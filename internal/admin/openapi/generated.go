@@ -1972,6 +1972,135 @@ func (e MigrationSourceRepositoryStatus) Valid() bool {
 	}
 }
 
+// Defines values for NexusMigrationBatchState.
+const (
+	NexusMigrationBatchStateBlocked   NexusMigrationBatchState = "blocked"
+	NexusMigrationBatchStateCancelled NexusMigrationBatchState = "cancelled"
+	NexusMigrationBatchStateCompleted NexusMigrationBatchState = "completed"
+	NexusMigrationBatchStateFailed    NexusMigrationBatchState = "failed"
+	NexusMigrationBatchStatePaused    NexusMigrationBatchState = "paused"
+	NexusMigrationBatchStatePausing   NexusMigrationBatchState = "pausing"
+	NexusMigrationBatchStateReady     NexusMigrationBatchState = "ready"
+	NexusMigrationBatchStateRunning   NexusMigrationBatchState = "running"
+	NexusMigrationBatchStateScanning  NexusMigrationBatchState = "scanning"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationBatchState enum.
+func (e NexusMigrationBatchState) Valid() bool {
+	switch e {
+	case NexusMigrationBatchStateBlocked:
+		return true
+	case NexusMigrationBatchStateCancelled:
+		return true
+	case NexusMigrationBatchStateCompleted:
+		return true
+	case NexusMigrationBatchStateFailed:
+		return true
+	case NexusMigrationBatchStatePaused:
+		return true
+	case NexusMigrationBatchStatePausing:
+		return true
+	case NexusMigrationBatchStateReady:
+		return true
+	case NexusMigrationBatchStateRunning:
+		return true
+	case NexusMigrationBatchStateScanning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NexusMigrationCapabilitiesCapacityEvidenceSource.
+const (
+	OperatorReported NexusMigrationCapabilitiesCapacityEvidenceSource = "operator-reported"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationCapabilitiesCapacityEvidenceSource enum.
+func (e NexusMigrationCapabilitiesCapacityEvidenceSource) Valid() bool {
+	switch e {
+	case OperatorReported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NexusMigrationEntryFormat.
+const (
+	NexusMigrationEntryFormatMaven NexusMigrationEntryFormat = "maven"
+	NexusMigrationEntryFormatRaw   NexusMigrationEntryFormat = "raw"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationEntryFormat enum.
+func (e NexusMigrationEntryFormat) Valid() bool {
+	switch e {
+	case NexusMigrationEntryFormatMaven:
+		return true
+	case NexusMigrationEntryFormatRaw:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NexusMigrationEntryState.
+const (
+	NexusMigrationEntryStateCommitted     NexusMigrationEntryState = "committed"
+	NexusMigrationEntryStateConflict      NexusMigrationEntryState = "conflict"
+	NexusMigrationEntryStateFailed        NexusMigrationEntryState = "failed"
+	NexusMigrationEntryStatePending       NexusMigrationEntryState = "pending"
+	NexusMigrationEntryStateSkipped       NexusMigrationEntryState = "skipped"
+	NexusMigrationEntryStateSourceDeleted NexusMigrationEntryState = "source_deleted"
+	NexusMigrationEntryStateSourceMissing NexusMigrationEntryState = "source_missing"
+	NexusMigrationEntryStateUnsupported   NexusMigrationEntryState = "unsupported"
+	NexusMigrationEntryStateUploaded      NexusMigrationEntryState = "uploaded"
+	NexusMigrationEntryStateVerified      NexusMigrationEntryState = "verified"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationEntryState enum.
+func (e NexusMigrationEntryState) Valid() bool {
+	switch e {
+	case NexusMigrationEntryStateCommitted:
+		return true
+	case NexusMigrationEntryStateConflict:
+		return true
+	case NexusMigrationEntryStateFailed:
+		return true
+	case NexusMigrationEntryStatePending:
+		return true
+	case NexusMigrationEntryStateSkipped:
+		return true
+	case NexusMigrationEntryStateSourceDeleted:
+		return true
+	case NexusMigrationEntryStateSourceMissing:
+		return true
+	case NexusMigrationEntryStateUnsupported:
+		return true
+	case NexusMigrationEntryStateUploaded:
+		return true
+	case NexusMigrationEntryStateVerified:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NexusMigrationStartPolicyVersion.
+const (
+	ReleaseRawV1 NexusMigrationStartPolicyVersion = "release-raw-v1"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationStartPolicyVersion enum.
+func (e NexusMigrationStartPolicyVersion) Valid() bool {
+	switch e {
+	case ReleaseRawV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OIDCRoleMappingMatchGatewayRole.
 const (
 	OIDCRoleMappingMatchGatewayRoleAdmin  OIDCRoleMappingMatchGatewayRole = "admin"
@@ -5342,6 +5471,149 @@ type MigrationSourceUnsupportedAsset struct {
 	Repository string `json:"repository"`
 }
 
+// NexusMigrationAsset defines model for NexusMigrationAsset.
+type NexusMigrationAsset struct {
+	Sha256     string `json:"sha256"`
+	Size       int64  `json:"size"`
+	SourcePath string `json:"sourcePath"`
+	TargetPath string `json:"targetPath"`
+	Uploaded   bool   `json:"uploaded"`
+	Validator  string `json:"validator"`
+	Verified   bool   `json:"verified"`
+}
+
+// NexusMigrationBatch defines model for NexusMigrationBatch.
+type NexusMigrationBatch struct {
+	CapacityEvidence   NexusMigrationCapacityEvidence `json:"capacityEvidence"`
+	Counts             NexusMigrationCounts           `json:"counts"`
+	CreatedAt          time.Time                      `json:"createdAt"`
+	EntryCount         int64                          `json:"entryCount"`
+	Id                 openapi_types.UUID             `json:"id"`
+	LastError          string                         `json:"lastError"`
+	ManifestSha256     string                         `json:"manifestSha256"`
+	Mappings           []NexusMigrationMapping        `json:"mappings"`
+	MetadataDiscovered int64                          `json:"metadataDiscovered"`
+	PolicyVersion      string                         `json:"policyVersion"`
+	ScanComplete       bool                           `json:"scanComplete"`
+	SourceId           openapi_types.UUID             `json:"sourceId"`
+
+	// SourceVerificationBytes Actual source bytes read to fill missing manifest hashes during source verification, separately persisted even if the scan fails. Discovery-provided required hashes avoid this transfer.
+	SourceVerificationBytes int64                    `json:"sourceVerificationBytes"`
+	SourceVersion           string                   `json:"sourceVersion"`
+	State                   NexusMigrationBatchState `json:"state"`
+	TotalBytes              *int64                   `json:"totalBytes"`
+
+	// TransferredBytes Copy-stage source bytes actually read, including retries and revalidation of existing identities. Separate from pre-copy sourceVerificationBytes; neither counter implies target visibility.
+	TransferredBytes  int64     `json:"transferredBytes"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+	VerifiedBytes     int64     `json:"verifiedBytes"`
+	Version           string    `json:"version"`
+	VisibleIdentities int64     `json:"visibleIdentities"`
+}
+
+// NexusMigrationBatchState defines model for NexusMigrationBatch.State.
+type NexusMigrationBatchState string
+
+// NexusMigrationBatchPage defines model for NexusMigrationBatchPage.
+type NexusMigrationBatchPage struct {
+	Items      []NexusMigrationBatch `json:"items"`
+	NextCursor string                `json:"nextCursor"`
+}
+
+// NexusMigrationCapabilities defines model for NexusMigrationCapabilities.
+type NexusMigrationCapabilities struct {
+	CapacityEvidenceSource NexusMigrationCapabilitiesCapacityEvidenceSource `json:"capacityEvidenceSource"`
+	ExecutionEnabled       bool                                             `json:"executionEnabled"`
+	MaxAttempts            int                                              `json:"maxAttempts"`
+	PolicyVersion          string                                           `json:"policyVersion"`
+	PoolId                 string                                           `json:"poolId"`
+	TargetId               string                                           `json:"targetId"`
+}
+
+// NexusMigrationCapabilitiesCapacityEvidenceSource defines model for NexusMigrationCapabilities.CapacityEvidenceSource.
+type NexusMigrationCapabilitiesCapacityEvidenceSource string
+
+// NexusMigrationCapacityEvidence defines model for NexusMigrationCapacityEvidence.
+type NexusMigrationCapacityEvidence struct {
+	BackupBytes   *int64    `json:"backupBytes"`
+	DownloadBytes *int64    `json:"downloadBytes"`
+	FreeBytes     *int64    `json:"freeBytes"`
+	HeadroomBytes *int64    `json:"headroomBytes"`
+	ObservedAt    time.Time `json:"observedAt"`
+	PoolId        string    `json:"poolId"`
+	RestoreBytes  *int64    `json:"restoreBytes"`
+	TargetId      string    `json:"targetId"`
+	UploadBytes   *int64    `json:"uploadBytes"`
+	ValidUntil    time.Time `json:"validUntil"`
+}
+
+// NexusMigrationCounts defines model for NexusMigrationCounts.
+type NexusMigrationCounts struct {
+	Committed     int64 `json:"committed"`
+	Conflict      int64 `json:"conflict"`
+	Failed        int64 `json:"failed"`
+	Pending       int64 `json:"pending"`
+	Skipped       int64 `json:"skipped"`
+	SourceDeleted int64 `json:"sourceDeleted"`
+	SourceMissing int64 `json:"sourceMissing"`
+	Unsupported   int64 `json:"unsupported"`
+	Uploaded      int64 `json:"uploaded"`
+	Verified      int64 `json:"verified"`
+}
+
+// NexusMigrationEntry defines model for NexusMigrationEntry.
+type NexusMigrationEntry struct {
+	Assets             []NexusMigrationAsset     `json:"assets"`
+	Attempts           int64                     `json:"attempts"`
+	BatchId            openapi_types.UUID        `json:"batchId"`
+	Format             NexusMigrationEntryFormat `json:"format"`
+	Id                 openapi_types.UUID        `json:"id"`
+	Identity           string                    `json:"identity"`
+	LastError          string                    `json:"lastError"`
+	SourceRepository   string                    `json:"sourceRepository"`
+	State              NexusMigrationEntryState  `json:"state"`
+	TargetRepositoryId openapi_types.UUID        `json:"targetRepositoryId"`
+	TransferredBytes   int64                     `json:"transferredBytes"`
+	UpdatedAt          time.Time                 `json:"updatedAt"`
+	VerifiedBytes      int64                     `json:"verifiedBytes"`
+	VisibleIdentities  int64                     `json:"visibleIdentities"`
+}
+
+// NexusMigrationEntryFormat defines model for NexusMigrationEntry.Format.
+type NexusMigrationEntryFormat string
+
+// NexusMigrationEntryState defines model for NexusMigrationEntry.State.
+type NexusMigrationEntryState string
+
+// NexusMigrationEntryPage defines model for NexusMigrationEntryPage.
+type NexusMigrationEntryPage struct {
+	Items      []NexusMigrationEntry `json:"items"`
+	NextCursor string                `json:"nextCursor"`
+}
+
+// NexusMigrationMapping defines model for NexusMigrationMapping.
+type NexusMigrationMapping struct {
+	SourceRepository   string             `json:"sourceRepository"`
+	TargetRepositoryId openapi_types.UUID `json:"targetRepositoryId"`
+}
+
+// NexusMigrationResume defines model for NexusMigrationResume.
+type NexusMigrationResume struct {
+	CapacityEvidence NexusMigrationCapacityEvidence `json:"capacityEvidence"`
+}
+
+// NexusMigrationStart defines model for NexusMigrationStart.
+type NexusMigrationStart struct {
+	CapacityEvidence NexusMigrationCapacityEvidence   `json:"capacityEvidence"`
+	Mappings         []NexusMigrationMapping          `json:"mappings"`
+	PolicyVersion    NexusMigrationStartPolicyVersion `json:"policyVersion"`
+	SourceId         openapi_types.UUID               `json:"sourceId"`
+	SourceVersion    string                           `json:"sourceVersion"`
+}
+
+// NexusMigrationStartPolicyVersion defines model for NexusMigrationStart.PolicyVersion.
+type NexusMigrationStartPolicyVersion string
+
 // OCIBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
 type OCIBearer struct {
 	// Realm Exact complete HTTPS token-service URL. The first exchange contract rejects userinfo, all query parameters, and fragments.
@@ -6809,6 +7081,47 @@ type UpdateMigrationSourceParams struct {
 	IfMatch string `json:"If-Match"`
 }
 
+// ListNexusMigrationBatchesParams defines parameters for ListNexusMigrationBatches.
+type ListNexusMigrationBatchesParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// StartNexusMigrationBatchParams defines parameters for StartNexusMigrationBatch.
+type StartNexusMigrationBatchParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// CancelNexusMigrationBatchParams defines parameters for CancelNexusMigrationBatch.
+type CancelNexusMigrationBatchParams struct {
+	IfMatch        string `json:"If-Match"`
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// ListNexusMigrationEntriesParams defines parameters for ListNexusMigrationEntries.
+type ListNexusMigrationEntriesParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// PauseNexusMigrationBatchParams defines parameters for PauseNexusMigrationBatch.
+type PauseNexusMigrationBatchParams struct {
+	IfMatch        string `json:"If-Match"`
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// ResumeNexusMigrationBatchParams defines parameters for ResumeNexusMigrationBatch.
+type ResumeNexusMigrationBatchParams struct {
+	IfMatch        string `json:"If-Match"`
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// RetryNexusMigrationBatchParams defines parameters for RetryNexusMigrationBatch.
+type RetryNexusMigrationBatchParams struct {
+	IfMatch        string `json:"If-Match"`
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // ListRepositoriesParams defines parameters for ListRepositories.
 type ListRepositoriesParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -7288,6 +7601,15 @@ type DiscoverMigrationSourceJSONRequestBody = MigrationSourceDiscoveryInput
 // PreviewMigrationSourceMappingJSONRequestBody defines body for PreviewMigrationSourceMapping for application/json ContentType.
 type PreviewMigrationSourceMappingJSONRequestBody = MigrationSourceMappingInput
 
+// StartNexusMigrationBatchJSONRequestBody defines body for StartNexusMigrationBatch for application/json ContentType.
+type StartNexusMigrationBatchJSONRequestBody = NexusMigrationStart
+
+// ResumeNexusMigrationBatchJSONRequestBody defines body for ResumeNexusMigrationBatch for application/json ContentType.
+type ResumeNexusMigrationBatchJSONRequestBody = NexusMigrationResume
+
+// RetryNexusMigrationBatchJSONRequestBody defines body for RetryNexusMigrationBatch for application/json ContentType.
+type RetryNexusMigrationBatchJSONRequestBody = NexusMigrationResume
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
 
@@ -7641,6 +7963,33 @@ type ServerInterface interface {
 
 	// (POST /migration-sources/{sourceId}/preflight)
 	PreflightMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID)
+
+	// (GET /migrations/nexus/batches)
+	ListNexusMigrationBatches(w http.ResponseWriter, r *http.Request, params ListNexusMigrationBatchesParams)
+
+	// (POST /migrations/nexus/batches)
+	StartNexusMigrationBatch(w http.ResponseWriter, r *http.Request, params StartNexusMigrationBatchParams)
+
+	// (GET /migrations/nexus/batches/{batchId})
+	GetNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID)
+
+	// (POST /migrations/nexus/batches/{batchId}/cancel)
+	CancelNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params CancelNexusMigrationBatchParams)
+
+	// (GET /migrations/nexus/batches/{batchId}/entries)
+	ListNexusMigrationEntries(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params ListNexusMigrationEntriesParams)
+
+	// (POST /migrations/nexus/batches/{batchId}/pause)
+	PauseNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params PauseNexusMigrationBatchParams)
+
+	// (POST /migrations/nexus/batches/{batchId}/resume)
+	ResumeNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params ResumeNexusMigrationBatchParams)
+
+	// (POST /migrations/nexus/batches/{batchId}/retry)
+	RetryNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params RetryNexusMigrationBatchParams)
+
+	// (GET /migrations/nexus/capabilities)
+	GetNexusMigrationCapabilities(w http.ResponseWriter, r *http.Request)
 	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
 	// (GET /overview-statistics)
 	GetOverviewStatistics(w http.ResponseWriter, r *http.Request)
@@ -10271,6 +10620,500 @@ func (siw *ServerInterfaceWrapper) PreflightMigrationSource(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreflightMigrationSource(w, r, sourceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNexusMigrationBatches operation middleware
+func (siw *ServerInterfaceWrapper) ListNexusMigrationBatches(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNexusMigrationBatchesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNexusMigrationBatches(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartNexusMigrationBatch operation middleware
+func (siw *ServerInterfaceWrapper) StartNexusMigrationBatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StartNexusMigrationBatchParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartNexusMigrationBatch(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNexusMigrationBatch operation middleware
+func (siw *ServerInterfaceWrapper) GetNexusMigrationBatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "batchId" -------------
+	var batchId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "batchId", r.PathValue("batchId"), &batchId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "batchId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNexusMigrationBatch(w, r, batchId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelNexusMigrationBatch operation middleware
+func (siw *ServerInterfaceWrapper) CancelNexusMigrationBatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "batchId" -------------
+	var batchId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "batchId", r.PathValue("batchId"), &batchId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "batchId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelNexusMigrationBatchParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelNexusMigrationBatch(w, r, batchId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNexusMigrationEntries operation middleware
+func (siw *ServerInterfaceWrapper) ListNexusMigrationEntries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "batchId" -------------
+	var batchId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "batchId", r.PathValue("batchId"), &batchId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "batchId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNexusMigrationEntriesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNexusMigrationEntries(w, r, batchId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseNexusMigrationBatch operation middleware
+func (siw *ServerInterfaceWrapper) PauseNexusMigrationBatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "batchId" -------------
+	var batchId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "batchId", r.PathValue("batchId"), &batchId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "batchId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PauseNexusMigrationBatchParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseNexusMigrationBatch(w, r, batchId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeNexusMigrationBatch operation middleware
+func (siw *ServerInterfaceWrapper) ResumeNexusMigrationBatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "batchId" -------------
+	var batchId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "batchId", r.PathValue("batchId"), &batchId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "batchId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResumeNexusMigrationBatchParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeNexusMigrationBatch(w, r, batchId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryNexusMigrationBatch operation middleware
+func (siw *ServerInterfaceWrapper) RetryNexusMigrationBatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "batchId" -------------
+	var batchId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "batchId", r.PathValue("batchId"), &batchId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "batchId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RetryNexusMigrationBatchParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryNexusMigrationBatch(w, r, batchId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNexusMigrationCapabilities operation middleware
+func (siw *ServerInterfaceWrapper) GetNexusMigrationCapabilities(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNexusMigrationCapabilities(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15692,6 +16535,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migration-sources/{sourceId}/discovery", wrapper.DiscoverMigrationSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migration-sources/{sourceId}/mapping-preview", wrapper.PreviewMigrationSourceMapping)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migration-sources/{sourceId}/preflight", wrapper.PreflightMigrationSource)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/batches", wrapper.ListNexusMigrationBatches)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches", wrapper.StartNexusMigrationBatch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}", wrapper.GetNexusMigrationBatch)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/cancel", wrapper.CancelNexusMigrationBatch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/entries", wrapper.ListNexusMigrationEntries)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/pause", wrapper.PauseNexusMigrationBatch)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/resume", wrapper.ResumeNexusMigrationBatch)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/retry", wrapper.RetryNexusMigrationBatch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/capabilities", wrapper.GetNexusMigrationCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/overview-statistics", wrapper.GetOverviewStatistics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
@@ -20875,6 +21727,1327 @@ func (response PreflightMigrationSource504ApplicationProblemPlusJSONResponse) Vi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatchesRequestObject struct {
+	Params ListNexusMigrationBatchesParams
+}
+
+type ListNexusMigrationBatchesResponseObject interface {
+	VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error
+}
+
+type ListNexusMigrationBatches200ResponseHeaders struct {
+	ETag *string
+}
+
+type ListNexusMigrationBatches200JSONResponse struct {
+	Body    NexusMigrationBatchPage
+	Headers ListNexusMigrationBatches200ResponseHeaders
+}
+
+func (response ListNexusMigrationBatches200JSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListNexusMigrationBatches400ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationBatches401ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationBatches403ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationBatches404ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationBatches409ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches412ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationBatches412ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches422ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationBatches422ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationBatches503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationBatches503ApplicationProblemPlusJSONResponse) VisitListNexusMigrationBatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatchRequestObject struct {
+	Params StartNexusMigrationBatchParams
+	Body   *StartNexusMigrationBatchJSONRequestBody
+}
+
+type StartNexusMigrationBatchResponseObject interface {
+	VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error
+}
+
+type StartNexusMigrationBatch202ResponseHeaders struct {
+	ETag *string
+}
+
+type StartNexusMigrationBatch202JSONResponse struct {
+	Body    NexusMigrationBatch
+	Headers StartNexusMigrationBatch202ResponseHeaders
+}
+
+func (response StartNexusMigrationBatch202JSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartNexusMigrationBatch400ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch401ApplicationProblemPlusJSONResponse Problem
+
+func (response StartNexusMigrationBatch401ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartNexusMigrationBatch403ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartNexusMigrationBatch404ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartNexusMigrationBatch409ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch412ApplicationProblemPlusJSONResponse Problem
+
+func (response StartNexusMigrationBatch412ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch422ApplicationProblemPlusJSONResponse Problem
+
+func (response StartNexusMigrationBatch422ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartNexusMigrationBatch503ApplicationProblemPlusJSONResponse Problem
+
+func (response StartNexusMigrationBatch503ApplicationProblemPlusJSONResponse) VisitStartNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatchRequestObject struct {
+	BatchId openapi_types.UUID `json:"batchId"`
+}
+
+type GetNexusMigrationBatchResponseObject interface {
+	VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error
+}
+
+type GetNexusMigrationBatch200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetNexusMigrationBatch200JSONResponse struct {
+	Body    NexusMigrationBatch
+	Headers GetNexusMigrationBatch200ResponseHeaders
+}
+
+func (response GetNexusMigrationBatch200JSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetNexusMigrationBatch400ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationBatch401ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationBatch403ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationBatch404ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationBatch409ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch412ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationBatch412ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch422ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationBatch422ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationBatch503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationBatch503ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatchRequestObject struct {
+	BatchId openapi_types.UUID `json:"batchId"`
+	Params  CancelNexusMigrationBatchParams
+}
+
+type CancelNexusMigrationBatchResponseObject interface {
+	VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error
+}
+
+type CancelNexusMigrationBatch200ResponseHeaders struct {
+	ETag *string
+}
+
+type CancelNexusMigrationBatch200JSONResponse struct {
+	Body    NexusMigrationBatch
+	Headers CancelNexusMigrationBatch200ResponseHeaders
+}
+
+func (response CancelNexusMigrationBatch200JSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CancelNexusMigrationBatch400ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch401ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelNexusMigrationBatch401ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch403ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelNexusMigrationBatch403ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch404ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelNexusMigrationBatch404ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch409ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelNexusMigrationBatch409ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch412ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelNexusMigrationBatch412ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch422ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelNexusMigrationBatch422ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelNexusMigrationBatch503ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelNexusMigrationBatch503ApplicationProblemPlusJSONResponse) VisitCancelNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntriesRequestObject struct {
+	BatchId openapi_types.UUID `json:"batchId"`
+	Params  ListNexusMigrationEntriesParams
+}
+
+type ListNexusMigrationEntriesResponseObject interface {
+	VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error
+}
+
+type ListNexusMigrationEntries200ResponseHeaders struct {
+	ETag *string
+}
+
+type ListNexusMigrationEntries200JSONResponse struct {
+	Body    NexusMigrationEntryPage
+	Headers ListNexusMigrationEntries200ResponseHeaders
+}
+
+func (response ListNexusMigrationEntries200JSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListNexusMigrationEntries400ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationEntries401ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationEntries403ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationEntries404ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationEntries409ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries412ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationEntries412ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries422ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationEntries422ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationEntries503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationEntries503ApplicationProblemPlusJSONResponse) VisitListNexusMigrationEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatchRequestObject struct {
+	BatchId openapi_types.UUID `json:"batchId"`
+	Params  PauseNexusMigrationBatchParams
+}
+
+type PauseNexusMigrationBatchResponseObject interface {
+	VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error
+}
+
+type PauseNexusMigrationBatch200ResponseHeaders struct {
+	ETag *string
+}
+
+type PauseNexusMigrationBatch200JSONResponse struct {
+	Body    NexusMigrationBatch
+	Headers PauseNexusMigrationBatch200ResponseHeaders
+}
+
+func (response PauseNexusMigrationBatch200JSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PauseNexusMigrationBatch400ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch401ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationBatch401ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch403ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationBatch403ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch404ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationBatch404ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch409ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationBatch409ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch412ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationBatch412ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch422ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationBatch422ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationBatch503ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationBatch503ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatchRequestObject struct {
+	BatchId openapi_types.UUID `json:"batchId"`
+	Params  ResumeNexusMigrationBatchParams
+	Body    *ResumeNexusMigrationBatchJSONRequestBody
+}
+
+type ResumeNexusMigrationBatchResponseObject interface {
+	VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error
+}
+
+type ResumeNexusMigrationBatch200ResponseHeaders struct {
+	ETag *string
+}
+
+type ResumeNexusMigrationBatch200JSONResponse struct {
+	Body    NexusMigrationBatch
+	Headers ResumeNexusMigrationBatch200ResponseHeaders
+}
+
+func (response ResumeNexusMigrationBatch200JSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ResumeNexusMigrationBatch400ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch401ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationBatch401ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch403ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationBatch403ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch404ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationBatch404ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch409ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationBatch409ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch412ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationBatch412ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch422ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationBatch422ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationBatch503ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationBatch503ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatchRequestObject struct {
+	BatchId openapi_types.UUID `json:"batchId"`
+	Params  RetryNexusMigrationBatchParams
+	Body    *RetryNexusMigrationBatchJSONRequestBody
+}
+
+type RetryNexusMigrationBatchResponseObject interface {
+	VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error
+}
+
+type RetryNexusMigrationBatch200ResponseHeaders struct {
+	ETag *string
+}
+
+type RetryNexusMigrationBatch200JSONResponse struct {
+	Body    NexusMigrationBatch
+	Headers RetryNexusMigrationBatch200ResponseHeaders
+}
+
+func (response RetryNexusMigrationBatch200JSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RetryNexusMigrationBatch400ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch401ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryNexusMigrationBatch401ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch403ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryNexusMigrationBatch403ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch404ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryNexusMigrationBatch404ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch409ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryNexusMigrationBatch409ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch412ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryNexusMigrationBatch412ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch422ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryNexusMigrationBatch422ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryNexusMigrationBatch503ApplicationProblemPlusJSONResponse Problem
+
+func (response RetryNexusMigrationBatch503ApplicationProblemPlusJSONResponse) VisitRetryNexusMigrationBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilitiesRequestObject struct {
+}
+
+type GetNexusMigrationCapabilitiesResponseObject interface {
+	VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error
+}
+
+type GetNexusMigrationCapabilities200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetNexusMigrationCapabilities200JSONResponse struct {
+	Body    NexusMigrationCapabilities
+	Headers GetNexusMigrationCapabilities200ResponseHeaders
+}
+
+func (response GetNexusMigrationCapabilities200JSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetNexusMigrationCapabilities400ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationCapabilities401ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationCapabilities403ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationCapabilities404ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationCapabilities409ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities412ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationCapabilities412ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities422ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationCapabilities422ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationCapabilities503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationCapabilities503ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -29599,6 +31772,33 @@ type StrictServerInterface interface {
 
 	// (POST /migration-sources/{sourceId}/preflight)
 	PreflightMigrationSource(ctx context.Context, request PreflightMigrationSourceRequestObject) (PreflightMigrationSourceResponseObject, error)
+
+	// (GET /migrations/nexus/batches)
+	ListNexusMigrationBatches(ctx context.Context, request ListNexusMigrationBatchesRequestObject) (ListNexusMigrationBatchesResponseObject, error)
+
+	// (POST /migrations/nexus/batches)
+	StartNexusMigrationBatch(ctx context.Context, request StartNexusMigrationBatchRequestObject) (StartNexusMigrationBatchResponseObject, error)
+
+	// (GET /migrations/nexus/batches/{batchId})
+	GetNexusMigrationBatch(ctx context.Context, request GetNexusMigrationBatchRequestObject) (GetNexusMigrationBatchResponseObject, error)
+
+	// (POST /migrations/nexus/batches/{batchId}/cancel)
+	CancelNexusMigrationBatch(ctx context.Context, request CancelNexusMigrationBatchRequestObject) (CancelNexusMigrationBatchResponseObject, error)
+
+	// (GET /migrations/nexus/batches/{batchId}/entries)
+	ListNexusMigrationEntries(ctx context.Context, request ListNexusMigrationEntriesRequestObject) (ListNexusMigrationEntriesResponseObject, error)
+
+	// (POST /migrations/nexus/batches/{batchId}/pause)
+	PauseNexusMigrationBatch(ctx context.Context, request PauseNexusMigrationBatchRequestObject) (PauseNexusMigrationBatchResponseObject, error)
+
+	// (POST /migrations/nexus/batches/{batchId}/resume)
+	ResumeNexusMigrationBatch(ctx context.Context, request ResumeNexusMigrationBatchRequestObject) (ResumeNexusMigrationBatchResponseObject, error)
+
+	// (POST /migrations/nexus/batches/{batchId}/retry)
+	RetryNexusMigrationBatch(ctx context.Context, request RetryNexusMigrationBatchRequestObject) (RetryNexusMigrationBatchResponseObject, error)
+
+	// (GET /migrations/nexus/capabilities)
+	GetNexusMigrationCapabilities(ctx context.Context, request GetNexusMigrationCapabilitiesRequestObject) (GetNexusMigrationCapabilitiesResponseObject, error)
 	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
 	// (GET /overview-statistics)
 	GetOverviewStatistics(ctx context.Context, request GetOverviewStatisticsRequestObject) (GetOverviewStatisticsResponseObject, error)
@@ -31829,6 +34029,264 @@ func (sh *strictHandler) PreflightMigrationSource(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PreflightMigrationSourceResponseObject); ok {
 		if err := validResponse.VisitPreflightMigrationSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNexusMigrationBatches operation middleware
+func (sh *strictHandler) ListNexusMigrationBatches(w http.ResponseWriter, r *http.Request, params ListNexusMigrationBatchesParams) {
+	var request ListNexusMigrationBatchesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNexusMigrationBatches(ctx, request.(ListNexusMigrationBatchesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNexusMigrationBatches")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNexusMigrationBatchesResponseObject); ok {
+		if err := validResponse.VisitListNexusMigrationBatchesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartNexusMigrationBatch operation middleware
+func (sh *strictHandler) StartNexusMigrationBatch(w http.ResponseWriter, r *http.Request, params StartNexusMigrationBatchParams) {
+	var request StartNexusMigrationBatchRequestObject
+
+	request.Params = params
+
+	var body StartNexusMigrationBatchJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartNexusMigrationBatch(ctx, request.(StartNexusMigrationBatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartNexusMigrationBatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartNexusMigrationBatchResponseObject); ok {
+		if err := validResponse.VisitStartNexusMigrationBatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNexusMigrationBatch operation middleware
+func (sh *strictHandler) GetNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID) {
+	var request GetNexusMigrationBatchRequestObject
+
+	request.BatchId = batchId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNexusMigrationBatch(ctx, request.(GetNexusMigrationBatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNexusMigrationBatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNexusMigrationBatchResponseObject); ok {
+		if err := validResponse.VisitGetNexusMigrationBatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelNexusMigrationBatch operation middleware
+func (sh *strictHandler) CancelNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params CancelNexusMigrationBatchParams) {
+	var request CancelNexusMigrationBatchRequestObject
+
+	request.BatchId = batchId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelNexusMigrationBatch(ctx, request.(CancelNexusMigrationBatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelNexusMigrationBatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelNexusMigrationBatchResponseObject); ok {
+		if err := validResponse.VisitCancelNexusMigrationBatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNexusMigrationEntries operation middleware
+func (sh *strictHandler) ListNexusMigrationEntries(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params ListNexusMigrationEntriesParams) {
+	var request ListNexusMigrationEntriesRequestObject
+
+	request.BatchId = batchId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNexusMigrationEntries(ctx, request.(ListNexusMigrationEntriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNexusMigrationEntries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNexusMigrationEntriesResponseObject); ok {
+		if err := validResponse.VisitListNexusMigrationEntriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PauseNexusMigrationBatch operation middleware
+func (sh *strictHandler) PauseNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params PauseNexusMigrationBatchParams) {
+	var request PauseNexusMigrationBatchRequestObject
+
+	request.BatchId = batchId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PauseNexusMigrationBatch(ctx, request.(PauseNexusMigrationBatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PauseNexusMigrationBatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PauseNexusMigrationBatchResponseObject); ok {
+		if err := validResponse.VisitPauseNexusMigrationBatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumeNexusMigrationBatch operation middleware
+func (sh *strictHandler) ResumeNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params ResumeNexusMigrationBatchParams) {
+	var request ResumeNexusMigrationBatchRequestObject
+
+	request.BatchId = batchId
+	request.Params = params
+
+	var body ResumeNexusMigrationBatchJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumeNexusMigrationBatch(ctx, request.(ResumeNexusMigrationBatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumeNexusMigrationBatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumeNexusMigrationBatchResponseObject); ok {
+		if err := validResponse.VisitResumeNexusMigrationBatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetryNexusMigrationBatch operation middleware
+func (sh *strictHandler) RetryNexusMigrationBatch(w http.ResponseWriter, r *http.Request, batchId openapi_types.UUID, params RetryNexusMigrationBatchParams) {
+	var request RetryNexusMigrationBatchRequestObject
+
+	request.BatchId = batchId
+	request.Params = params
+
+	var body RetryNexusMigrationBatchJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryNexusMigrationBatch(ctx, request.(RetryNexusMigrationBatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryNexusMigrationBatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryNexusMigrationBatchResponseObject); ok {
+		if err := validResponse.VisitRetryNexusMigrationBatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNexusMigrationCapabilities operation middleware
+func (sh *strictHandler) GetNexusMigrationCapabilities(w http.ResponseWriter, r *http.Request) {
+	var request GetNexusMigrationCapabilitiesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNexusMigrationCapabilities(ctx, request.(GetNexusMigrationCapabilitiesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNexusMigrationCapabilities")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNexusMigrationCapabilitiesResponseObject); ok {
+		if err := validResponse.VisitGetNexusMigrationCapabilitiesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

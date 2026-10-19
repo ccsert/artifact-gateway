@@ -9,6 +9,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 可执行测试与[协议兼容性基线](protocol-compatibility.zh-CN.md)时，才代表当前状态。
 
 - [Nexus 源发现与原生映射](nexus-source-discovery.zh-CN.md)
+- [Nexus 持久迁移批次](nexus-migration-batches.zh-CN.md)
 
 ## 快速开始
 
