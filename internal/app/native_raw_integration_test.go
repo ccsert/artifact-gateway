@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -65,7 +66,7 @@ func TestPostgresNativeRawStateTransitions(t *testing.T) {
 	if referenced, err := store.RawObjectIsUnreferenced(context.Background(), digest); err != nil || !referenced {
 		t.Fatalf("raw object unreferenced=%t err=%v", referenced, err)
 	}
-	objectsStore := NewMemoryOCIObjectStore()
+	objectsStore := objectstore.NewMemoryStore()
 	if err = objectsStore.Put(context.Background(), objectKey, []byte("raw payload")); err != nil {
 		t.Fatal(err)
 	}
@@ -128,14 +129,14 @@ func TestNativeRawListingAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {
 	}
 	defer storeB.Close()
 	bucket := "native-raw-list-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,9 +144,9 @@ func TestNativeRawListingAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsA, repository.FormatRaw: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsB, repository.FormatRaw: objectsB}}))
 	defer serverB.Close()
 	request := func(method, address string, body []byte) *http.Response {
 		t.Helper()
@@ -370,7 +371,7 @@ func TestPostgresRawAuditFieldsIntegration(t *testing.T) {
 		Store:         store,
 		Authenticator: testAuthenticator(),
 		Client:        &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")},
-		Cache:         NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil),
+		Cache:         NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil),
 	}
 	request := httptest.NewRequest(http.MethodGet, "/raw/raw-audit/release/app.txt", nil)
 	authorize(request, "resolver-secret")

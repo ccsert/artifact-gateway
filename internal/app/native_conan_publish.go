@@ -16,7 +16,7 @@ import (
 
 type nativeConanPublishHandler struct {
 	store              GatewayStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
 	publicationScanner *publicationScanScheduler
@@ -32,10 +32,7 @@ type nativeConanPublishRequest struct {
 	Objects         []repository.MavenDeclaredObject `json:"objects"`
 }
 
-func newNativeConanPublishHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeConanPublishHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativeConanPublishHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeConanPublishHandler {
 	return nativeConanPublishHandler{store: store, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}}
 }
 

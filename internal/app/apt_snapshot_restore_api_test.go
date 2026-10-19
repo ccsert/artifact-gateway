@@ -61,7 +61,7 @@ func TestAPTArchiveRestoreRouteAuthorizationTrustReceiptAndAtomicReplay(t *testi
 	}
 
 	request := func(trust aptpublication.SnapshotArchiveTrustVerifier, id, token, digest, media string, length int64) *httptest.ResponseRecorder {
-		handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects, APTArchiveTrust: trust}, store, TestAdapter{}, auth)
+		handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{APTArchiveTrust: trust}, Store: store, Adapter: TestAdapter{}, Authenticator: auth, Storage: ObjectStores{repository.FormatAPT: objects}})
 		req := httptest.NewRequest(http.MethodPost, "https://gateway.example.com/api/v2/repositories/"+id+"/apt/snapshots/restore", bytes.NewReader(archive.Bytes()))
 		if length > 0 {
 			req.ContentLength = length
@@ -142,7 +142,7 @@ func TestAPTArchiveRestoreBodyBypassesJSONLimit(t *testing.T) {
 	store, objects, repo, _ := aptArchiveAPIFixture(t)
 	body := bytes.Repeat([]byte("x"), (1<<20)+1)
 	receipt := fmt.Sprintf("sha256:%x", sha256.Sum256(body))
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects, APTArchiveTrust: aptArchiveRouteTrust{}}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{APTArchiveTrust: aptArchiveRouteTrust{}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objects}})
 	req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/apt/snapshots/restore", bytes.NewReader(body))
 	authorize(req, "admin-secret")
 	req.Header.Set("Content-Type", aptSnapshotArchiveContentType)

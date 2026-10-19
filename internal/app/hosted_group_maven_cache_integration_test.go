@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"net/http"
 	"os"
 	"testing"
@@ -17,7 +18,7 @@ func TestPostgresMavenGroupResolutionScopeSurvivesReload(t *testing.T) {
 	}
 	for _, status := range []int{200, 404} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
-			control, err := NewPostgresCacheControlStore(NewMemoryOCIObjectStore(), url)
+			control, err := NewPostgresCacheControlStore(objectstore.NewMemoryStore(), url)
 			if err != nil {
 				t.Fatal(err)
 			}

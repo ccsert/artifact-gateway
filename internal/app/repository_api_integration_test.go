@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -27,7 +28,7 @@ type referenceAfterClaimStore struct {
 }
 
 type blockingDeleteObjectStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	entered chan struct{}
 	release chan struct{}
 }
@@ -35,7 +36,7 @@ type blockingDeleteObjectStore struct {
 func (s blockingDeleteObjectStore) Delete(ctx context.Context, key string) error {
 	s.entered <- struct{}{}
 	<-s.release
-	return s.MemoryOCIObjectStore.Delete(ctx, key)
+	return s.MemoryStore.Delete(ctx, key)
 }
 
 type blockingMavenCommitStore struct {
@@ -112,7 +113,7 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	hostedRequest := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"releases","format":"maven"}`))
 	authorize(hostedRequest, "admin-secret")
 	hostedRequest.Header.Set("Idempotency-Key", "integration-releases")
@@ -299,7 +300,7 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 	defer mavenUpstream.Close()
 	// Only this task-owned HTTP fixture opts into plaintext upstream reads.
 	// Production clients keep the default HTTPS-only proxy policy.
-	handler = NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: mavenUpstream.Client(), AllowHTTPForTesting: true})
+	handler = newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{HTTPClient: mavenUpstream.Client(), AllowHTTPForTesting: true}})
 	mavenGroup := fmt.Sprintf(`{"name":"maven-engineering","members":[{"name":"hosted","type":"hosted","endpoint":"%s","position":0},{"name":"proxy","type":"proxy","endpoint":"%s","position":1}]}`, mavenUpstream.URL, mavenUpstream.URL)
 	createdMaven := integrationRequest(handler, http.MethodPost, "/api/v1/maven/groups", mavenGroup, "admin-secret")
 	if createdMaven.Code != http.StatusCreated {
@@ -438,7 +439,7 @@ func TestPostgresLifecycleJobStatusManagementHTTP(t *testing.T) {
 	if _, _, err = store.EnqueueLifecycleJob(ctx, job); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -482,7 +483,7 @@ func TestPostgresTombstoneInspectionHTTP(t *testing.T) {
 	if err = store.DeleteOCIManifest(ctx, repo.ID, "team/widget", digest); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/tombstones?q=team%2F", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -737,7 +738,7 @@ func TestPostgresMavenRetentionDryRunReturnsCandidatesWithoutTombstoning(t *test
 			t.Fatal(err)
 		}
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	response := integrationRequest(handler, http.MethodPost, "/api/v2/repositories/"+repo.ID+"/retention:dry-run", "", "admin-secret")
 	if response.Code != http.StatusOK {
 		t.Fatalf("dry run=%d body=%s", response.Code, response.Body.String())

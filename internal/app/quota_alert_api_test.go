@@ -18,7 +18,7 @@ import (
 )
 
 func TestAdministratorListsQuotaRulesWithoutActivatingSMTP(t *testing.T) {
-	h := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	r := httptest.NewRequest(http.MethodGet, "/api/v2/repository-quota-alert-rules", nil)
 	authorize(r, "admin-secret")
 	w := httptest.NewRecorder()
@@ -68,7 +68,7 @@ func TestQuotaEventAPIKeepsExactLargeByteCounts(t *testing.T) {
 	if _, err = s.EvaluateNextRepositoryQuotaAlert(ctx, repository.QuotaAlertMailConfig{}, time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
-	h := NewGatewayHandler(Dependencies{}, s, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: s, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	w := quotaRequest(h, "GET", "/api/v2/repository-quota-alert-rules/"+rule.ID+"/events", "", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"usedBytes":`+strconv.FormatInt(used, 10)) || !strings.Contains(w.Body.String(), `"quotaBytes":`+strconv.FormatInt(quota, 10)) {
 		t.Fatalf("byte evidence rounded by API: %s", w.Body.String())
@@ -82,7 +82,7 @@ func TestQuotaRuleAdministratorAndPasswordGates(t *testing.T) {
 		t.Fatal(err)
 	}
 	auth := testAuthenticatorWithUsers(store)
-	h := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	id := uuid.NewString()
 	for _, route := range []struct{ method, path string }{{"GET", "/api/v2/repository-quota-alert-rules"}, {"POST", "/api/v2/repository-quota-alert-rules"}, {"GET", "/api/v2/repository-quota-alert-rules/" + id}, {"PUT", "/api/v2/repository-quota-alert-rules/" + id}, {"DELETE", "/api/v2/repository-quota-alert-rules/" + id}, {"GET", "/api/v2/repository-quota-alert-rules/" + id + "/events"}} {
 		for _, test := range []struct {
@@ -130,7 +130,7 @@ func TestQuotaRuleActivationNeedsEncryptionAndEnabledTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "synthetic@example.test", ApprovedIPs: []string{"192.0.2.10"}}
-	h := NewGatewayHandler(Dependencies{Email: cfg}, s, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: cfg}, Store: s, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	body := fmt.Sprintf(`{"repositoryId":%q,"targetId":%q,"enabled":true,"policy":{"warningBasisPoints":8500,"criticalBasisPoints":9500,"recoveryBelowBasisPoints":8000,"warningForSeconds":300,"criticalForSeconds":120,"recoveryForSeconds":180,"maxSampleAgeSeconds":60}}`, repo.ID, target.ID)
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", "")
 	w := quotaRequest(h, "POST", "/api/v2/repository-quota-alert-rules", body, "")
@@ -151,7 +151,7 @@ func TestQuotaRuleFiniteCountAndUniqueScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewGatewayHandler(Dependencies{}, s, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: s, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for i := 0; i < 101; i++ {
 		repo, err := s.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: fmt.Sprintf("quota-limit-%d", i), Format: repository.FormatRaw, Type: repository.RepositoryTypeHosted, State: repository.RepositoryActive})
 		if err != nil {
@@ -187,7 +187,7 @@ func TestAdministratorCreatesExplicitQuotaRuleDisabledWithoutSMTP(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	body := fmt.Sprintf(`{"repositoryId":%q,"targetId":%q,"policy":{"warningBasisPoints":8500,"criticalBasisPoints":9500,"recoveryBelowBasisPoints":8000,"warningForSeconds":300,"criticalForSeconds":120,"recoveryForSeconds":180,"maxSampleAgeSeconds":60}}`, repo.ID, target.ID)
 	r := httptest.NewRequest(http.MethodPost, "/api/v2/repository-quota-alert-rules", strings.NewReader(body))
 	authorize(r, "admin-secret")
@@ -229,7 +229,7 @@ func quotaFixture(t *testing.T) (http.Handler, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	body := fmt.Sprintf(`{"repositoryId":%q,"targetId":%q,"policy":{"warningBasisPoints":8500,"criticalBasisPoints":9500,"recoveryBelowBasisPoints":8000,"warningForSeconds":300,"criticalForSeconds":120,"recoveryForSeconds":180,"maxSampleAgeSeconds":60}}`, repo.ID, target.ID)
 	w := quotaRequest(h, "POST", "/api/v2/repository-quota-alert-rules", body, "")
 	if w.Code != 201 {

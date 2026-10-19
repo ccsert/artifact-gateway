@@ -16,13 +16,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestNativePyPIHostedUploadAndSimpleRead(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "pypi-hosted", Name: "python", Format: repository.FormatPyPI})
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +49,7 @@ func TestNativePyPIHostedUploadAndSimpleRead(t *testing.T) {
 	if err = writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativePyPIObjectStore: objects}, repository.FormatPyPI), store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatPyPI), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 	upload := httptest.NewRequest(http.MethodPost, "/pypi/"+repo.Name+"/legacy/", body)
 	upload.Header.Set("Content-Type", writer.FormDataContentType())
 	authorize(upload, "resolver-secret")
@@ -97,7 +98,7 @@ func TestNativePyPIRealTwineUploadAndPipDownload(t *testing.T) {
 	}
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "pypi-cli", Name: "python", Format: repository.FormatPyPI})
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +125,7 @@ func TestNativePyPIRealTwineUploadAndPipDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()}))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}}))
 	defer server.Close()
 	temporary := t.TempDir()
 	wheelPath := filepath.Join(temporary, "gateway_widget-1.2.3-py3-none-any.whl")
@@ -200,8 +201,8 @@ func TestNativePyPIProxyCachesVerifiedDistributionAndServesOffline(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := func(path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		authorize(req, "resolver-secret")
@@ -236,7 +237,7 @@ func TestNativePyPIProxyCachesVerifiedDistributionAndServesOffline(t *testing.T)
 func TestNativePyPIAnonymousReadAndManagedGrantBoundaries(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	public, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: "pypi-public", Name: "pypi-public", Format: repository.FormatPyPI, AnonymousRead: true,
 	})
@@ -254,7 +255,7 @@ func TestNativePyPIAnonymousReadAndManagedGrantBoundaries(t *testing.T) {
 	if _, err = store.ReplaceRepositoryGrants(ctx, private.ID, nil, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 	request := func(path, token string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -289,7 +290,7 @@ func TestNativePyPIAnonymousReadAndManagedGrantBoundaries(t *testing.T) {
 func TestNativePyPIGroupFiltersMembersByManagedGrant(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	denied, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: "pypi-group-denied", Name: "pypi-group-denied", Format: repository.FormatPyPI,
 	})
@@ -319,7 +320,7 @@ func TestNativePyPIGroupFiltersMembersByManagedGrant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 	request := httptest.NewRequest(http.MethodGet, "/pypi/"+group.Name+"/simple/shared-widget/", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -371,7 +372,7 @@ func TestNativePyPIGroupMergesMembersAndPrefersHostedConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hostedKey := "native/pypi/sha256/" + hex.EncodeToString(hostedSum[:])
 	if err = objects.Put(ctx, hostedKey, hostedBytes); err != nil {
 		t.Fatal(err)
@@ -383,7 +384,7 @@ func TestNativePyPIGroupMergesMembersAndPrefersHostedConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	get := func(path string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		authorize(request, "resolver-secret")
@@ -441,7 +442,7 @@ func pypiFixtureWheel(t *testing.T, distribution, version string) []byte {
 	return buffer.Bytes()
 }
 
-func publishPyPITestFile(t *testing.T, store *repository.MemoryStore, objects OCIObjectStore, repo repository.HostedRepository, project, version string) repository.PyPIFile {
+func publishPyPITestFile(t *testing.T, store *repository.MemoryStore, objects ObjectStore, repo repository.HostedRepository, project, version string) repository.PyPIFile {
 	t.Helper()
 	distribution := strings.ReplaceAll(project, "-", "_")
 	data := pypiFixtureWheel(t, distribution, version)

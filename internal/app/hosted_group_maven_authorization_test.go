@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -33,18 +34,18 @@ type groupMavenAuthorizationFixture struct {
 }
 
 type groupMavenAuthorizationObjects struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	reads atomic.Int32
 }
 
 func (s *groupMavenAuthorizationObjects) Get(ctx context.Context, key string) ([]byte, error) {
 	s.reads.Add(1)
-	return s.MemoryOCIObjectStore.Get(ctx, key)
+	return s.MemoryStore.Get(ctx, key)
 }
 
 func newGroupMavenAuthorizationFixture(t *testing.T) *groupMavenAuthorizationFixture {
 	t.Helper()
-	f := &groupMavenAuthorizationFixture{store: repository.NewMemoryStore(), objects: &groupMavenAuthorizationObjects{MemoryOCIObjectStore: NewMemoryOCIObjectStore()}}
+	f := &groupMavenAuthorizationFixture{store: repository.NewMemoryStore(), objects: &groupMavenAuthorizationObjects{MemoryStore: objectstore.NewMemoryStore()}}
 	var err error
 	f.hosted, err = f.store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "sample-releases", Name: "sample-releases", Format: repository.FormatMaven})
 	if err != nil {
@@ -67,10 +68,9 @@ func newGroupMavenAuthorizationFixture(t *testing.T) *groupMavenAuthorizationFix
 	)
 	f.grants(t, f.hosted, repository.RepositoryGrant{Principal: "fixture-reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example:"})
 	f.grants(t, f.proxy, repository.RepositoryGrant{Principal: "fixture-reader", Scopes: []string{"repositories:read"}})
-	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Minute, time.Minute, []string{host})
+	cache := NewMavenCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Minute, time.Minute, []string{host})
 	auth := Authenticator{AdminToken: "fixture-admin", ResolverToken: "fixture-secret", ResolverActor: "fixture-reader"}
-	f.handler = NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: f.objects}, f.store, TestAdapter{}, auth,
-		NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), cache, UpstreamClient{HTTPClient: upstream.Client(), AllowHTTPForTesting: true})
+	f.handler = newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: f.store, Adapter: TestAdapter{}, Authenticator: auth, Storage: ObjectStores{repository.FormatMaven: f.objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: cache}, Upstream: UpstreamClient{HTTPClient: upstream.Client(), AllowHTTPForTesting: true}})
 	return f
 }
 

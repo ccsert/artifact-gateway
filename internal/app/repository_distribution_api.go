@@ -505,7 +505,7 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 			_, err = h.sessions.store.RestoreGoModuleVersion(r.Context(), repo.ID, modulePath, version)
 		case repository.FormatCargo:
 			name, version, _ := splitVersionCoordinate(request.Coordinate)
-			if h.diagnostics.NativeCargoObjectStore == nil {
+			if h.objects[repository.FormatCargo] == nil {
 				err = repository.ErrDisabled
 				break
 			}
@@ -515,7 +515,7 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 				break
 			}
 			objectKey := "native/cargo/sha256/" + strings.TrimPrefix(reservation.Digest, "sha256:")
-			stored, statErr := h.diagnostics.NativeCargoObjectStore.Stat(r.Context(), objectKey)
+			stored, statErr := h.objects[repository.FormatCargo].Stat(r.Context(), objectKey)
 			if errors.Is(statErr, objectstore.ErrNotFound) {
 				err = repository.ErrDisabled
 			} else if statErr != nil {

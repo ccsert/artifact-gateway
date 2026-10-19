@@ -69,7 +69,7 @@ func TestPostgresEmailConsoleBrowserTLS(t *testing.T) {
 	}}
 	// Both fixtures use their own CA; switch the complete sender at the worker boundary.
 	worker := EmailNotificationWorker{Store: store, Sender: sender, InstanceID: "email-console-browser-owned"}
-	handler := NewGatewayHandler(Dependencies{Email: cfg}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: cfg}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/__fixture/failure" && r.Method == http.MethodPost {
 			failure.Store(true)

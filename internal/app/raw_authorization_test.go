@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -47,7 +48,7 @@ func TestRawAnonymousPolicyRequiresPublicGroupAndMember(t *testing.T) {
 		}
 	}
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
-	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 	for group, want := range map[string]int{"private": http.StatusUnauthorized, "member-private": http.StatusUnauthorized, "public": http.StatusOK} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/raw/"+group+"/artifact", nil))
@@ -96,7 +97,7 @@ func TestRawDoesNotExposeOCIGroupAndChecksMemberGrantBeforeCache(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "shared", Members: []repository.Member{{Name: "oci", Type: repository.MemberHosted}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
-	denied := RawHandler{Store: store, Authenticator: Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"build-agent": {"downloads"}}}, Client: client, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	denied := RawHandler{Store: store, Authenticator: Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"build-agent": {"downloads"}}}, Client: client, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 	w := httptest.NewRecorder()
 	denied.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/shared/a"))
 	if w.Code != http.StatusNotFound {
@@ -164,7 +165,7 @@ func TestRawUsesManagedGrantsForBoundMembers(t *testing.T) {
 	authenticator := Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", RepositoryReaders: map[string][]string{"build-agent": {"downloads"}}}
 	client := &rawFixtureClient{responses: map[string]int{"denied": http.StatusOK, "allowed": http.StatusOK}, body: []byte("artifact")}
 	metrics := &Metrics{}
-	handler := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: client, Metrics: metrics, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	handler := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: client, Metrics: metrics, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
@@ -244,7 +245,7 @@ func TestRawBoundGrantDenialDoesNotServeCachedSource(t *testing.T) {
 	}
 	authenticator := Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", RepositoryReaders: map[string][]string{"build-agent": {"downloads"}}}
 	client := &rawFixtureClient{responses: map[string]int{"cached": http.StatusOK}, body: []byte("artifact")}
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)
 	handler := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: client, Cache: cache}
 
 	first := httptest.NewRecorder()

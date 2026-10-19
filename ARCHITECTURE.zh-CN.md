@@ -73,6 +73,29 @@ advisory lock、`FOR UPDATE SKIP LOCKED` 和尽力而为的 `LISTEN/NOTIFY` 唤�
 协议包负责 wire compatibility 和格式坐标；应用 Handler 负责授权并编排领域接口，不应
 重新实现协议规则。Repository 实现负责事务持久化，但不负责 HTTP 响应语义。
 
+## 显式 HTTP 组合根
+
+`NewGatewayHandler(GatewayOptions)` 是唯一 HTTP 装配入口，返回处理器或配置错误。
+`GatewayOptions` 显式指定元数据、按格式注入的 `ObjectStores`、代理缓存、认证、可选
+上游传输与指标；`Dependencies` 保留运行时和可选功能服务，不再携带逐格式的字节存储
+字段。
+
+构造器在注册路由前拒绝缺失的元数据存储、仓库可用性适配器，以及任一已准入格式的
+对象存储，也拒绝接口中装入的类型化 nil。`cmd/gateway` 先初始化 PostgreSQL 连接池并
+验证 RustFS 桶，再通过 `SharedObjectStores` 显式分配持久存储。缓存维护也必须显式
+提供对象存储。已配置的格式缓存也会校验内部字节存储依赖，包括类型化 nil。格式缓存
+为 nil 表示禁用该缓存；HTTP 和原生格式构造器都不会创建替代
+存储。
+
+原生处理器使用与格式无关的 `objectstore.Store` 端口，在组合边界命名为
+`app.ObjectStore`。OCI 与 Raw 分别注入存储，各格式保留既有对象键命名空间、摘要及
+发布顺序；共享同一个持久桶由部署明确选择。
+
+`internal/apptest` 为单元测试与原生客户端 fixture 提供隔离的内存对象存储和泛型
+`NewGateway` 辅助函数。app 同包测试通过薄辅助层复用它，避免导入环。生产路径不导入
+`apptest`；内存持久层是明确选择的测试设施，PostgreSQL/RustFS 集成测试仍负责证明
+持久化与并发语义。
+
 ## 仓库模型
 
 - **Hosted** 接受原生发布并拥有制品生命周期。

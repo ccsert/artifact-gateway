@@ -56,7 +56,7 @@ func TestOIDCBrowserJITRegistersPendingUserWithoutRepositoryAccess(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{OIDCRuntime: runtime}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{OIDCRuntime: runtime}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	signIn := func() *http.Cookie {
 		t.Helper()
 		start := httptest.NewRecorder()
@@ -231,7 +231,7 @@ func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(dependencies, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: dependencies, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 
 	configResponse := httptest.NewRecorder()
 	handler.ServeHTTP(configResponse, httptest.NewRequest(http.MethodGet, "/auth/oidc/config", nil))
@@ -313,7 +313,7 @@ func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 }
 
 func TestOIDCConfigIsDisabledWithoutBrowserClient(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/auth/oidc/config", nil))
 	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != `{"enabled":false}` {

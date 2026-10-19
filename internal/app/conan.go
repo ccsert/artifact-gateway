@@ -68,7 +68,7 @@ type ConanHandler struct {
 	Authenticator Authenticator
 	Client        ConanClient
 	Cache         *ConanCache
-	NativeObjects OCIObjectStore
+	NativeObjects ObjectStore
 	Metrics       *Metrics
 	ReadPolicies  repository.RepositoryQuarantineReadPolicyStore
 	Quarantine    repository.ArtifactQuarantineStore

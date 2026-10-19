@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-func publishQuarantineReadNPM(t *testing.T, store *repository.MemoryStore, objects *MemoryOCIObjectStore, repo repository.HostedRepository, packageName, version string, body []byte) repository.NPMVersion {
+func publishQuarantineReadNPM(t *testing.T, store *repository.MemoryStore, objects *objectstore.MemoryStore, repo repository.HostedRepository, packageName, version string, body []byte) repository.NPMVersion {
 	t.Helper()
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
@@ -36,7 +37,7 @@ func publishQuarantineReadNPM(t *testing.T, store *repository.MemoryStore, objec
 func TestNPMQuarantineReadPolicyHidesWholeVersionAndBlocksTarball(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "npm-read-hosted", Name: "npm-read-hosted", Format: repository.FormatNPM})
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +46,7 @@ func TestNPMQuarantineReadPolicyHidesWholeVersionAndBlocksTarball(t *testing.T) 
 	blocked := publishQuarantineReadNPM(t, store, objects, repo, "widget", "1.0.0", []byte("blocked npm"))
 	enableQuarantineReadPolicy(t, store, repo.ID)
 	quarantineReadIdentity(t, store, repo, "widget@1.0.0", blocked.Digest)
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
 
 	packumentRequest := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/widget", nil)
 	authorize(packumentRequest, "resolver-secret")
@@ -90,7 +91,7 @@ func TestNPMQuarantineReadPolicyHidesWholeVersionAndBlocksTarball(t *testing.T) 
 func TestNPMGroupDoesNotReintroduceQuarantinedVersionFromLowerPriorityMember(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	first, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "npm-read-first", Name: "npm-read-first", Format: repository.FormatNPM})
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +108,7 @@ func TestNPMGroupDoesNotReintroduceQuarantinedVersionFromLowerPriorityMember(t *
 		repository.GroupMember{RepositoryID: first.ID},
 		repository.GroupMember{RepositoryID: second.ID, Position: 1},
 	)
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
 
 	request := func(path string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, path, nil)
@@ -130,7 +131,7 @@ func TestNPMGroupDoesNotReintroduceQuarantinedVersionFromLowerPriorityMember(t *
 func TestNPMGroupQuarantinedVersionClaimsDifferentTarballName(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	first, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "npm-read-name-first", Name: "npm-read-name-first", Format: repository.FormatNPM})
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +154,7 @@ func TestNPMGroupQuarantinedVersionClaimsDifferentTarballName(t *testing.T) {
 	enableQuarantineReadPolicy(t, store, first.ID)
 	quarantineReadIdentity(t, store, first, "widget@1.0.0", blocked.Digest)
 	createV2Group(t, store, "npm-read-name-group", repository.FormatNPM, repository.GroupMember{RepositoryID: first.ID}, repository.GroupMember{RepositoryID: second.ID, Position: 1})
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-read-name-group/widget/-/alternate.tgz", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
@@ -272,7 +273,7 @@ func TestArtifactScanWorkerStartProcessesJobsAfterLifecycleNotification(t *testi
 func TestNativeArtifactScanResolverSelectsExactMavenSnapshotBuild(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if _, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "repo", Name: "maven", Format: repository.FormatMaven}); err != nil {
 		t.Fatal(err)
 	}
@@ -326,10 +327,10 @@ func TestArtifactScanAPIEnqueuesIdempotently(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := testScanDigest("asset")
-	handler := NewGatewayHandler(Dependencies{
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
 		ArtifactScanner:        scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) { return scanning.Report{}, nil }),
 		ArtifactScannerFormats: []repository.Format{repository.FormatRaw},
-	}, store, TestAdapter{}, Authenticator{AdminToken: "admin", AdminActor: "operator", ResolverToken: "resolver", ResolverActor: "build-agent"})
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "admin", AdminActor: "operator", ResolverToken: "resolver", ResolverActor: "build-agent"}})
 	request := func(token, key, coordinate, requestedDigest string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/artifact-scans", bytes.NewBufferString(`{"coordinate":"`+coordinate+`","digest":"`+requestedDigest+`"}`))
 		r.Header.Set("Authorization", "Bearer "+token)
@@ -365,12 +366,12 @@ func TestArtifactScanAPIRejectsUnsupportedProxyCacheLayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
 		ArtifactScanner: scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) {
 			return scanning.Report{}, nil
 		}),
 		ArtifactScannerFormats: []repository.Format{repository.FormatRaw, repository.FormatNPM},
-	}, store, TestAdapter{}, Authenticator{AdminToken: "admin", AdminActor: "operator"})
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "admin", AdminActor: "operator"}})
 	request := func(repo repository.HostedRepository, coordinate string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/artifact-scans", bytes.NewBufferString(`{"coordinate":"`+coordinate+`","digest":"`+testScanDigest(coordinate)+`"}`))
 		r.Header.Set("Authorization", "Bearer admin")

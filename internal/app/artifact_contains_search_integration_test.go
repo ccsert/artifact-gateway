@@ -46,7 +46,7 @@ func TestPostgresContainsArtifactSearchHTTP(t *testing.T) {
 		}
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	for _, endpoint := range []string{"/api/v2/artifact-search", "/api/v2/repositories/" + repo.ID + "/artifact-search"} {
 		t.Run(endpoint, func(t *testing.T) {
 			query := "Alpha"
@@ -132,7 +132,7 @@ func TestPostgresContainsGlobalSearchProbeBudget(t *testing.T) {
 	}
 	counted := &countedSearchStore{GatewayStore: store}
 	auth := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, counted, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: counted, Adapter: TestAdapter{}, Authenticator: auth})
 	for _, q := range []string{"needle", "artifact", "absent-keyword", "x", "ph", "/", "a:b", "1.0"} {
 		for _, size := range []string{"1", "50", "200"} {
 			counted.probes = 0
@@ -221,7 +221,7 @@ func TestPostgresContainsSearchAcrossFormats(t *testing.T) {
 				exec(`INSERT INTO native_cargo_publications(repository_id,collision_key,version_key,object_key,size,index_row,publisher,published_at) VALUES($1,$2,'1.0.0',$3,7,'{}','fixture',now())`, repo.ID, coordinate, "native/cargo/sha256/"+strings.Repeat("a", 64))
 			}
 			authenticator := testAuthenticator()
-			handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 			for _, endpoint := range []string{"/api/v2/artifact-search", "/api/v2/repositories/" + repo.ID + "/artifact-search"} {
 				values := url.Values{"q": {"ALPHA"}, "match": {"contains"}, "format": {string(format)}}
 				request := httptest.NewRequest("GET", endpoint+"?"+values.Encode(), nil)
@@ -333,7 +333,7 @@ func TestPostgresContainsSearchMetadataLockBudget(t *testing.T) {
 	}
 	auth := testAuthenticator()
 	auth.APIKeys = scopedStore
-	handler := NewGatewayHandler(Dependencies{}, scopedStore, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: scopedStore, Adapter: TestAdapter{}, Authenticator: auth})
 	for _, anonymous := range []bool{false, true} {
 		requestCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
 		req := httptest.NewRequest("GET", "/api/v2/repositories/"+repo.ID+"/artifact-search?q=alpha&match=contains", nil).WithContext(requestCtx)

@@ -280,3 +280,11 @@ func (c *Cache) renewPublicationLock(ctx context.Context, owner string, failed c
 }
 
 var ErrLockRenewal = errors.New("conan distributed publication lock renewal failed")
+
+// Validate rejects an unconfigured byte store before the cache is used.
+func (c *Cache) Validate() error {
+	if c == nil {
+		return objectstore.Validate(nil)
+	}
+	return objectstore.Validate(c.store)
+}

@@ -20,7 +20,7 @@ func TestRuntimeLogErrorsMatchDeclaredProblemContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := operationalog.NewBuffer(1)
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	initial := runtimeLogPage(t, h, nil)
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -30,14 +30,14 @@ func TestRuntimeLogErrorsMatchDeclaredProblemContract(t *testing.T) {
 		handler          http.Handler
 		ctx              context.Context
 	}{
-		{"disabled", "", "log_buffer_unavailable", 503, runtimeLogFixture(nil, "node", "session"), nil},
-		{"identity", "", "log_source_identity_unavailable", 503, runtimeLogFixture(b, "node", ""), nil},
+		{"disabled", "", "log_buffer_unavailable", 503, runtimeLogFixture(t, nil, "node", "session"), nil},
+		{"identity", "", "log_source_identity_unavailable", 503, runtimeLogFixture(t, b, "node", ""), nil},
 		{"remote", "?instanceId=other", "remote_log_query_unavailable", 503, h, nil},
 		{"window", "?from=2026-01-01T00:00:00Z&to=2026-01-03T00:00:00Z", "invalid_time_window", 400, h, nil},
 		{"limit", "?limit=101", "invalid_limit", 400, h, nil},
 		{"cursor", "?afterCursor=bad", "invalid_cursor", 400, h, nil},
 		{"filter", "?component=" + url.QueryEscape("http\x1b"), "invalid_filter", 400, h, nil},
-		{"session", "?afterCursor=" + url.QueryEscape(*initial.AfterCursor), "log_cursor_scope_changed", 409, runtimeLogFixture(operationalog.NewBuffer(1), "node", "new-session"), nil},
+		{"session", "?afterCursor=" + url.QueryEscape(*initial.AfterCursor), "log_cursor_scope_changed", 409, runtimeLogFixture(t, operationalog.NewBuffer(1), "node", "new-session"), nil},
 		{"timeout", "", "log_query_timeout", 504, h, canceled},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -57,7 +57,7 @@ func TestRuntimeLogErrorsMatchDeclaredProblemContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	auth := testAuthenticatorWithUsers(store)
-	guarded := NewGatewayHandler(Dependencies{LogBuffer: b, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}}, store, TestAdapter{}, auth)
+	guarded := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LogBuffer: b, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	assertRuntimeLogProblemContract(t, spec, requestRuntimeLogs(guarded, auth.IssueToken("user:runtime-contract-reset")), 403, "password_change_required")
 }
 

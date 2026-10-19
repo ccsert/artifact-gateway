@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -20,7 +21,7 @@ import (
 func TestAPTLifecycleManagementAuthorizationAndEmptySnapshot(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "apt-lifecycle", Format: repository.FormatAPT, Type: repository.RepositoryTypeHosted})
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +40,7 @@ func TestAPTLifecycleManagementAuthorizationAndEmptySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects, APTSigner: aptManagementSigner{}}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{APTSigner: aptManagementSigner{}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objects}})
 	request := aptpublication.LifecycleRequest{Suite: "stable", ExpectedSnapshotID: snapshot.ID, Action: "delete", PublicationSessionIDs: []string{session.ID}}
 	body, _ := json.Marshal(request)
 	call := func(method, path, token string, body []byte) *httptest.ResponseRecorder {

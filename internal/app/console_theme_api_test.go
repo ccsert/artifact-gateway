@@ -66,7 +66,7 @@ const acmeDarkTheme = `{
 
 func TestConsoleThemePackageManagementLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, body, token, ifMatch string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		if token != "" {
@@ -150,7 +150,7 @@ func TestConsoleThemePackageManagementLifecycle(t *testing.T) {
 
 func TestConsoleThemePackageRejectsInvalidAndReservedPackages(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 		authorize(r, "admin-secret")
@@ -180,7 +180,7 @@ func TestConsoleThemePackageRejectsInvalidAndReservedPackages(t *testing.T) {
 
 func TestConsoleThemeCatalogMutationsShareOneLock(t *testing.T) {
 	store := &catalogLockObservingStore{MemoryStore: repository.NewMemoryStore()}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	settingsBody := `{"siteName":"Artifact Gateway","logoUrl":"","brandMark":"AG","enabledThemeIds":["gateway-dark","gateway-light","aerok-dark","aerok-light"],"defaultThemeId":"gateway-dark"}`
 	settingsRequest := httptest.NewRequest(http.MethodPut, "/api/v2/site-settings", strings.NewReader(settingsBody))

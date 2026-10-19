@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
@@ -23,7 +24,7 @@ import (
 func TestAPTHTTPScanAndQuarantineSignedReads(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "apt-scanning", Format: repository.FormatAPT, Type: repository.RepositoryTypeHosted})
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +88,7 @@ func TestAPTHTTPScanAndQuarantineSignedReads(t *testing.T) {
 	if _, err = store.ReplaceRepositorySecurityPolicy(ctx, repo.ID, policy, policy.Version); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects, APTSigner: aptManagementSigner{}, ArtifactScanner: scanner, ArtifactScannerFormats: []repository.Format{repository.FormatAPT}}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{APTSigner: aptManagementSigner{}, ArtifactScanner: scanner, ArtifactScannerFormats: []repository.Format{repository.FormatAPT}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objects}})
 	call := func(method, path, token, body, version string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, token)

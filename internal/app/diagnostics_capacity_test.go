@@ -32,7 +32,7 @@ func TestDiagnosticsCapacityPreservesAdministratorAndPasswordGates(t *testing.T)
 		t.Fatal(err)
 	}
 	auth := testAuthenticatorWithUsers(store)
-	handler := NewGatewayHandler(Dependencies{LocalCapacity: o}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LocalCapacity: o}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	resetToken := auth.IssueToken("user:capacity-reset")
 	for _, token := range []string{"", "reader-secret", resetToken} {
 		r := capacityResponse(handler, token)
@@ -89,7 +89,7 @@ func TestDiagnosticsCapacityHasNoFakeZeroForUnconfiguredOrFailedObservation(t *t
 				t.Fatal(err)
 			}
 		}
-		r := capacityResponse(NewGatewayHandler(deps, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator()), "admin-secret")
+		r := capacityResponse(newTestGateway(t, GatewayOptions{Dependencies: deps, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()}), "admin-secret")
 		if r.Code != http.StatusOK || strings.Contains(r.Body.String(), "totalBytes") || strings.Contains(r.Body.String(), "availableBytes") || strings.Contains(r.Body.String(), "private-secret") {
 			t.Fatalf("unknown capacity response=%d %s", r.Code, r.Body.String())
 		}
@@ -114,7 +114,7 @@ func TestDiagnosticsRepeatedTimeoutsReuseProcessObserverWithoutProbeGrowth(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{LocalCapacity: o}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LocalCapacity: o}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for range 8 {
 		r := capacityResponse(handler, "admin-secret")
 		if r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"reason":"timeout"`) || strings.Contains(r.Body.String(), "availableBytes") {
@@ -151,7 +151,7 @@ func TestDiagnosticsLocalCapacityMatchesGeneratedOpenAPIResponse(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		response := capacityResponse(NewGatewayHandler(deps, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator()), "admin-secret")
+		response := capacityResponse(newTestGateway(t, GatewayOptions{Dependencies: deps, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()}), "admin-secret")
 		var body map[string]any
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)

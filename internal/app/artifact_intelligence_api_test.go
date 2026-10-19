@@ -29,7 +29,7 @@ func TestArtifactIntelligenceManagementHTTP(t *testing.T) {
 	if _, err := store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, body, token, ifMatch string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		if token != "" {
@@ -95,7 +95,7 @@ func TestArtifactIntelligenceScopeIsNarrowerThanRepositoryWrite(t *testing.T) {
 	}
 	auth := testAuthenticator()
 	auth.APIKeys = store
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, keyToken)
@@ -121,7 +121,7 @@ func TestArtifactIntelligenceRejectsUnknownArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	digest := "sha256:" + strings.Repeat("d", 64)
 	request := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/artifact-intelligence?coordinate=library/missing&digest="+digest, strings.NewReader(`{"signatures":[],"sboms":[],"licenses":[]}`))
 	authorize(request, "admin-secret")
@@ -147,7 +147,7 @@ func TestArtifactIntelligenceManagementHTTPRejectsInvalidPayloads(t *testing.T) 
 	}, "latest"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	path := "/api/v2/repositories/" + repo.ID + "/artifact-intelligence?coordinate=library/validation&digest=" + digest
 	request := func(payload adminopenapi.ArtifactIntelligenceWritable) *httptest.ResponseRecorder {
 		body, err := json.Marshal(payload)

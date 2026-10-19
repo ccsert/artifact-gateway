@@ -12,12 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 type noBrowseObjectReads struct {
-	OCIObjectStore
+	ObjectStore
 	t *testing.T
 }
 
@@ -37,7 +38,7 @@ func proxyDirectoryFixture(t *testing.T, format repository.Format) (*PostgresCac
 	if databaseURL == "" {
 		t.Skip("PostgreSQL integration environment is required")
 	}
-	control, err := NewPostgresCacheControlStore(noBrowseObjectReads{NewMemoryOCIObjectStore(), t}, databaseURL)
+	control, err := NewPostgresCacheControlStore(noBrowseObjectReads{objectstore.NewMemoryStore(), t}, databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +58,7 @@ func proxyDirectoryFixture(t *testing.T, format repository.Format) (*PostgresCac
 	raw := NewDefaultRawCache(control, nil)
 	maven := NewDefaultMavenCache(control, nil)
 	maintenance := NewCacheMaintenanceWithRaw(control, oci, raw)
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), oci, maven, raw, nil, maintenance)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: oci, Maven: maven, Raw: raw, Conan: nil, Maintenance: maintenance}})
 	return control, store, repo, handler
 }
 

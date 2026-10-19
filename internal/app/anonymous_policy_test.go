@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -131,7 +132,7 @@ func TestAnonymousConanPolicyNeverAllowsWrites(t *testing.T) {
 	if _, err := store.CreateConanGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}}); err != nil {
 		t.Fatal(err)
 	}
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Cache: NewConanCache(objectstore.NewMemoryStore())}
 	for _, request := range []*http.Request{
 		httptest.NewRequest(http.MethodDelete, "/conan/v2/public/conans/pkg/1.0/u/c/revisions/rev", nil),
 		httptest.NewRequest(http.MethodPost, "/conan/v2/public/conans/pkg/1.0/u/c/revisions/rev:restore", nil),

@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestMavenReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testing.T) {
 	ctx := context.Background()
-	store, objects := repository.NewMemoryStore(), NewMemoryOCIObjectStore()
+	store, objects := repository.NewMemoryStore(), objectstore.NewMemoryStore()
 	body := []byte("quarantined Maven replication")
 	digest := quarantineReplicationDigest(body)
 	coordinate := "org.example:quarantined:1.0.0"
@@ -50,7 +51,7 @@ func TestMavenReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *test
 		t.Fatal(err)
 	}
 	destination := &quarantineBeforeReplicationPublishStore{
-		OCIObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued Maven replication",
+		ObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued Maven replication",
 	}
 
 	if err := (MavenReplication{Store: store, Source: objects, Destination: destination}).RunJobs(ctx, 1); err != nil {
@@ -65,7 +66,7 @@ func TestMavenReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *test
 
 func TestOCIReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testing.T) {
 	ctx := context.Background()
-	store, objects := repository.NewMemoryStore(), NewMemoryOCIObjectStore()
+	store, objects := repository.NewMemoryStore(), objectstore.NewMemoryStore()
 	body := []byte(`{"schemaVersion":2}`)
 	digest := quarantineReplicationDigest(body)
 	name, sourceKey := "team/quarantined", "native/oci/source/quarantined"
@@ -93,7 +94,7 @@ func TestOCIReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testin
 		t.Fatal(err)
 	}
 	destination := &quarantineBeforeReplicationPublishStore{
-		OCIObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued OCI replication",
+		ObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued OCI replication",
 	}
 
 	if err := (OCIReplication{Store: store, Source: objects, Destination: destination}).RunJobs(ctx, 1); err != nil {
@@ -108,7 +109,7 @@ func TestOCIReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testin
 
 func TestNPMReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testing.T) {
 	ctx := context.Background()
-	store, objects := repository.NewMemoryStore(), NewMemoryOCIObjectStore()
+	store, objects := repository.NewMemoryStore(), objectstore.NewMemoryStore()
 	body := []byte("quarantined npm replication")
 	digest := quarantineReplicationDigest(body)
 	packageName, version := "quarantined-widget", "1.0.0"
@@ -134,7 +135,7 @@ func TestNPMReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testin
 		t.Fatal(err)
 	}
 	destination := &quarantineBeforeReplicationPublishStore{
-		OCIObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued npm replication",
+		ObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued npm replication",
 	}
 
 	if err := (NPMReplication{Store: store, Source: objects, Destination: destination}).RunJobs(ctx, 1); err != nil {
@@ -149,7 +150,7 @@ func TestNPMReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testin
 
 func TestConanReplicationWorkerParksRecipeClosureQuarantinedAfterPlanCreation(t *testing.T) {
 	ctx := context.Background()
-	store, objects := repository.NewMemoryStore(), NewMemoryOCIObjectStore()
+	store, objects := repository.NewMemoryStore(), objectstore.NewMemoryStore()
 	reference, revision := "quarantined/1.0/user/stable", "rrev"
 	recipeBody, packageBody := []byte("quarantined recipe"), []byte("quarantined package")
 	recipeDigest, packageDigest := quarantineReplicationDigest(recipeBody), quarantineReplicationDigest(packageBody)
@@ -199,7 +200,7 @@ func TestConanReplicationWorkerParksRecipeClosureQuarantinedAfterPlanCreation(t 
 		t.Fatal(err)
 	}
 	destination := &quarantineBeforeReplicationPublishStore{
-		OCIObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued Conan recipe closure",
+		ObjectStore: objects, Repository: store, Plan: plan, Reason: "block queued Conan recipe closure",
 	}
 
 	if err = (ConanReplication{Store: store, Source: objects, Destination: destination}).RunJobs(ctx, 1); err != nil {
@@ -216,7 +217,7 @@ func TestConanReplicationWorkerParksRecipeClosureQuarantinedAfterPlanCreation(t 
 }
 
 type quarantineBeforeReplicationPublishStore struct {
-	OCIObjectStore
+	ObjectStore
 	Repository *repository.MemoryStore
 	Plan       repository.ReplicationPlan
 	Digest     string
@@ -226,7 +227,7 @@ type quarantineBeforeReplicationPublishStore struct {
 }
 
 func (s *quarantineBeforeReplicationPublishStore) SetVerifiedDigest(ctx context.Context, key, digest string) error {
-	if err := s.OCIObjectStore.SetVerifiedDigest(ctx, key, digest); err != nil {
+	if err := s.ObjectStore.SetVerifiedDigest(ctx, key, digest); err != nil {
 		return err
 	}
 	if s.Triggered {

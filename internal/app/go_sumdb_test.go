@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/ccsert/artifact-gateway/internal/egress"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 	"golang.org/x/mod/sumdb"
@@ -125,10 +126,7 @@ func TestNativeGoSumDBMirrorsOnlyAllowlistedChecksumDatabases(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() { goSumDBEgressHooks = previousHooks })
-	handler := NewGatewayHandler(
-		Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store,
-		TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: sumdbServer.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: sumdbServer.Client()}})
 
 	request := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
@@ -288,11 +286,7 @@ func TestNativeGoRealClientVerifiesChecksumsThroughSumDBMirror(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gateway := httptest.NewServer(NewGatewayHandler(
-		Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store,
-		TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: sumdbServer.Client()},
-	))
+	gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: sumdbServer.Client()}}))
 	t.Cleanup(gateway.Close)
 
 	temporary := t.TempDir()

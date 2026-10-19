@@ -8,13 +8,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestConanReplicationCopiesRecipeAndPackageToTargetOwnedKeys(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	reference, revision := "widget/1.0/user/stable", "rrev"
 	recipeBody, packageBody := []byte("recipe"), []byte("package")
 	recipeDigest, packageDigest := conanReplicationDigest(recipeBody), conanReplicationDigest(packageBody)
@@ -63,7 +64,7 @@ func TestConanReplicationCopiesRecipeAndPackageToTargetOwnedKeys(t *testing.T) {
 func TestConanReplicationRejectsTombstonedSource(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte("source visibility")
 	digest := conanReplicationDigest(body)
 	reference, revision, key := "widget/1.0/user/stable", "rrev", "native/conan/source/recipe"
@@ -91,7 +92,7 @@ func TestConanReplicationRejectsTombstonedSource(t *testing.T) {
 func TestConanReplicationDoesNotPublishRecipeWhenAnyTargetObjectIsUnavailable(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	reference, revision := "widget/1.0/user/stable", "rrev"
 	recipeBody, packageBody := []byte("recipe"), []byte("package")
 	recipeDigest, packageDigest := conanReplicationDigest(recipeBody), conanReplicationDigest(packageBody)

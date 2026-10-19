@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/authorization"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -48,12 +49,7 @@ func TestNativeRawAcceptsServiceAccountCredentialThroughBasicAuthentication(t *t
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		Authenticator{APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{APIKeys: store}, Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 
 	request := httptest.NewRequest(http.MethodPut, "/raw/service-account-raw/releases/app.txt", strings.NewReader("artifact"))
 	request.SetBasicAuth("jenkins", token)
@@ -70,7 +66,7 @@ func TestNativeRawHostedPutReadRangeHeadAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, bytes.NewReader(body))
 		authorize(r, "resolver-secret")
@@ -134,7 +130,7 @@ func TestNativeRawHostedAnonymousReadPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	for _, repo := range []string{"public", "private"} {
 		put := httptest.NewRequest(http.MethodPut, "/raw/"+repo+"/release/app.txt", strings.NewReader("raw"))
 		put.Header.Set("Content-Type", "text/plain")
@@ -168,7 +164,7 @@ func TestNativeRawHostedUsesManagedRepositoryGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	adminPut := httptest.NewRequest(http.MethodPut, "/raw/downloads/releases/app.txt", strings.NewReader("native raw artifact"))
 	authorize(adminPut, "admin-secret")
 	adminPutResponse := httptest.NewRecorder()
@@ -224,7 +220,7 @@ func TestNativeRawHostedGeneratesAndValidatesChecksumSidecars(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, path, bytes.NewReader(body))
@@ -291,7 +287,7 @@ func TestNativeRawHostedResumableUploadIsAtomic(t *testing.T) {
 		t.Fatal(err)
 	}
 	enablePublicationScan(t, store, repo.ID)
-	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, repository.FormatRaw), store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatRaw), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, bytes.NewReader(body))
 		authorize(r, "resolver-secret")
@@ -358,7 +354,7 @@ func TestNativeRawHostedListsVisibleAssetsWithPagination(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	put := func(path, content string) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPut, "/raw/downloads/"+path, strings.NewReader(content))
@@ -437,8 +433,8 @@ func TestNativeRawHostedListsVisibleAssetsWithPagination(t *testing.T) {
 func TestNativeRawHostedStreamsRangeFromObjectStore(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw})
-	objects := &recordingNativeRawObjectStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore()}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	objects := &recordingNativeRawObjectStore{MemoryStore: objectstore.NewMemoryStore()}
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	put := httptest.NewRequest(http.MethodPut, "/raw/downloads/releases/big.bin", strings.NewReader(strings.Repeat("abcdef", 128)))
 	authorize(put, "resolver-secret")
 	created := httptest.NewRecorder()
@@ -477,17 +473,17 @@ func TestNativeRawHostedStreamsRangeFromObjectStore(t *testing.T) {
 }
 
 type recordingNativeRawObjectStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	openCalls      int
 	openRangeCalls int
 }
 
 func (s *recordingNativeRawObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	s.openCalls++
-	return s.MemoryOCIObjectStore.Open(ctx, key)
+	return s.MemoryStore.Open(ctx, key)
 }
 
 func (s *recordingNativeRawObjectStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
 	s.openRangeCalls++
-	return s.MemoryOCIObjectStore.OpenRange(ctx, key, offset, length)
+	return s.MemoryStore.OpenRange(ctx, key, offset, length)
 }

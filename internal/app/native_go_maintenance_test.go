@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 type failOnceGoDeleteStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	fail bool
 }
 
@@ -33,7 +34,7 @@ func (s *failOnceGoDeleteStore) Delete(ctx context.Context, key string) error {
 	if s.fail {
 		return errors.New("object store unavailable")
 	}
-	return s.MemoryOCIObjectStore.Delete(ctx, key)
+	return s.MemoryStore.Delete(ctx, key)
 }
 
 func TestNativeGoMaintenanceRetriesDurablePublicationCleanup(t *testing.T) {
@@ -45,7 +46,7 @@ func TestNativeGoMaintenanceRetriesDurablePublicationCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := &failOnceGoDeleteStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), fail: true}
+	objects := &failOnceGoDeleteStore{MemoryStore: objectstore.NewMemoryStore(), fail: true}
 	key := "native/go/sha256/" + strings.Repeat("a", 64)
 	if err = objects.Put(ctx, key, []byte("orphan")); err != nil {
 		t.Fatal(err)
@@ -107,7 +108,7 @@ func TestNativeGoMaintenanceKeepsReferencedPublicationObject(t *testing.T) {
 	if _, err = store.CacheGoModuleAsset(ctx, asset); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, key, []byte("visible")); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +150,7 @@ func TestNativeGoMaintenanceReclaimsTombstonedVersionAfterRecoveryWindow(t *test
 	}); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	for _, asset := range assets {
 		if err = objects.Put(ctx, asset.ObjectKey, []byte(asset.Kind)); err != nil {
 			t.Fatal(err)
@@ -237,7 +238,7 @@ func TestNativeGoMaintenanceCollectsTombstonedReferenceButKeepsSharedObject(t *t
 			t.Fatal(err)
 		}
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	for _, asset := range assetsFor(repoA.ID) {
 		if err = objects.Put(ctx, asset.ObjectKey, []byte(asset.Kind)); err != nil {
 			t.Fatal(err)
@@ -286,7 +287,7 @@ func TestNativeGoMaintenanceFailsRestoreClosedAfterDeleteBeforeCollectedMark(t *
 	}); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	for _, asset := range assets {
 		if err = objects.Put(ctx, asset.ObjectKey, []byte(asset.Kind)); err != nil {
 			t.Fatal(err)

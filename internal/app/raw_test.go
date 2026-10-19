@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -67,7 +68,7 @@ func TestRawHostedFirstCacheAndRange(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusNotFound, "proxy": http.StatusOK}, body: []byte("artifact")}
-	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"})}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"proxy.example"})}
 	for range 2 {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
@@ -93,7 +94,7 @@ func TestRawRejectsMultipartRangeOverHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)})
+	server := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)})
 	defer server.Close()
 	for _, values := range [][]string{{"bytes=0-1,3-4"}, {"bytes=0-1", "bytes=3-4"}} {
 		request, err := http.NewRequest(http.MethodGet, server.URL+"/raw/downloads/release/app.txt", nil)
@@ -119,7 +120,7 @@ func TestRawHeadConditionalAndChecksumSidecars(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
-	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 
 	warm := httptest.NewRecorder()
 	h.ServeHTTP(warm, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
@@ -295,7 +296,7 @@ type rawLockLifecycleClient struct {
 }
 
 type rawLateVisibleStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	coordinator  *rawRequestLockCoordinator
 	missIndex    bool
 	activeAtOpen int
@@ -306,12 +307,12 @@ func (s *rawLateVisibleStore) Get(ctx context.Context, key string) ([]byte, erro
 		s.missIndex = false
 		return nil, errors.New("cache index is not visible yet")
 	}
-	return s.MemoryOCIObjectStore.Get(ctx, key)
+	return s.MemoryStore.Get(ctx, key)
 }
 
 func (s *rawLateVisibleStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	s.activeAtOpen = s.coordinator.activeRequests()
-	return s.MemoryOCIObjectStore.Open(ctx, key)
+	return s.MemoryStore.Open(ctx, key)
 }
 
 func (c *rawLockLifecycleClient) FetchRaw(_ context.Context, _ string, member repository.Member, _ string, _ http.Header) (*http.Response, error) {
@@ -339,7 +340,7 @@ func TestRawHeadCacheMissUsesUpstreamHeadWithoutReadingBody(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawProbeClient{body: &rawReadProbe{remaining: 1 << 20}}
-	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, rawRequest(http.MethodHead, "/raw/downloads/release/large.iso"))
@@ -353,7 +354,7 @@ func TestRawCacheMissReadsUpstreamWithBoundedBuffer(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawProbeClient{body: &rawReadProbe{remaining: 2 << 20}}
-	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/downloads/release/large.iso"))
@@ -367,7 +368,7 @@ func TestRawRejectsNewColdMissBeforeUpstreamWhenSpoolCapacityIsFull(t *testing.T
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawSpoolAdmissionClient{started: make(chan struct{}), unblock: make(chan struct{})}
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithMaxConcurrentSpools(1)
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil).WithMaxConcurrentSpools(1)
 	metrics := &Metrics{}
 	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: cache}
 	firstDone := make(chan *httptest.ResponseRecorder, 1)
@@ -420,7 +421,7 @@ func TestRawReleasesFailedMemberRequestLockBeforeTryingNextMember(t *testing.T) 
 	}})
 	coordinator := &rawRequestLockCoordinator{}
 	client := &rawLockLifecycleClient{coordinator: coordinator}
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithCoordinator(coordinator)
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil).WithCoordinator(coordinator)
 	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
 
 	response := httptest.NewRecorder()
@@ -435,7 +436,7 @@ func TestRawReleasesRequestLockBeforeServingLateCacheHit(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	coordinator := &rawRequestLockCoordinator{}
-	objects := &rawLateVisibleStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), coordinator: coordinator}
+	objects := &rawLateVisibleStore{MemoryStore: objectstore.NewMemoryStore(), coordinator: coordinator}
 	cache := NewRawCache(objects, time.Hour, time.Hour, nil).WithCoordinator(coordinator)
 	key := cache.Key("downloads", "release/app.txt", "hosted", "http://legacy.local")
 	if err := cache.Store(context.Background(), key, RawContent{Body: []byte("artifact"), ContentType: "text/plain", Member: "hosted", Endpoint: "http://legacy.local", Repository: "downloads", Path: "release/app.txt"}); err != nil {
@@ -467,7 +468,7 @@ func TestRawWritesV2AuditFieldsForRequestOutcomes(t *testing.T) {
 		}
 	}
 	client := &rawFixtureClient{responses: map[string]int{"legacy": http.StatusOK, "proxy": http.StatusNotFound, "hosted-miss": http.StatusNotFound, "proxy-ok": http.StatusOK, "offline": http.StatusServiceUnavailable}, body: []byte("artifact")}
-	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 	request := func(method, path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, rawRequest(method, path))
@@ -563,7 +564,7 @@ func TestRawAuditsCorrelationAndExportsMetrics(t *testing.T) {
 		"hosted": http.StatusOK, "negative": http.StatusNotFound, "outage": http.StatusBadGateway,
 	}, body: []byte("artifact")}
 	metrics := &Metrics{}
-	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 
 	traceID := trace.TraceID{1}
 	spanID := trace.SpanID{1}
@@ -626,7 +627,7 @@ func TestGatewayRoutesRawRequests(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
-	handler := NewGatewayHandlerWithRawCache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil), nil, client)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil), Maintenance: nil}, Upstream: client})
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
 	if w.Code != http.StatusOK || w.Body.String() != "artifact" {
@@ -658,7 +659,7 @@ func TestRawStandardHTTPClientE2E(t *testing.T) {
 	}})
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "outage", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusNotFound, "proxy": http.StatusOK}, body: []byte("artifact")}
-	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"})}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"proxy.example"})}
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -748,7 +749,7 @@ func TestRawLegacyGroupStandardHTTPClientE2E(t *testing.T) {
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "hosted", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL}}})
-	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil)}
 	gateway := httptest.NewServer(handler)
 	defer gateway.Close()
 
@@ -780,7 +781,7 @@ func TestRawLegacyGroupStandardHTTPClientE2E(t *testing.T) {
 func TestRawFetchesCanonicalRepresentationAndBoundsObjectSize(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithMaxObjectBytes(8)
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil).WithMaxObjectBytes(8)
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
 	r := rawRequest(http.MethodGet, "/raw/downloads/release/app.txt")

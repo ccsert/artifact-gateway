@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -30,8 +31,7 @@ func TestCargoProxyLiveCratesIO(t *testing.T) {
 		t.Fatal(err)
 	}
 	enableAnonymousAccess(t, store)
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore()},
-		store, TestAdapter{}, testAuthenticator()))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}}))
 	defer server.Close()
 	home := t.TempDir()
 	consumer := t.TempDir()

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -35,7 +36,7 @@ func TestPostgresRustFSCargoProxyOfflineRestart(t *testing.T) {
 	}
 	defer func() { _ = storeA.Close() }()
 	bucket := "cargo-proxy-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +89,7 @@ func TestPostgresRustFSCargoProxyOfflineRestart(t *testing.T) {
 		}
 		return response.StatusCode, body
 	}
-	warm := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsA, CargoUpstreamClient: upstream.Client()},
-		storeA, TestAdapter{}, testAuthenticator()))
+	warm := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsA}}))
 	base := "/cargo/" + repo.Name
 	if status, _ := request(warm, base+"/config.json"); status != 200 {
 		t.Fatalf("config status=%d", status)
@@ -128,12 +128,11 @@ func TestPostgresRustFSCargoProxyOfflineRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = storeB.Close() }()
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
-	restarted := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsB, CargoUpstreamClient: upstream.Client()},
-		storeB, TestAdapter{}, testAuthenticator()))
+	restarted := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsB}}))
 	defer restarted.Close()
 	if status, body := request(restarted, base+"/de/mo/demo"); status != 200 || string(body) != row {
 		t.Fatalf("restart index=%d body=%s", status, body)

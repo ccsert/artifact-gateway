@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -56,9 +57,8 @@ func TestOCIBearerNativeAndGroupColdHot(t *testing.T) {
 				}
 				name = group.Name
 			}
-			objects := NewMemoryOCIObjectStore()
-			handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
-				NewOCICache(objects, time.Hour, time.Hour, time.Hour, []string{redirectOrigin}), upstream.client)
+			objects := objectstore.NewMemoryStore()
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewOCICache(objects, time.Hour, time.Hour, time.Hour, []string{redirectOrigin})}, Upstream: upstream.client})
 			for _, round := range []string{"cold", "hot"} {
 				request := httptest.NewRequest(http.MethodGet, "/v2/"+name+"/demo/manifests/latest", nil)
 				request.Header.Set("Accept", asset.mediaType)

@@ -12,20 +12,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
-func newCacheEntriesTestHandler(t *testing.T) (http.Handler, *repository.MemoryStore, OCIObjectStore, *OCICache, *MavenCache, *RawCache, *ConanCache) {
+func newCacheEntriesTestHandler(t *testing.T) (http.Handler, *repository.MemoryStore, ObjectStore, *OCICache, *MavenCache, *RawCache, *ConanCache) {
 	t.Helper()
 	store := repository.NewMemoryStore()
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	ociCache := NewDefaultOCICache(objectStore, nil)
 	mavenCache := NewDefaultMavenCache(objectStore, nil)
 	rawCache := NewDefaultRawCache(objectStore, nil)
 	conanCache := NewDefaultConanCache(objectStore, nil)
 	maintenance := NewCacheMaintenanceWithRaw(objectStore, ociCache, rawCache).WithConan(conanCache)
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), ociCache, mavenCache, rawCache, conanCache, maintenance)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: ociCache, Maven: mavenCache, Raw: rawCache, Conan: conanCache, Maintenance: maintenance}})
 	return handler, store, objectStore, ociCache, mavenCache, rawCache, conanCache
 }
 
@@ -423,7 +424,7 @@ func TestV2MavenProxyNegativeCacheClearScopesAndPreservesPositiveEntries(t *test
 
 func TestV2MavenProxyCacheRefreshForcesUpstreamAndPreservesOldCacheOnFailure(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	ctx := context.Background()
 	assetPath := "org/example/widget/1.0.0/widget-1.0.0.jar"
 	upstream := &proxyUpstream{bodies: map[string][]byte{"/" + assetPath: []byte("fresh-jar")}, calls: map[string]int{}}
@@ -439,7 +440,7 @@ func TestV2MavenProxyCacheRefreshForcesUpstreamAndPreservesOldCacheOnFailure(t *
 		t.Fatal(err)
 	}
 	maintenance := NewCacheMaintenance(objectStore, NewDefaultOCICache(objectStore, nil))
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objectStore, nil), mavenCache, nil, nil, maintenance, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectStore, nil), Maven: mavenCache, Raw: nil, Conan: nil, Maintenance: maintenance}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	upstream.handler = func(path string) (int, []byte) { return http.StatusServiceUnavailable, nil }
 	failed := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/cache/refresh", strings.NewReader(`{"path":"`+assetPath+`"}`))
@@ -474,7 +475,7 @@ func TestV2MavenProxyCacheRefreshForcesUpstreamAndPreservesOldCacheOnFailure(t *
 
 func TestV2MavenProxyCacheRefreshAcceptsGAVPomPath(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	ctx := context.Background()
 	pomPath := "org/example/widget/1.0.0/widget-1.0.0.pom"
 	upstream := &proxyUpstream{bodies: map[string][]byte{"/" + pomPath: []byte("<project/>")}, calls: map[string]int{}}
@@ -486,7 +487,7 @@ func TestV2MavenProxyCacheRefreshAcceptsGAVPomPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	mavenCache := NewMavenCache(objectStore, time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objectStore, nil), mavenCache, nil, nil, NewCacheMaintenance(objectStore, NewDefaultOCICache(objectStore, nil)), UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectStore, nil), Maven: mavenCache, Raw: nil, Conan: nil, Maintenance: NewCacheMaintenance(objectStore, NewDefaultOCICache(objectStore, nil))}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/cache/refresh", strings.NewReader(`{"gav":"org.example:widget:1.0.0"}`))
 	authorize(request, testAuthenticator().AdminToken)
@@ -502,7 +503,7 @@ func TestV2MavenProxyCacheRefreshAcceptsGAVPomPath(t *testing.T) {
 
 func TestV2MavenProxyHealthReportsReachabilityAndCircuitCacheStatus(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	ctx := context.Background()
 	upstream := &proxyUpstream{bodies: map[string][]byte{"/": []byte("ok")}, calls: map[string]int{}}
 	upstreamServer := httptest.NewServer(upstream)
@@ -517,7 +518,7 @@ func TestV2MavenProxyHealthReportsReachabilityAndCircuitCacheStatus(t *testing.T
 	}
 	mavenCache := NewMavenCache(objectStore, time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
 	mavenCache.RecordUpstreamFailure(ctx, repo.Endpoint)
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objectStore, nil), mavenCache, nil, nil, NewCacheMaintenance(objectStore, NewDefaultOCICache(objectStore, nil)), UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectStore, nil), Maven: mavenCache, Raw: nil, Conan: nil, Maintenance: NewCacheMaintenance(objectStore, NewDefaultOCICache(objectStore, nil))}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/proxy/health", nil)
 	authorize(request, testAuthenticator().IssueToken("reader"))

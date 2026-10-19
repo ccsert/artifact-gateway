@@ -7,13 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestNativeNPMMaintenanceReclaimsUnreferencedTombstone(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "npm-reclaim", Name: "npm-reclaim", Format: repository.FormatNPM})
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +51,7 @@ func TestNativeNPMMaintenanceReclaimsUnreferencedTombstone(t *testing.T) {
 func TestNativeNPMMaintenanceSerializesReclaimAndRestore(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "npm-reclaim-race", Name: "npm-reclaim-race", Format: repository.FormatNPM})
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +72,7 @@ func TestNativeNPMMaintenanceSerializesReclaimAndRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blocking := blockingLifecycleDeleteStore{OCIObjectStore: objects, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	blocking := blockingLifecycleDeleteStore{ObjectStore: objects, entered: make(chan struct{}, 1), release: make(chan struct{})}
 	maintenance := NativeNPMMaintenance{Store: store, Objects: blocking, Now: func() time.Time { return time.Now().UTC().Add(25 * time.Hour) }}
 	if err = maintenance.EnqueueReclaimJobs(ctx, time.Now().UTC().Add(time.Hour), 10); err != nil {
 		t.Fatal(err)

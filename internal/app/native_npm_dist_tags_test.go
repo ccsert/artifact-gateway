@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -65,7 +66,7 @@ func TestNativeNPMDistTagsAddListMoveAndRemove(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 			first := publishNPMDistTagHTTPFixture(t, handler, repo.Name, packageName, "1.0.0", map[string]string{"latest": "1.0.0"})
 			publishNPMDistTagHTTPFixture(t, handler, repo.Name, packageName, "1.1.0", map[string]string{"next": "1.1.0"})
 			before, err := store.GetNPMVersion(context.Background(), repo.ID, packageName, "1.0.0")
@@ -154,7 +155,7 @@ func TestNativeNPMDistTagsRefuseInvalidTargetsAndCallers(t *testing.T) {
 	if _, err = store.ReplaceAnonymousAccessPolicy(ctx, repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
 	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "2.0.0", map[string]string{"next": "2.0.0"})
 	quarantined := publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "3.0.0", map[string]string{"rc": "3.0.0"})
@@ -232,7 +233,7 @@ func TestNativeNPMDistTagsPreserveOrdinaryVersionLikeNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
 	path := "/npm/" + repo.Name + "/-/package/widget/dist-tags"
 	for _, tag := range []string{"2026-release", "2026-10-16", "1-canary", "v1-release", "1.2-beta", "V2.0.0"} {
@@ -255,7 +256,7 @@ func TestNativeNPMGroupDistTagWritesRequirePackageWritePermission(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0", "beta": "1.0.0"})
 	createV2Group(t, store, "npm-tag-permissions-group", repository.FormatNPM, repository.GroupMember{RepositoryID: repo.ID, Position: 0})
 	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{
@@ -289,7 +290,7 @@ func TestNativeNPMGroupDistTagWritesRequirePackageWritePermission(t *testing.T) 
 func TestNativeNPMDistTagsProxyAndGroupAreReadOnly(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	primary, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "npm-primary", Name: "npm-primary", Format: repository.FormatNPM})
 	if err != nil {
 		t.Fatal(err)
@@ -299,7 +300,7 @@ func TestNativeNPMDistTagsProxyAndGroupAreReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
 	publishNPMDistTagHTTPFixture(t, handler, primary.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0", "beta": "1.0.0"})
 	publishNPMDistTagHTTPFixture(t, handler, secondary.Name, "widget", "2.0.0", map[string]string{"latest": "2.0.0", "beta": "2.0.0", "rc": "2.0.0"})
 
@@ -316,7 +317,7 @@ func TestNativeNPMDistTagsProxyAndGroupAreReadOnly(t *testing.T) {
 		repository.GroupMember{RepositoryID: primary.ID, Position: 0},
 		repository.GroupMember{RepositoryID: secondary.ID, Position: 1},
 	)
-	proxyHandler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	proxyHandler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 
 	if _, err = store.ReplaceAnonymousAccessPolicy(ctx, repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)

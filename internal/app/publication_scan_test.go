@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
@@ -151,9 +152,7 @@ func TestRawPublicationSucceedsWhenScanEnqueueFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	enablePublicationScan(t, store.MemoryStore, repo.ID)
-	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{
-		NativeOCIObjectStore: NewMemoryOCIObjectStore(),
-	}, repository.FormatRaw), store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatRaw), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 
 	request := httptest.NewRequest(http.MethodPut, "/raw/raw-releases/releases/widget.tar.gz", bytes.NewBufferString("published artifact"))
 	authorize(request, "resolver-secret")
@@ -211,13 +210,14 @@ func TestRawPublicationEnqueuesConfiguredArtifactScan(t *testing.T) {
 	if _, err = store.ReplaceRepositorySecurityPolicy(ctx, repo.ID, policy, policy.Version); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{
-		NativeOCIObjectStore: NewMemoryOCIObjectStore(),
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
+
 		ArtifactScanner: scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) {
 			return scanning.Report{}, nil
 		}),
 		ArtifactScannerFormats: []repository.Format{repository.FormatRaw},
-	}, store, TestAdapter{}, testAuthenticator())
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}},
+	)
 
 	request := httptest.NewRequest(http.MethodPut, "/raw/raw-releases/releases/widget.tar.gz", bytes.NewBufferString("published artifact"))
 	authorize(request, "resolver-secret")
@@ -246,7 +246,7 @@ func TestRawPublicationEnqueuesConfiguredArtifactScan(t *testing.T) {
 func TestConanPublicationEnqueuesRecipeAndPackageScans(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: uuid.NewString(), Name: "conan-releases", Format: repository.FormatConan,
 	})
@@ -258,13 +258,14 @@ func TestConanPublicationEnqueuesRecipeAndPackageScans(t *testing.T) {
 	if _, err = store.ReplaceRepositorySecurityPolicy(ctx, repo.ID, policy, policy.Version); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{
-		NativeConanObjectStore: objects,
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
+
 		ArtifactScanner: scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) {
 			return scanning.Report{}, nil
 		}),
 		ArtifactScannerFormats: []repository.Format{repository.FormatConan},
-	}, store, TestAdapter{}, testAuthenticator())
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}},
+	)
 
 	publishConanForScan(t, handler, repo.ID, map[string]any{
 		"kind": "recipe", "reference": "pkg/1.0/user/stable", "recipeRevision": "rrev",

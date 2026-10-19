@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -33,10 +34,10 @@ type groupMavenFixture struct {
 	gateway   *httptest.Server
 }
 
-func newGroupMavenFixture(t *testing.T, objects OCIObjectStore, statuses ...int) *groupMavenFixture {
+func newGroupMavenFixture(t *testing.T, objects ObjectStore, statuses ...int) *groupMavenFixture {
 	t.Helper()
 	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
+		objects = objectstore.NewMemoryStore()
 	}
 	f := &groupMavenFixture{t: t, store: repository.NewMemoryStore()}
 	var hosts []string
@@ -76,7 +77,7 @@ func newGroupMavenFixture(t *testing.T, objects OCIObjectStore, statuses ...int)
 		t.Fatal(err)
 	}
 	f.cache = NewMavenCache(objects, time.Hour, time.Hour, time.Minute, time.Minute, hosts)
-	f.gateway = httptest.NewServer(NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, f.store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), f.cache, UpstreamClient{AllowHTTPForTesting: true}))
+	f.gateway = httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: f.store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objectstore.NewMemoryStore()}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: f.cache}, Upstream: UpstreamClient{AllowHTTPForTesting: true}}))
 	t.Cleanup(f.gateway.Close)
 	return f
 }

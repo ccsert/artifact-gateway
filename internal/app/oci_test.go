@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -54,7 +55,7 @@ func TestOCILegacyGroupServesManifestAndRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 
 	challenge := httptest.NewRecorder()
 	handler.ServeHTTP(challenge, httptest.NewRequest(http.MethodGet, "/v2/", nil))
@@ -119,7 +120,7 @@ func TestGatewayPropagatesTraceContextToOCIUpstream(t *testing.T) {
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	request.Header.Set("traceparent", "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01")
 	authorize(request, "resolver-secret")
@@ -143,7 +144,7 @@ func TestOCIRangeIsServedFromVerifiedFullResponse(t *testing.T) {
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/blobs/"+digest, nil)
 	request.Header.Set("Range", "bytes=0-7")
 	authorize(request, "resolver-secret")
@@ -168,7 +169,7 @@ func TestOCIRejectsDigestMismatchAndSupportsHead(t *testing.T) {
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/blobs/"+expected, nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -189,7 +190,7 @@ func TestOCIRejectsDigestMismatchAndSupportsHead(t *testing.T) {
 func TestOCIDenylistedProxyReturnsForbiddenAndAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 0}}})
-	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"allowed.example"})
+	cache := NewDefaultOCICache(objectstore.NewMemoryStore(), []string{"allowed.example"})
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: UpstreamClient{}, Authenticator: testAuthenticator(), Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
@@ -208,7 +209,7 @@ func TestOCICachedProxyIsDeniedAfterPolicyRevocation(t *testing.T) {
 	client := &countingOCIClient{content: content, status: http.StatusOK}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
-	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"registry.example"})
+	cache := NewDefaultOCICache(objectstore.NewMemoryStore(), []string{"registry.example"})
 	metrics := &Metrics{}
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
@@ -258,7 +259,7 @@ func TestOCIUsesManagedGrantsForBoundMembersAndCachedSources(t *testing.T) {
 	authenticator := Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", RepositoryReaders: map[string][]string{"build-agent": {"team/app"}}}
 	client := &countingOCIClient{content: content, status: http.StatusOK}
 	metrics := &Metrics{}
-	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"first.example", "second.example"})
+	cache := NewDefaultOCICache(objectstore.NewMemoryStore(), []string{"first.example", "second.example"})
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: client, Authenticator: authenticator, Cache: cache}
 	request := func() *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
@@ -303,7 +304,7 @@ func TestOCICacheWithoutEndpointProvenanceIsRefetched(t *testing.T) {
 	client := &countingOCIClient{content: content, status: http.StatusOK}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	cache := NewDefaultOCICache(objects, []string{"registry.example"})
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
@@ -338,7 +339,7 @@ func TestOCIDenylistedProxyOverridesEarlierUpstreamFailure(t *testing.T) {
 	client := &countingOCIClient{status: http.StatusInternalServerError}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "failing", Type: repository.MemberProxy, Endpoint: "https://allowed.example", Position: 0}, {Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 1}}})
-	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{"allowed.example"})
+	cache := NewDefaultOCICache(objectstore.NewMemoryStore(), []string{"allowed.example"})
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
@@ -370,7 +371,7 @@ func TestOCIHostedGroupServesTaggedManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -398,7 +399,7 @@ func TestOCIHostedGroupPrefersHostedMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -435,7 +436,7 @@ func TestOCITriesProxyAfterHostedMiss(t *testing.T) {
 		{Name: "legacy-hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{strings.TrimPrefix(proxy.URL, "http://")}), UpstreamClient{AllowHTTPForTesting: true})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), []string{strings.TrimPrefix(proxy.URL, "http://")})}, Upstream: UpstreamClient{AllowHTTPForTesting: true}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -500,7 +501,7 @@ func TestOCITokensAuditLoginSubject(t *testing.T) {
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	for _, username := range []string{"alice", "bob"} {
 		tokenResponse := httptest.NewRecorder()
 		tokenRequest := httptest.NewRequest(http.MethodGet, "/auth/token", nil)
@@ -525,7 +526,7 @@ func TestOCILocalAdminSessionExchangesForRegistryToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 
 	createUser := httptest.NewRequest(http.MethodPost, "/api/v2/users", strings.NewReader(`{"name":"root","password":"supersecret","role":"admin"}`))
 	authorize(createUser, "admin-secret")
@@ -577,7 +578,7 @@ func TestOCIRejectsTaggedManifestWithMismatchedDigest(t *testing.T) {
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -590,7 +591,7 @@ func TestOCIRejectsTaggedManifestWithMismatchedDigest(t *testing.T) {
 
 func TestOCIErrorContract(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	tests := []struct {
 		name   string
 		method string
@@ -626,7 +627,7 @@ func TestOCIMapsUpstreamNotFoundByResource(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: upstream.URL, Position: 0}}})
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Upstream: UpstreamClient{}})
 	for _, test := range []struct {
 		path string
 		code string
@@ -656,7 +657,7 @@ func TestOCIAuditsUpstreamTransportFailure(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "legacy", Type: repository.MemberHosted, Endpoint: "://invalid", Position: 0}}})
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, authenticator.IssueToken("alice"))
 	response := httptest.NewRecorder()
@@ -674,7 +675,7 @@ func TestOCIRepositoryPermissionRejectsAndAuditsDeniedRead(t *testing.T) {
 	store := repository.NewMemoryStore()
 	authenticator := testAuthenticator()
 	authenticator.RepositoryReaders = map[string][]string{"alice": {"team/allowed/*"}}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator, UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Upstream: UpstreamClient{}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/private/manifests/latest", nil)
 	authorize(request, authenticator.IssueToken("alice"))
 	response := httptest.NewRecorder()

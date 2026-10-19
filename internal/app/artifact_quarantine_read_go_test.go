@@ -8,18 +8,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // publishQuarantineReadGoVersion publishes one Hosted module version and
 // returns its authoritative ZIP digest, which is the distribution anchor used
 // by the quarantine API.
-func publishQuarantineReadGoVersion(t *testing.T, store *repository.MemoryStore, objects *MemoryOCIObjectStore, repo repository.HostedRepository, modulePath, version string) string {
+func publishQuarantineReadGoVersion(t *testing.T, store *repository.MemoryStore, objects *objectstore.MemoryStore, repo repository.HostedRepository, modulePath, version string) string {
 	t.Helper()
 	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
 		"go.mod": "module " + modulePath + "\n\ngo 1.26\n",
 	})
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}})
 	request := httptest.NewRequest(
 		http.MethodPut,
 		"/go/"+repo.Name+"/"+modulePath+"/@v/"+version+".zip",
@@ -45,7 +46,7 @@ func TestGoQuarantineReadPolicyHidesVersionAndBlocksEveryRepresentation(t *testi
 	)
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: "go-read-hosted", Name: "go-read-hosted", Format: repository.FormatGo,
 		Type: repository.RepositoryTypeHosted,
@@ -69,7 +70,7 @@ func TestGoQuarantineReadPolicyHidesVersionAndBlocksEveryRepresentation(t *testi
 	}, "0"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}})
 	get := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -120,7 +121,7 @@ func TestGoGroupDoesNotReintroduceQuarantinedVersionFromLowerPriorityMember(t *t
 	const modulePath = "example.com/acme/grouped"
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	first, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: "go-read-first", Name: "go-read-first", Format: repository.FormatGo,
 		Type: repository.RepositoryTypeHosted,
@@ -158,7 +159,7 @@ func TestGoGroupDoesNotReintroduceQuarantinedVersionFromLowerPriorityMember(t *t
 	}, "0"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}})
 	listRequest := httptest.NewRequest(http.MethodGet, "/go/"+group.Name+"/"+modulePath+"/@v/list", nil)
 	authorize(listRequest, "resolver-secret")
 	listResponse := httptest.NewRecorder()

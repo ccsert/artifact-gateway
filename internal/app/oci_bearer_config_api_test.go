@@ -28,7 +28,7 @@ func ociBearerManagementRequest(handler http.Handler, method, path, body, versio
 
 func TestRepositoryOCIBearerConfigRoundTripAndIdempotency(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	body := `{"name":"oci-proxy","format":"oci","type":"proxy","endpoint":"https://registry.example.test","allowedHosts":["registry.example.test"],"ociBearer":` + ociBearerConfigJSON + `}`
 	created := ociBearerManagementRequest(handler, http.MethodPost, "/api/v2/repositories", body, "", "create-oci-bearer")
 	if created.Code != http.StatusCreated {
@@ -107,7 +107,7 @@ func TestRepositoryOCIBearerConfigValidation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := repository.NewMemoryStore()
-			handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 			body := `{"name":"oci-proxy","format":"oci","type":"proxy","endpoint":"https://registry.example.test","ociBearer":` + config + `}`
 			created := ociBearerManagementRequest(handler, http.MethodPost, "/api/v2/repositories", body, "", "invalid-bearer")
 			if created.Code != http.StatusBadRequest || strings.Contains(created.Body.String(), "synthetic-secret") {
@@ -144,7 +144,7 @@ func TestRepositoryOCIBearerConfigIsOCIProxyOnlyAndOptIn(t *testing.T) {
 	} {
 		t.Run(string(fixture.format)+"-"+string(fixture.typeOf), func(t *testing.T) {
 			store := repository.NewMemoryStore()
-			handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 			base := `{"name":"other-repo","format":"` + string(fixture.format) + `","type":"` + string(fixture.typeOf) + `"`
 			if fixture.typeOf == repository.RepositoryTypeProxy {
 				base += `,"endpoint":"https://registry.example.test","allowedHosts":["registry.example.test"]`

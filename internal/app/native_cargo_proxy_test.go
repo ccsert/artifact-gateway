@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -58,9 +59,8 @@ func TestCargoProxyVerifiedCacheAndOfflineReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	gateway := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects, CargoUpstreamClient: upstream.Client()},
-		store, TestAdapter{}, testAuthenticator()))
+	objects := objectstore.NewMemoryStore()
+	gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}}))
 	defer gateway.Close()
 	get := func(path string) (int, []byte) {
 		t.Helper()
@@ -235,8 +235,7 @@ func TestCargoProxyOfficialSourceReplacementOnlineAndOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	enableAnonymousAccess(t, store)
-	gateway := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore(), CargoUpstreamClient: upstream.Client()},
-		store, TestAdapter{}, testAuthenticator()))
+	gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}}))
 	defer gateway.Close()
 	home := t.TempDir()
 	write(filepath.Join(home, "config.toml"), "[source.crates-io]\nreplace-with=\"gateway\"\n[source.gateway]\nregistry=\"sparse+"+gateway.URL+"/cargo/proxy-official/\"\n")
@@ -309,7 +308,7 @@ func TestCargoProxyNegativeAndConditionalIndexCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newNativeCargoHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	h := newNativeCargoHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	h.upstream = UpstreamClient{HTTPClient: upstream.Client()}
 	request := httptest.NewRequest(http.MethodGet, "http://gateway/cargo/cargo-negative/de/mo/demo", nil)
 	first, err := h.proxyIndex(request, repo, "demo")

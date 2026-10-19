@@ -18,7 +18,7 @@ import (
 func TestCargoTombstoneRestoreAndGroupOwner(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	first, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-life-a", Format: repository.FormatCargo})
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestCargoTombstoneRestoreAndGroupOwner(t *testing.T) {
 	}
 	group := createV2Group(t, store, "cargo-life-group", repository.FormatCargo,
 		repository.GroupMember{RepositoryID: first.ID}, repository.GroupMember{RepositoryID: second.ID})
-	handler := NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -134,7 +134,7 @@ func TestCargoRetentionRequiresExplicitPolicyAndPreservesYank(t *testing.T) {
 	if jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 10); err != nil || len(jobs) != 0 {
 		t.Fatalf("disabled Cargo retention scheduled jobs=%+v err=%v", jobs, err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}})
 	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0"} {
 		payload, _ := cargoC0PublishFixture(t, "demo", version, "demo")
 		r := httptest.NewRequest(http.MethodPut, "/cargo/"+repo.Name+"/api/v1/crates/new", bytes.NewReader(payload))

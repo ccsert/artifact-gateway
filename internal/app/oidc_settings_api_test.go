@@ -87,7 +87,7 @@ func TestOIDCSettingsCanMoveFromEnvironmentToRuntimeStorage(t *testing.T) {
 
 	store := repository.NewMemoryStore()
 	runtime := NewOIDCRuntime(store, OIDCRuntimeConfig{})
-	handler := NewGatewayHandler(Dependencies{OIDCRuntime: runtime}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{OIDCRuntime: runtime}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	unauthorized := httptest.NewRecorder()
 	handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/v2/authentication/oidc", nil))

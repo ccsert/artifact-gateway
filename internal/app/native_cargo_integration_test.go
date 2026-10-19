@@ -39,14 +39,14 @@ func TestPostgresRustFSCargoHostedInterruptedPublishAndRestart(t *testing.T) {
 	}
 	defer func() { _ = storeB.Close() }()
 	bucket := "cargo-hosted-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,9 +71,9 @@ func TestPostgresRustFSCargoHostedInterruptedPublishAndRestart(t *testing.T) {
 	if _, err := storeB.GetCargoPublication(ctx, repo.ID, "demo", "1.0.0"); !errors.Is(err, repository.ErrNotFound) {
 		t.Fatalf("uploaded object without commit became visible: %v", err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsB}}))
 	defer func() { serverB.Close() }()
 	get := func(server *httptest.Server, path string) *http.Response {
 		t.Helper()
@@ -116,7 +116,7 @@ func TestPostgresRustFSCargoHostedInterruptedPublishAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	serverB.Close()
-	serverB = httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB = httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsB}}))
 	index := get(serverB, indexPath)
 	indexBody, _ := io.ReadAll(index.Body)
 	_ = index.Body.Close()

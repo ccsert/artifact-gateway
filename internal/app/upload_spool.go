@@ -98,7 +98,7 @@ func (s *uploadSpool) Close() error {
 	return nil
 }
 
-func spoolObjectAppend(_ context.Context, _ OCIObjectStore, _ string, _ int64, body io.Reader, maxChunkBytes int64) (*uploadSpool, int64, error) {
+func spoolObjectAppend(_ context.Context, _ ObjectStore, _ string, _ int64, body io.Reader, maxChunkBytes int64) (*uploadSpool, int64, error) {
 	spool, err := spoolUpload(body, maxChunkBytes)
 	if err != nil {
 		return nil, 0, err
@@ -124,7 +124,7 @@ func uploadPartOffset(key, partKey string) (int64, bool) {
 // spoolStoredUpload assembles immutable upload chunks once at completion.
 // Legacy cumulative upload objects are accepted as the initial prefix so
 // in-flight sessions created before this representation can still complete.
-func spoolStoredUpload(ctx context.Context, objects OCIObjectStore, key string, expectedSize int64) (*uploadSpool, error) {
+func spoolStoredUpload(ctx context.Context, objects ObjectStore, key string, expectedSize int64) (*uploadSpool, error) {
 	spool, err := newUploadSpool()
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func spoolStoredUpload(ctx context.Context, objects OCIObjectStore, key string, 
 	return spool, nil
 }
 
-func deleteUploadObjects(ctx context.Context, objects OCIObjectStore, key string) error {
+func deleteUploadObjects(ctx context.Context, objects ObjectStore, key string) error {
 	parts, err := objects.List(ctx, uploadPartPrefix(key))
 	deleteErr := err
 	if err == nil {
@@ -191,7 +191,7 @@ func deleteUploadObjects(ctx context.Context, objects OCIObjectStore, key string
 	return errors.Join(deleteErr, objects.Delete(ctx, key))
 }
 
-func spoolStoredObject(ctx context.Context, objects OCIObjectStore, key string) (*uploadSpool, error) {
+func spoolStoredObject(ctx context.Context, objects ObjectStore, key string) (*uploadSpool, error) {
 	reader, size, err := objects.Open(ctx, key)
 	if err != nil {
 		return nil, err

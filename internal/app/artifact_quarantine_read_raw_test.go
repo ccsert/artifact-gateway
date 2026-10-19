@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -60,7 +61,7 @@ func requireQuarantineReadDeniedAudit(t *testing.T, store *repository.MemoryStor
 func TestRawQuarantineReadPolicyBlocksGetHeadAndChecksumButDefaultsCompatible(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "raw-read-hosted", Name: "raw-read-hosted", Format: repository.FormatRaw})
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +77,7 @@ func TestRawQuarantineReadPolicyBlocksGetHeadAndChecksumButDefaultsCompatible(t 
 		t.Fatal(err)
 	}
 	quarantine := quarantineRawReadArtifact(t, store, repo.ID, "release/app.bin", digest)
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	request := func(method, suffix string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, "/raw/raw-read-hosted/release/app.bin"+suffix, nil)
 		authorize(r, "resolver-secret")
@@ -136,7 +137,7 @@ func TestRawQuarantineReadPolicyBlocksGetHeadAndChecksumButDefaultsCompatible(t 
 func TestRawGroupDoesNotFallThroughPastQuarantinedHostedArtifact(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "raw-read-member", Name: "raw-read-member", Format: repository.FormatRaw})
 	if err != nil {
 		t.Fatal(err)
@@ -162,7 +163,7 @@ func TestRawGroupDoesNotFallThroughPastQuarantinedHostedArtifact(t *testing.T) {
 	enableQuarantineReadPolicy(t, store, hosted.ID)
 	quarantineRawReadArtifact(t, store, hosted.ID, "release/app.bin", digest)
 	client := &rawFixtureClient{responses: map[string]int{proxy.Name: http.StatusOK}, body: []byte("proxy bypass")}
-	handler := NewGatewayHandlerWithRawCache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"}), nil, client)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"proxy.example"}), Maintenance: nil}, Upstream: client})
 
 	request := httptest.NewRequest(http.MethodGet, "/raw/raw-read-group/release/app.bin", nil)
 	authorize(request, "resolver-secret")

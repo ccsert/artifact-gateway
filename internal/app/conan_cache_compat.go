@@ -15,13 +15,10 @@ type ConanCache struct{ *conanprotocol.Cache }
 // conanCacheIndex remains a read model for existing app-level cache tests.
 type conanCacheIndex struct{ ExpiresAt time.Time }
 
-func NewConanCache(_ []string) *ConanCache {
-	return NewConanCacheWithStore(NewMemoryOCIObjectStore(), nil)
-}
-func NewConanCacheWithStore(store OCIObjectStore, _ []string) *ConanCache {
+func NewConanCache(store ObjectStore) *ConanCache {
 	return &ConanCache{Cache: conanprotocol.NewCache(store)}
 }
-func NewDefaultConanCache(store OCIObjectStore, hosts []string) *ConanCache {
+func NewDefaultConanCache(store ObjectStore, hosts []string) *ConanCache {
 	return &ConanCache{Cache: conanprotocol.NewDefaultCache(store, hosts)}
 }
 func (c *ConanCache) WithQuota(quota *CacheQuota) *ConanCache { c.Cache.WithQuota(quota); return c }

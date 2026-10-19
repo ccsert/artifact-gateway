@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -81,8 +82,8 @@ func TestNativeOCIProxyRepositoryPullsThroughUpstreamAndCaches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	cache := NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: cache}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/v2/docker-proxy/app/manifests/latest", nil)
@@ -116,7 +117,7 @@ func TestNativeOCIProxyRepositoryRejectsWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	req := httptest.NewRequest(http.MethodPut, "/v2/docker-proxy/app/manifests/latest", strings.NewReader(`{}`))
 	authorize(req, "resolver-secret")
 	w := httptest.NewRecorder()
@@ -140,8 +141,8 @@ func TestNativeMavenProxyRepositoryPullsThroughUpstreamAndCaches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mavenCache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	mavenCache := NewMavenCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: mavenCache}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/maven/maven-proxy/"+assetPath, nil)
@@ -176,8 +177,8 @@ func TestNativeRawProxyRepositoryPullsThroughUpstreamAndCaches(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &rawFixtureClient{responses: map[string]int{"raw-proxy": http.StatusOK}, body: []byte("artifact")}
-	rawCache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"})
-	handler := NewGatewayHandlerWithRawCache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, rawCache, nil, client)
+	rawCache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"proxy.example"})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: rawCache, Maintenance: nil}, Upstream: client})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/raw/raw-proxy/release/app.txt", nil)
@@ -220,9 +221,9 @@ func TestNativeRawProxyRejectsColdMissBeforeUpstreamWhenSpoolCapacityIsFull(t *t
 		t.Fatal(err)
 	}
 	client := &rawSpoolAdmissionClient{started: make(chan struct{}), unblock: make(chan struct{})}
-	rawCache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"}).WithMaxConcurrentSpools(1)
+	rawCache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"proxy.example"}).WithMaxConcurrentSpools(1)
 	metrics := &Metrics{}
-	handler := NewGatewayHandlerWithFormatCachesAndMetrics(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, rawCache, NewConanCache(nil), nil, metrics, client)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: rawCache, Conan: NewConanCache(objectstore.NewMemoryStore()), Maintenance: nil}, Metrics: metrics, Upstream: client})
 
 	firstDone := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
@@ -292,7 +293,7 @@ func TestNativeConanProxyRepositoryPullsThroughUpstream(t *testing.T) {
 		Store: store, NativeStore: store, Repositories: store,
 		Authorizer:    RepositoryAuthorizer{Grants: store, Legacy: testAuthenticator()},
 		Authenticator: testAuthenticator(), Client: client,
-		Cache: NewConanCache(nil), NativeObjects: NewMemoryOCIObjectStore(), Metrics: &Metrics{},
+		Cache: NewConanCache(objectstore.NewMemoryStore()), NativeObjects: objectstore.NewMemoryStore(), Metrics: &Metrics{},
 	}
 	req := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-proxy/conans/"+reference+"/revisions", nil)
 	authorize(req, "resolver-secret")
@@ -312,7 +313,7 @@ func TestNativeProxyRepositoryUnknownFormatFallsThrough(t *testing.T) {
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "hosted-oci", Name: "team", Format: repository.FormatOCI}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	req := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(req, "resolver-secret")
 	w := httptest.NewRecorder()

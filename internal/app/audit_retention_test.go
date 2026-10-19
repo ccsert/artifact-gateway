@@ -19,7 +19,7 @@ func TestAuditRetentionHTTPAndWorker(t *testing.T) {
 		{Actor: "recent", OccurredAt: time.Now().UTC()},
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, "admin-secret")

@@ -26,7 +26,7 @@ func goProxyBody(upstreamAuth string) string {
 func TestRepositoryUpstreamAuthCreateRedactsAndEncrypts(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", upstreamAuthTestKey)
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(goProxyBody(`{"scheme":"bearer","secret":"ghp_s3cret"}`)))
 	r.Header.Set("Idempotency-Key", "create-upstream-auth-1")
@@ -76,7 +76,7 @@ func TestRepositoryUpstreamAuthUpdateKeepsClearsAndSwitchesScheme(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	patch := func(version, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+repo.ID, strings.NewReader(body))
 		authorize(r, "admin-secret")
@@ -135,7 +135,7 @@ func TestRepositoryUpstreamAuthUpdateKeepsClearsAndSwitchesScheme(t *testing.T) 
 func TestRepositoryUpstreamAuthRejectedOutsideGoProxy(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", upstreamAuthTestKey)
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	// A non-Go proxy format must reject the field outright. Accepting it would
 	// let an operator configure authentication that the fetch path never reads.
@@ -179,7 +179,7 @@ func TestRepositoryUpstreamAuthRejectedOutsideGoProxy(t *testing.T) {
 func TestRepositoryUpstreamAuthValidation(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", upstreamAuthTestKey)
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	post := func(body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
 		r.Header.Set("Idempotency-Key", uuid.NewString())
@@ -210,7 +210,7 @@ func TestRepositoryUpstreamAuthValidation(t *testing.T) {
 func TestRepositoryUpstreamAuthRequiresEncryptionKey(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", "")
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(goProxyBody(`{"scheme":"bearer","secret":"s3cret"}`)))
 	r.Header.Set("Idempotency-Key", uuid.NewString())
 	authorize(r, "admin-secret")

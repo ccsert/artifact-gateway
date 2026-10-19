@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestCacheQuotaRejectsNewEntryButAllowsReplacement(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	quota := NewCacheQuota(store, map[string]int64{"team/app": 5})
 	cache := NewDefaultOCICache(store, nil).WithQuota(quota)
 	key := cache.Key("team", "team/app", ociManifest, "latest")
@@ -30,7 +31,7 @@ func TestCacheQuotaRejectsNewEntryButAllowsReplacement(t *testing.T) {
 }
 
 func TestCacheQuotaIgnoresExpiredIndexes(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	encoded, err := json.Marshal(struct {
 		Repository string    `json:"repository"`
 		Size       int64     `json:"size"`
@@ -50,7 +51,7 @@ func TestCacheQuotaIgnoresExpiredIndexes(t *testing.T) {
 }
 
 func TestConanCacheQuotaAndMemberEndpointIsolation(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cache := NewDefaultConanCache(store, nil).WithQuota(NewCacheQuota(store, nil))
 	first := repository.Member{Name: "hosted", Endpoint: "https://one.example"}
 	second := repository.Member{Name: "hosted", Endpoint: "https://two.example"}
@@ -67,7 +68,7 @@ func TestConanCacheQuotaAndMemberEndpointIsolation(t *testing.T) {
 }
 
 func TestConanCacheCollectsExpiredIndexesAndObjects(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cache := NewDefaultConanCache(store, nil)
 	member := repository.Member{Name: "hosted", Endpoint: "https://hosted.example"}
 	if err := cache.store(context.Background(), cache.key("central", "pkg/1", member), conanCacheEntry{body: []byte("expired"), member: member.Name, endpoint: member.Endpoint}, "central", 1024, -time.Second); err != nil {

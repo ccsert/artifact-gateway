@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -73,8 +74,7 @@ func TestMavenClientHostedPOMCompatibilityColdCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	upstream := &pomCompatUpstream{fetched: make(map[string]int)}
-	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
-		NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), NewDefaultMavenCache(NewMemoryOCIObjectStore(), []string{upstreamURL.Host}), upstream)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objectstore.NewMemoryStore()}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: NewDefaultMavenCache(objectstore.NewMemoryStore(), []string{upstreamURL.Host})}, Upstream: upstream})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 	files := map[string]string{

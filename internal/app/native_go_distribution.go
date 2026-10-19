@@ -248,8 +248,8 @@ type GoReplication struct {
 		repository.NativeGoStore
 		repository.ReplicationStore
 	}
-	Source      OCIObjectStore
-	Destination OCIObjectStore
+	Source      ObjectStore
+	Destination ObjectStore
 	ChunkBytes  int64
 	Metrics     repository.BackgroundOperationMetrics
 }

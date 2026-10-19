@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -55,8 +56,7 @@ func TestCargoGroupIndexAndDownloadStayWithOwner(t *testing.T) {
 	}
 	group := createV2Group(t, store, "cargo-group", repository.FormatCargo,
 		repository.GroupMember{RepositoryID: hosted.ID, Position: 0}, repository.GroupMember{RepositoryID: proxy.ID, Position: 1})
-	gateway := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore(), CargoUpstreamClient: upstream.Client()},
-		store, TestAdapter{}, testAuthenticator()))
+	gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}}))
 	defer gateway.Close()
 	request := func(method, path, token string, body []byte) (int, []byte) {
 		t.Helper()
@@ -142,8 +142,7 @@ func TestCargoGroupFirstReadRejectsUnseenProxyCollision(t *testing.T) {
 	}
 	group := createV2Group(t, store, "cargo-unseen-group", repository.FormatCargo,
 		repository.GroupMember{RepositoryID: hosted.ID, Position: 0}, repository.GroupMember{RepositoryID: proxy.ID, Position: 1})
-	gateway := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore(), CargoUpstreamClient: upstream.Client()},
-		store, TestAdapter{}, testAuthenticator()))
+	gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}}))
 	defer gateway.Close()
 	publish, _ := cargoC0PublishFixture(t, "demo", "1.0.0", "demo")
 	request := func(method, path, token string, body []byte) *http.Response {
@@ -244,8 +243,7 @@ func TestCargoGroupOfficialAlternateRegistry(t *testing.T) {
 	}
 	group := createV2Group(t, store, "cargo-group-official", repository.FormatCargo,
 		repository.GroupMember{RepositoryID: hosted.ID, Position: 0}, repository.GroupMember{RepositoryID: proxy.ID, Position: 1})
-	gateway := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore(), CargoUpstreamClient: upstream.Client()},
-		store, TestAdapter{}, testAuthenticator()))
+	gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}}))
 	defer gateway.Close()
 	consumer := filepath.Join(t.TempDir(), "consumer")
 	write(filepath.Join(consumer, "Cargo.toml"), "[package]\nname=\"consumer\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\ngroup-official-demo={version=\"=1.0.0\",registry=\"fixture\"}\n")

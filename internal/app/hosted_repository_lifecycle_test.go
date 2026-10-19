@@ -25,7 +25,7 @@ func TestRepositoryRetentionPolicyManagementUsesVersioning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	get := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/retention-policy", nil)
 	authorize(get, "admin-secret")
 	defaultPolicy := httptest.NewRecorder()
@@ -92,7 +92,7 @@ func TestRepositoryCapacityManagementUsesScopedGrantsAndAuditsConfiguration(t *t
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(method, actor, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, "/api/v2/repositories/"+repo.ID+"/capacity", strings.NewReader(body))
 		authorize(r, authenticator.IssueToken(actor))
@@ -147,7 +147,7 @@ func TestRepositoryRetentionDryRunIsAdminOnlyAcrossFormatsAndDoesNotMutateArtifa
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(repositoryID, token string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repositoryID+"/retention:dry-run", nil)
@@ -203,7 +203,7 @@ func TestRepositoryRetentionDryRunPaginatesAndBindsPolicyVersion(t *testing.T) {
 		}
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(target string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, target, nil)
 		authorize(req, "admin-secret")
@@ -286,7 +286,7 @@ func TestRepositoryRetentionExecutionEnqueuesIdempotentCrossFormatJobs(t *testin
 	if _, err = store.ReplaceRepositoryRetentionPolicy(ctx, raw.ID, repository.RepositoryRetentionPolicy{Enabled: true, KeepDays: 30, MinimumVersions: 1}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(repo string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo+"/retention:execute", nil)
 		authorize(req, "admin-secret")
@@ -332,7 +332,7 @@ func TestRepositoryRetentionExecutionChecksDryRunPolicyVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(key, version string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/retention:execute", nil)
 		authorize(req, "admin-secret")
@@ -381,7 +381,7 @@ func TestRepositoryNPMRetentionAndRestoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
 		authorize(req, "admin-secret")
@@ -430,7 +430,7 @@ func TestRepositoryNPMArtifactCanBeTombstonedThroughManagementAPI(t *testing.T) 
 		t.Fatal(err)
 	}
 	publishNPMGroupTestVersion(t, store, repo, "widget", "1.0.0")
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/tombstones", strings.NewReader(`{"coordinate":"widget@1.0.0"}`))
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -474,7 +474,7 @@ func TestRepositoryRestoreRestoresConanTombstoneAndRejectsCollectedObjects(t *te
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(repositoryID, token, coordinate string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repositoryID+"/restore", strings.NewReader(`{"coordinate":"`+coordinate+`"}`))
@@ -538,7 +538,7 @@ func TestRepositoryRestoreRestoresMavenTombstone(t *testing.T) {
 	if _, err = store.TombstoneMavenArtifact(ctx, repo.ID, artifact.ID); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/restore", strings.NewReader(`{"coordinate":"`+coordinate+`"}`))
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -571,7 +571,7 @@ func TestRepositoryRestoreRestoresOCIManifestAndTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	coordinate := manifest.Name + "@" + manifest.Digest
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/restore", strings.NewReader(`{"coordinate":"`+coordinate+`"}`))
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -628,7 +628,7 @@ func TestRepositoryLifecycleJobStatusManagement(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -699,7 +699,7 @@ func TestRepositoryLifecycleJobControlsAreAdminOnlyAndAudited(t *testing.T) {
 	enqueue(pendingID, 3)
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(id, action, token string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/lifecycle-jobs/"+id+"/"+action, nil)
@@ -750,7 +750,7 @@ func TestRepositoryTombstoneInspectionUsesBoundPagination(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(query string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/tombstones?"+query, nil)
 		authorize(req, "admin-secret")
@@ -796,7 +796,7 @@ func TestMavenArtifactDetailAndTombstoneManagement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	detail := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifacts/"+artifact.ID, nil)
 	authorize(detail, "admin-secret")
 	detailed := httptest.NewRecorder()
@@ -870,7 +870,7 @@ func TestConanRevisionManagementListsAndTombstonesSelectedRevisions(t *testing.T
 	if _, err = store.PutConanPackageRevision(ctx, repository.ConanPackageRevision{RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision, PackageID: packageID, Revision: packageRevision, Digest: digest}, []repository.ConanAsset{{RepositoryID: repo.ID, Reference: reference, RecipeRevision: recipeRevision, PackageID: packageID, PackageRevision: packageRevision, Path: "package.tgz", ObjectKey: "native/conan/package", Digest: digest, Size: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, nil)
 		authorize(req, "admin-secret")

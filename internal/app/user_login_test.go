@@ -26,7 +26,7 @@ func TestLocalLoginLocksRepeatedFailuresAndIssuesRevocableSession(t *testing.T) 
 	auth := testAuthenticator()
 	auth.LocalAuthMaxAttempts = 3
 	auth.LocalAuthLockout = time.Hour
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	login := func(password string) (int, string) {
 		request := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"alice","password":"`+password+`"}`))
 		response := httptest.NewRecorder()

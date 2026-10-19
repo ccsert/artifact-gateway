@@ -18,7 +18,7 @@ func TestUserManagementProfilePasswordSessionsAndLastAdminProtection(t *testing.
 	store := repository.NewMemoryStore()
 	authenticator := testAuthenticator()
 	authenticator.AdminActor = "platform-admin"
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	adminRequest := func(method, target, body, version string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, target, strings.NewReader(body))
 		request.Header.Set("Authorization", "Bearer admin-secret")
@@ -135,7 +135,7 @@ func TestUserManagementProfilePasswordSessionsAndLastAdminProtection(t *testing.
 
 func TestUserManagementValidatesProfileAndPasswordBounds(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	adminRequest := func(method, target string, body any, version string) *httptest.ResponseRecorder {
 		encoded, err := json.Marshal(body)
 		if err != nil {
@@ -230,7 +230,7 @@ func TestUserSessionManagementSupportsIndependentRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	login := func(agent string) string {
 		request := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"username":"session-owner","password":"session-password"}`))
 		request.Header.Set("User-Agent", agent)
@@ -322,7 +322,7 @@ func TestUserSessionManagementSupportsIndependentRevocation(t *testing.T) {
 func TestUserManagementIdentityBindingLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()
 	runtime := NewOIDCRuntime(store, OIDCRuntimeConfig{Issuer: "https://issuer.example.test"})
-	handler := NewGatewayHandler(Dependencies{OIDCRuntime: runtime}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{OIDCRuntime: runtime}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	adminRequest := func(method, target, body string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, target, strings.NewReader(body))
 		request.Header.Set("Authorization", "Bearer admin-secret")

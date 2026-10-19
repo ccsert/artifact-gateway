@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -31,7 +32,7 @@ func (conanGatewayClient) Fetch(context.Context, string, repository.Member, stri
 
 func TestV2GroupNPMMergesHostedAndProxyVersions(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
 		ID: "npm-hosted", Name: "npm-hosted", Format: repository.FormatNPM,
 	})
@@ -102,10 +103,7 @@ func TestV2GroupNPMMergesHostedAndProxyVersions(t *testing.T) {
 		repository.GroupMember{RepositoryID: proxy.ID, Position: 0},
 		repository.GroupMember{RepositoryID: hosted.ID, Position: 1},
 	)
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 
 	metadataRequest := httptest.NewRequest(http.MethodGet, "/npm/npm-group/widget", nil)
 	authorize(metadataRequest, "resolver-secret")
@@ -195,7 +193,7 @@ func TestV2GroupNPMWhoamiAnswersWithoutMemberResolution(t *testing.T) {
 	createV2Group(t, store, "npm-group", repository.FormatNPM,
 		repository.GroupMember{RepositoryID: member.ID, Position: 0},
 	)
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 
 	anonymous := httptest.NewRecorder()
 	handler.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, "/npm/npm-group/-/whoami", nil))
@@ -223,7 +221,7 @@ func TestV2GroupNPMWhoamiAnswersWithoutMemberResolution(t *testing.T) {
 
 func TestV2GroupNPMColdVersionMetadataResolvesForCorepack(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	tarball := npmFixtureTarball(t, "pnpm", "10.7.1")
 	sha512Digest := sha512.Sum512(tarball)
 	sha1Digest := sha1.Sum(tarball)
@@ -261,10 +259,7 @@ func TestV2GroupNPMColdVersionMetadataResolvesForCorepack(t *testing.T) {
 	createV2Group(t, store, "npm-corepack-group", repository.FormatNPM,
 		repository.GroupMember{RepositoryID: proxy.ID, Position: 0},
 	)
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-corepack-group/pnpm/10.7.1", nil)
 	authorize(request, "resolver-secret")
@@ -327,7 +322,7 @@ func TestV2GroupNPMVersionMetadataPreservesUpstreamFailureWhenAnotherVersionExis
 		repository.GroupMember{RepositoryID: hosted.ID, Position: 0},
 		repository.GroupMember{RepositoryID: proxy.ID, Position: 1},
 	)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-version-group/widget/2.0.0", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -343,7 +338,7 @@ func TestV2GroupNPMVersionMetadataPreservesUpstreamFailureWhenAnotherVersionExis
 
 func TestV2GroupNPMColdTarballResolvesThroughProxyWithoutPackumentRequest(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
 		ID: "npm-empty-hosted", Name: "npm-empty-hosted", Format: repository.FormatNPM,
 	})
@@ -388,10 +383,7 @@ func TestV2GroupNPMColdTarballResolvesThroughProxyWithoutPackumentRequest(t *tes
 		repository.GroupMember{RepositoryID: hosted.ID, Position: 0},
 		repository.GroupMember{RepositoryID: proxy.ID, Position: 1},
 	)
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-real-shape-group/"+packageName+"/-/"+packageName+"-"+version+".tgz", nil)
 	authorize(request, "resolver-secret")
@@ -466,10 +458,7 @@ func TestV2GroupNPMColdTarballMetadataFailuresAuditMemberExactlyOnce(t *testing.
 			group := createV2Group(t, store, "npm-group-cold-audit", repository.FormatNPM,
 				repository.GroupMember{RepositoryID: proxy.ID},
 			)
-			handler := NewGatewayHandler(
-				Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
-				UpstreamClient{HTTPClient: upstream.Client()},
-			)
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 			request := httptest.NewRequest(http.MethodGet, "/npm/"+group.Name+"/"+packageName+"/-/"+tarballName, nil)
 			authorize(request, "resolver-secret")
 			response := httptest.NewRecorder()
@@ -519,7 +508,7 @@ func TestV2GroupNPMAnonymousReadExcludesPrivateMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	enableAnonymousAccess(t, store)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/npm/npm-public-group/widget", nil))
 	if response.Code != http.StatusOK {
@@ -564,7 +553,7 @@ func TestV2GroupNPMFiltersMembersByManagedGrants(t *testing.T) {
 		repository.GroupMember{RepositoryID: denied.ID, Position: 0},
 		repository.GroupMember{RepositoryID: allowed.ID, Position: 1},
 	)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-authorized-group/widget", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -611,7 +600,7 @@ func TestV2GroupNPMFiltersDefaultGrantMembersByStaticPolicy(t *testing.T) {
 	)
 	authenticator := testAuthenticator()
 	authenticator.RepositoryReaders = map[string][]string{"build-agent": {allowed.Name}}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-static-group/widget", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -648,7 +637,7 @@ func TestV2GroupNPMAllMembersDeniedAuditsGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	createV2Group(t, store, "npm-denied-group", repository.FormatNPM, repository.GroupMember{RepositoryID: denied.ID})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-denied-group/widget", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -678,7 +667,7 @@ func TestV2GroupNPMProxyMetadataFailureAuditsMemberAndGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	createV2Group(t, store, "npm-failing-group", repository.FormatNPM, repository.GroupMember{RepositoryID: proxy.ID})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-failing-group/widget", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -709,7 +698,7 @@ func TestV2GroupNPMHostedTarballStorageFailureAuditsGroup(t *testing.T) {
 	}
 	publishNPMGroupTestVersion(t, store, repo, "widget", "1.0.0")
 	createV2Group(t, store, "npm-storage-group", repository.FormatNPM, repository.GroupMember{RepositoryID: repo.ID})
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-storage-group/widget/-/widget-1.0.0.tgz", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -742,7 +731,7 @@ func TestV2GroupNPMRepositoryNameTakesPrecedence(t *testing.T) {
 	publishNPMGroupTestVersion(t, store, repo, "widget", "1.0.0")
 	publishNPMGroupTestVersion(t, store, member, "widget", "9.0.0")
 	createV2Group(t, store, repo.Name, repository.FormatNPM, repository.GroupMember{RepositoryID: member.ID, Position: 0})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/npm/npm-shared/widget", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -786,7 +775,7 @@ func createV2Group(t *testing.T, store *repository.MemoryStore, name string, for
 
 func TestV2GroupOCIManifestHostedPreferredOverProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-hosted", Name: "oci-hosted", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
@@ -819,8 +808,8 @@ func TestV2GroupOCIManifestHostedPreferredOverProxy(t *testing.T) {
 	}
 	upstream.bodies["/v2/app/manifests/latest"] = []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","from":"upstream"}`)
 
-	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	cache := NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: cache}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/oci-group/app/manifests/latest", nil)
 	authorize(req, "resolver-secret")
@@ -836,7 +825,7 @@ func TestV2GroupOCIManifestHostedPreferredOverProxy(t *testing.T) {
 
 func TestV2GroupOCIManifestFallsBackToProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-hosted", Name: "oci-hosted", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
@@ -860,8 +849,8 @@ func TestV2GroupOCIManifestFallsBackToProxy(t *testing.T) {
 	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","from":"upstream"}`)
 	upstream.bodies["/v2/app/manifests/latest"] = manifest
 
-	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	cache := NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: cache}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/v2/oci-group/app/manifests/latest", nil)
@@ -888,7 +877,7 @@ func TestV2GroupOCIManifestFallsBackToProxy(t *testing.T) {
 
 func TestV2GroupOCIAnonymousTagListAggregatesAnonymousMembers(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	public, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-public", Name: "oci-public", Format: repository.FormatOCI, AnonymousRead: true})
 	if err != nil {
 		t.Fatal(err)
@@ -924,7 +913,7 @@ func TestV2GroupOCIAnonymousTagListAggregatesAnonymousMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	enableAnonymousAccess(t, store)
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 
 	request := httptest.NewRequest(http.MethodGet, "/v2/"+group.Name+"/app/tags/list?n=50", nil)
 	response := httptest.NewRecorder()
@@ -939,7 +928,7 @@ func TestV2GroupOCIAnonymousTagListAggregatesAnonymousMembers(t *testing.T) {
 
 func TestV2GroupMavenHostedPreferredOverProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "maven-hosted", Name: "maven-hosted", Format: repository.FormatMaven})
 	if err != nil {
 		t.Fatal(err)
@@ -977,8 +966,8 @@ func TestV2GroupMavenHostedPreferredOverProxy(t *testing.T) {
 		repository.GroupMember{RepositoryID: hosted.ID, Position: 1},
 	)
 
-	mavenCache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	mavenCache := NewMavenCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: mavenCache}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	req := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+assetPath, nil)
 	authorize(req, "resolver-secret")
@@ -1010,7 +999,7 @@ func TestV2GroupMavenHostedPreferredOverProxy(t *testing.T) {
 
 func TestV2GroupMavenFallsBackToProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "maven-hosted", Name: "maven-hosted", Format: repository.FormatMaven})
 	if err != nil {
 		t.Fatal(err)
@@ -1032,8 +1021,8 @@ func TestV2GroupMavenFallsBackToProxy(t *testing.T) {
 		repository.GroupMember{RepositoryID: proxy.ID, Position: 1},
 	)
 
-	mavenCache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
+	mavenCache := NewMavenCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: mavenCache}, Upstream: UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+assetPath, nil)
@@ -1060,7 +1049,7 @@ func TestV2GroupMavenFallsBackToProxy(t *testing.T) {
 
 func TestV2GroupRawHostedPreferredOverProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-hosted", Name: "raw-hosted", Format: repository.FormatRaw})
 	if err != nil {
 		t.Fatal(err)
@@ -1088,8 +1077,8 @@ func TestV2GroupRawHostedPreferredOverProxy(t *testing.T) {
 	)
 
 	client := &rawFixtureClient{responses: map[string]int{"raw-proxy": http.StatusOK}, body: []byte("upstream-raw")}
-	rawCache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"})
-	handler := NewGatewayHandlerWithRawCache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, rawCache, nil, client)
+	rawCache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"proxy.example"})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: rawCache, Maintenance: nil}, Upstream: client})
 
 	req := httptest.NewRequest(http.MethodGet, "/raw/raw-group/release/app.txt", nil)
 	authorize(req, "resolver-secret")
@@ -1105,7 +1094,7 @@ func TestV2GroupRawHostedPreferredOverProxy(t *testing.T) {
 
 func TestV2GroupRawFallsBackToProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-hosted", Name: "raw-hosted", Format: repository.FormatRaw})
 	if err != nil {
 		t.Fatal(err)
@@ -1123,8 +1112,8 @@ func TestV2GroupRawFallsBackToProxy(t *testing.T) {
 	)
 
 	client := &rawFixtureClient{responses: map[string]int{"raw-proxy": http.StatusOK}, body: []byte("upstream-raw")}
-	rawCache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"})
-	handler := NewGatewayHandlerWithRawCache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, rawCache, nil, client)
+	rawCache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"proxy.example"})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: rawCache, Maintenance: nil}, Upstream: client})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/raw/raw-group/release/app.txt", nil)
@@ -1151,7 +1140,7 @@ func TestV2GroupRawFallsBackToProxy(t *testing.T) {
 
 func TestV2GroupConanHostedPreferredOverProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "conan-hosted", Name: "conan-hosted", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -1189,7 +1178,7 @@ func TestV2GroupConanHostedPreferredOverProxy(t *testing.T) {
 	)
 
 	client := &conanFixtureClient{proxyURL: upstream.URL}
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, nil, NewConanCache(nil), nil, conanGatewayClient{client})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: nil, Conan: NewConanCache(objectstore.NewMemoryStore()), Maintenance: nil}, Upstream: conanGatewayClient{client}})
 
 	req := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-group/conans/"+reference+"/revisions", nil)
 	authorize(req, "resolver-secret")
@@ -1205,7 +1194,7 @@ func TestV2GroupConanHostedPreferredOverProxy(t *testing.T) {
 
 func TestV2GroupConanFallsBackToProxy(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "conan-hosted", Name: "conan-hosted", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -1229,7 +1218,7 @@ func TestV2GroupConanFallsBackToProxy(t *testing.T) {
 	)
 
 	client := &conanFixtureClient{proxyURL: upstream.URL}
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, nil, NewConanCache(nil), nil, conanGatewayClient{client})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: nil, Conan: NewConanCache(objectstore.NewMemoryStore()), Maintenance: nil}, Upstream: conanGatewayClient{client}})
 
 	req := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-group/conans/pkg/1.0/user/stable/revisions", nil)
 	authorize(req, "resolver-secret")
@@ -1245,7 +1234,7 @@ func TestV2GroupConanFallsBackToProxy(t *testing.T) {
 
 func TestV2GroupNameDoesNotShadowV2RepositoryOrLegacyGroup(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	// A V2 repository and a V2 group share the same name; the repository must
 	// keep priority because the native handler claims the path first.
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "shared", Format: repository.FormatOCI})
@@ -1264,7 +1253,7 @@ func TestV2GroupNameDoesNotShadowV2RepositoryOrLegacyGroup(t *testing.T) {
 	if _, err := store.PutOCIManifest(context.Background(), repository.OCIManifest{RepositoryID: repo.ID, Name: "app", Digest: digest, ObjectKey: manifestKey, MediaType: "application/vnd.oci.image.manifest.v1+json", Size: int64(len(manifest))}, "latest"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/shared/app/manifests/latest", nil)
 	authorize(req, "resolver-secret")
@@ -1280,8 +1269,8 @@ func TestV2GroupNameDoesNotShadowV2RepositoryOrLegacyGroup(t *testing.T) {
 	if _, err := legacyStore.CreateGroup(context.Background(), repository.Group{Name: "legacy", Enabled: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "http://proxy.example", Position: 0}}}); err != nil {
 		t.Fatal(err)
 	}
-	legacyCache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{"proxy.example"})
-	legacyHandler := NewGatewayHandlerWithOCICache(Dependencies{}, legacyStore, TestAdapter{}, testAuthenticator(), legacyCache)
+	legacyCache := NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{"proxy.example"})
+	legacyHandler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: legacyStore, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: legacyCache}})
 	legacyReq := httptest.NewRequest(http.MethodGet, "/v2/legacy/app/manifests/latest", nil)
 	authorize(legacyReq, "resolver-secret")
 	legacyW := httptest.NewRecorder()

@@ -87,6 +87,34 @@ Application handlers authorize requests and orchestrate domain interfaces;
 they must not recreate protocol rules. Repository implementations own
 transactional persistence but not HTTP response behavior.
 
+## Explicit HTTP composition
+
+`NewGatewayHandler(GatewayOptions)` is the sole HTTP composition entry point and
+returns a handler or a configuration error. `GatewayOptions` names metadata,
+per-format `ObjectStores`, proxy caches, authentication, optional upstream
+transport and metrics explicitly. `Dependencies` retains optional runtime and
+feature services; it no longer owns per-format byte-store fields.
+
+The constructor rejects missing metadata, availability adapters and any admitted
+format's object store, including typed nil interface values, before registering
+routes. `cmd/gateway` initializes its PostgreSQL pool and verifies the RustFS
+bucket first, then assigns the durable store with `SharedObjectStores`. Cache
+maintenance also requires an explicit object store. Configured format caches
+validate their own byte-store dependency, including typed nils. A nil format cache disables
+that cache; no HTTP or native-format constructor creates replacement storage.
+
+Native handlers use the format-independent `objectstore.Store` port (named
+`app.ObjectStore` at the composition boundary). OCI and Raw have distinct storage
+assignments, and all formats retain their existing key namespaces, digests and
+publication ordering. Sharing one durable bucket is an explicit deployment
+choice.
+
+`internal/apptest` supplies isolated in-memory object stores and a generic
+`NewGateway` helper for unit tests and native-client fixture binaries. Same-package
+app tests use a thin helper around it to avoid an import cycle. Production never
+imports `apptest`; memory persistence is explicitly selected test infrastructure,
+and PostgreSQL/RustFS integration tests still prove durability and concurrency.
+
 ## Repository model
 
 - **Hosted** repositories accept native publication and own artifact lifecycle.

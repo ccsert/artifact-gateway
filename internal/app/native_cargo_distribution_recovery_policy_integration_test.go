@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -35,14 +36,14 @@ func TestPostgresRustFSCargoReplicationRecoveryPreservesIndependentReadPolicies(
 	}
 	t.Cleanup(func() { _ = storeA.Close(); _ = storeB.Close() })
 	bucketSuffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	sourceObjects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "cargo-policy-src-"+bucketSuffix)
+	sourceObjects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "cargo-policy-src-"+bucketSuffix)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := sourceObjects.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	targetObjects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "cargo-policy-dst-"+bucketSuffix)
+	targetObjects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "cargo-policy-dst-"+bucketSuffix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,13 +69,13 @@ func TestPostgresRustFSCargoReplicationRecoveryPreservesIndependentReadPolicies(
 			t.Fatal(err)
 		}
 	}
-	request := func(store *repository.PostgresStore, objects OCIObjectStore, method, path string, body []byte) *httptest.ResponseRecorder {
+	request := func(store *repository.PostgresStore, objects ObjectStore, method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, path, bytes.NewReader(body))
 		r.Host = "localhost:8080"
 		authorize(r, "admin-secret")
 		w := httptest.NewRecorder()
-		NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects}, store, TestAdapter{}, testAuthenticator()).ServeHTTP(w, r)
+		newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}}).ServeHTTP(w, r)
 		return w
 	}
 	crateName := "policy" + strings.ReplaceAll(uuid.NewString(), "-", "")[:8]
@@ -90,7 +91,7 @@ func TestPostgresRustFSCargoReplicationRecoveryPreservesIndependentReadPolicies(
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkRead := func(store *repository.PostgresStore, objects OCIObjectStore, repo repository.HostedRepository, status int, indexVisible bool) {
+	checkRead := func(store *repository.PostgresStore, objects ObjectStore, repo repository.HostedRepository, status int, indexVisible bool) {
 		t.Helper()
 		base := "/cargo/" + repo.Name
 		index := request(store, objects, http.MethodGet, base+"/"+indexPath, nil)
@@ -118,7 +119,7 @@ func TestPostgresRustFSCargoReplicationRecoveryPreservesIndependentReadPolicies(
 	if err != nil || replayed {
 		t.Fatalf("create plan=%+v replayed=%t err=%v", plan, replayed, err)
 	}
-	interrupt := &interruptedCargoAdmissionStore{OCIObjectStore: targetObjects}
+	interrupt := &interruptedCargoAdmissionStore{ObjectStore: targetObjects}
 	if err := (CargoReplication{Store: storeB, Source: sourceObjects, Destination: interrupt, ChunkBytes: 8}).RunJobs(ctx, 1); err != nil {
 		t.Fatal(err)
 	}

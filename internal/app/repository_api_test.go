@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -141,7 +142,7 @@ func TestBackgroundOperationMetricsUseOnlyBoundedLabels(t *testing.T) {
 
 func TestGroupManagementAndResolverVerticalSlice(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, selectiveAdapter{available: map[string]bool{"proxy": true}}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: selectiveAdapter{available: map[string]bool{"proxy": true}}, Authenticator: testAuthenticator()})
 	group := `{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0},{"name":"proxy","type":"proxy","endpoint":"https://registry.example","position":1}]}`
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/oci/groups", strings.NewReader(group))
 	authorize(request, "admin-secret")
@@ -197,7 +198,7 @@ func TestGroupManagementAndResolverVerticalSlice(t *testing.T) {
 }
 
 func TestAPIRejectsUnauthenticatedAndInvalidGroup(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	unauthenticated := httptest.NewRecorder()
 	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodPost, "/api/v1/oci/groups", nil))
 	if unauthenticated.Code != http.StatusUnauthorized {
@@ -214,9 +215,9 @@ func TestAPIRejectsUnauthenticatedAndInvalidGroup(t *testing.T) {
 
 func TestRawGroupContractAndExactCacheInvalidation(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	rawCache := NewRawCache(objectStore, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(objectStore, nil))
-	handler := NewGatewayHandlerWithRawCache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objectStore, nil), nil, rawCache, nil)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objectStore, nil), Maven: nil, Raw: rawCache, Maintenance: nil}})
 
 	for _, payload := range []string{
 		`{"name":"Raw","cacheQuotaBytes":5,"members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`,
@@ -291,7 +292,7 @@ func TestConanCacheInvalidationTargetsMemberAndEndpoint(t *testing.T) {
 	first := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://one.example", Position: 0}
 	second := repository.Member{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://two.example", Position: 1}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{first, second}})
-	cache := NewConanCache(nil)
+	cache := NewConanCache(objectstore.NewMemoryStore())
 	path := "pkg/1.0/user/stable/revisions"
 	for _, member := range []repository.Member{first, second} {
 		if err := cache.store(context.Background(), cache.key("central", path, member), conanCacheEntry{body: []byte(member.Name), member: member.Name, endpoint: member.Endpoint}, "central", 1024, time.Hour, "central", path, ""); err != nil {
@@ -316,8 +317,8 @@ func TestConanCacheInvalidationTargetsMemberAndEndpoint(t *testing.T) {
 
 func TestConanGroupAPIRequiresProxyAllowlistAndDefaultsQuota(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandlerWithFormatCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(objects, nil), nil, nil, NewConanCache(nil), nil)
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(objects, nil), Maven: nil, Raw: nil, Conan: NewConanCache(objectstore.NewMemoryStore()), Maintenance: nil}})
 	for _, test := range []struct {
 		name, body string
 		want       int
@@ -354,7 +355,7 @@ func TestConanGroupAPIValidatesManagedRepositoryBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	create := func(group, repositoryID string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v1/conan/groups", strings.NewReader(`{"name":"`+group+`","members":[{"name":"remote","type":"hosted","endpoint":"https://conan.example","repositoryId":"`+repositoryID+`"}]}`))
 		authorize(r, "admin-secret")
@@ -371,7 +372,7 @@ func TestConanGroupAPIValidatesManagedRepositoryBinding(t *testing.T) {
 }
 
 func TestResolverTokenCannotManageGroups(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/oci/groups", strings.NewReader(`{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"test://available","position":0}]}`))
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -386,7 +387,7 @@ func TestRepositoryReadPermissionRejectsAndAuditsUnauthorizedOCIResolution(t *te
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://available", Position: 0}}})
 	authenticator := testAuthenticator()
 	authenticator.RepositoryReaders = map[string][]string{"build-agent": {"team/allowed/*"}}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/team/resolve?repository=team/denied/app", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -406,7 +407,7 @@ func TestAdminCanQueryRepositoryAudits(t *testing.T) {
 		{GroupName: "engineering", Repository: "team/app", Actor: "bob", Outcome: repository.AuditUpstreamError, Evidence: map[string]string{"privateToV2": "value"}},
 		{GroupName: "engineering", Repository: "team/app", Actor: "carol", Outcome: repository.AuditResolved},
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/audits?group=engineering&repository=team/app", nil)
 	authorize(request, "admin-secret")
@@ -445,7 +446,7 @@ func TestAdminCanPageAuditsWithScopedCursor(t *testing.T) {
 			OccurredAt: base.Add(time.Duration(index) * time.Minute),
 		})
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/audits/page?repository=team/app&pageSize=1&from=2026-08-08T10:01:00Z", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -493,7 +494,7 @@ func TestAdminCanPageAuditsWithScopedCursor(t *testing.T) {
 func TestResolverFailsWhenAuditCannotBeRecorded(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "group", Members: []repository.Member{{Name: "one", Type: repository.MemberHosted, Endpoint: "test://available", Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, failingAuditStore{store}, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: failingAuditStore{store}, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/group/resolve?repository=app", nil)
 	authorize(request, "resolver-secret")
@@ -510,7 +511,7 @@ func TestResolverFailsWhenAuditCannotBeRecorded(t *testing.T) {
 
 func TestResolverAuditsStorageFailureAccurately(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, failingGetStore{store}, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: failingGetStore{store}, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/group/resolve?repository=app", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -531,7 +532,7 @@ func TestResolverAuditsStorageFailureAccurately(t *testing.T) {
 func TestMetricsReportResolverOutcomes(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "group", Members: []repository.Member{{Name: "one", Type: repository.MemberHosted, Endpoint: "http://legacy", Position: 0}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/oci/groups/group/resolve?repository=app", nil)
 	authorize(request, "resolver-secret")
@@ -566,7 +567,7 @@ func TestMetricsCountDisabledAndMissingGroupsAsFailures(t *testing.T) {
 	if err := store.DisableGroup(context.Background(), "disabled"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, target := range []string{"/api/v1/oci/groups/missing/resolve?repository=app", "/api/v1/oci/groups/disabled/resolve?repository=app", "/api/v1/oci/groups/disabled/resolve"} {
 		request := httptest.NewRequest(http.MethodGet, target, nil)
 		authorize(request, "resolver-secret")
@@ -619,7 +620,7 @@ func TestGroupMemberRepositoryBindingsRequireMatchingFormat(t *testing.T) {
 
 func TestListGroupsEndpoints(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	create := func(path, payload string) {
 		t.Helper()
@@ -677,7 +678,7 @@ func TestListGroupsEndpoints(t *testing.T) {
 }
 
 func TestListGroupsRequiresAdmin(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	// rawAPIHandler collapses authentication and admin checks into a single 403.
 	unauthenticatedStatus := map[string]int{
 		"/api/v1/oci/groups":   http.StatusUnauthorized,

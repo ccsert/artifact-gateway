@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -19,7 +20,7 @@ import (
 func TestRepositoryGoPromotionAndReplicationPublishCompleteTargetVersions(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	create := func(name string) repository.HostedRepository {
 		t.Helper()
 		repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
@@ -57,7 +58,7 @@ func TestRepositoryGoPromotionAndReplicationPublishCompleteTargetVersions(t *tes
 		t.Fatal(err)
 	}
 	zipDigest := assets[2].Digest
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}})
 	distribute := func(operation string, target repository.HostedRepository, key string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/"+operation,
@@ -252,11 +253,11 @@ func TestGoReplicationWorkerParksWhenNonZipRepresentationIsQuarantined(t *testin
 		t.Fatal(err)
 	}
 	destination := &quarantineBeforeReplicationPublishStore{
-		OCIObjectStore: fixture.objects,
-		Repository:     fixture.store,
-		Plan:           plan,
-		Digest:         fixture.assets[1].Digest,
-		Reason:         "block queued Go replication on mod representation",
+		ObjectStore: fixture.objects,
+		Repository:  fixture.store,
+		Plan:        plan,
+		Digest:      fixture.assets[1].Digest,
+		Reason:      "block queued Go replication on mod representation",
 	}
 
 	if err := (GoReplication{Store: fixture.store, Source: fixture.objects, Destination: destination, ChunkBytes: 4}).RunJobs(fixture.ctx, 1); err != nil {
@@ -313,7 +314,7 @@ func TestGoReplicationSnapshotRequiresCanonicalTargetKeys(t *testing.T) {
 type goDistributionFixture struct {
 	ctx        context.Context
 	store      *repository.MemoryStore
-	objects    *MemoryOCIObjectStore
+	objects    *objectstore.MemoryStore
 	handler    http.Handler
 	source     repository.HostedRepository
 	target     repository.HostedRepository
@@ -326,7 +327,7 @@ func newGoDistributionFixture(t *testing.T) goDistributionFixture {
 	t.Helper()
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	create := func(name string) repository.HostedRepository {
 		t.Helper()
 		item, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
@@ -365,7 +366,7 @@ func newGoDistributionFixture(t *testing.T) goDistributionFixture {
 	}
 	return goDistributionFixture{
 		ctx: ctx, store: store, objects: objects,
-		handler: NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator()),
+		handler: newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}}),
 		source:  source, target: target, modulePath: modulePath, version: version, assets: assets,
 	}
 }

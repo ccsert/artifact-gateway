@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -43,11 +44,12 @@ func TestAPTPublicationManagementStagesPackageWithoutProtocolVisibility(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{
-		NativeAPTObjectStore: objects, APTSigner: aptManagementSigner{},
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
+		APTSigner:  aptManagementSigner{},
 		APTSigning: APTSigningRuntime{Mode: "remote", TrustedFingerprints: []string{strings.Repeat("a", 40), strings.Repeat("b", 40)}},
-	}, store, TestAdapter{}, testAuthenticator())
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objects}},
+	)
 	deb := aptManagementDebianPackage(t, "Package: widget\nVersion: 1:2.0-3\nArchitecture: amd64\n")
 	digestBytes := sha256.Sum256(deb)
 	digest := "sha256:" + hex.EncodeToString(digestBytes[:])
@@ -217,7 +219,7 @@ func TestAPTPublicationManagementRequiresRepositoryWriteAndCanonicalScope(t *tes
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}})
 	digest := "sha256:" + strings.Repeat("a", 64)
 	body := fmt.Sprintf(`{"suite":"stable","component":"main","objectName":"widget.deb","declaredDigest":%q,"declaredSize":7}`, digest)
 
@@ -267,7 +269,7 @@ func TestAPTSigningReadinessFailsClosedWhenVisibleKeyLeavesPolicy(t *testing.T) 
 func TestAPTHostedPublicationCanStartFromSupportedRepositoryProvisioningAPI(t *testing.T) {
 	t.Parallel()
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}})
 
 	createRepository := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"apt-preview","format":"apt","type":"hosted"}`))
 	authorize(createRepository, "admin-secret")

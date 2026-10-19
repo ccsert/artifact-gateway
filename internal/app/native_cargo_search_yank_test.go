@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
@@ -22,8 +23,7 @@ func TestNativeCargoHostedSearchYankAndDownload(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore()},
-		store, TestAdapter{}, testAuthenticator()))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}}))
 	defer server.Close()
 	request := func(method, path, token string, body []byte, headers map[string]string) *http.Response {
 		t.Helper()

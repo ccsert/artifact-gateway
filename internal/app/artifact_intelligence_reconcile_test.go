@@ -49,7 +49,7 @@ func TestArtifactIntelligenceReconciliationRequeuesOnlyFailedCopyJobs(t *testing
 		}
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	path := "/api/v2/repositories/" + repo.ID + "/lifecycle-jobs:reconcile-intelligence?limit=1"
 
 	denied := httptest.NewRequest(http.MethodPost, path, nil)

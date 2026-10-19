@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -101,11 +102,8 @@ func TestOCIBearerORASMultiplatformColdHot(t *testing.T) {
 				}
 				name = group.Name
 			}
-			objects := NewMemoryOCIObjectStore()
-			gateway := httptest.NewServer(NewGatewayHandlerWithOCICache(
-				Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
-				NewOCICache(objects, time.Hour, time.Hour, time.Hour, []string{redirectOrigin}), upstream.client,
-			))
+			objects := objectstore.NewMemoryStore()
+			gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewOCICache(objects, time.Hour, time.Hour, time.Hour, []string{redirectOrigin})}, Upstream: upstream.client}))
 			t.Cleanup(gateway.Close)
 			root := t.TempDir()
 			registryConfig := filepath.Join(root, "empty-registry-config.json")

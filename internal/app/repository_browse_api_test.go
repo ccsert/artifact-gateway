@@ -67,7 +67,7 @@ func TestRepositoryBrowseProjectsMavenNamespaceComponentVersionAndAssets(t *test
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	token := authenticator.IssueToken("maven-browser")
 	_, root := browseRepositoryForTest(t, handler, token, repo.ID, "", "", 50)
 	if len(root.Items) != 2 || root.Items[0].Name != "com.acme" || root.Items[1].Name != "org.example" {
@@ -101,7 +101,7 @@ func TestRepositoryBrowseRejectsUnboundedProxyProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	response, _ := browseRepositoryForTest(t, handler, authenticator.IssueToken("proxy-browser"), repo.ID, "", "", 50)
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"unsupported_repository_type"`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
@@ -171,7 +171,7 @@ func TestRepositoryBrowseProjectsRawPathsWithoutClientReconstruction(t *testing.
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	token := authenticator.IssueToken("browse-reader")
 
 	rootResponse, firstPage := browseRepositoryForTest(t, handler, token, repo.ID, "", "", 1)

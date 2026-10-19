@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -30,7 +31,7 @@ func (s markFailMavenStore) MarkMavenPublishObject(context.Context, string, stri
 }
 
 type failingDeleteObjectStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	fail bool
 }
 
@@ -38,10 +39,10 @@ func (s *failingDeleteObjectStore) Delete(ctx context.Context, key string) error
 	if s.fail {
 		return errors.New("object store unavailable")
 	}
-	return s.MemoryOCIObjectStore.Delete(ctx, key)
+	return s.MemoryStore.Delete(ctx, key)
 }
 
-type failingPutObjectStore struct{ *MemoryOCIObjectStore }
+type failingPutObjectStore struct{ *objectstore.MemoryStore }
 
 func (s failingPutObjectStore) Put(context.Context, string, []byte) error {
 	return errors.New("object store unavailable")
@@ -60,7 +61,7 @@ func TestNativeMavenValidatePOMRejectsTrailingDocument(t *testing.T) {
 	pom := []byte("<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0.0</version></project><extra/>")
 	sum := sha256.Sum256(pom)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err := objects.Put(context.Background(), "native/maven/sha256/"+strings.TrimPrefix(digest, "sha256:"), pom); err != nil {
 		t.Fatal(err)
 	}
@@ -98,8 +99,8 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 		t.Fatal(err)
 	}
 	enablePublicationScan(t, store, repo.ID)
-	objects := NewMemoryOCIObjectStore()
-	h := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeMavenObjectStore: objects}, repository.FormatMaven), store, TestAdapter{}, testAuthenticator())
+	objects := objectstore.NewMemoryStore()
+	h := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatMaven), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objects}})
 	pom := []byte("<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0.0</version></project>")
 	sum := sha256.Sum256(pom)
 	pomDigest := "sha256:" + hex.EncodeToString(sum[:])
@@ -168,7 +169,7 @@ func TestNativeMavenProtocolPublishesDirectlyByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	handler := newNativeMavenHandler(store, objects, testAuthenticator())
 	put := func(name, body string) {
 		t.Helper()
@@ -224,7 +225,7 @@ func TestNativeMavenDirectUploadAcceptsLargeJar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	handler := newNativeMavenHandler(store, objects, testAuthenticator())
 	base := "/repository/maven/large-releases/org/example/big/1.0.0/"
 	pom := `<project><groupId>org.example</groupId><artifactId>big</artifactId><version>1.0.0</version></project>`
@@ -264,7 +265,7 @@ func TestNativeMavenDirectSnapshotMetadataClosesTheBuildSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	handler := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	put := func(path, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.0-SNAPSHOT/"+path, strings.NewReader(body))
@@ -299,7 +300,7 @@ func TestNativeMavenDirectSnapshotAcceptsGradleJarBeforePOM(t *testing.T) {
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven}); err != nil {
 		t.Fatal(err)
 	}
-	handler := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	handler := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	put := func(name, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/gradle-widget/2.0.0-SNAPSHOT/"+name, strings.NewReader(body))
@@ -321,7 +322,7 @@ func TestNativeMavenDirectSnapshotAcceptsGradleJarBeforePOM(t *testing.T) {
 func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven, MavenStrictPublication: true})
-	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	h := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	assets := map[string]string{
 		"widget-1.2.0.pom": "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>",
 		"widget-1.2.0.jar": "jar bytes",
@@ -398,7 +399,7 @@ func TestNativeMavenProtocolReplacesExpiredOpenSessionBeforeStaging(t *testing.T
 		t.Fatal(err)
 	}
 
-	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	h := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	pom := "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>"
 	request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/widget-1.2.0.pom", strings.NewReader(pom))
 	request.SetBasicAuth("maven", "resolver-secret")
@@ -424,7 +425,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator()))
+	server := httptest.NewServer(newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator()))
 	defer server.Close()
 
 	request := func(method, path, body string, headers map[string]string) *http.Response {
@@ -556,7 +557,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	failingServer := httptest.NewServer(newNativeMavenHandler(failingStore, failingPutObjectStore{NewMemoryOCIObjectStore()}, testAuthenticator()))
+	failingServer := httptest.NewServer(newNativeMavenHandler(failingStore, failingPutObjectStore{objectstore.NewMemoryStore()}, testAuthenticator()))
 	defer failingServer.Close()
 	failedPut, err := http.NewRequest(http.MethodPut, failingServer.URL+"/repository/maven/deploys/org/example/failed/4.0.0/failed-4.0.0.pom", strings.NewReader("<project><groupId>org.example</groupId><artifactId>failed</artifactId><version>4.0.0</version></project>"))
 	if err != nil {
@@ -597,7 +598,7 @@ func TestNativeMavenCoordinateBrowseSearchProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatMaven: objectstore.NewMemoryStore()}})
 	if _, err := store.ReplaceRepositoryGrants(context.Background(), mavenRepo.ID, []repository.RepositoryGrant{
 		{Principal: "maven", Scopes: []string{"repositories:write"}},
 		{Principal: "maven-browser", Scopes: []string{"repositories:read"}},
@@ -685,7 +686,7 @@ func TestNativeMavenProtocolCommitRetryAfterControlPlaneFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := &failOnceMavenCommitStore{MemoryStore: base, fail: true}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	server := httptest.NewServer(newNativeMavenHandler(store, objects, testAuthenticator()))
 	defer server.Close()
 
@@ -758,7 +759,7 @@ func TestNativeMavenProtocolCommitRetryAfterControlPlaneFailure(t *testing.T) {
 func TestNativeMavenSessionIdempotencyReplaysAndRejectsDifferentPayload(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "idempotent", Format: repository.FormatMaven})
-	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	h := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	object := []byte("pom")
 	sum := sha256.Sum256(object)
 	body := nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: int64(len(object))}}}
@@ -787,7 +788,7 @@ func TestNativeMavenAnonymousReadPolicy(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	publicRepo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "public", Format: repository.FormatMaven, AnonymousRead: true})
 	privateRepo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "private", Format: repository.FormatMaven})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	asset := []byte("jar")
 	sum := sha256.Sum256(asset)
 	key := "native/maven/sha256/" + hex.EncodeToString(sum[:])
@@ -822,7 +823,7 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "maven", Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example"}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	asset := []byte("jar")
 	sum := sha256.Sum256(asset)
 	key := "native/maven/sha256/" + hex.EncodeToString(sum[:])
@@ -885,7 +886,7 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 func TestNativeMavenProtocolSessionsArePublisherScoped(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven, MavenStrictPublication: true})
-	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), Authenticator{ResolverToken: "resolver-secret", RepositoryWriters: map[string][]string{"alice": {"releases"}, "bob": {"releases"}}})
+	h := newNativeMavenHandler(store, objectstore.NewMemoryStore(), Authenticator{ResolverToken: "resolver-secret", RepositoryWriters: map[string][]string{"alice": {"releases"}, "bob": {"releases"}}})
 	put := func(actor, name, body string) int {
 		r := httptest.NewRequest(http.MethodPut, "/repository/maven/releases/org/example/widget/1.0.0/"+name, strings.NewReader(body))
 		r.SetBasicAuth(actor, "resolver-secret")
@@ -913,7 +914,7 @@ func TestNativeMavenProtocolSessionsArePublisherScoped(t *testing.T) {
 func TestNativeMavenProtocolStagesIntentBeforeObjectBytes(t *testing.T) {
 	base := repository.NewMemoryStore()
 	_, _ = base.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	h := newNativeMavenHandler(markFailMavenStore{base}, objects, testAuthenticator())
 	r := httptest.NewRequest(http.MethodPut, "/repository/maven/releases/org/example/widget/1.0.0/widget-1.0.0.jar", strings.NewReader("jar"))
 	r.SetBasicAuth("maven", "resolver-secret")
@@ -930,7 +931,7 @@ func TestNativeMavenProtocolStagesIntentBeforeObjectBytes(t *testing.T) {
 
 func TestNativeMavenCollectorRetainsIntentUntilObjectDeleteSucceeds(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := &failingDeleteObjectStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), fail: true}
+	objects := &failingDeleteObjectStore{MemoryStore: objectstore.NewMemoryStore(), fail: true}
 	key := "native/maven/sha256/deadbeef"
 	_ = objects.Put(context.Background(), key, []byte("staged"))
 	_, _ = store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{ID: "expired", RepositoryID: "repo", Coordinate: "org.example:widget:1.0.0", Publisher: "alice", State: "open", ExpiresAt: time.Now().Add(-time.Hour)})
@@ -973,7 +974,7 @@ func TestNativeMavenSnapshotMultiBuildPublish(t *testing.T) {
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven, MavenStrictPublication: true}); err != nil {
 		t.Fatal(err)
 	}
-	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	h := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 
 	request := func(method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
 		t.Helper()
@@ -1122,7 +1123,7 @@ func TestNativeMavenSnapshotTombstoneScopesToSingleBuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	h := newNativeMavenHandler(store, objects, testAuthenticator())
 
 	publish := func(jarBody, key string) repository.MavenArtifact {
@@ -1204,7 +1205,7 @@ func TestNativeMavenPublishSessionResponsesMatchContractKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewGatewayHandler(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objectstore.NewMemoryStore()}})
 	pomDigest := "sha256:" + strings.Repeat("a", 64)
 	body, _ := json.Marshal(nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: pomDigest, Size: 42}}})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewReader(body))

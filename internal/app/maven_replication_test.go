@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestMavenReplicationCopiesTargetOwnedAssetsAndMetadata(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte("replicated Maven asset")
 	digest := mavenReplicationDigest(body)
 	sourceKey := "native/maven/sha256/" + digest[len("sha256:"):]
@@ -53,7 +54,7 @@ func TestMavenReplicationCopiesTargetOwnedAssetsAndMetadata(t *testing.T) {
 func TestMavenReplicationRejectsTombstonedSourceAndExistingTarget(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte("source visibility")
 	digest := mavenReplicationDigest(body)
 	sourceKey, targetKey := "source", "target"
@@ -83,7 +84,7 @@ func TestMavenReplicationRejectsTombstonedSourceAndExistingTarget(t *testing.T) 
 func TestMavenReplicationSharesTargetObjectForPathsWithTheSameDigest(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte("shared Maven asset")
 	digest := mavenReplicationDigest(body)
 	coordinate := "org.example:shared:1.0.0"

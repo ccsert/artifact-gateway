@@ -40,7 +40,7 @@ func TestRepositoryArtifactIdentitiesReturnHistoricalNPMVersions(t *testing.T) {
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-identities?purpose=distribution&q=widget&pageSize=50", nil)
 	authorize(request, authenticator.IssueToken("identity-reader"))
 	response := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestRepositoryArtifactIdentitiesApplyConanPurposeBoundary(t *testing.T) {
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	list := func(purpose string) []struct {
 		Coordinate string `json:"coordinate"`
 		Digest     string `json:"digest"`
@@ -153,7 +153,7 @@ func TestRepositoryArtifactIdentitiesRequireRepositoryRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	path := "/api/v2/repositories/" + repo.ID + "/artifact-identities?purpose=scan"
 
 	for _, test := range []struct {
@@ -189,7 +189,7 @@ func TestRepositoryArtifactIdentitiesRejectOverlongQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	for _, query := range []string{strings.Repeat("x", 256), strings.Repeat(" ", 256), strings.Repeat("x", 255) + " "} {
 		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-identities?purpose=scan&q="+url.QueryEscape(query), nil)
 		authorize(request, authenticator.IssueToken("reader"))
@@ -229,7 +229,7 @@ func TestRepositoryArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) 
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	list := func(repositoryID string) int {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repositoryID+"/artifact-identities?purpose=scan", nil)

@@ -26,7 +26,7 @@ func TestRuntimeNodesAPIListsHeartbeatStatusAndWorkerCapabilities(t *testing.T) 
 		}
 	}
 
-	handler := NewGatewayHandler(Dependencies{Runtime: DiagnosticRuntime{SessionID: "session-api"}}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Runtime: DiagnosticRuntime{SessionID: "session-api"}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/runtime/nodes", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -116,7 +116,7 @@ func TestRuntimeNodeStatusMarksThirtySecondsAsStale(t *testing.T) {
 }
 
 func TestRuntimeNodesAPIRequiresAdministrator(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v2/runtime/nodes", nil))
 	if response.Code != http.StatusUnauthorized {

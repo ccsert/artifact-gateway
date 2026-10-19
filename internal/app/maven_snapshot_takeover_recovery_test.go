@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
 	testsupport "github.com/ccsert/artifact-gateway/internal/testsupport/snapshotfixture"
@@ -21,7 +22,7 @@ import (
 
 type takeoverFixture struct {
 	store   *repository.MemoryStore
-	objects *MemoryOCIObjectStore
+	objects *objectstore.MemoryStore
 	repo    repository.HostedRepository
 	p       *snapshotimport.Prepared
 	plan    repository.MavenSnapshotImportPlan
@@ -47,7 +48,7 @@ func newTakeoverFixture(t *testing.T, bundles ...func(testing.TB) (string, strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	o := NewMemoryOCIObjectStore()
+	o := objectstore.NewMemoryStore()
 	if _, err = snapshotimport.Run(ctx, p, s, o, repo.ID, "target", "operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, p, repo.ID, "target", "operator")); err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +402,7 @@ func TestSnapshotTakeoverWithAbsentMetadataAndCorruptNewDeployment(t *testing.T)
 }
 
 type concurrentSnapshotCompletionObjects struct {
-	OCIObjectStore
+	ObjectStore
 	key    string
 	once   sync.Once
 	mutate func()
@@ -411,7 +412,7 @@ func (o *concurrentSnapshotCompletionObjects) Open(ctx context.Context, key stri
 	if key == o.key {
 		o.once.Do(o.mutate)
 	}
-	return o.OCIObjectStore.Open(ctx, key)
+	return o.ObjectStore.Open(ctx, key)
 }
 
 func TestSnapshotConcurrentAppendFencesValidatedCompletion(t *testing.T) {
@@ -430,7 +431,7 @@ func TestSnapshotConcurrentAppendFencesValidatedCompletion(t *testing.T) {
 		}
 	}
 	h := f.h
-	h.objects = &concurrentSnapshotCompletionObjects{OCIObjectStore: f.objects, key: key, mutate: func() {
+	h.objects = &concurrentSnapshotCompletionObjects{ObjectStore: f.objects, key: key, mutate: func() {
 		if w := f.request(http.MethodPut, "widget-1.0-"+stamp+"-9-tests.zip", "new tests"); w.Code != 201 {
 			t.Fatalf("concurrent append=%d", w.Code)
 		}

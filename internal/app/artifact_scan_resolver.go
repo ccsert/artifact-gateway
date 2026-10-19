@@ -29,13 +29,13 @@ type NativeArtifactScanResolver struct {
 	Cargo   repository.NativeCargoStore
 	Conan   repository.NativeConanStore
 	APT     repository.APTArtifactStore
-	Objects OCIObjectStore
+	Objects ObjectStore
 }
 
 // NewNativeArtifactScanResolver adapts a store implementing the native format
 // interfaces. Missing interfaces simply make that format unavailable rather
 // than weakening validation for formats that are present.
-func NewNativeArtifactScanResolver(store any, bytes OCIObjectStore) *NativeArtifactScanResolver {
+func NewNativeArtifactScanResolver(store any, bytes ObjectStore) *NativeArtifactScanResolver {
 	resolver := &NativeArtifactScanResolver{Objects: bytes}
 	resolver.Maven, _ = store.(repository.NativeMavenStore)
 	resolver.OCI, _ = store.(repository.NativeOCIStore)

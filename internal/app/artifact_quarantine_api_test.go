@@ -30,7 +30,7 @@ func TestArtifactQuarantineManagementHTTP(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	path := "/api/v2/repositories/" + repo.ID + "/artifact-quarantine?coordinate=" + coordinate + "&digest=" + digest
 	requestAs := func(method, body, ifMatch, token string) *httptest.ResponseRecorder {
 		httpRequest := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -127,7 +127,7 @@ func TestArtifactQuarantineConanUsesRecipeRevisionAsTheOnlyAnchor(t *testing.T) 
 		t.Fatalf("visible package revision=%#v err=%v", visiblePackage, err)
 	}
 
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	put := func(coordinate, digest, ifMatch, state, reason string) *httptest.ResponseRecorder {
 		query := url.Values{"coordinate": {coordinate}, "digest": {digest}}
 		request := httptest.NewRequest(

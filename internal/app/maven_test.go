@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -71,7 +72,7 @@ func TestMavenProxyCacheCachesComponentsAndMetadataSeparately(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}}})
 	client := &countingMavenClient{status: http.StatusOK, body: []byte("jar")}
-	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, -time.Millisecond, time.Hour, time.Hour, []string{"repo.example"})
+	cache := NewMavenCache(objectstore.NewMemoryStore(), time.Hour, -time.Millisecond, time.Hour, time.Hour, []string{"repo.example"})
 	metrics := &Metrics{}
 	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: cache}
 	request := func(path string) *httptest.ResponseRecorder {
@@ -129,7 +130,7 @@ func TestMavenProxyCacheCachesComponentsAndMetadataSeparately(t *testing.T) {
 func TestMavenProxyCacheNegativeWhitelistRetryAndCorruption(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}}})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	cache := NewMavenCache(objects, time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
 	client := &countingMavenClient{status: http.StatusNotFound}
 	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
@@ -186,7 +187,7 @@ func TestMavenProxyRetriesHTTPFailuresAndInvalidatesUnauthorizedCachedSource(t *
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "central", Type: repository.MemberProxy, Endpoint: "https://repo.example", Position: 0}
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{member}})
-	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
+	cache := NewMavenCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
 	client := &countingMavenClient{status: http.StatusOK, statuses: []int{http.StatusServiceUnavailable, http.StatusOK}, body: []byte("recovered")}
 	metrics := &Metrics{}
 	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: cache}
@@ -239,7 +240,7 @@ func TestMavenLegacyGroupServesArtifactsMetadataAndChecksums(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{}})
 	for path, want := range files {
 		request := httptest.NewRequest(http.MethodGet, "/maven/engineering"+path, nil)
 		request.SetBasicAuth("gradle", "resolver-secret")
@@ -286,7 +287,7 @@ func TestMavenHostedMemberWinsAndProxyIsFallback(t *testing.T) {
 		{Name: "proxy-first", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 0},
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 1},
 	}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{AllowHTTPForTesting: true})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{AllowHTTPForTesting: true}})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -322,7 +323,7 @@ func TestMavenSignalsAndAuditsAnInternalCoordinateConflict(t *testing.T) {
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{AllowHTTPForTesting: true})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{AllowHTTPForTesting: true}})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -337,7 +338,7 @@ func TestMavenSignalsAndAuditsAnInternalCoordinateConflict(t *testing.T) {
 
 func TestMavenGroupManagementAndPathValidation(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	create := httptest.NewRequest(http.MethodPost, "/api/v1/maven/groups", strings.NewReader(`{"name":"engineering","members":[{"name":"hosted","type":"hosted","endpoint":"http://legacy","position":0}]}`))
 	authorize(create, "admin-secret")
 	created := httptest.NewRecorder()
@@ -405,7 +406,7 @@ func TestMavenUsesManagedGrantsForBoundMembersAndCachedSources(t *testing.T) {
 	authenticator := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"maven": {"engineering"}}}
 	client := &countingMavenClient{status: http.StatusOK, body: []byte("artifact")}
 	metrics := &Metrics{}
-	cache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
+	cache := NewMavenCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{"repo.example"})
 	handler := MavenHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: client, Metrics: metrics, Cache: cache}
 	request := func() *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.jar", nil)
@@ -446,7 +447,7 @@ func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: upstream.URL, Position: 0}}})
 	authenticator := testAuthenticator()
 	authenticator.RepositoryReaders = map[string][]string{"maven": {"engineering/*"}}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	cache := NewDefaultMavenCache(objects, []string{strings.TrimPrefix(upstream.URL, "http://")}).WithQuota(NewCacheQuota(objects, map[string]int64{"engineering": 1}))
 	metrics := &Metrics{}
 	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: UpstreamClient{AllowHTTPForTesting: true}, Metrics: metrics, Cache: cache}
@@ -468,7 +469,7 @@ func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
 func TestMavenDenylistedProxyReturnsForbiddenAndAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "https://blocked.example", Position: 0}}})
-	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Metrics: &Metrics{}, Cache: NewDefaultMavenCache(NewMemoryOCIObjectStore(), []string{"allowed.example"})}
+	handler := MavenHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Metrics: &Metrics{}, Cache: NewDefaultMavenCache(objectstore.NewMemoryStore(), []string{"allowed.example"})}
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -499,7 +500,7 @@ func TestMavenForwardsConditionalRequestsAndDisabledGroupsAreAudited(t *testing.
 	defer proxy.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0}, {Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{AllowHTTPForTesting: true})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{AllowHTTPForTesting: true}})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/maven-metadata.xml", nil)
 	request.Header.Set("If-None-Match", `"cached"`)
 	request.SetBasicAuth("maven", "resolver-secret")

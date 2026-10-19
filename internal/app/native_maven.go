@@ -27,7 +27,7 @@ import (
 // only gains asset rows at commit, making incomplete uploads unaddressable.
 type nativeMavenHandler struct {
 	store              GatewayStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	authenticator      Authenticator
 	authorizer         RepositoryAuthorizer
 	management         hostedRepositoryAPIHandler
@@ -61,7 +61,7 @@ func (h nativeMavenHandler) recordAuthorizationDenial(decision AuthorizationDeci
 	}
 }
 
-func newNativeMavenHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeMavenHandler {
+func newNativeMavenHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeMavenHandler {
 	return nativeMavenHandler{store: store, objects: objects, authenticator: auth, authorizer: RepositoryAuthorizer{
 		Grants: store,
 		Legacy: auth,

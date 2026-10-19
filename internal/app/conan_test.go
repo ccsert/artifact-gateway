@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -43,7 +44,7 @@ func TestConanHostedRecipeAndPackageFilesAreChecksumVerifiedAndCached(t *testing
 	defer upstream.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: upstream.URL}}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{}, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/packages/package-id/revisions/prev/files/package.tgz"
 	for range 2 {
 		w := httptest.NewRecorder()
@@ -61,7 +62,7 @@ func TestConanChecksumMismatchIsNotCached(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}}})
 	client := &conanChecksumClient{}
-	cache := NewConanCache(nil)
+	cache := NewConanCache(objectstore.NewMemoryStore())
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: cache, Metrics: &Metrics{}}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py"
 	for range 2 {
@@ -81,7 +82,7 @@ func TestConanAuditFieldsAndMetricsCoverCacheLifecycle(t *testing.T) {
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
 	metrics := &Metrics{}
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAcceptClient{}, Cache: NewConanCache(nil), Metrics: metrics}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAcceptClient{}, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: metrics}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
 	for range 2 {
 		r := conanRequest(path)
@@ -144,7 +145,7 @@ func (c *conanPublicationCoordinator) OpenCircuit(context.Context, string, time.
 func (c *conanPublicationCoordinator) CloseCircuit(context.Context, string) error { return nil }
 
 type conanInvalidationGateStore struct {
-	OCIObjectStore
+	ObjectStore
 	listStarted chan struct{}
 	allowList   chan struct{}
 	once        sync.Once
@@ -159,18 +160,18 @@ func (s *conanInvalidationGateStore) List(ctx context.Context, prefix string) ([
 			return nil, ctx.Err()
 		}
 	}
-	return s.OCIObjectStore.List(ctx, prefix)
+	return s.ObjectStore.List(ctx, prefix)
 }
 
 func TestConanInvalidationSharesPublicationLockAcrossInstances(t *testing.T) {
-	base := NewMemoryOCIObjectStore()
+	base := objectstore.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	seed := NewDefaultConanCache(base, nil)
 	key := seed.key("central", "pkg/1.0/user/stable/revisions", member, "application/json")
 	if err := seed.store(context.Background(), key, conanCacheEntry{body: []byte(`{"revisions":[]}`), contentType: "application/json", member: member.Name, endpoint: member.Endpoint, status: http.StatusOK}, "central", 0, time.Minute, "central", "pkg/1.0/user/stable/revisions", "application/json"); err != nil {
 		t.Fatal(err)
 	}
-	store := &conanInvalidationGateStore{OCIObjectStore: base, listStarted: make(chan struct{}), allowList: make(chan struct{})}
+	store := &conanInvalidationGateStore{ObjectStore: base, listStarted: make(chan struct{}), allowList: make(chan struct{})}
 	coordinator := &conanPublicationCoordinator{}
 	cacheA := NewDefaultConanCache(store, nil).WithCoordinator(coordinator)
 	cacheB := NewDefaultConanCache(store, nil).WithCoordinator(coordinator)
@@ -236,7 +237,7 @@ func TestConanHostedPrecedesProxyAndCachesNotFound(t *testing.T) {
 	// Use a fixture client for Proxy to avoid requiring TLS while still proving
 	// resolution order and the configured allowlist contract.
 	client := conanFixtureClient{hostedURL: hosted.URL, proxyURL: proxy.URL}
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &client, Cache: NewConanCache([]string{"proxy.example"}), Metrics: &Metrics{}}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &client, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
 	for range 2 {
 		w := httptest.NewRecorder()
@@ -268,7 +269,7 @@ func TestConanCacheSeparatesAcceptRepresentations(t *testing.T) {
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
 	client := &conanAcceptClient{}
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore())}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
 	for _, accept := range []string{"application/a", "application/b", "application/a"} {
 		r := conanRequest(path)
@@ -299,7 +300,7 @@ func TestConanRejectsOversizeMetadataAndArtifactWithoutCaching(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanOversizeClient{}, Cache: NewDefaultConanCache(objects, nil).WithMaxObjectBytes(200)}
 	for _, path := range []string{
 		"/conan/v2/central/conans/pkg/1.0/user/stable/revisions",
@@ -365,7 +366,7 @@ func TestConanLatestPackageRevisionIsValidatedAndUsesMetadataTTL(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	cache := NewDefaultConanCache(objects, nil)
 	path := "pkg/1.0/user/stable/revisions/rrev/packages/package-id/latest"
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusOK, body: `{"revision":"prev","time":"2024-01-01T00:00:00Z"}`}, Cache: cache}
@@ -391,7 +392,7 @@ func TestConanLatestPackageRevisionIsValidatedAndUsesMetadataTTL(t *testing.T) {
 		t.Fatalf("latest cache TTL=%s, want one minute", ttl)
 	}
 
-	badObjects := NewMemoryOCIObjectStore()
+	badObjects := objectstore.NewMemoryStore()
 	bad := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusOK, body: `{"revision":"prev"}`}, Cache: NewDefaultConanCache(badObjects, nil)}
 	w = httptest.NewRecorder()
 	bad.ServeHTTP(w, conanRequest("/conan/v2/central/conans/"+path))
@@ -406,7 +407,7 @@ func TestConanLatestPackageRevisionIsValidatedAndUsesMetadataTTL(t *testing.T) {
 func TestConanAuthenticationHandshakeIsConan2GETOnly(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}})
-	h := ConanHandler{Store: store, Authenticator: Authenticator{ResolverToken: "resolver-secret"}, Client: &conanAnonymousClient{}, Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: Authenticator{ResolverToken: "resolver-secret"}, Client: &conanAnonymousClient{}, Cache: NewConanCache(objectstore.NewMemoryStore())}
 
 	for _, request := range []struct {
 		method, path string
@@ -432,7 +433,7 @@ func TestConanSuccessfulHandshakesWriteResolvedAudits(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "authenticated", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: NewConanCache(objectstore.NewMemoryStore())}
 
 	for _, test := range []struct {
 		name, path, actor string
@@ -463,7 +464,7 @@ func TestConanRejectsStringRevisionTimeWithoutCaching(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":"tomorrow"}]}`}, Cache: NewDefaultConanCache(objects, nil)}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions"))
@@ -480,7 +481,7 @@ func TestConanRejectsQuotedNumericRevisionTime(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "test://hosted"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":"1"}]}`}, Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":"1"}]}`}, Cache: NewConanCache(objectstore.NewMemoryStore())}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions"))
 	if w.Code != http.StatusBadRequest {
@@ -492,7 +493,7 @@ func TestConanAuditsNonSuccessUpstreamStatus(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusFound}, Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusFound}, Cache: NewConanCache(objectstore.NewMemoryStore())}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions"))
 	if w.Code != http.StatusBadGateway {
@@ -507,7 +508,7 @@ func TestConanAuditRetainsSuccessfulUpstreamStatusAcrossCacheHit(t *testing.T) {
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://legacy.example"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusCreated, body: `{"revisions":[{"revision":"abc","time":1}]}`}, Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: conanStatusClient{status: http.StatusCreated, body: `{"revisions":[{"revision":"abc","time":1}]}`}, Cache: NewConanCache(objectstore.NewMemoryStore())}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
 	for range 2 {
 		w := httptest.NewRecorder()
@@ -535,7 +536,7 @@ func TestConanRevisionSearchResolvesThroughUpstream(t *testing.T) {
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
 	client := &conanAcceptClient{}
 	w := httptest.NewRecorder()
-	ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil)}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/search"))
+	ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore())}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/search"))
 	if w.Code != http.StatusOK || client.calls != 1 {
 		t.Fatalf("status=%d calls=%d", w.Code, client.calls)
 	}
@@ -548,7 +549,7 @@ func TestConanMalformedRouteReturnsBadRequestAndAudits(t *testing.T) {
 	store := repository.NewMemoryStore()
 	client := &conanAcceptClient{}
 	w := httptest.NewRecorder()
-	ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil)}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/files/a%2fb"))
+	ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore())}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/pkg/1.0/user/stable/revisions/rrev/files/a%2fb"))
 	if w.Code != http.StatusBadRequest || client.calls != 0 {
 		t.Fatalf("status=%d calls=%d", w.Code, client.calls)
 	}

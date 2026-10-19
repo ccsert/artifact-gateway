@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/ccsert/artifact-gateway/internal/app"
+	"github.com/ccsert/artifact-gateway/internal/apptest"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -55,12 +56,10 @@ func main() {
 	if address == "" {
 		address = "127.0.0.1:18083"
 	}
-	handler := app.NewGatewayHandler(
-		app.Dependencies{NativeNPMObjectStore: app.NewMemoryOCIObjectStore()},
-		store,
-		app.TestAdapter{},
-		app.Authenticator{ResolverToken: "fixture-secret", ResolverActor: "npm-fixture"},
-	)
+	handler := apptest.NewGateway(log.Default(), app.GatewayOptions{
+		Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{},
+		Authenticator: app.Authenticator{ResolverToken: "fixture-secret", ResolverActor: "npm-fixture"},
+	}, app.NewGatewayHandler)
 	log.Printf("Native npm %s fixture listening on %s", packages.Type, address)
 	log.Fatal(http.ListenAndServe(address, handler))
 }

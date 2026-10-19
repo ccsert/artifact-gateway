@@ -46,7 +46,7 @@ func TestSecurityPolicyEvaluationReportsPyPIAggregateQuarantine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/v2/repositories/"+target.ID+"/security-policy:evaluate",

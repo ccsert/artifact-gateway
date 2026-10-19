@@ -27,7 +27,7 @@ func TestRepositorySecurityPolicyManagementAndEvaluationHTTP(t *testing.T) {
 	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: source.ID, Path: coordinate, Digest: digest, ObjectKey: "raw/security-widget", Size: 7}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, body, ifMatch, token string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		if token != "" {
@@ -93,7 +93,7 @@ func TestRepositoryPromotionSecurityPolicyDeniesBeforeEnqueue(t *testing.T) {
 	if _, err = store.ReplaceRepositorySecurityPolicy(ctx, target.ID, policy, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+coordinate+`","digest":"`+digest+`"}`))
 	authorize(request, "admin-secret")
 	request.Header.Set("Idempotency-Key", "security-denied")

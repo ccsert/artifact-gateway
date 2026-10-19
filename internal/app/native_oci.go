@@ -26,7 +26,7 @@ import (
 type nativeOCIHandler struct {
 	store              repository.NativeOCIStore
 	repos              repository.HostedRepositoryStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
 	audit              repository.Store
@@ -54,10 +54,7 @@ func (h nativeOCIHandler) withProxy(proxy OCIHandler) nativeOCIHandler {
 	return h
 }
 
-func newNativeOCIHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeOCIHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativeOCIHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeOCIHandler {
 	return nativeOCIHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, readPolicies: store, quarantine: store, authorizer: RepositoryAuthorizer{
 		Grants: store,
 		Legacy: auth,

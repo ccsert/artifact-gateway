@@ -18,7 +18,7 @@ func TestRepositoryQuarantineReadPolicyAPIUsesAdminCASAndAudits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	path := "/api/v2/repositories/" + repo.ID + "/quarantine-read-policy"
 	request := func(method, token, body, ifMatch string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))

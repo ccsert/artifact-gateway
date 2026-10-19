@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -93,7 +94,7 @@ func TestPostgresRustFSCargoProxyOfficialOfflineReplay(t *testing.T) {
 	}
 	defer func() { _ = storeA.Close() }()
 	bucket := "cargo-official-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +119,7 @@ func TestPostgresRustFSCargoProxyOfficialOfflineReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	warm := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsA, CargoUpstreamClient: upstream.Client()},
-		storeA, TestAdapter{}, testAuthenticator()))
+	warm := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsA}}))
 	consumer := filepath.Join(t.TempDir(), "consumer")
 	write(filepath.Join(consumer, "Cargo.toml"), "[package]\nname=\"consumer\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\nproxy-official-demo=\"=1.0.0\"\n")
 	write(filepath.Join(consumer, "src/main.rs"), "fn main() { assert_eq!(proxy_official_demo::value(), 42); }\n")
@@ -170,12 +170,11 @@ func TestPostgresRustFSCargoProxyOfficialOfflineReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = storeB.Close() }()
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
-	restarted := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsB, CargoUpstreamClient: upstream.Client()},
-		storeB, TestAdapter{}, testAuthenticator()))
+	restarted := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{CargoUpstreamClient: upstream.Client()}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsB}}))
 	defer restarted.Close()
 	freshHome := t.TempDir()
 	write(filepath.Join(freshHome, "config.toml"), config(restarted.URL))

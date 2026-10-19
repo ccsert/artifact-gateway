@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 )
@@ -15,7 +16,7 @@ import (
 func TestNativeArtifactScanResolverResolvesSingleFileFormats(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	resolver := NewNativeArtifactScanResolver(store, objects)
 
 	rawDigest := putScanFixtureObject(t, objects, "scan/raw", "raw payload")
@@ -66,7 +67,7 @@ func TestNativeArtifactScanResolverResolvesSingleFileFormats(t *testing.T) {
 func TestNativeArtifactScanResolverWalksOCIIndex(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	resolver := NewNativeArtifactScanResolver(store, objects)
 
 	configDigest := putScanFixtureObject(t, objects, "scan/oci-config", `{"architecture":"amd64"}`)
@@ -116,7 +117,7 @@ func TestNativeArtifactScanResolverWalksOCIIndex(t *testing.T) {
 func TestNativeArtifactScanResolverResolvesGoModuleAssets(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if _, err := store.PutGoModuleVersion(ctx, repository.GoModuleVersion{RepositoryID: "go", Module: "example.com/team/widget", Version: "v1.2.3"}); err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestNativeArtifactScanResolverResolvesGoModuleAssets(t *testing.T) {
 func TestNativeArtifactScanResolverResolvesVisibleConanRevisions(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	reference, recipeRevision := "widget/1.2.3@team/stable", "rrev"
 	recipeDigest := testScanDigest("recipe revision")
 	recipeAssets := []repository.ConanAsset{
@@ -189,7 +190,7 @@ func TestNativeArtifactScanResolverResolvesVisibleConanRevisions(t *testing.T) {
 	}
 }
 
-func putScanFixtureObject(t *testing.T, objects *MemoryOCIObjectStore, key, body string) string {
+func putScanFixtureObject(t *testing.T, objects *objectstore.MemoryStore, key, body string) string {
 	t.Helper()
 	if err := objects.Put(context.Background(), key, []byte(body)); err != nil {
 		t.Fatal(err)
@@ -207,7 +208,7 @@ func registerScanOCIBlob(t *testing.T, ctx context.Context, store *repository.Me
 	}
 }
 
-func newScanConanAsset(t *testing.T, objects *MemoryOCIObjectStore, repositoryID, reference, recipeRevision, packageID, packageRevision, path, body string) repository.ConanAsset {
+func newScanConanAsset(t *testing.T, objects *objectstore.MemoryStore, repositoryID, reference, recipeRevision, packageID, packageRevision, path, body string) repository.ConanAsset {
 	t.Helper()
 	key := "scan/conan/" + path
 	digest := putScanFixtureObject(t, objects, key, body)

@@ -15,11 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestRawCacheUsesPersistedGroupQuota(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(store, nil))
 	first := cache.Key("downloads", "one", "hosted", "http://legacy.local")
 	if err := cache.Store(context.Background(), first, RawContent{Body: []byte("1234"), Repository: "downloads", CacheQuotaBytes: 5}); err != nil {
@@ -32,7 +33,7 @@ func TestRawCacheUsesPersistedGroupQuota(t *testing.T) {
 }
 
 func TestRawCacheLoadsLegacyIndex(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cache := NewRawCache(store, time.Hour, time.Hour, nil)
 	key := cache.Key("downloads", "artifact", "hosted", "http://legacy.local")
 	body := []byte("artifact")
@@ -69,7 +70,7 @@ func TestRawCacheLoadsLegacyIndex(t *testing.T) {
 }
 
 func TestRawCacheQuotaCountsLegacyIndex(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cache := NewRawCache(store, time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(store, nil))
 	key := cache.Key("downloads", "existing", "hosted", "http://legacy.local")
 	legacy, err := json.Marshal(struct {
@@ -90,7 +91,7 @@ func TestRawCacheQuotaCountsLegacyIndex(t *testing.T) {
 }
 
 func TestRawQuotaExcludesSameNamedOCICacheAndRecordsRejection(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	quota := NewCacheQuota(store, nil)
 	ociCache := NewDefaultOCICache(store, nil)
 	ociKey := ociCache.Key("downloads", "downloads", ociManifest, "latest")
@@ -109,7 +110,7 @@ func TestRawQuotaExcludesSameNamedOCICacheAndRecordsRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	metrics := &Metrics{}
-	handler := RawHandler{Store: groups, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("two")}, Metrics: metrics, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(NewMemoryOCIObjectStore(), nil))}
+	handler := RawHandler{Store: groups, Authenticator: testAuthenticator(), Client: &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("two")}, Metrics: metrics, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, nil).WithQuota(NewCacheQuota(objectstore.NewMemoryStore(), nil))}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/limited/artifact"))
 	if response.Code != http.StatusOK || metrics.cacheQuotaDenied.Load() != 1 {
@@ -121,7 +122,7 @@ func TestRawProxyDenialAndNegativeCache(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "blocked", Type: repository.MemberProxy, Endpoint: "http://blocked.example"}}})
 	client := &rawFixtureClient{responses: map[string]int{"blocked": http.StatusNotFound}}
-	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"blocked.example"})}
+	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"blocked.example"})}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/a"))
 	if w.Code != http.StatusForbidden || len(client.Calls()) != 0 {
@@ -142,7 +143,7 @@ func TestRawProxyDenialAndNegativeCache(t *testing.T) {
 }
 
 func TestRawProxyPolicyRejectsPrivateAddresses(t *testing.T) {
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"127.0.0.1", "::1"})
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"127.0.0.1", "::1"})
 	for _, endpoint := range []string{"http://proxy.example", "https://user:secret@proxy.example", "https://127.0.0.1", "https://[::1]"} {
 		if cache.ProxyAllowed(endpoint) {
 			t.Fatalf("proxy endpoint %q was allowed", endpoint)
@@ -257,7 +258,7 @@ func TestRawProxyTLSE2ESafelyPinsDialedAddressAndCaches(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}, Anonymous: true}}})
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"example.com"})
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"example.com"})
 	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
 	defer gateway.Close()
 
@@ -348,7 +349,7 @@ func TestRawProxyTLSRejectsPrivateResolutionAndUnsafeRedirectsWithoutCaching(t *
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "redirects", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "blocked", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"other.example"}}}})
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"example.com"})
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"example.com"})
 	gateway := httptest.NewServer(RawHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Metrics: &Metrics{}, Cache: cache})
 	defer gateway.Close()
 
@@ -412,7 +413,7 @@ func withRawProxyNetwork(t *testing.T, lookup func(context.Context, string, stri
 }
 
 func TestRawCacheCollectorKeepsLiveReferences(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cache := NewRawCache(store, time.Hour, time.Hour, nil)
 	live := cache.Key("g", "live", "m", "https://host")
 	expired := cache.Key("g", "expired", "m", "https://host")
@@ -457,7 +458,7 @@ func TestRawCacheCollectorKeepsLiveReferences(t *testing.T) {
 }
 
 func TestRawCacheInvalidationKeepsObjectsReferencedByOtherIndexes(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cacheA := NewRawCache(store, time.Hour, time.Hour, nil)
 	cacheB := NewRawCache(store, time.Hour, time.Hour, nil)
 	liveKey := cacheA.Key("g", "live", "m", "https://host")

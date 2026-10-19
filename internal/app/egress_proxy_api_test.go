@@ -18,7 +18,7 @@ import (
 func TestRepositoryEgressProxyCreateRedactsAndEncrypts(t *testing.T) {
 	t.Setenv("GATEWAY_EGRESS_PROXY_KEY", strings.Repeat("ab", 32))
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	body := `{"name":"maven-proxy","format":"maven","type":"proxy","endpoint":"https://upstream.example","egressProxy":{"mode":"custom","protocol":"socks5","host":"proxy.corp.example","port":1080,"username":"gateway","password":"s3cret","remoteDns":true,"noProxy":["*.internal.example"]}}`
 	r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
@@ -69,7 +69,7 @@ func TestRepositoryEgressProxyUpdateKeepsAndClearsCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	patch := func(version, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+repo.ID, strings.NewReader(body))
 		authorize(r, "admin-secret")
@@ -117,7 +117,7 @@ func TestRepositoryEgressProxyUpdateKeepsAndClearsCredentials(t *testing.T) {
 func TestRepositoryEgressProxyValidation(t *testing.T) {
 	t.Setenv("GATEWAY_EGRESS_PROXY_KEY", strings.Repeat("ab", 32))
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	post := func(body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
 		r.Header.Set("Idempotency-Key", uuid.NewString())
@@ -138,7 +138,7 @@ func TestRepositoryEgressProxyValidation(t *testing.T) {
 
 func TestRepositoryEgressProxyCreateRequiresKeyForPassword(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	body := `{"name":"maven-proxy","format":"maven","type":"proxy","endpoint":"https://upstream.example","egressProxy":{"mode":"custom","protocol":"http","host":"proxy.example","port":8080,"password":"s3cret"}}`
 	r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
 	r.Header.Set("Idempotency-Key", uuid.NewString())
@@ -163,7 +163,7 @@ func TestEgressProxyTestEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	testCall := func(id string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+id+"/egress-proxy:test", nil)
 		authorize(r, "admin-secret")

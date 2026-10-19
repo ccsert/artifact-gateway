@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 type failingConanDeleteStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	fail bool
 }
 
@@ -19,13 +20,13 @@ func (s *failingConanDeleteStore) Delete(ctx context.Context, key string) error 
 	if s.fail {
 		return errors.New("object store unavailable")
 	}
-	return s.MemoryOCIObjectStore.Delete(ctx, key)
+	return s.MemoryStore.Delete(ctx, key)
 }
 
 func TestNativeConanMaintenanceRetriesFailedReclaimJob(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := &failingConanDeleteStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), fail: true}
+	objects := &failingConanDeleteStore{MemoryStore: objectstore.NewMemoryStore(), fail: true}
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "repo", Name: "conan", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)

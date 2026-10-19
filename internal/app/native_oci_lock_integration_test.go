@@ -21,12 +21,13 @@ import (
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/database"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 type gatedOCIUploadObjects struct {
-	OCIObjectStore
+	ObjectStore
 	entered chan struct{}
 	resume  chan struct{}
 }
@@ -43,7 +44,7 @@ func (s gatedOCIUploadObjects) PutReader(ctx context.Context, key string, reader
 		case <-s.resume:
 		}
 	}
-	return s.OCIObjectStore.PutReader(ctx, key, reader, size)
+	return s.ObjectStore.PutReader(ctx, key, reader, size)
 }
 
 func TestPostgresRustFSOCIConcurrentHTTPUploadsKeepMetadataAvailable(t *testing.T) {
@@ -76,16 +77,16 @@ func TestPostgresRustFSOCIConcurrentHTTPUploadsKeepMetadataAvailable(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "oci-pool-"+strings.ReplaceAll(uuid.NewString(), "-", ""))
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "oci-pool-"+strings.ReplaceAll(uuid.NewString(), "-", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objects.EnsureBucket(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	gate := gatedOCIUploadObjects{OCIObjectStore: objects, entered: make(chan struct{}, 4), resume: make(chan struct{})}
-	dependencies := Dependencies{NativeOCIObjectStore: gate, checkers: []Checker{postgresPoolChecker{db: primary}}}
-	server := httptest.NewServer(NewGatewayHandler(dependencies, store, TestAdapter{}, testAuthenticator()))
+	gate := gatedOCIUploadObjects{ObjectStore: objects, entered: make(chan struct{}, 4), resume: make(chan struct{})}
+	dependencies := Dependencies{checkers: []Checker{postgresPoolChecker{db: primary}}}
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: dependencies, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: gate, repository.FormatRaw: gate}}))
 	defer server.Close()
 	var resumeOnce sync.Once
 	resume := func() { resumeOnce.Do(func() { close(gate.resume) }) }

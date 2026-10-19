@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	mavenprotocol "github.com/ccsert/artifact-gateway/internal/protocol/maven"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -36,12 +37,13 @@ func TestPostgresMavenProtocolPublishesDirectlyByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, Authenticator{
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{
 		ResolverToken:     "resolver-secret",
 		RepositoryReaders: map[string][]string{"maven": {repo.Name}},
 		RepositoryWriters: map[string][]string{"maven": {repo.Name}},
-	})
+	}, Storage: ObjectStores{repository.FormatMaven: objects}},
+	)
 	pom := []byte("<project><groupId>org.example</groupId><artifactId>direct</artifactId><version>1.0.0</version></project>")
 	put := httptest.NewRequest(http.MethodPut, "/repository/maven/"+repo.Name+"/org/example/direct/1.0.0/direct-1.0.0.pom", bytes.NewReader(pom))
 	put.SetBasicAuth("maven", "resolver-secret")
@@ -73,7 +75,7 @@ func TestPostgresRustFSMavenPromotionSharesVerifiedObjectAndCompletesJob(t *test
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(s3Endpoint, s3AccessKey, s3SecretKey, "maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +142,7 @@ func TestPostgresRustFSMavenReplicationPublishesTargetOwnedCheckpoints(t *testin
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "maven-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "maven-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +319,7 @@ func TestPostgresMavenTombstoneRestoreBeforeAndAfterReclaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, key, []byte("restore")); err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +377,7 @@ func TestPostgresMavenMaintenanceRetainsObjectReferencedAfterClaim(t *testing.T)
 	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET created_at=now()-interval '25 hours' WHERE object_key=$1`, key); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, key, []byte("staged")); err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +428,7 @@ func TestPostgresMavenCollectorRecoversClaimAfterTombstoneWriteFailure(t *testin
 	if _, err = db.ExecContext(ctx, `UPDATE native_maven_object_intents SET created_at=now()-interval '25 hours' WHERE object_key=$1`, key); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, key, []byte("staged")); err != nil {
 		t.Fatal(err)
 	}
@@ -583,7 +585,7 @@ func TestPostgresMavenCommitCannotReferenceObjectDuringBlockedDeletion(t *testin
 	if err = store.MarkMavenPublishObject(ctx, active.ID, declared.Name, key); err != nil {
 		t.Fatal(err)
 	}
-	objects := blockingDeleteObjectStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+	objects := blockingDeleteObjectStore{MemoryStore: objectstore.NewMemoryStore(), entered: make(chan struct{}, 1), release: make(chan struct{})}
 	if err = objects.Put(ctx, key, pom); err != nil {
 		t.Fatal(err)
 	}
@@ -800,7 +802,7 @@ func TestPostgresNativeMavenPublishLifecycleIntegration(t *testing.T) {
 
 	// A bad staged checksum must create neither upload metadata nor bytes. A
 	// later retry can replace a lost staged object and commit its references.
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	handler := newNativeMavenHandler(store, objects, testAuthenticator())
 	pom := []byte("<project><groupId>org.example</groupId><artifactId>recovery</artifactId><version>1.0.0</version></project>")
 	jar := []byte("recovery jar")
@@ -916,7 +918,7 @@ func TestPostgresNativeMavenPromotionFailureLeavesS3ObjectsUnpublished(t *testin
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(s3Endpoint, s3AccessKey, s3SecretKey, "native-maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(s3Endpoint, s3AccessKey, s3SecretKey, "native-maven-promotion-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}

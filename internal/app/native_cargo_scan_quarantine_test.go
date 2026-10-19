@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
@@ -19,13 +20,13 @@ import (
 func TestCargoHostedAndGroupQuarantineReadPolicy(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "cargo-quarantine", Name: "cargo-quarantine", Format: repository.FormatCargo})
 	if err != nil {
 		t.Fatal(err)
 	}
 	group := createV2Group(t, store, "cargo-quarantine-group", repository.FormatCargo, repository.GroupMember{RepositoryID: repo.ID})
-	handler := NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}})
 	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, path, bytes.NewReader(body))
@@ -90,14 +91,14 @@ func TestCargoHostedAndGroupQuarantineReadPolicy(t *testing.T) {
 func TestCargoPublicationScanResolvesExactCrate(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-scan", Format: repository.FormatCargo})
 	if err != nil {
 		t.Fatal(err)
 	}
 	enablePublicationScan(t, store, repo.ID)
-	deps := publicationScanDependencies(Dependencies{NativeCargoObjectStore: objects}, repository.FormatCargo)
-	handler := NewGatewayHandler(deps, store, TestAdapter{}, testAuthenticator())
+	deps := publicationScanDependencies(Dependencies{}, repository.FormatCargo)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: deps, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}})
 	body, archive := cargoC0PublishFixture(t, "demo", "1.0.0", "demo")
 	r := httptest.NewRequest(http.MethodPut, "/cargo/"+repo.Name+"/api/v1/crates/new", bytes.NewReader(body))
 	r.Host = "localhost:8080"
