@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
-for binary in curl go node npm python3; do
+for binary in curl docker go node python3 tar; do
   command -v "$binary" >/dev/null || {
     printf 'Native npm E2E requires %s\n' "$binary" >&2
     exit 1
@@ -21,6 +21,9 @@ private_registry_url="${proxy_url}/npm/private/"
 workdir=$(mktemp -d)
 upstream_pid=""
 proxy_pid=""
+integration_started=0
+integration_project="artifact-gateway-npm-clients-$$"
+integration_compose=(docker compose --env-file /dev/null --project-name "$integration_project" -f compose.integration.yml)
 
 cleanup() {
   local status=$?
@@ -30,11 +33,44 @@ cleanup() {
       wait "$pid" 2>/dev/null || true
     fi
   done
+  if [[ "$integration_started" == 1 ]]; then
+    if ! "${integration_compose[@]}" down -v --remove-orphans; then
+      printf 'Failed to clean the owned npm client project %s\n' "$integration_project" >&2
+      status=1
+    fi
+  fi
   rm -rf "$workdir"
   trap - EXIT
   exit "$status"
 }
 trap cleanup EXIT
+
+# Keep real-client evidence stable across Node.js patch releases. The archive
+# contains npm's bundled dependencies; no package resolution or global install
+# is needed to run the selected official client.
+npm_client_version=11.6.2
+npm_client_archive="$workdir/npm-client.tgz"
+curl --disable --fail --silent --show-error --proto '=https' --tlsv1.2 \
+  --retry 3 --connect-timeout 15 --max-time 120 \
+  "https://registry.npmjs.org/npm/-/npm-${npm_client_version}.tgz" \
+  --output "$npm_client_archive"
+node - "$npm_client_archive" <<'NODE'
+const fs = require('node:fs');
+const { createHash } = require('node:crypto');
+const expected = 'sha512-7iKzNfy8lWYs3zq4oFPa8EXZz5xt9gQNKJZau3B1ErLBb6bF7sBJ00x09485DOvRT2l5Gerbl3VlZNT57MxJVA==';
+const actual = `sha512-${createHash('sha512').update(fs.readFileSync(process.argv[2])).digest('base64')}`;
+if (actual !== expected) throw new Error('official npm client archive integrity mismatch');
+NODE
+mkdir "$workdir/npm-client"
+tar -xzf "$npm_client_archive" -C "$workdir/npm-client"
+npm() { node "$workdir/npm-client/package/bin/npm-cli.js" "$@"; }
+if [[ "$(npm --version)" != "$npm_client_version" ]]; then
+  printf 'Official npm client version mismatch\n' >&2
+  exit 1
+fi
+export npm_config_cache="$workdir/npm-cache-default"
+export npm_config_update_notifier=false
+printf 'Official npm client %s verified against its pinned SHA-512\n' "$npm_client_version"
 
 go build -o "$workdir/native-npm-fixture" ./cmd/native-npm-fixture
 LISTEN_ADDR="127.0.0.1:${upstream_port}" "$workdir/native-npm-fixture" >"$workdir/upstream.log" 2>&1 &
@@ -330,3 +366,39 @@ mkdir "$offline_install"
 )
 
 printf 'Native npm Hosted (with dist-tag add/ls/rm), Proxy, Group, and cold package-lock online/offline npm ci E2E passed through native npm repository roots at %s\n' "$proxy_url"
+
+# Real npm also publishes into PostgreSQL/RustFS, then installs from a fresh
+# HTTP instance. A distinct project and dynamic loopback ports isolate this
+# gate from development, the normal integration suite and parallel gates.
+integration_started=1
+"${integration_compose[@]}" up -d --wait postgres rustfs
+"${integration_compose[@]}" run --rm --no-deps rustfs-ready
+"${integration_compose[@]}" run --rm --no-deps migrate
+postgres_address=$("${integration_compose[@]}" port postgres 5432)
+rustfs_address=$("${integration_compose[@]}" port rustfs 9000)
+if ! TEST_DATABASE_URL="postgres://gateway:integration-password@${postgres_address}/gateway_test?sslmode=disable" \
+  TEST_RUSTFS_ENDPOINT="http://${rustfs_address}" \
+  TEST_RUSTFS_ACCESS_KEY=integration-rustfs TEST_RUSTFS_SECRET_KEY=integration-password \
+  NPM_CLIENT_NODE="$(command -v node)" NPM_CLIENT_JS="$workdir/npm-client/package/bin/npm-cli.js" \
+  go test -json -count=1 -tags=integration,npmclient ./internal/app \
+    -run '^TestPostgresRustFSNPMDistTagOfficialClient$' >"$workdir/persistent-npm.jsonl"; then
+  cat "$workdir/persistent-npm.jsonl" >&2
+  exit 1
+fi
+python3 - "$workdir/persistent-npm.jsonl" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+name = "TestPostgresRustFSNPMDistTagOfficialClient"
+passed = False
+for line in Path(sys.argv[1]).read_text().splitlines():
+    event = json.loads(line)
+    if event.get("Output"):
+        print(event["Output"], end="")
+    if event.get("Test") == name and event.get("Action") == "pass":
+        passed = True
+if not passed:
+    raise SystemExit("required PostgreSQL/RustFS official npm proof was missing or skipped")
+print("Official npm 11.6.2 persistent dist-tag gate passed; empty-cache target-only installation and complete SHA-256 bytes verified. Loopback HTTP fixture; production TLS/cutover is not asserted.")
+PY
