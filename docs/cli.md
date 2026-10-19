@@ -852,6 +852,15 @@ command, flag, or argument count the client does not have.
   committed session refused and a repeated commit answering 409); a user signs
   in with `auth login --secret-output` and uses the token. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
+- `make cli-runtime-e2e` always creates its own Gateway, PostgreSQL and RustFS
+  with synthetic credentials and ephemeral loopback ports. It restarts that
+  Gateway and checks the changed log session and bounded `scope_changed` result
+  from the old cursor; stops only its PostgreSQL to verify unhealthy status and
+  not-ready info, restores it, and disables only its log buffer to verify
+  `503/log_buffer_unavailable` rather than a successful empty list. A member,
+  a pending user and a user required to change their password remain refused;
+  unread member diagnostics are unknown and fail `status --strict`. CI and
+  `ci-local` run the same target; no existing development stack is reused.
 - `make email-compose-check` runs the email commands against an isolated
   Gateway with owned TLS SMTP: a target from a private recipient file, a
   rename that keeps it enabled, a preview and a plan that queue nothing, a
