@@ -198,7 +198,7 @@ def check(render_only):
         def rule(name, target):
             repo = api("POST", "/api/v2/repositories", {"name": name, "format": "raw", "type": "hosted"}, 201, {"Idempotency-Key": str(uuid.uuid4())})
             api("PUT", "/api/v2/repositories/" + repo["id"] + "/capacity", {"quotaBytes": 1000})
-            api("PUT", "/repository/" + name + "/synthetic.txt", b"x" * 900, 201,
+            api("PUT", "/raw/" + name + "/synthetic.txt", b"x" * 900, 201,
                 {"Content-Type": "application/octet-stream"})
             return api("POST", "/api/v2/repository-quota-alert-rules", {
                 "repositoryId": repo["id"], "targetId": target["id"], "enabled": True,
