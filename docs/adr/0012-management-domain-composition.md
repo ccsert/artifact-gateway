@@ -28,7 +28,7 @@ splitting domain dependencies, and are not a prerequisite for #280.
 `managementServer` composes domain handlers by embedding. Each domain owns its
 operations once, declares its store ports, and has an independent constructor.
 The generated `ServerInterface` assertion rejects missing or duplicate methods.
-Generated routing and parameter binding stay at the HTTP edge. This slice does
+Generated routing and parameter binding stay at the HTTP edge. The first slice does
 not change OpenAPI, Console or agctl behavior and introduces no second API.
 
 `managementScope` contains only repository lookup, an explicit anonymous-policy
@@ -60,6 +60,17 @@ anonymous-policy read path requires only a read method, so a domain does not
 need policy-write permission to serve an allowed anonymous browse request.
 Signed pagination, repository/actor scope and cache/configuration revisions
 retain their existing semantics.
+
+The repository catalog and authorization scope are construction requirements;
+format queries, publishers and aggregate queries can be supplied independently.
+An authorized request needing an unconfigured capability returns
+`501/not_supported`, explicitly described by the contract and generated outputs.
+It neither panics nor treats missing capabilities as empty inventories. Account
+state and repository permission checks run first; global search filters unreadable
+repositories first. Without global session or Group metadata, administrators get
+501 and other authenticated callers retain an opaque 404. Session metadata without
+a publisher still permits resource authorization before reporting 501. Group
+recursive search and browse also report missing capabilities for readable members.
 
 ## Verification and limits
 

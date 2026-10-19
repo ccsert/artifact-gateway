@@ -18,6 +18,8 @@ repositories_repositoryId_cache_entries:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ProxyCacheBrowsePage"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -32,6 +34,8 @@ repositories_repositoryId_cache_invalidate:
         application/json:
           schema: {"$ref": "../components/schemas.yaml#/ProxyCacheInvalidateRequest"}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ProxyCacheInvalidateResult"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -46,6 +50,8 @@ repositories_repositoryId_cache_negative_clear:
         application/json:
           schema: {"$ref": "../components/schemas.yaml#/ProxyCacheNegativeClearRequest"}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ProxyCacheNegativeClearResult"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -60,6 +66,8 @@ repositories_repositoryId_cache_refresh:
         application/json:
           schema: {"$ref": "../components/schemas.yaml#/MavenCacheRefreshRequest"}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/MavenCacheRefreshResult"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -69,6 +77,8 @@ repositories_repositoryId_proxy_health:
   get:
     operationId: getProxyHealth
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/MavenProxyHealth"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}

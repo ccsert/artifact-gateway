@@ -36,6 +36,12 @@ type groupBrowseContribution struct {
 }
 
 func (h artifactManagementHandler) BrowseGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.BrowseGroupParams) {
+	if h.groups == nil {
+		if principal, ok := h.authenticateArtifactCaller(w, r); ok {
+			h.unavailableSessionLookup(w, principal)
+		}
+		return
+	}
 	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
@@ -52,6 +58,10 @@ func (h artifactManagementHandler) BrowseGroup(w http.ResponseWriter, r *http.Re
 			return
 		}
 		principal = anonymousPrincipal()
+	}
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
+		return
 	}
 	if group.Format != repository.FormatMaven && group.Format != repository.FormatRaw {
 		writeHostedProblem(w, 400, "unsupported_format", "Group directories support Maven and Raw")
@@ -71,7 +81,7 @@ func (h artifactManagementHandler) BrowseGroup(w http.ResponseWriter, r *http.Re
 	}
 	members, scope, mavenScope, err := h.groupBrowseMembers(r, group, principal)
 	if err != nil {
-		writeHostedProblem(w, 500, "internal_error", "resolve Group browse scope failed")
+		writeArtifactQueryFailure(w, err, "resolve Group browse scope failed")
 		return
 	}
 	if len(members) == 0 && !principal.Admin {
@@ -98,7 +108,7 @@ func (h artifactManagementHandler) BrowseGroup(w http.ResponseWriter, r *http.Re
 	}
 	contributions, err := h.groupBrowseContributions(r, group, members, mavenScope, parent, limit+1, after)
 	if err != nil {
-		writeHostedProblem(w, 500, "internal_error", "browse Group failed")
+		writeArtifactQueryFailure(w, err, "browse Group failed")
 		return
 	}
 	keys := make([]string, 0, len(contributions))
@@ -146,26 +156,22 @@ func (h artifactManagementHandler) groupBrowseMembers(r *http.Request, group rep
 	if err != nil {
 		return nil, "", "", err
 	}
-	if h.anonymousPolicy == nil {
-		return nil, "", "", errors.New("anonymous access policy is unavailable")
-	}
-	policy, err := h.anonymousPolicy.GetAnonymousAccessPolicy(r.Context())
-	if err != nil {
-		return nil, "", "", err
-	}
-	revisions := []any{group, principal, policy.Version}
+	revisions := []any{group, principal, ""}
 	members := make([]groupBrowseMember, 0, len(resolved))
 	proxies := make([]repository.Member, 0)
+	missingGrants := h.grants == nil
 	for _, member := range resolved {
 		repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
 			return nil, "", "", err
 		}
-		grants, err := h.grants.GetRepositoryGrants(r.Context(), repo.ID)
-		if err != nil {
-			return nil, "", "", err
+		if !missingGrants {
+			grants, err := h.grants.GetRepositoryGrants(r.Context(), repo.ID)
+			if err != nil {
+				return nil, "", "", err
+			}
+			revisions = append(revisions, repo, grants.Version)
 		}
-		revisions = append(revisions, repo, grants.Version)
 		if isAnonymous(principal) {
 			if !repo.AnonymousRead {
 				continue
@@ -183,6 +189,17 @@ func (h artifactManagementHandler) groupBrowseMembers(r *http.Request, group rep
 			proxies = append(proxies, member)
 		}
 	}
+	if len(members) == 0 && !principal.Admin {
+		return members, "", "", nil
+	}
+	if missingGrants || h.anonymousPolicy == nil {
+		return nil, "", "", errArtifactCapabilityUnavailable
+	}
+	policy, err := h.anonymousPolicy.GetAnonymousAccessPolicy(r.Context())
+	if err != nil {
+		return nil, "", "", err
+	}
+	revisions[2] = policy.Version
 	mavenScope := ""
 	if group.Format == repository.FormatMaven && h.mavenCache != nil {
 		mavenScope = (MavenHandler{Cache: h.mavenCache}).mavenResolutionScope(proxies)
@@ -204,10 +221,13 @@ func (h artifactManagementHandler) groupBrowseContributions(r *http.Request, gro
 		if member.repo.Type == repository.RepositoryTypeProxy {
 			store := h.proxyDirectory
 			if store == nil {
-				return nil, errors.New("indexed proxy browsing is unavailable")
+				return nil, errArtifactCapabilityUnavailable
 			}
 			nodes, err = store.ListGroupProxyBrowseNodes(r.Context(), member.repo, group.Name, mavenScope, parent, limit, after)
 		} else {
+			if h.browse == nil {
+				return nil, errArtifactCapabilityUnavailable
+			}
 			nodes, err = h.browse.ListGroupArtifactBrowseNodes(r.Context(), member.repo.ID, group.Format, parent, limit, after)
 		}
 		if errors.Is(err, repository.ErrNotFound) {

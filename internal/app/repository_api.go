@@ -300,7 +300,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	identities, _ := any(store).(repository.ArtifactIdentityStore)
 	artifactsAPI := newArtifactManagementHandler(artifactManagementOptions{
 		Scope: scope, Repositories: store, Groups: store, Grants: store,
-		MavenPublisher: nativeMaven, ConanPublisher: nativeConanPublish,
+		MavenPublisher: nativeMaven, ConanPublisher: nativeConanPublish, ConanSessions: store,
 		Maven: store, Raw: store, NPM: store, PyPI: store, APT: store, OCI: store, Conan: store, Cargo: store, CargoProxy: store,
 		Intelligence: store, SearchProjection: searchProjection, Identities: identities, Usage: store, Browse: store,
 		ProxyOperations: proxyCacheBrowse, ProxyDirectory: proxyCacheBrowse.directoryStore(), MavenProxyOperations: mavenProxyOperations, MavenCache: mavenCache,

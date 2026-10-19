@@ -13,6 +13,8 @@ repositories_repositoryId_publish_sessions:
           schema:
             "$ref": "../components/schemas.yaml#/CreatePublishSession"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '201':
         "$ref": "../components/responses.yaml#/PublishSession"
       '409':
@@ -23,6 +25,8 @@ publish_sessions_sessionId:
   get:
     operationId: getPublishSession
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/PublishSession"
       '404':
@@ -46,6 +50,8 @@ publish_sessions_sessionId_objects_objectName:
             type: string
             contentEncoding: binary
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '204':
         description: Verified and staged
       '409':
@@ -58,6 +64,8 @@ publish_sessions_sessionId_commit:
   post:
     operationId: commitPublishSession
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/Artifact"
       '409':

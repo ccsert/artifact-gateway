@@ -21,7 +21,7 @@ func (h artifactManagementHandler) SearchRepositoryArtifacts(w http.ResponseWrit
 	}
 	r, cancel := artifactSearchRequest(r, match)
 	defer cancel()
-	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) {
+	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) && h.groups != nil {
 		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID.String())
 		if groupErr == nil {
 			if !anonymousHostedGroupReadAllowed(r.Context(), h.anonymousPolicy, h.store, group, r.Method) {
@@ -33,6 +33,9 @@ func (h artifactManagementHandler) SearchRepositoryArtifacts(w http.ResponseWrit
 		}
 	}
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
+		if !requireArtifactCapability(w, h.repositorySearchConfigured(repo)) {
+			return
+		}
 		query := ""
 		if params.Q != nil {
 			query = *params.Q

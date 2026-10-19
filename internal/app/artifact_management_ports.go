@@ -88,3 +88,8 @@ type artifactMavenProxyOperations interface {
 	Refresh(http.ResponseWriter, *http.Request)
 	Health(http.ResponseWriter, *http.Request)
 }
+
+// Session lookup does not imply that the native publisher is configured.
+type artifactConanSessionReader interface {
+	GetConanPublishSession(context.Context, string) (repository.ConanPublishSession, error)
+}

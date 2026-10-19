@@ -2037,6 +2037,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -5573,6 +5576,9 @@
           },
           "500": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -5709,6 +5715,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -5732,6 +5741,9 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/ArtifactList"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -5789,6 +5801,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -5826,6 +5841,9 @@
             "$ref": "#/components/responses/ArtifactSummaryList"
           },
           "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -5883,6 +5901,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -5975,6 +5996,9 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/Artifact"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       },
@@ -5983,6 +6007,9 @@
         "responses": {
           "202": {
             "$ref": "#/components/responses/Deletion"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -6026,6 +6053,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       },
@@ -6060,6 +6090,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -6186,6 +6219,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -6227,6 +6263,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -6259,6 +6298,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -6910,6 +6952,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -6952,6 +6997,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -7006,6 +7054,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7048,6 +7099,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -7112,6 +7166,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7146,6 +7203,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -7212,6 +7272,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7242,6 +7305,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -7274,6 +7340,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7305,6 +7374,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7326,6 +7398,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7343,6 +7418,9 @@
             "$ref": "#/components/responses/PublishSession"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -7385,6 +7463,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7406,6 +7487,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7423,6 +7507,9 @@
             "$ref": "#/components/responses/PublishSession"
           },
           "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -7468,6 +7555,9 @@
           },
           "422": {
             "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7491,6 +7581,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
             "$ref": "#/components/responses/Problem"
           },
           "507": {
@@ -9966,6 +10059,7 @@
             "enum": [
               "invalid_request",
               "invalid_state",
+              "not_supported",
               "encryption_key_unavailable",
               "invalid_page_token",
               "name_exists",

@@ -20,6 +20,8 @@ artifact_search:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         description: Cross-repository artifact search page
         content:
@@ -52,6 +54,8 @@ repositories_repositoryId_artifact_search:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/ArtifactSummaryList"
       '400':
@@ -83,6 +87,8 @@ repositories_repositoryId_browse:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         description: Direct children of the requested browse position
         content:

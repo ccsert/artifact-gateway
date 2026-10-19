@@ -81,7 +81,7 @@ func (h artifactManagementHandler) SearchArtifacts(w http.ResponseWriter, r *htt
 
 	repositories, err := h.readableSearchRepositories(r.Context(), principal, format, searchQuery)
 	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list searchable repositories failed")
+		writeArtifactQueryFailure(w, err, "list searchable repositories failed")
 		return
 	}
 	start := 0
@@ -110,7 +110,7 @@ func (h artifactManagementHandler) SearchArtifacts(w http.ResponseWriter, r *htt
 		remaining := pageSize - len(items)
 		summaries, searchErr := h.searchGroupMemberArtifactsByQuery(r, repo, searchQuery, remaining+1, after)
 		if searchErr != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search repository artifacts failed")
+			writeArtifactQueryFailure(w, searchErr, "search repository artifacts failed")
 			return
 		}
 		hasMoreInRepository := len(summaries) > remaining
@@ -128,7 +128,7 @@ func (h artifactManagementHandler) SearchArtifacts(w http.ResponseWriter, r *htt
 			}
 			hasLaterResults, searchErr := h.hasSearchResultsAfter(r, repositories, index+1, searchQuery)
 			if searchErr != nil {
-				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search repository artifacts failed")
+				writeArtifactQueryFailure(w, searchErr, "search repository artifacts failed")
 				return
 			}
 			if hasMoreInRepository || hasLaterResults {
@@ -145,6 +145,9 @@ func (h artifactManagementHandler) SearchArtifacts(w http.ResponseWriter, r *htt
 }
 
 func (h artifactManagementHandler) readableSearchRepositories(ctx context.Context, principal Principal, format repository.Format, query repository.ArtifactSearchQuery) ([]repository.HostedRepository, error) {
+	if h.store == nil {
+		return nil, errArtifactCapabilityUnavailable
+	}
 	repositories := make([]repository.HostedRepository, 0)
 	after := ""
 	for {

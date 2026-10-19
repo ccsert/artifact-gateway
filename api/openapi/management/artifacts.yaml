@@ -8,6 +8,8 @@ repositories_repositoryId_artifacts:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/ArtifactList"
 repositories_repositoryId_artifact_usage:
@@ -37,6 +39,8 @@ repositories_repositoryId_artifact_usage:
       description: Case-sensitive literal substring of the artifact address. Surrounding whitespace is trimmed; SQL wildcard characters have no special meaning.
       schema: {type: string, maxLength: 512}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/RepositoryArtifactUsage"
       '400':
@@ -57,10 +61,14 @@ repositories_repositoryId_artifacts_artifactId:
   get:
     operationId: getArtifact
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/Artifact"
   delete:
     operationId: deleteArtifact
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '202':
         "$ref": "../components/responses.yaml#/Deletion"

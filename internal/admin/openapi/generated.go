@@ -2268,6 +2268,7 @@ const (
 	ProblemCodeLogSourceIdentityUnavailable ProblemCode = "log_source_identity_unavailable"
 	ProblemCodeNameExists                   ProblemCode = "name_exists"
 	ProblemCodeNotFound                     ProblemCode = "not_found"
+	ProblemCodeNotSupported                 ProblemCode = "not_supported"
 	ProblemCodePasswordChangeRequired       ProblemCode = "password_change_required"
 	ProblemCodeQuotaExceeded                ProblemCode = "quota_exceeded"
 	ProblemCodeRemoteLogQueryUnavailable    ProblemCode = "remote_log_query_unavailable"
@@ -2325,6 +2326,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeNameExists:
 		return true
 	case ProblemCodeNotFound:
+		return true
+	case ProblemCodeNotSupported:
 		return true
 	case ProblemCodePasswordChangeRequired:
 		return true
@@ -17232,6 +17235,20 @@ func (response SearchArtifacts403ApplicationProblemPlusJSONResponse) VisitSearch
 	return err
 }
 
+type SearchArtifacts501ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchArtifacts501ApplicationProblemPlusJSONResponse) VisitSearchArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetAuditRetentionPolicyRequestObject struct {
 }
 
@@ -18257,6 +18274,20 @@ func (response GetConanPublishSession404ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type GetConanPublishSession501ApplicationProblemPlusJSONResponse Problem
+
+func (response GetConanPublishSession501ApplicationProblemPlusJSONResponse) VisitGetConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UploadConanPublishObjectRequestObject struct {
 	SessionId  SessionId `json:"sessionId"`
 	ObjectName string    `json:"objectName"`
@@ -18315,6 +18346,20 @@ func (response UploadConanPublishObject422ApplicationProblemPlusJSONResponse) Vi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadConanPublishObject501ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadConanPublishObject501ApplicationProblemPlusJSONResponse) VisitUploadConanPublishObjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -18381,6 +18426,20 @@ func (response CommitConanPublishSession422ApplicationProblemPlusJSONResponse) V
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitConanPublishSession501ApplicationProblemPlusJSONResponse Problem
+
+func (response CommitConanPublishSession501ApplicationProblemPlusJSONResponse) VisitCommitConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20316,6 +20375,20 @@ func (response BrowseGroup500ApplicationProblemPlusJSONResponse) VisitBrowseGrou
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseGroup501ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseGroup501ApplicationProblemPlusJSONResponse) VisitBrowseGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -23188,6 +23261,20 @@ func (response GetPublishSession404ApplicationProblemPlusJSONResponse) VisitGetP
 	return err
 }
 
+type GetPublishSession501ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPublishSession501ApplicationProblemPlusJSONResponse) VisitGetPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UploadPublishObjectRequestObject struct {
 	SessionId  SessionId `json:"sessionId"`
 	ObjectName string    `json:"objectName"`
@@ -23232,6 +23319,20 @@ func (response UploadPublishObject422ApplicationProblemPlusJSONResponse) VisitUp
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadPublishObject501ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadPublishObject501ApplicationProblemPlusJSONResponse) VisitUploadPublishObjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -23284,6 +23385,20 @@ func (response CommitPublishSession422ApplicationProblemPlusJSONResponse) VisitC
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitPublishSession501ApplicationProblemPlusJSONResponse Problem
+
+func (response CommitPublishSession501ApplicationProblemPlusJSONResponse) VisitCommitPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -25155,6 +25270,20 @@ func (response GetArtifactIntelligence404ApplicationProblemPlusJSONResponse) Vis
 	return err
 }
 
+type GetArtifactIntelligence501ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactIntelligence501ApplicationProblemPlusJSONResponse) VisitGetArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReplaceArtifactIntelligenceRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ReplaceArtifactIntelligenceParams
@@ -25236,6 +25365,20 @@ func (response ReplaceArtifactIntelligence412ApplicationProblemPlusJSONResponse)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceArtifactIntelligence501ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceArtifactIntelligence501ApplicationProblemPlusJSONResponse) VisitReplaceArtifactIntelligenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -25774,6 +25917,20 @@ func (response SearchRepositoryArtifacts400ApplicationProblemPlusJSONResponse) V
 	return err
 }
 
+type SearchRepositoryArtifacts501ApplicationProblemPlusJSONResponse Problem
+
+func (response SearchRepositoryArtifacts501ApplicationProblemPlusJSONResponse) VisitSearchRepositoryArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoryArtifactUsageRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListRepositoryArtifactUsageParams
@@ -25843,6 +26000,20 @@ func (response ListRepositoryArtifactUsage403ApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type ListRepositoryArtifactUsage501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactUsage501ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListArtifactsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListArtifactsParams
@@ -25862,6 +26033,22 @@ func (response ListArtifacts200JSONResponse) VisitListArtifactsResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListArtifacts501ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListArtifacts501ApplicationProblemPlusJSONResponse) VisitListArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -25889,6 +26076,22 @@ func (response DeleteArtifact202JSONResponse) VisitDeleteArtifactResponse(w http
 	return err
 }
 
+type DeleteArtifact501ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteArtifact501ApplicationProblemPlusJSONResponse) VisitDeleteArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetArtifactRequestObject struct {
 	RepositoryId RepositoryId       `json:"repositoryId"`
 	ArtifactId   openapi_types.UUID `json:"artifactId"`
@@ -25908,6 +26111,22 @@ func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifact501ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetArtifact501ApplicationProblemPlusJSONResponse) VisitGetArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -26007,6 +26226,20 @@ func (response BrowseRepository500ApplicationProblemPlusJSONResponse) VisitBrows
 	return err
 }
 
+type BrowseRepository501ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseRepository501ApplicationProblemPlusJSONResponse) VisitBrowseRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListProxyCacheEntriesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListProxyCacheEntriesParams
@@ -26058,6 +26291,20 @@ func (response ListProxyCacheEntries404ApplicationProblemPlusJSONResponse) Visit
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProxyCacheEntries501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListProxyCacheEntries501ApplicationProblemPlusJSONResponse) VisitListProxyCacheEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -26117,6 +26364,20 @@ func (response InvalidateProxyCache404ApplicationProblemPlusJSONResponse) VisitI
 	return err
 }
 
+type InvalidateProxyCache501ApplicationProblemPlusJSONResponse Problem
+
+func (response InvalidateProxyCache501ApplicationProblemPlusJSONResponse) VisitInvalidateProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ClearProxyNegativeCacheRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Body         *ClearProxyNegativeCacheJSONRequestBody
@@ -26172,6 +26433,20 @@ func (response ClearProxyNegativeCache404ApplicationProblemPlusJSONResponse) Vis
 	return err
 }
 
+type ClearProxyNegativeCache501ApplicationProblemPlusJSONResponse Problem
+
+func (response ClearProxyNegativeCache501ApplicationProblemPlusJSONResponse) VisitClearProxyNegativeCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RefreshProxyCacheRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Body         *RefreshProxyCacheJSONRequestBody
@@ -26223,6 +26498,20 @@ func (response RefreshProxyCache404ApplicationProblemPlusJSONResponse) VisitRefr
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshProxyCache501ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshProxyCache501ApplicationProblemPlusJSONResponse) VisitRefreshProxyCacheResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -26425,6 +26714,20 @@ func (response CreateConanPublishSession404ApplicationProblemPlusJSONResponse) V
 	return err
 }
 
+type CreateConanPublishSession501ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateConanPublishSession501ApplicationProblemPlusJSONResponse) VisitCreateConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListConanPackageIdsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListConanPackageIdsParams
@@ -26474,6 +26777,20 @@ func (response ListConanPackageIds404ApplicationProblemPlusJSONResponse) VisitLi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanPackageIds501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanPackageIds501ApplicationProblemPlusJSONResponse) VisitListConanPackageIdsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -26533,6 +26850,20 @@ func (response ListConanPackageRevisions404ApplicationProblemPlusJSONResponse) V
 	return err
 }
 
+type ListConanPackageRevisions501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanPackageRevisions501ApplicationProblemPlusJSONResponse) VisitListConanPackageRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteConanPackageRevisionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Revision     string       `json:"revision"`
@@ -26577,6 +26908,20 @@ func (response DeleteConanPackageRevision404ApplicationProblemPlusJSONResponse) 
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConanPackageRevision501ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteConanPackageRevision501ApplicationProblemPlusJSONResponse) VisitDeleteConanPackageRevisionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -26636,6 +26981,20 @@ func (response ListConanRecipeRevisions404ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type ListConanRecipeRevisions501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanRecipeRevisions501ApplicationProblemPlusJSONResponse) VisitListConanRecipeRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListConanReferencesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListConanReferencesParams
@@ -26685,6 +27044,20 @@ func (response ListConanReferences404ApplicationProblemPlusJSONResponse) VisitLi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConanReferences501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListConanReferences501ApplicationProblemPlusJSONResponse) VisitListConanReferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -27378,6 +27751,20 @@ func (response ListMavenCoordinates404ApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type ListMavenCoordinates501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMavenCoordinates501ApplicationProblemPlusJSONResponse) VisitListMavenCoordinatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListOCIImagesRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListOCIImagesParams
@@ -27427,6 +27814,20 @@ func (response ListOCIImages404ApplicationProblemPlusJSONResponse) VisitListOCII
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOCIImages501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOCIImages501ApplicationProblemPlusJSONResponse) VisitListOCIImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -27482,6 +27883,20 @@ func (response ListOCIManifests404ApplicationProblemPlusJSONResponse) VisitListO
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOCIManifests501ApplicationProblemPlusJSONResponse Problem
+
+func (response ListOCIManifests501ApplicationProblemPlusJSONResponse) VisitListOCIManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -27634,6 +28049,20 @@ func (response GetProxyHealth404ApplicationProblemPlusJSONResponse) VisitGetProx
 	return err
 }
 
+type GetProxyHealth501ApplicationProblemPlusJSONResponse Problem
+
+func (response GetProxyHealth501ApplicationProblemPlusJSONResponse) VisitGetProxyHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreatePublishSessionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       CreatePublishSessionParams
@@ -27670,6 +28099,20 @@ func (response CreatePublishSession409ApplicationProblemPlusJSONResponse) VisitC
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublishSession501ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePublishSession501ApplicationProblemPlusJSONResponse) VisitCreatePublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }

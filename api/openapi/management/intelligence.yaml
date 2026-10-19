@@ -13,6 +13,8 @@ repositories_repositoryId_artifact_intelligence:
   get:
     operationId: getArtifactIntelligence
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ArtifactIntelligence"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '401': {"$ref": "../components/responses.yaml#/Problem"}
@@ -27,6 +29,8 @@ repositories_repositoryId_artifact_intelligence:
         application/json:
           schema: {"$ref": "../components/schemas.yaml#/ArtifactIntelligenceWritable"}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ArtifactIntelligence"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '403': {"$ref": "../components/responses.yaml#/Problem"}

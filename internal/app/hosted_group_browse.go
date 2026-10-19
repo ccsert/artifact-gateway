@@ -67,7 +67,7 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 		}
 		items, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
 		if err != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search group member artifacts failed")
+			writeArtifactQueryFailure(w, err, "search group member artifacts failed")
 			return
 		}
 		for _, item := range items {
@@ -114,6 +114,9 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 
 func (h artifactManagementHandler) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
 	query = repositorySearchQueryForFormat(repo.Format, query)
+	if !h.projectedSearchConfigured(repo, query) {
+		return nil, errArtifactCapabilityUnavailable
+	}
 	items := make([]adminopenapi.ArtifactSummary, 0, limit)
 	if repo.Format == repository.FormatCargo {
 		if query.Mode != repository.ArtifactSearchByCoordinate {
@@ -256,6 +259,9 @@ func repositorySearchQueryForFormat(format repository.Format, query repository.A
 }
 
 func (h artifactManagementHandler) listHostedGroupConanRecipeRevisions(w http.ResponseWriter, r *http.Request, group repository.HostedGroup, params adminopenapi.ListConanRecipeRevisionsParams) {
+	if !requireArtifactCapability(w, h.conan != nil) {
+		return
+	}
 	reference := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/")
 	if !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference must be a valid Conan recipe reference")

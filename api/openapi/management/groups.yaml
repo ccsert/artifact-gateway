@@ -153,6 +153,8 @@ groups_groupId_browse:
         maxLength: 16384
       description: Opaque continuation bound to this Group and parent.
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         description: Direct children and authorized candidate order
         content:

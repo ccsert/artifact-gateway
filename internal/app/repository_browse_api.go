@@ -25,6 +25,9 @@ func (h artifactManagementHandler) BrowseRepository(w http.ResponseWriter, r *ht
 			writeHostedProblem(w, http.StatusBadRequest, "unsupported_repository_type", "directory browsing is not available for this proxy repository")
 			return
 		}
+		if repo.Type != repository.RepositoryTypeProxy && !requireArtifactCapability(w, h.browse != nil) {
+			return
+		}
 		pageSize := 50
 		if params.PageSize != nil {
 			pageSize = int(*params.PageSize)

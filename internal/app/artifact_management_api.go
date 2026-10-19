@@ -14,6 +14,7 @@ type artifactManagementOptions struct {
 	Grants               artifactGrantReader
 	MavenPublisher       mavenManagementOperations
 	ConanPublisher       http.Handler
+	ConanSessions        artifactConanSessionReader
 	Maven                artifactMavenReader
 	Raw                  artifactRawReader
 	NPM                  artifactNPMReader
@@ -43,6 +44,7 @@ type artifactManagementHandler struct {
 	grants           artifactGrantReader
 	sessions         mavenManagementOperations
 	conanPublish     http.Handler
+	conanSessions    artifactConanSessionReader
 	maven            artifactMavenReader
 	raw              artifactRawReader
 	npm              artifactNPMReader
@@ -71,6 +73,7 @@ func newArtifactManagementHandler(options artifactManagementOptions) artifactMan
 		grants:           options.Grants,
 		sessions:         options.MavenPublisher,
 		conanPublish:     options.ConanPublisher,
+		conanSessions:    options.ConanSessions,
 		maven:            options.Maven,
 		raw:              options.Raw,
 		npm:              options.NPM,
@@ -93,8 +96,12 @@ func newArtifactManagementHandler(options artifactManagementOptions) artifactMan
 }
 
 func (h artifactManagementHandler) withSessionScope(w http.ResponseWriter, r *http.Request, sessionID string, operation RepositoryOperation, handler func(Principal, repository.HostedRepository)) {
-	principal, ok := h.authenticate(w, r)
+	principal, ok := h.authenticateArtifactCaller(w, r)
 	if !ok {
+		return
+	}
+	if h.maven == nil {
+		h.unavailableSessionLookup(w, principal)
 		return
 	}
 	session, err := h.maven.GetMavenPublishSession(r.Context(), sessionID)
