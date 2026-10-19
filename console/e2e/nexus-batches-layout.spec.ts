@@ -236,6 +236,9 @@ test("member batch deep links are denied before capabilities, tasks or source AP
   await page.route("**/api/v2/artifact-search**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );
+  await page.route("**/api/v2/repositories?**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
   let calls = 0;
   await page.route("**/api/v2/migrations/nexus/**", (route) => {
     calls++;
