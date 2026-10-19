@@ -91,7 +91,8 @@ test("a scheduled task is created, paused, run, and deleted", async ({
     await dialog.getByPlaceholder("例如：每日清理快照").fill(name);
     await dialog.getByRole("combobox").nth(1).click();
     await page
-      .getByRole("option", { name: repositoryName, exact: true })
+      .locator(".ant-select-item-option")
+      .filter({ hasText: repositoryName })
       .click();
     await dialog.getByRole("button", { name: /^创\s*建$/ }).click();
     await expect(dialog).toBeHidden();
