@@ -27,7 +27,7 @@ trap cleanup EXIT
 archive="$work/apache-maven-3.9.16-bin.tar.gz"
 curl --disable --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
   --connect-timeout 15 --max-time 120 --retry 2 \
-  https://archive.apache.org/dist/maven/maven-3/3.9.16/binaries/apache-maven-3.9.16-bin.tar.gz \
+  https://dlcdn.apache.org/maven/maven-3/3.9.16/binaries/apache-maven-3.9.16-bin.tar.gz \
   --output "$archive"
 python3 - "$archive" <<'PY'
 import hashlib
