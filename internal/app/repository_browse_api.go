@@ -5,12 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -93,7 +94,7 @@ func repositoryBrowseParentKey(parent repository.ArtifactBrowseParent) string {
 	return strings.Join([]string{string(parent.Kind), parent.Namespace, parent.Component, parent.Version, strconv.Itoa(parent.BuildNumber), parent.Path}, "\x1f")
 }
 
-func (h hostedRepositoryAPIHandler) decodeRepositoryBrowseParent(token string, repo repository.HostedRepository, principal string) (repository.ArtifactBrowseParent, string, error) {
+func (h managementScope) decodeRepositoryBrowseParent(token string, repo repository.HostedRepository, principal string) (repository.ArtifactBrowseParent, string, error) {
 	if token == "" {
 		parent := repository.ArtifactBrowseParent{}
 		return parent, repositoryBrowseParentKey(parent), nil
@@ -110,6 +111,9 @@ func (h hostedRepositoryAPIHandler) decodeRepositoryBrowseParent(token string, r
 }
 
 func validRepositoryBrowseParent(format repository.Format, parent repository.ArtifactBrowseParent) bool {
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{}), format); ok {
+		return capability.ValidBrowseParent(parent)
+	}
 	switch format {
 	case repository.FormatMaven:
 		switch parent.Kind {
@@ -120,8 +124,6 @@ func validRepositoryBrowseParent(format repository.Format, parent repository.Art
 		case repository.BrowseNodeVersion:
 			return parent.Namespace != "" && parent.Component != "" && parent.Version != ""
 		}
-	case repository.FormatRaw:
-		return parent.Kind == repository.BrowseNodeDirectory && parent.Path != "" && !strings.HasPrefix(parent.Path, "/")
 	case repository.FormatCargo:
 		switch parent.Kind {
 		case repository.BrowseNodeComponent:
@@ -133,7 +135,7 @@ func validRepositoryBrowseParent(format repository.Format, parent repository.Art
 	return false
 }
 
-func (h hostedRepositoryAPIHandler) decodeRepositoryBrowsePageToken(token string, repo repository.HostedRepository, principal, parent string) (string, error) {
+func (h managementScope) decodeRepositoryBrowsePageToken(token string, repo repository.HostedRepository, principal, parent string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
@@ -144,11 +146,11 @@ func (h hostedRepositoryAPIHandler) decodeRepositoryBrowsePageToken(token string
 	return cursor.After, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeRepositoryBrowsePageToken(repo repository.HostedRepository, principal, parent, after string) string {
+func (h managementScope) encodeRepositoryBrowsePageToken(repo repository.HostedRepository, principal, parent, after string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, repositoryBrowsePageCursor{Endpoint: "repository-browse-page", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal, Parent: parent, After: after, Revision: repositoryBrowseRevision(repo), ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository.HostedRepository, principal string, node repository.ArtifactBrowseNode) adminopenapi.BrowseNode {
+func (h managementScope) repositoryBrowseNodeResponse(repo repository.HostedRepository, principal string, node repository.ArtifactBrowseNode) adminopenapi.BrowseNode {
 	cursor := repositoryBrowseNodeCursor{
 		Endpoint: "repository-browse-node", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal,
 		Revision: repositoryBrowseRevision(repo), Kind: string(node.Kind), Namespace: node.Namespace, Component: node.Component, Version: node.Coordinate, BuildNumber: node.BuildNumber, Path: node.Path,
@@ -158,10 +160,8 @@ func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository
 		cursor.Version = ""
 	}
 	name := node.Name
-	if repo.Format == repository.FormatRaw {
-		if decoded, err := url.PathUnescape(name); err == nil {
-			name = decoded
-		}
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{}), repo.Format); ok {
+		name = capability.BrowseName(name)
 	}
 	response := adminopenapi.BrowseNode{Id: encodeSignedCursor(h.authenticator.AdminToken, cursor), Kind: adminopenapi.BrowseNodeKind(node.Kind), Name: name, HasChildren: node.HasChildren}
 	response.SourceTimestamp = optionalString(node.SourceTimestamp)

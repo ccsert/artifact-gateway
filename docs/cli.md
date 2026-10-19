@@ -492,7 +492,9 @@ addressed by ID with `--repo`.
   remotes, APT `sources.list` and `auth.conf`, Cargo `config.toml`), with
   publish snippets for hosted repositories. Credentials are always the
   placeholder `${ARTIFACT_GATEWAY_TOKEN}`; the configured token is never
-  written into a snippet. URLs follow the server the CLI talks to, with
+  written into a snippet. Maven Hosted reads and deploys through
+  `/repository/maven/<repository>/`; Proxy guides use `/maven/<repository>/`.
+  URLs follow the server the CLI talks to, with
   credentials, query, and fragment removed. PyPI `.netrc` entries use the
   bare hostname that pip matches, while index URLs retain any explicit port.
 
@@ -787,7 +789,8 @@ command, flag, or argument count the client does not have.
 
 ## Verification
 
-- `go test ./internal/agctl/...` runs offline against in-process fakes:
+- `make cli-test` runs the command entry point and `internal/agctl` tests
+  offline against in-process fakes (also run by CI and `ci-local`):
   command parsing, exit codes, redaction, and the JSON envelopes. Golden
   envelopes live in `internal/agctl/testdata/golden/`; after an intended
   output change, rewrite them with `go test ./internal/agctl/ -update` and
@@ -801,11 +804,15 @@ command, flag, or argument count the client does not have.
   Gateway's configured OIDC issuer, with surrounding whitespace and trailing
   slashes normalized) adds the identity link checks; isolated
   Compose mode configures a synthetic issuer itself, and CI configures one on
-  the shared Gateway. The scenario creates a repository, replays the
+  the shared Gateway. Agent recipes first inspect the same real Gateway through
+  `commands --json` and `info --json`, retaining schema/capability and identity
+  checks. The scenario creates a repository, replays the
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,
-  reorder, delete that keeps the members); publishes a Raw file and a Maven
+  reorder, delete that keeps the members); creates and updates a Maven Proxy
+  with a synthetic upstream (no fetch), verifies its capabilities and read-only
+  connection guide, refuses a stale update, and accepts deletion; publishes a Raw file and a Maven
   POM through the native protocols and searches, browses, lists, inspects,
   and deletes them; checks that a credential without permissions is refused
   (6), sees an empty global search, and that the refusal is in the audit log
@@ -823,7 +830,12 @@ command, flag, or argument count the client does not have.
   dry-run, 202, timed-out wait) and waits for `deleted`. The CI playbook runs
   as well: a service account gets a credential only into a 0600 file, reads
   the repository with it, rotates it (the old secret answers 401), and loses
-  access with its grant; an API key is created and revoked; a pending user
+  access with its grant. With only read/write on a separate Maven repository,
+  the new credential creates/replays a session, uploads and commits its POM/JAR,
+  searches the coordinate and reads both files byte-for-byte through the native
+  endpoint; the read-back is found by actor/operation in the audit. Revoking its
+  grant refuses a new session with 403 while the committed artifact remains.
+  An API key is created and revoked; a pending user
   becomes a member without repository access until granted, its session is
   ended and rejected, its password reset from a file, and the user deleted;
   each of those changes (create, role update, session list and revokes,
@@ -842,6 +854,15 @@ command, flag, or argument count the client does not have.
   committed session refused and a repeated commit answering 409); a user signs
   in with `auth login --secret-output` and uses the token. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
+- `make cli-runtime-e2e` always creates its own Gateway, PostgreSQL and RustFS
+  with synthetic credentials and ephemeral loopback ports. It restarts that
+  Gateway and checks the changed log session and bounded `scope_changed` result
+  from the old cursor; stops only its PostgreSQL to verify unhealthy status and
+  not-ready info, restores it, and disables only its log buffer to verify
+  `503/log_buffer_unavailable` rather than a successful empty list. A member,
+  a pending user and a user required to change their password remain refused;
+  unread member diagnostics are unknown and fail `status --strict`. CI and
+  `ci-local` run the same target; no existing development stack is reused.
 - `make email-compose-check` runs the email commands against an isolated
   Gateway with owned TLS SMTP: a target from a private recipient file, a
   rename that keeps it enabled, a preview and a plan that queue nothing, a

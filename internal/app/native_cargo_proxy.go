@@ -287,7 +287,7 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 	w.Header().Set("X-Checksum-Sha256", checksum)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	captured := httpsnoop.CaptureMetricsFn(w, func(out http.ResponseWriter) {
-		http.ServeContent(out, r, name+"-"+version+".crate", crate.CachedAt, spool.file)
+		http.ServeContent(out, r, name+"-"+version+".crate", crate.CachedAt, spool.File())
 	})
 	h.recordAudit(r, repo, name+"@"+version, "crate", actor, repository.AuditResolved, captured.Code, captured.Written)
 }

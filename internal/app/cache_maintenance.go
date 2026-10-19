@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // CacheMaintenance reports cache capacity and runs OCI's retention collector
@@ -79,22 +83,23 @@ func (m *CacheMaintenance) runFormats(ctx context.Context, formats []string) err
 	m.mu.Unlock()
 
 	var err error
+	modules := rawFormatRegistry(rawformat.Options{Cache: m.raw})
 	for _, format := range formats {
-		switch format {
-		case cacheCollectionFormatOCI:
-			if m.oci != nil {
-				err = m.oci.CollectGarbage(ctx)
+		if capability, ok := formatmodule.Capability[formatmodule.CacheMaintenance](modules, repository.Format(format)); ok {
+			err = capability.CollectCache(ctx)
+		} else {
+			switch format {
+			case cacheCollectionFormatOCI:
+				if m.oci != nil {
+					err = m.oci.CollectGarbage(ctx)
+				}
+			case cacheCollectionFormatConan:
+				if m.conan != nil {
+					err = m.conan.CollectGarbage(ctx)
+				}
+			default:
+				err = fmt.Errorf("unsupported cache maintenance format %q", format)
 			}
-		case cacheCollectionFormatRaw:
-			if m.raw != nil {
-				err = m.raw.CollectGarbage(ctx)
-			}
-		case cacheCollectionFormatConan:
-			if m.conan != nil {
-				err = m.conan.CollectGarbage(ctx)
-			}
-		default:
-			err = fmt.Errorf("unsupported cache maintenance format %q", format)
 		}
 		if err != nil {
 			break

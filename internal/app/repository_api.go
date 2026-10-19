@@ -10,6 +10,8 @@ import (
 	sourceapi "github.com/ccsert/artifact-gateway/internal/admin/nexussource"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -240,7 +242,18 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: upstreamClient, Authenticator: authenticator, Cache: cache}
 	publicationScanner := NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
 	nativeOCI := newNativeOCIHandler(store, options.Storage[repository.FormatOCI], authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
-	nativeRaw := newNativeRawHandler(store, options.Storage[repository.FormatRaw], authenticator).withMetrics(metrics).withProxy(rawClient, rawCache).withPublicationScanner(publicationScanner)
+	rawLegacy := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}
+	rawModule := rawformat.New(rawformat.Options{Store: store, Repositories: store, Groups: store, Objects: options.Storage[repository.FormatRaw], Authenticator: authenticator,
+		Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
+			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
+		}},
+		Audit: store, Anonymous: store, ReadPolicies: store, Quarantine: store, Client: rawClient, Cache: rawCache, Metrics: rawModuleMetrics{metrics}, Scanner: publicationScanner,
+		GroupRuntime: rawModuleGroupRuntime{resolver: v2GroupResolver{groups: store, repos: store, audit: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}, policy: store},
+		LegacyStore:  store, LegacyRuntime: rawRuntime{handler: rawLegacy}, RecordFailure: recordRawFailure})
+	formatModules, err := formatmodule.New(rawModule)
+	if err != nil {
+		return nil, err
+	}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
@@ -295,7 +308,10 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{BatchAdapter: migrationapi.New(dependencies.MigrationService, authenticator, store), Adapter: sourceapi.New(dependencies.SourceService, authenticator, store), hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, conanPublish: nativeConanPublish, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, cargo: store, cargoProxy: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, quotaAlerts: store, queueStats: store, browse: store, diagnostics: dependencies, objects: options.Storage, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	scope := newManagementScope(store, store, store, store, authenticator, metrics)
+	repositoriesAPI := newRepositoryManagementHandler(repositoryManagementOptions{Scope: scope, Repositories: store, Groups: store, Capacities: store, Maintenance: maintenance, ArtifactScanner: dependencies.ArtifactScanner, ArtifactScanFormats: dependencies.ArtifactScannerFormats})
+	legacyAPI := generatedRepositoryAPIAdapter{BatchAdapter: migrationapi.New(dependencies.MigrationService, authenticator, store), Adapter: sourceapi.New(dependencies.SourceService, authenticator, store), managementScope: scope, store: store, sessions: nativeMaven, conanPublish: nativeConanPublish, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, cargo: store, cargoProxy: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, audit: store, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, quotaAlerts: store, queueStats: store, browse: store, diagnostics: dependencies, objects: options.Storage, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}
+	adminopenapi.HandlerWithOptions(managementServer{repositoryManagementHandler: repositoriesAPI, generatedRepositoryAPIAdapter: legacyAPI}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -335,18 +351,9 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		})}
 	mavenProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: mavenGroupRouter}
 	mux.Handle("/maven/", mavenProtocol)
-	rawRepositoryHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if nativeRaw.ServeHTTP(w, r) {
-			return
-		}
-		RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
-	})
-	rawGroupRouter := v2GroupRouter{format: repository.FormatRaw, groups: store, repos: store, audit: store, auth: authenticator,
-		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
-		raw:        &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
-		next:       rawRepositoryHandler}
-	rawProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter}
-	mux.Handle("/raw/", rawProtocol)
+	if err := formatModules.Mount(mux); err != nil {
+		return nil, err
+	}
 	npmGroupRouter := v2GroupRouter{format: repository.FormatNPM, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		npm:        &v2GroupNPMHandler{native: &nativeNPM},

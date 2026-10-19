@@ -54,6 +54,8 @@ jobs:
         run: make openapi-check
       - name: Validate agctl command map against the API contracts
         run: make cli-contract-check
+      - name: Validate agctl parsing, schemas and agent recipes
+        run: make cli-test
       - name: Run tests
         run: make test
       - name: Validate Cargo C0 with the pinned official client
@@ -62,6 +64,8 @@ jobs:
         run: make kubernetes-local-check
       - name: Verify opt-in Compose email roles with owned TLS SMTP
         run: make email-compose-check
+      - name: Verify agctl runtime restart and dependency failure contracts
+        run: make cli-runtime-e2e
       - name: Run Native OCI E2E
         run: make native-oci-e2e
       - name: Run Native Raw E2E
@@ -200,9 +204,20 @@ jobs:
           EOF
           docker compose --env-file "$GATEWAY_ENV_FILE" -f compose.yml up --build --wait --remove-orphans
       - name: Run console E2E
+        id: console-e2e
         env:
           GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env
         run: make console-e2e
+      - name: Upload Console E2E report and traces
+        if: ${{ !cancelled() && (steps.console-e2e.outcome == 'success' || steps.console-e2e.outcome == 'failure') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: console-e2e-results
+          path: |
+            console/test-results/
+            console/playwright-report/
+          retention-days: 7
+          if-no-files-found: error
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod

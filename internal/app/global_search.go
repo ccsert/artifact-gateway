@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/artifactquery"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -47,7 +48,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	searchQuery.Match = match
 	if match == repository.ArtifactSearchContains {
 		for _, character := range params.Q {
-			if invalidRawSearchRune(character) {
+			if artifactquery.InvalidRune(character) {
 				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must not contain control characters")
 				return
 			}
@@ -233,14 +234,14 @@ func optionalArtifactVulnerabilityStatus(value string) *adminopenapi.ArtifactInt
 	return &status
 }
 
-func (h hostedRepositoryAPIHandler) encodeGlobalArtifactSearchCursor(query repository.ArtifactSearchQuery, format repository.Format, repositoryID, coordinate string, buildNumber int, digest string) string {
+func (h managementScope) encodeGlobalArtifactSearchCursor(query repository.ArtifactSearchQuery, format repository.Format, repositoryID, coordinate string, buildNumber int, digest string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, globalArtifactSearchCursor{
 		Endpoint: "global-artifact-search", Query: query.Value, Mode: string(query.Mode), Match: string(query.Match), Format: string(format), RepositoryID: repositoryID,
 		Coordinate: coordinate, BuildNumber: buildNumber, Digest: digest, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix(),
 	})
 }
 
-func (h hostedRepositoryAPIHandler) decodeGlobalArtifactSearchCursor(token string, query repository.ArtifactSearchQuery, format repository.Format) (globalArtifactSearchCursor, error) {
+func (h managementScope) decodeGlobalArtifactSearchCursor(token string, query repository.ArtifactSearchQuery, format repository.Format) (globalArtifactSearchCursor, error) {
 	if token == "" {
 		return globalArtifactSearchCursor{}, nil
 	}

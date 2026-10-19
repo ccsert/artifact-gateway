@@ -96,6 +96,14 @@ advisory lock、`FOR UPDATE SKIP LOCKED` 和尽力而为的 `LISTEN/NOTIFY` 唤�
 `apptest`；内存持久层是明确选择的测试设施，PostgreSQL/RustFS 集成测试仍负责证明
 持久化与并发语义。
 
+## 格式模块
+
+Raw 的 Hosted/Proxy/Group 路由、发布、扫描、保留、分发及浏览/用法规则归
+`internal/format/raw` 所有，通过 `internal/format` 能力注册表分发。共享 HTTP/身份
+适配仍在 app；既有 PostgreSQL/S3 与原生协议操作保留锁、CAS、完整验证及可见性
+语义。模块 port、共享字节 helper 和其余格式迁移边界见
+[ADR 0011](docs/adr/0011-format-modules.zh-CN.md)。
+
 ## 仓库模型
 
 - **Hosted** 接受原生发布并拥有制品生命周期。

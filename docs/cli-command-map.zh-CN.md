@@ -336,7 +336,8 @@ server base）。计划命令省略前导 `agctl`。
 | gateway apt-snapshot verify | #138 文档；远程归档/恢复见上表 | LOCAL 已有 | 本地归档读/摘要完整性；输出 signatures=not_checked 不冒充可信签名已通过 |
 | gateway theme validate/install/list | #139 区分本地 directory 与远程 managed | LOCAL 已有 | 显式本地目录/文件权限；包校验/ownership；不以远端 admin token 获得本地写入权 |
 | 完整系统备份/恢复、主机/部署配置、worker/PG/S3/SMTP relay/auth/CA | #126/#137/#139 明确部署入口；远程需求待独立 API | LOCAL/远程 BLOCKED | 尚无通用远程管理端点；不做隐式 SSH/容器/数据库直连，不从真实 secrets 自动探测 |
-| 在线全量与持续增量字节迁移任务 | #269，关联 #199/#202/#204/#205；未来 #137 接受实际 API | BLOCKED | 源发现与映射当前仅提供 API（#381）；持久字节任务仍未实现；默认源只读/制品与用户权限秘密迁移分离；不能由离线导入命令宣称在线同步完成 |
+| 手动全量与完整重扫的增量字节迁移 | #381/#382、Console #383；没有 agctl 命令 | API-only 已实现 | 源发现/映射与持久 Maven release/Raw 批次已经交付；现有 Console/API 保持源只读，提供容量/身份/校验证据；协议客户端仍需配置原生端点 |
+| 周期调度的 Nexus 持续同步 | #269，关联 #199/#202/#204/#205；未来 #137 消费实际调度契约 | BLOCKED | 持久手动批次不等于自动周期调度；离线导入不冒充在线同步、主体/凭据迁移或生产切流 |
 | 物理挂载告警、集群 sender 就绪/积压与更完整通知 | #255/#256 及 #209–#213/#229/#230；未来 #336 扩展 | BLOCKED | 现有局部 capability/心跳不是全部角色交付证明；待实际 API/schema/部署验收，不伪造字段或命令 |
 
 来源：`cmd/gateway/main.go`、`internal/{backupops,snapshotimport,preflight,evidence,aptpublication,consoletheme}/cli*.go`；

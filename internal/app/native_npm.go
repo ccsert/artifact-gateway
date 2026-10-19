@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/artifacthttp"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
@@ -896,7 +897,7 @@ func (h nativeNPMHandler) tarballWithAudit(w http.ResponseWriter, r *http.Reques
 		h.writeNPMQuarantineDenied(w, r, repo, version, actor, disposition, target)
 		return
 	}
-	result := serveNativeRawObject(w, r, tarballName, repository.RawAsset{
+	result := artifacthttp.ServeObject(w, r, tarballName, artifacthttp.Object{
 		Digest: version.Digest, ObjectKey: version.ObjectKey, Size: version.Size,
 		ContentType: "application/octet-stream",
 	}, h.objects)

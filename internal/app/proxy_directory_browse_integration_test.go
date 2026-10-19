@@ -202,7 +202,7 @@ func TestProxyDirectoryRawScopeEscapingAndLiveInvalidation(t *testing.T) {
 	if err := decodeSignedCursor(testAuthenticator().AdminToken, parent, &cursor); err != nil {
 		t.Fatal(err)
 	}
-	h := hostedRepositoryAPIHandler{authenticator: testAuthenticator()}
+	h := managementScope{authenticator: testAuthenticator()}
 	if _, _, err := h.decodeRepositoryBrowseParent(parent, repo, cursor.Principal); err != nil {
 		t.Fatalf("current upstream parent rejected: %v", err)
 	}

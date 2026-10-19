@@ -46,6 +46,8 @@ agree with executable tests and the
 - [ADR 0008: Go module path follows the source repository](adr/0008-go-module-path.md)
 - [ADR 0009: Native management architecture](adr/0009-native-architecture.md)
 - [ADR 0010: Memory store contracts](adr/0010-memory-store-contracts.md)
+- [ADR 0011: Explicit format modules and Raw tracer](adr/0011-format-modules.md)
+- [ADR 0012: Management API domain composition](adr/0012-management-domain-composition.md)
 
 ## Protocols and formats
 

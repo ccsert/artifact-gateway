@@ -44,7 +44,7 @@ func TestRetentionUsageMatchersFoldAuditResourcesIntoCoordinates(t *testing.T) {
 		{Format: repository.FormatPyPI, Coordinate: "hello@2.0"},
 		{Format: repository.FormatGo, Coordinate: "example.com/m@v1.2.3"},
 		{Format: repository.FormatMaven, Coordinate: "org.example:app:1.0"},
-		{Format: repository.FormatRaw, Coordinate: "dist/tool.tar.gz", rawPath: "dist/tool.tar.gz"},
+		{Format: repository.FormatRaw, Coordinate: "dist/tool.tar.gz", usagePath: "dist/tool.tar.gz"},
 		{Format: repository.FormatOCI, Digest: "sha256:" + strings.Repeat("a", 64)},
 		{Format: repository.FormatConan, conanRef: "widget/1.0@team/stable", conanRevision: "rrev"},
 	}
@@ -73,7 +73,7 @@ func TestRetentionUsageMatchersFoldAuditResourcesIntoCoordinates(t *testing.T) {
 	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatPyPI, Coordinate: "hello@2.0"}), 1, 2*time.Hour)
 	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatGo, Coordinate: "example.com/m@v1.2.3"}), 1, 3*time.Hour)
 	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatMaven, Coordinate: "org.example:app:1.0"}), 2, 4*time.Hour)
-	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatRaw, Coordinate: "dist/tool.tar.gz", rawPath: "dist/tool.tar.gz"}), 1, 5*time.Hour)
+	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatRaw, Coordinate: "dist/tool.tar.gz", usagePath: "dist/tool.tar.gz"}), 1, 5*time.Hour)
 	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatOCI, Digest: "sha256:" + strings.Repeat("a", 64)}), 1, 6*time.Hour)
 	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatConan, conanRef: "widget/1.0@team/stable", conanRevision: "rrev"}), 1, 7*time.Hour)
 	assertEvidence(index.match(&RepositoryRetentionCandidate{Format: repository.FormatNPM, Coordinate: "widget@2.0.0"}), 0, 0)

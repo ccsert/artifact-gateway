@@ -198,7 +198,6 @@ type v2GroupRouter struct {
 	authorizer RepositoryAuthorizer
 	oci        *v2GroupOCIHandler
 	maven      *v2GroupMavenHandler
-	raw        *v2GroupRawHandler
 	conan      *v2GroupConanHandler
 	npm        *v2GroupNPMHandler
 	pypi       *v2GroupPyPIHandler
@@ -244,11 +243,6 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case repository.FormatMaven:
 		if r.maven != nil {
 			r.maven.serve(w, req, resolver, group)
-			return
-		}
-	case repository.FormatRaw:
-		if r.raw != nil {
-			r.raw.serve(w, req, resolver, group)
 			return
 		}
 	case repository.FormatConan:

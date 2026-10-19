@@ -9,7 +9,7 @@ import (
 
 // GetGroupResolution inspects configuration using the protocol resolver itself.
 // It does not query artifacts, contact upstreams, or decide access for a reader.
-func (h generatedRepositoryAPIAdapter) GetGroupResolution(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+func (h repositoryManagementHandler) GetGroupResolution(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
 	group, ok := h.readGroup(w, r, id.String())
 	if !ok {
 		return

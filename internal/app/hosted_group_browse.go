@@ -3,11 +3,12 @@ package app
 import (
 	"errors"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -171,6 +172,16 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 	if query.Mode != repository.ArtifactSearchByCoordinate {
 		return nil, errors.New("digest search requires the artifact search projection")
 	}
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{Store: h.sessions.store}), repo.Format); ok {
+		summaries, err := capability.Search(r.Context(), repo.ID, query, limit, after.Coordinate)
+		if err != nil {
+			return nil, err
+		}
+		for _, summary := range summaries {
+			items = append(items, formatArtifactSummaryResponse(summary))
+		}
+		return items, nil
+	}
 	switch repo.Format {
 	case repository.FormatOCI:
 		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
@@ -198,16 +209,6 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 		for _, reference := range references {
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
 		}
-	case repository.FormatRaw:
-		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
-		if err != nil {
-			return nil, err
-		}
-		for _, asset := range assets {
-			digest, contentType, size := asset.Digest, asset.ContentType, asset.Size
-			updatedAt := asset.UpdatedAt
-			items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &digest, ContentType: &contentType, Size: &size, CreatedAt: &updatedAt})
-		}
 	case repository.FormatNPM:
 		packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		if err != nil {
@@ -233,25 +234,9 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 }
 
 func repositorySearchQueryForFormat(format repository.Format, query repository.ArtifactSearchQuery) repository.ArtifactSearchQuery {
-	if format != repository.FormatRaw || query.Mode != repository.ArtifactSearchByCoordinate || query.Value == "" {
-		return query
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{}), format); ok {
+		return capability.SearchQuery(query)
 	}
-	segments := strings.Split(query.Value, "/")
-	canonical := true
-	for _, segment := range segments {
-		decoded, err := url.PathUnescape(segment)
-		if err != nil || url.PathEscape(decoded) != segment {
-			canonical = false
-			break
-		}
-	}
-	if canonical {
-		return query
-	}
-	for index, segment := range segments {
-		segments[index] = url.PathEscape(segment)
-	}
-	query.Value = strings.Join(segments, "/")
 	return query
 }
 
