@@ -345,20 +345,8 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 		if err != nil {
 			continue
 		}
-		if repo.Type == repository.RepositoryTypeHosted {
-			pkg, lookupErr := h.native.store.GetNPMPackage(r.Context(), repo.ID, packageName)
-			if lookupErr != nil && !errors.Is(lookupErr, repository.ErrNotFound) {
-				h.native.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
-				return
-			}
-			for _, hidden := range pkg.TombstonedVersions {
-				if hidden.TarballName == tarballName {
-					resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
-					h.native.writeError(w, http.StatusNotFound, "package tarball not found")
-					return
-				}
-			}
-		}
+		// Resolve the candidate identity first: different package versions may
+		// legitimately declare the same flat tarball name in different members.
 		version, err := h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
 		if errors.Is(err, repository.ErrNotFound) && repo.Type == repository.RepositoryTypeProxy {
 			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
@@ -403,6 +391,7 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 			}
 			for _, hidden := range pkg.TombstonedVersions {
 				if hidden.Version == version.Version {
+					resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
 					h.native.writeError(w, http.StatusNotFound, "package tarball not found")
 					return
 				}
