@@ -21,6 +21,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/ccsert/artifact-gateway/internal/evidence"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/preflight"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -121,23 +122,15 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			slog.Error("shutdown tracing", "error", err)
 		}
 	}()
-	objectStore, err := app.NewRustFSOCIObjectStore(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
+	objectStore, err := objectstore.NewRustFSStore(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
 	if err != nil {
-		slog.Error("create OCI object store", "error", err)
+		slog.Error("create object store", "error", err)
 		return 1
 	}
 	if err := objectStore.EnsureBucket(context.Background()); err != nil {
-		slog.Error("ensure OCI cache bucket", "error", err)
+		slog.Error("ensure object-store bucket", "error", err)
 		return 1
 	}
-	dependencies.NativeMavenObjectStore = objectStore
-	dependencies.NativeOCIObjectStore = objectStore
-	dependencies.NativeConanObjectStore = objectStore
-	dependencies.NativeNPMObjectStore = objectStore
-	dependencies.NativePyPIObjectStore = objectStore
-	dependencies.NativeGoObjectStore = objectStore
-	dependencies.NativeCargoObjectStore = objectStore
-	dependencies.NativeAPTObjectStore = objectStore
 
 	if len(cfg.APTRestoreTrustedFingerprints) > 0 {
 		trust, err := aptpublication.NewTrustedSnapshotArchiveVerifier(cfg.APTRestoreTrustedFingerprints, cfg.APTRestoreTrustedPublicKeys)
@@ -293,18 +286,39 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 				"detail", "GATEWAY_REPOSITORY_READERS is empty and GATEWAY_LEGACY_READ_DEFAULT=allow, so any authenticated caller may read a legacy repository with no grant",
 				"change", "unset GATEWAY_LEGACY_READ_DEFAULT to deny unmatched readers once every reading actor has a reader pattern or a per-repository grant")
 		}
-		handler = app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{
-			AdminToken:           cfg.AdminToken,
-			ResolverToken:        cfg.ResolverToken,
-			AdminActor:           cfg.AdminActor,
-			ResolverActor:        cfg.ResolverActor,
-			LocalAuthMaxAttempts: cfg.LocalAuthMaxFailedAttempts,
-			LocalAuthLockout:     cfg.LocalAuthLockoutDuration,
-			RepositoryReaders:    cfg.RepositoryReaders,
-			LegacyReadPermissive: cfg.LegacyReadPermissive,
-			OIDCSource:           oidcRuntime,
-			APIKeys:              store,
-		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{OCIBearerCache: app.NewOCIBearerTokenCache()})
+		handler, err = app.NewGatewayHandler(app.GatewayOptions{
+			Dependencies: dependencies,
+			Store:        store,
+			Storage:      app.SharedObjectStores(objectStore),
+			Adapter:      app.TestAdapter{},
+			Authenticator: app.Authenticator{
+				AdminToken:           cfg.AdminToken,
+				ResolverToken:        cfg.ResolverToken,
+				AdminActor:           cfg.AdminActor,
+				ResolverActor:        cfg.ResolverActor,
+				LocalAuthMaxAttempts: cfg.LocalAuthMaxFailedAttempts,
+				LocalAuthLockout:     cfg.LocalAuthLockoutDuration,
+				RepositoryReaders:    cfg.RepositoryReaders,
+				LegacyReadPermissive: cfg.LegacyReadPermissive,
+				OIDCSource:           oidcRuntime,
+				APIKeys:              store,
+			},
+			Caches: app.GatewayCaches{
+				OCI: ociCache,
+				Maven: app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).
+					WithCoordinator(coordinator).WithQuota(quota).
+					WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL),
+				Raw:         rawCache,
+				Conan:       conanCache,
+				Maintenance: maintenance,
+			},
+			Metrics:  metrics,
+			Upstream: app.UpstreamClient{OCIBearerCache: app.NewOCIBearerTokenCache()},
+		})
+		if err != nil {
+			slog.Error("configure Gateway HTTP handler", "error", err)
+			return 1
+		}
 	}
 	server := &http.Server{
 		Addr:              cfg.ListenAddress,

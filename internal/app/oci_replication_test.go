@@ -7,13 +7,14 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestOCIReplicationCopiesManifestToTargetOwnedKey(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte(`{"schemaVersion":2}`)
 	digest := digestOCIReplicationBody(body)
 	sourceKey := "native/oci/manifests/source/team%2Fwidget/" + digest[7:]
@@ -47,7 +48,7 @@ func TestOCIReplicationCopiesManifestToTargetOwnedKey(t *testing.T) {
 func TestOCIReplicationRejectsSourceManifestRemovedAfterCopy(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte(`{"schemaVersion":2}`)
 	digest := digestOCIReplicationBody(body)
 	sourceKey := "source-manifest"

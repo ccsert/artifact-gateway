@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	ociprotocol "github.com/ccsert/artifact-gateway/internal/protocol/oci"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ func TestPostgresRustFSOCIPromotionCopiesManifestAndMountsBlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "promotion-oci-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "promotion-oci-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestPostgresRustFSOCIReplicationPublishesTargetOwnedManifest(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "replication-oci-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "replication-oci-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,14 +359,14 @@ func TestNativeOCIHostedHTTPAcrossPostgresAndRustFSGatewayInstances(t *testing.T
 	}
 	defer storeB.Close()
 	bucket := "native-oci-http-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,9 +379,9 @@ func TestNativeOCIHostedHTTPAcrossPostgresAndRustFSGatewayInstances(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsA, repository.FormatRaw: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsB, repository.FormatRaw: objectsB}}))
 	defer serverB.Close()
 	client := serverA.Client()
 	request := func(method, address string, body []byte) *http.Response {
@@ -454,14 +455,14 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndRustFSGatewayInstances(t *
 	}
 	defer storeB.Close()
 	bucket := "native-oci-referrers-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,9 +475,9 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndRustFSGatewayInstances(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsA, repository.FormatRaw: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeOCIObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsB, repository.FormatRaw: objectsB}}))
 	defer serverB.Close()
 	request := func(method, address string, body []byte) *http.Response {
 		t.Helper()

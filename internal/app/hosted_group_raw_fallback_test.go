@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -49,8 +50,8 @@ func TestV2GroupRawProxyFallbackOverTLS(t *testing.T) {
 		members = append(members, repository.GroupMember{RepositoryID: repo.ID, Position: i})
 	}
 	createV2Group(t, store, "tls-chain", repository.FormatRaw, members...)
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"example.com"})
-	handler := NewGatewayHandlerWithRawCache(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, cache, nil, UpstreamClient{HTTPClient: upstream.Client()})
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"example.com"})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: cache, Maintenance: nil}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	gateway := httptest.NewServer(handler)
 	defer gateway.Close()
 	for _, check := range []struct {
@@ -173,7 +174,7 @@ func rawProxyGroupFixture(t *testing.T, firstStatus, secondStatus int) (http.Han
 	}
 	createV2Group(t, store, "raw-chain", repository.FormatRaw, repository.GroupMember{RepositoryID: repos[0].ID, Position: 0}, repository.GroupMember{RepositoryID: repos[1].ID, Position: 1})
 	client := &rawFixtureClient{responses: map[string]int{"first": firstStatus, "second": secondStatus}, body: []byte("from-second-proxy")}
-	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"first.example", "second.example"})
-	handler := NewGatewayHandlerWithRawCache(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, cache, nil, client)
+	cache := NewRawCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, []string{"first.example", "second.example"})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: cache, Maintenance: nil}, Upstream: client})
 	return handler, cache, client, repos[0]
 }

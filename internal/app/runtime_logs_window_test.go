@@ -19,7 +19,7 @@ func TestRuntimeLogRolling24HourWindowAndCursor(t *testing.T) {
 	if err := logger.Handler().Handle(context.Background(), record); err != nil {
 		t.Fatal(err)
 	}
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	query := url.Values{"windowSeconds": {"86400"}}
 	initial := runtimeLogPage(t, h, query)
 	if len(initial.Items) != 1 {
@@ -41,7 +41,7 @@ func TestRuntimeLogRolling24HourWindowAndCursor(t *testing.T) {
 func TestRuntimeLogRollingWindowRejectsInvalidBoundsWithoutData(t *testing.T) {
 	b := operationalog.NewBuffer(1)
 	operationalog.NewLogger(b, "node", "session").Info("protected synthetic record")
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	for _, q := range []url.Values{
 		{"windowSeconds": {"0"}}, {"windowSeconds": {"86401"}}, {"windowSeconds": {"-1"}},
 		{"windowSeconds": {"3600"}, "from": {time.Now().Add(-time.Hour).Format(time.RFC3339Nano)}},

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ccsert/artifact-gateway/internal/emailnotification"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/quotaalert"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/testsupport"
@@ -59,7 +60,7 @@ func quotaHTTPTransitionsDeliverActualTLSMIME(t *testing.T, locale string) {
 	}
 	f := testsupport.NewSMTPFixture(t, true)
 	cfg := emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "gateway@example.test", ApprovedIPs: []string{"192.0.2.10"}, CAFile: f.CAFile, ConsoleOrigin: "https://console.example.invalid"}
-	h := NewGatewayHandler(Dependencies{Email: cfg, NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: cfg}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, "admin-secret")

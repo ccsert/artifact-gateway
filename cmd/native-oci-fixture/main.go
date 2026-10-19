@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/ccsert/artifact-gateway/internal/app"
+	"github.com/ccsert/artifact-gateway/internal/apptest"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -24,7 +25,7 @@ func main() {
 	if address == "" {
 		address = "127.0.0.1:18081"
 	}
-	handler := app.NewGatewayHandler(app.Dependencies{NativeOCIObjectStore: app.NewMemoryOCIObjectStore()}, store, app.TestAdapter{}, app.Authenticator{ResolverToken: "fixture-secret"})
+	handler := apptest.NewGateway(log.Default(), app.GatewayOptions{Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{ResolverToken: "fixture-secret"}}, app.NewGatewayHandler)
 	log.Printf("Native OCI fixture listening on %s", address)
 	log.Fatal(http.ListenAndServe(address, handler))
 }

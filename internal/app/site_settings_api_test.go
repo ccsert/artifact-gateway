@@ -11,7 +11,7 @@ import (
 
 func TestSiteSettingsArePubliclyReadableAndAdminVersioned(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	read := httptest.NewRecorder()
 	handler.ServeHTTP(read, httptest.NewRequest(http.MethodGet, "/api/v2/site-settings", nil))
@@ -51,7 +51,7 @@ func TestSiteSettingsArePubliclyReadableAndAdminVersioned(t *testing.T) {
 
 func TestSiteSettingsRejectUnavailableOrDisabledDefaultTheme(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for name, body := range map[string]string{
 		"unavailable":      `{"siteName":"Acme","logoUrl":"","brandMark":"AC","enabledThemeIds":["missing-theme"],"defaultThemeId":"missing-theme"}`,
 		"disabled default": `{"siteName":"Acme","logoUrl":"","brandMark":"AC","enabledThemeIds":["aerok-dark"],"defaultThemeId":"aerok-light"}`,
@@ -71,7 +71,7 @@ func TestSiteSettingsRejectUnavailableOrDisabledDefaultTheme(t *testing.T) {
 
 func TestSiteSettingsRejectUnsafeLogoURLs(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPut, "/api/v2/site-settings", strings.NewReader(`{"siteName":"Acme","logoUrl":"javascript:alert(1)","brandMark":"AC","enabledThemeIds":["aerok-dark"],"defaultThemeId":"aerok-dark"}`))
 	request.Header.Set("If-Match", "1")
 	authorize(request, "admin-secret")

@@ -11,13 +11,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 func TestNativeConanPublishSessionMakesRevisionVisibleOnlyOnCommit(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "conan-hosted", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +26,7 @@ func TestNativeConanPublishSessionMakesRevisionVisibleOnlyOnCommit(t *testing.T)
 	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read", "repositories:write"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}})
 	body := []byte("from publish session")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
@@ -77,7 +78,7 @@ func TestNativeConanPublishSessionResponsesMatchContractKeys(t *testing.T) {
 	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read", "repositories:write"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objectstore.NewMemoryStore()}})
 	requestBody, _ := json.Marshal(map[string]any{"kind": "package", "reference": "pkg/1.0/user/stable", "recipeRevision": "rrev", "packageId": "pid", "packageRevision": "prev", "objects": []map[string]any{{"name": "conaninfo.txt", "digest": "sha256:" + strings.Repeat("a", 64), "size": 1}}})
 	create := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/conan-publish-sessions", bytes.NewReader(requestBody))
 	create.Header.Set("Authorization", "Bearer resolver-secret")
@@ -122,7 +123,7 @@ func TestNativeConanPublishObjectUploadExceedsManagementJSONLimit(t *testing.T) 
 	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read", "repositories:write"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objectstore.NewMemoryStore()}})
 	body := bytes.Repeat([]byte("c"), managementJSONBodyLimit+1)
 	sum := sha256.Sum256(body)
 	requestBody, _ := json.Marshal(map[string]any{"kind": "recipe", "reference": "pkg/1.0/user/stable", "recipeRevision": "rrev", "objects": []map[string]any{{"name": "conan_sources.tgz", "digest": "sha256:" + hex.EncodeToString(sum[:]), "size": len(body)}}})

@@ -45,7 +45,7 @@ type nativePyPIHandler struct {
 	repos              repository.HostedRepositoryStore
 	readPolicies       repository.RepositoryQuarantineReadPolicyStore
 	quarantine         repository.ArtifactQuarantineStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
 	audit              repository.Store
@@ -67,10 +67,7 @@ type pypiAuditTarget struct {
 	MemberName string
 }
 
-func newNativePyPIHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativePyPIHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativePyPIHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativePyPIHandler {
 	return nativePyPIHandler{
 		store: store, repos: store, readPolicies: store, quarantine: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {

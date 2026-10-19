@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -45,14 +46,14 @@ func TestPostgresRustFSNPMPublicationIsVisibleAcrossGatewayInstances(t *testing.
 	}
 	defer storeB.Close()
 	bucket := "native-npm-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,9 +63,9 @@ func TestPostgresRustFSNPMPublicationIsVisibleAcrossGatewayInstances(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeNPMObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeNPMObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectsB}}))
 	defer serverB.Close()
 
 	packageName, version := "@scope/postgres-widget", "1.2.3"
@@ -156,7 +157,7 @@ func TestPostgresRustFSNPMPublicationIsVisibleAcrossGatewayInstances(t *testing.
 	if _, err = db.ExecContext(ctx, `UPDATE native_npm_versions SET deleted_at=now()-interval '25 hours' WHERE repository_id::text=$1 AND package_name=$2 AND version=$3`, repo.ID, packageName, version); err != nil {
 		t.Fatal(err)
 	}
-	blocking := blockingLifecycleDeleteStore{OCIObjectStore: objectsA, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	blocking := blockingLifecycleDeleteStore{ObjectStore: objectsA, entered: make(chan struct{}, 1), release: make(chan struct{})}
 	maintenance := NativeNPMMaintenance{Store: storeA, Objects: blocking}
 	if err = maintenance.EnqueueReclaimJobs(ctx, time.Now().UTC().Add(-24*time.Hour), 10); err != nil {
 		t.Fatal(err)
@@ -207,14 +208,14 @@ func TestPostgresRustFSNPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T
 	}
 	defer storeB.Close()
 	bucket := "proxy-npm-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,15 +257,9 @@ func TestPostgresRustFSNPMProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectsA}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectsB}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}}))
 	defer serverB.Close()
 
 	// package-lock.json can send npm ci straight to the Group/Proxy tarball URL.

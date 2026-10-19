@@ -22,7 +22,7 @@ type NativeCargoPromotion struct {
 		repository.RepositoryQuarantineReadPolicyStore
 		repository.ArtifactQuarantineStore
 	}
-	Objects      OCIObjectStore
+	Objects      ObjectStore
 	Intelligence repository.ArtifactIntelligenceStore
 	Metrics      repository.BackgroundOperationMetrics
 }
@@ -222,7 +222,7 @@ type CargoReplication struct {
 		repository.RepositoryQuarantineReadPolicyStore
 		repository.ArtifactQuarantineStore
 	}
-	Source, Destination OCIObjectStore
+	Source, Destination ObjectStore
 	ChunkBytes          int64
 	Metrics             repository.BackgroundOperationMetrics
 }

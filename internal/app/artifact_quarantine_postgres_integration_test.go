@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -36,7 +37,7 @@ func TestPostgresRawProtocolReadHonorsQuarantineReadPolicy(t *testing.T) {
 	body := []byte("postgres quarantine read")
 	digest := "sha256:" + strings.Repeat("d", 64)
 	objectKey := "native/raw/quarantine-read-postgres-" + suffix
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, objectKey, body); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +57,7 @@ func TestPostgresRawProtocolReadHonorsQuarantineReadPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	request := httptest.NewRequest(http.MethodGet, "/raw/"+repo.Name+"/"+path, nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()

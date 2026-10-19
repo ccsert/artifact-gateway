@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -25,7 +26,7 @@ type countingOCIClient struct {
 }
 
 type rangeRecordingOCIStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	offset int64
 	length int64
 	calls  int
@@ -33,13 +34,13 @@ type rangeRecordingOCIStore struct {
 }
 
 type legacyMetadataOCIStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	hideDigest bool
 	migrated   bool
 }
 
-func (s *legacyMetadataOCIStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
-	info, err := s.MemoryOCIObjectStore.Stat(ctx, key)
+func (s *legacyMetadataOCIStore) Stat(ctx context.Context, key string) (ObjectInfo, error) {
+	info, err := s.MemoryStore.Stat(ctx, key)
 	if s.hideDigest {
 		info.Digest = ""
 	}
@@ -54,14 +55,14 @@ func (s *legacyMetadataOCIStore) SetVerifiedDigest(context.Context, string, stri
 
 func (s *rangeRecordingOCIStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	s.opens++
-	return s.MemoryOCIObjectStore.Open(ctx, key)
+	return s.MemoryStore.Open(ctx, key)
 }
 
 func (s *rangeRecordingOCIStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
 	s.offset = offset
 	s.length = length
 	s.calls++
-	return s.MemoryOCIObjectStore.OpenRange(ctx, key, offset, length)
+	return s.MemoryStore.OpenRange(ctx, key, offset, length)
 }
 
 type renewingTestCoordinator struct {
@@ -104,7 +105,7 @@ func (c *renewingTestCoordinator) SetFail() {
 
 func TestOCICacheRenewsDistributedLockAndCancelsLostOwner(t *testing.T) {
 	coordinator := &renewingTestCoordinator{}
-	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), nil).WithCoordinator(coordinator)
+	cache := NewDefaultOCICache(objectstore.NewMemoryStore(), nil).WithCoordinator(coordinator)
 	cache.WithLockTiming(30*time.Millisecond, 5*time.Millisecond)
 
 	// The fill runs until the lock has been renewed twice rather than for a
@@ -165,7 +166,7 @@ func TestOCICacheServesVerifiedContentAndCoalescesConcurrentPulls(t *testing.T) 
 	client := &countingOCIClient{content: content, status: http.StatusOK, delay: 20 * time.Millisecond}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
-	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Minute, time.Minute, []string{"registry.example"})
+	cache := NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Minute, time.Minute, []string{"registry.example"})
 	metrics := &Metrics{}
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 
@@ -208,7 +209,7 @@ func TestOCICacheStreamsLargeBlobAndServesCachedRange(t *testing.T) {
 	client := &countingOCIClient{content: content, status: http.StatusOK, delay: 20 * time.Millisecond}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
-	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Minute, time.Minute, []string{"registry.example"})
+	cache := NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Minute, time.Minute, []string{"registry.example"})
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	path := "/v2/team/app/blobs/" + digestOf(content)
 
@@ -250,7 +251,7 @@ func TestOCICacheUsesObjectStoreRangeReadForHighOffset(t *testing.T) {
 	client := &countingOCIClient{content: content, status: http.StatusOK}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
-	objectStore := &rangeRecordingOCIStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore()}
+	objectStore := &rangeRecordingOCIStore{MemoryStore: objectstore.NewMemoryStore()}
 	cache := NewOCICache(objectStore, time.Hour, time.Minute, time.Minute, []string{"registry.example"})
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	path := "/v2/team/app/blobs/" + digestOf(content)
@@ -287,7 +288,7 @@ func TestOCICacheRejectsSameSizeCorruptObjectForFullAndRangeReads(t *testing.T) 
 	client := &countingOCIClient{content: content, status: http.StatusOK}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	cache := NewOCICache(objectStore, time.Hour, time.Hour, time.Hour, []string{"registry.example"})
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	path := "/v2/team/app/blobs/" + digestOf(content)
@@ -324,7 +325,7 @@ func TestOCICacheRejectsSameSizeCorruptObjectForFullAndRangeReads(t *testing.T) 
 }
 
 func TestOCICacheMigratesVerifiedLegacyObjectMetadata(t *testing.T) {
-	store := &legacyMetadataOCIStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore()}
+	store := &legacyMetadataOCIStore{MemoryStore: objectstore.NewMemoryStore()}
 	cache := NewOCICache(store, time.Hour, time.Hour, time.Hour, nil)
 	content := []byte("legacy cached content")
 	key := "oci/index/legacy.json"
@@ -343,7 +344,7 @@ func TestOCIHostedSingleflightGivesEveryWaiterAnIndependentReader(t *testing.T) 
 	client := &countingOCIClient{content: content, status: http.StatusOK, delay: 20 * time.Millisecond}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://hosted.example", Position: 0}}})
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: NewDefaultOCICache(NewMemoryOCIObjectStore(), nil)}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: &Metrics{}}, Client: client, Authenticator: testAuthenticator(), Cache: NewDefaultOCICache(objectstore.NewMemoryStore(), nil)}
 
 	var wg sync.WaitGroup
 	for range 6 {
@@ -366,7 +367,7 @@ func TestOCIHostedSingleflightGivesEveryWaiterAnIndependentReader(t *testing.T) 
 }
 
 func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
-	cache := NewOCICache(NewMemoryOCIObjectStore(), -time.Millisecond, time.Hour, time.Hour, []string{"trusted.example"})
+	cache := NewOCICache(objectstore.NewMemoryStore(), -time.Millisecond, time.Hour, time.Hour, []string{"trusted.example"})
 	key := cache.Key("team", "team/app", ociManifest, "latest")
 	if err := cache.Store(context.Background(), key, CachedOCIContent{Body: []byte("content"), Digest: digestOf([]byte("content"))}); err != nil {
 		t.Fatal(err)
@@ -389,7 +390,7 @@ func TestOCICacheExpiresAndProxyPolicyIsEnforcedInRequestPath(t *testing.T) {
 }
 
 func TestOCICacheCollectsOnlyUnreferencedDigestObjectsAfterGracePeriod(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	cache := NewOCICache(store, time.Hour, time.Hour, time.Hour, nil)
 	cache.WithGarbageCollectionGrace(5 * time.Millisecond)
 	first := []byte("first")
@@ -429,7 +430,7 @@ func TestOCICacheNegativeResultAndCircuitBreakerAvoidRepeatedProxyRequests(t *te
 	client := &countingOCIClient{content: []byte("missing"), status: http.StatusNotFound}
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example", Position: 0}}})
-	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{"registry.example"})
+	cache := NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{"registry.example"})
 	metrics := &Metrics{}
 	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: cache}
 	for range 2 {
@@ -464,7 +465,7 @@ func TestOCICacheRecordsProxyWhitelistDenial(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "team", Members: []repository.Member{{Name: "untrusted", Type: repository.MemberProxy, Endpoint: "https://untrusted.example", Position: 0}}})
 	metrics := &Metrics{}
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{"trusted.example"})}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: client, Authenticator: testAuthenticator(), Cache: NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{"trusted.example"})}
 	req := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(req, "resolver-secret")
 	response := httptest.NewRecorder()

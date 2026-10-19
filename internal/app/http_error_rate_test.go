@@ -46,7 +46,7 @@ func TestHTTPErrorRateActualHTTPAndDiagnosticsContract(t *testing.T) {
 		m.sampleHTTPErrorRate(o, "synthetic-http-session", now.Add(time.Duration(i-20)*15*time.Second))
 	}
 	deps := Dependencies{HTTPErrorRate: o, Runtime: DiagnosticRuntime{InstanceID: "synthetic-http-node", SessionID: "synthetic-http-session", Roles: []string{"api"}}}
-	handler := NewGatewayHandler(deps, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: deps, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	response := capacityResponse(handler, "admin-secret")
 	if response.Code != 200 || response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("diagnostics %d", response.Code)

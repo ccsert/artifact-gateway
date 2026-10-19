@@ -38,7 +38,7 @@ const (
 type nativeGoHandler struct {
 	store              nativeGoPublicationStore
 	repos              repository.HostedRepositoryStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
 	audit              repository.Store
@@ -65,10 +65,7 @@ type goRoute struct {
 	kind       string
 }
 
-func newNativeGoHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeGoHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativeGoHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeGoHandler {
 	return nativeGoHandler{
 		store: store, repos: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
 		readPolicies: store, quarantine: store,

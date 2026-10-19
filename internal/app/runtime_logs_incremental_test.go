@@ -18,8 +18,8 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-func runtimeLogFixture(buffer *operationalog.Buffer, instance, session string) http.Handler {
-	return NewGatewayHandler(Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: instance, SessionID: session}}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+func runtimeLogFixture(t *testing.T, buffer *operationalog.Buffer, instance, session string) http.Handler {
+	return newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: instance, SessionID: session}}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 }
 
 func runtimeLogPage(t *testing.T, handler http.Handler, query url.Values) adminopenapi.RuntimeLogPage {
@@ -41,7 +41,7 @@ func runtimeLogPage(t *testing.T, handler http.Handler, query url.Values) admino
 func TestRuntimeLogIncrementalTimeAndLevelFiltersPreserveUnreadPages(t *testing.T) {
 	b := operationalog.NewBuffer(350)
 	l := operationalog.NewLogger(b, "node", "session")
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	now := time.Now().UTC()
 	from, to := now.Add(-30*time.Minute), now.Add(-time.Minute)
 	query := url.Values{"from": {from.Format(time.RFC3339Nano)}, "to": {to.Format(time.RFC3339Nano)}, "level": {"ERROR"}, "limit": {"100"}}
@@ -90,7 +90,7 @@ func TestRuntimeLogIncrementalTimeAndLevelFiltersPreserveUnreadPages(t *testing.
 func TestRuntimeLogOverwriteBetweenForwardPagesReportsCoverage(t *testing.T) {
 	b := operationalog.NewBuffer(120)
 	l := operationalog.NewLogger(b, "node", "session")
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	p := runtimeLogPage(t, h, nil)
 	for i := 0; i < 100; i++ {
 		l.Info("retained")
@@ -126,7 +126,7 @@ func TestRuntimeLogSourceUsesObservedExactComponentsAndActualPolicy(t *testing.T
 		l.Info("synthetic worker event", "component", fmt.Sprintf("worker_%03d", i))
 	}
 	operationalog.NewLogger(b, "other-node", "other-session").Info("foreign", "component", "foreign_worker")
-	h := NewGatewayHandler(Dependencies{LogBuffer: b, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", SlowThreshold: 25 * time.Millisecond}}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LogBuffer: b, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", SlowThreshold: 25 * time.Millisecond}}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	p := runtimeLogPage(t, h, url.Values{"level": {"DEBUG"}})
 	if len(p.Items) != 0 || p.Source.AccessMode != "full" || p.Source.SlowThresholdMs != 25 || p.Source.MinimumLevel != "INFO" || p.Source.CapacityLines != 150 || p.Source.MaxLineBytes != 16384 || len(p.Source.Components) != 100 || !p.Source.ComponentsTruncated {
 		t.Fatalf("source metadata %#v", p)
@@ -145,7 +145,7 @@ func TestRuntimeLogProjectionOfRealHTTPAccessEvent(t *testing.T) {
 	const marker = "synthetic-private-http-payload"
 	b := operationalog.NewBuffer(10)
 	l := operationalog.NewLogger(b, "node", "session")
-	h := NewGatewayHandler(Dependencies{LogBuffer: b, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: l}}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LogBuffer: b, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: l}}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	r := httptest.NewRequest("GET", "/api/v2/repositories?token="+marker, strings.NewReader(marker))
 	r.Header.Set("X-Request-ID", "synthetic-http-event")
 	authorize(r, "admin-secret")
@@ -181,7 +181,7 @@ func TestRuntimeLogProjectionOfRealHTTPAccessEvent(t *testing.T) {
 
 func TestRuntimeLogMalformedDiagnosticValuesDoNotDiscardSafeEvent(t *testing.T) {
 	b := operationalog.NewBuffer(4)
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	for _, extra := range []string{`"status":"503","durationMs":{},"attempt":[],"method":1,"requestClass":{},"jobId":[]`, `"status":null,"durationMs":null,"attempt":null,"method":null,"requestClass":null,"jobId":null`} {
 		line := fmt.Sprintf(`{"time":%q,"level":"INFO","msg":"safe event","instanceId":"node","sessionId":"session",%s}`+"\n", time.Now().UTC().Format(time.RFC3339Nano), extra)
 		if _, err := b.Write([]byte(line)); err != nil {
@@ -210,7 +210,7 @@ func runtimeLogRequest(handler http.Handler, query url.Values, ctx context.Conte
 func TestRuntimeLogIncrementalPublicBoundary(t *testing.T) {
 	b := operationalog.NewBuffer(500)
 	l := operationalog.NewLogger(b, "node", "session")
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	query := url.Values{"component": {"http"}, "limit": {"100"}}
 	initial := runtimeLogPage(t, h, query)
 	if initial.AfterCursor == nil || initial.Source == nil || initial.Retention == nil || len(initial.Items) != 0 || initial.Source.MinimumLevel != "INFO" || initial.Source.AccessMode != "limited" || initial.Source.CapacityLines != 500 {
@@ -250,7 +250,7 @@ func TestRuntimeLogIncrementalPublicBoundary(t *testing.T) {
 func TestRuntimeLogCursorIsBoundedForConfiguredInstanceIDs(t *testing.T) {
 	instance := "node-" + strings.Repeat("x", 2048)
 	b := operationalog.NewBuffer(2)
-	h := runtimeLogFixture(b, instance, "session")
+	h := runtimeLogFixture(t, b, instance, "session")
 	p := runtimeLogPage(t, h, nil)
 	if p.AfterCursor == nil || len(*p.AfterCursor) > 1024 {
 		t.Fatalf("cursor exceeds wire bound: %#v", p.AfterCursor)
@@ -265,7 +265,7 @@ func TestRuntimeLogCursorIsBoundedForConfiguredInstanceIDs(t *testing.T) {
 func TestRuntimeLogCursorValidationScopeAndTrueGap(t *testing.T) {
 	b := operationalog.NewBuffer(3)
 	l := operationalog.NewLogger(b, "node", "session")
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	query := url.Values{"level": {"ERROR"}}
 	p := runtimeLogPage(t, h, query)
 	for i := 0; i < 4; i++ {
@@ -293,8 +293,8 @@ func TestRuntimeLogCursorValidationScopeAndTrueGap(t *testing.T) {
 		{"tamper", url.Values{"level": {"ERROR"}, "afterCursor": {*p.AfterCursor + "x"}}, h, 400, "invalid_cursor"},
 		{"changed filter", url.Values{"afterCursor": {*p.AfterCursor}}, h, 400, "invalid_cursor"},
 		{"before and after", url.Values{"afterCursor": {*p.AfterCursor}, "beforeSequence": {"3"}}, h, 400, "invalid_cursor"},
-		{"restart", query, runtimeLogFixture(operationalog.NewBuffer(3), "node", "new-session"), 409, "log_cursor_scope_changed"},
-		{"different node", query, runtimeLogFixture(operationalog.NewBuffer(3), "other", "session"), 409, "log_cursor_scope_changed"},
+		{"restart", query, runtimeLogFixture(t, operationalog.NewBuffer(3), "node", "new-session"), 409, "log_cursor_scope_changed"},
+		{"different node", query, runtimeLogFixture(t, operationalog.NewBuffer(3), "other", "session"), 409, "log_cursor_scope_changed"},
 		{"control filter", url.Values{"component": {"http\x1b"}}, h, 400, "invalid_filter"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -314,7 +314,7 @@ func TestRuntimeLogCursorValidationScopeAndTrueGap(t *testing.T) {
 func TestRuntimeLogConcurrentAppendAndPaging(t *testing.T) {
 	b := operationalog.NewBuffer(1000)
 	l := operationalog.NewLogger(b, "node", "session")
-	h := runtimeLogFixture(b, "node", "session")
+	h := runtimeLogFixture(t, b, "node", "session")
 	p := runtimeLogPage(t, h, nil)
 	query := url.Values{"afterCursor": {*p.AfterCursor}, "limit": {"17"}}
 	var wg sync.WaitGroup

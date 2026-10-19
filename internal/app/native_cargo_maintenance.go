@@ -18,7 +18,7 @@ type NativeCargoMaintenance struct {
 		repository.NativeCargoStore
 		repository.LifecycleJobStore
 	}
-	Objects        OCIObjectStore
+	Objects        ObjectStore
 	RecoveryWindow time.Duration
 	Now            func() time.Time
 	Metrics        repository.BackgroundOperationMetrics

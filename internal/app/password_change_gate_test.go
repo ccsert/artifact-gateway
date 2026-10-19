@@ -29,7 +29,7 @@ func TestPasswordChangeRequiredBlocksRepositorySurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticatorWithUsers(store)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	token := authenticator.IssueToken("user:reset")
 
 	for _, path := range []string{

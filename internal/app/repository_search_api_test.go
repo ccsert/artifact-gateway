@@ -88,7 +88,7 @@ func TestCrossFormatArtifactSearchUsesFormatProjectionsAndBoundPagination(t *tes
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(repo repository.HostedRepository, q string, token string) *httptest.ResponseRecorder {
 		t.Helper()
 		values := url.Values{"q": {q}, "pageSize": {"1"}}
@@ -190,7 +190,7 @@ func TestMavenSnapshotSearchPaginationPreservesBuildPositionAcrossSurfaces(t *te
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	assertPages := func(name, path string, authenticated bool, match string) {
 		t.Helper()
 		token := ""
@@ -251,7 +251,7 @@ func TestOCIManifestBrowseIncludesUntaggedManifest(t *testing.T) {
 	if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: "nginx", Digest: digest, ObjectKey: "oci/untagged", MediaType: "application/vnd.oci.image.manifest.v1+json", Size: 1989, CreatedAt: createdAt}, digest); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/oci/manifests?name=nginx&pageSize=50", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()
@@ -287,7 +287,7 @@ func TestAnonymousHostedGroupArtifactSearchAggregatesOnlyAnonymousMembers(t *tes
 		t.Fatal(err)
 	}
 	enableAnonymousAccess(t, store)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+group.ID+"/artifact-search?q=team%2F&pageSize=50", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -322,7 +322,7 @@ func TestConanRecipeRevisionSearchPaginatesAndBindsCursorToQuery(t *testing.T) {
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(query, token string, pageSize int) *httptest.ResponseRecorder {
 		t.Helper()
 		values := url.Values{"reference": {reference}, "pageSize": {strconv.Itoa(pageSize)}}
@@ -397,7 +397,7 @@ func TestAnonymousHostedGroupConanRecipeRevisionsAggregateMembers(t *testing.T) 
 		t.Fatal(err)
 	}
 	enableAnonymousAccess(t, store)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+group.ID+"/conan/recipe-revisions?reference="+url.QueryEscape(reference), nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -413,7 +413,7 @@ func TestCreateHostedGroupAcceptsConanFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(fmt.Sprintf(`{"name":"conan-group","format":"conan","members":[{"repositoryId":"%s","position":0}]}`, repo.ID)))
 	authorize(request, "admin-secret")
 	request.Header.Set("Content-Type", "application/json")
@@ -432,7 +432,7 @@ func TestCreateHostedGroupAcceptsNPMFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(fmt.Sprintf(`{"name":"npm-group","format":"npm","members":[{"repositoryId":"%s","position":0}]}`, repo.ID)))
 	authorize(request, "admin-secret")
 	request.Header.Set("Content-Type", "application/json")

@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
 	testsupport "github.com/ccsert/artifact-gateway/internal/testsupport/snapshotfixture"
 	"net/http"
@@ -33,7 +34,7 @@ func TestMavenSnapshotImportAbsentMetadataAndQuarantineReads(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			objects := NewMemoryOCIObjectStore()
+			objects := objectstore.NewMemoryStore()
 			if _, err = snapshotimport.Run(ctx, p, s, objects, repo.ID, "synthetic-target", "synthetic-operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, p, repo.ID, "synthetic-target", "synthetic-operator")); err != nil {
 				t.Fatal(err)
 			}
@@ -44,7 +45,7 @@ func TestMavenSnapshotImportAbsentMetadataAndQuarantineReads(t *testing.T) {
 				items, _ := s.ListMavenArtifacts(ctx, repo.ID)
 				quarantineReadIdentity(t, s, repo, items[0].Coordinate, items[0].Digest)
 			}
-			h := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, s, TestAdapter{}, testAuthenticator())
+			h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: s, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objects}})
 			for _, scope := range []string{repo.Name, group} {
 				for _, method := range []string{http.MethodGet, http.MethodHead} {
 					for _, file := range []string{"widget-1.0-20260101.000000-7.jar", "widget-1.0-SNAPSHOT.jar", "maven-metadata.xml"} {
@@ -93,7 +94,7 @@ func TestMavenSnapshotImportReservationRejectsOrdinarySameActorWrites(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	h := newNativeMavenHandler(s, objects, Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"maven": {repo.Name}}, RepositoryWriters: map[string][]string{"maven": {repo.Name}}})
 	for _, path := range []string{"org/example/widget/1.0-SNAPSHOT/widget-1.0-SNAPSHOT.pom", "org/example/widget/1.0-SNAPSHOT/maven-metadata.xml", "org/example/widget/maven-metadata.xml"} {
 		r := httptest.NewRequest(http.MethodPut, "/repository/maven/"+repo.Name+"/"+path, bytes.NewBufferString("synthetic upload"))
@@ -144,7 +145,7 @@ func testMavenSnapshotImportPreservesSourceHistory(t *testing.T, bundle func(tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	auth := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"maven": {"synthetic-history"}}, RepositoryWriters: map[string][]string{"maven": {"synthetic-history"}}}
 	report, err := snapshotimport.Run(ctx, prepared, store, objects, repo.ID, "synthetic-target", "synthetic-operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, prepared, repo.ID, "synthetic-target", "synthetic-operator"))
 	if err != nil || report.Status != "verified" {

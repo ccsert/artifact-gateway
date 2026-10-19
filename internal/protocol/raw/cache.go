@@ -547,3 +547,11 @@ func (c *Cache) renewPublicationLock(ctx context.Context, owner string, failed c
 func privateIP(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
 }
+
+// Validate rejects an unconfigured byte store before the cache is used.
+func (c *Cache) Validate() error {
+	if c == nil {
+		return objectstore.Validate(nil)
+	}
+	return objectstore.Validate(c.store)
+}

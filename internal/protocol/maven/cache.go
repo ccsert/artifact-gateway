@@ -280,3 +280,11 @@ func (c *Cache) RecordUpstreamSuccess(ctx context.Context, endpoint string) {
 func isMavenMetadata(path string) bool {
 	return strings.HasSuffix(path, "/maven-metadata.xml") || path == "maven-metadata.xml"
 }
+
+// Validate rejects an unconfigured byte store before the cache is used.
+func (c *Cache) Validate() error {
+	if c == nil {
+		return objectstore.Validate(nil)
+	}
+	return objectstore.Validate(c.store)
+}

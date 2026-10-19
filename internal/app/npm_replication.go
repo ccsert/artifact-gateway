@@ -15,8 +15,8 @@ type NPMReplication struct {
 		repository.NativeNPMStore
 		repository.ReplicationStore
 	}
-	Source      OCIObjectStore
-	Destination OCIObjectStore
+	Source      ObjectStore
+	Destination ObjectStore
 	ChunkBytes  int64
 	Metrics     repository.BackgroundOperationMetrics
 }

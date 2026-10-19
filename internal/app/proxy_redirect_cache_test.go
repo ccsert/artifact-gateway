@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -160,13 +161,10 @@ func newRedirectCacheGateway(t *testing.T, format repository.Format, route strin
 		}
 		name = group.Name
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	ociCache := NewOCICache(objects, time.Hour, time.Hour, time.Hour, []string{redirectOrigin})
 	mavenCache := NewMavenCache(objects, time.Hour, time.Hour, time.Hour, time.Hour, []string{redirectOrigin})
-	gateway := httptest.NewServer(NewGatewayHandlerWithCaches(
-		Dependencies{NativeOCIObjectStore: objects, NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
-		ociCache, mavenCache, upstream.client,
-	))
+	gateway := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects, repository.FormatMaven: objects}, Caches: GatewayCaches{OCI: ociCache, Maven: mavenCache}, Upstream: upstream.client}))
 	t.Cleanup(gateway.Close)
 	return gateway, name
 }

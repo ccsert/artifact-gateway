@@ -37,14 +37,14 @@ func TestPostgresRustFSCargoPromotionAndReplicationReadback(t *testing.T) {
 	}
 	defer func() { _ = storeB.Close() }()
 	bucketSuffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	sourceObjects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "cargo-dist-source-"+bucketSuffix)
+	sourceObjects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "cargo-dist-source-"+bucketSuffix)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := sourceObjects.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	destinationObjects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "cargo-dist-target-"+bucketSuffix)
+	destinationObjects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "cargo-dist-target-"+bucketSuffix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestPostgresRustFSCargoPromotionAndReplicationReadback(t *testing.T) {
 	}
 	crateName := "dist" + strings.ReplaceAll(uuid.NewString(), "-", "")[:8]
 	payload, archive := cargoC0PublishFixture(t, crateName, "1.0.0", crateName)
-	handlerA := NewGatewayHandler(Dependencies{NativeCargoObjectStore: sourceObjects}, storeA, TestAdapter{}, testAuthenticator())
+	handlerA := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: sourceObjects}})
 	request := func(handler http.Handler, method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, path, bytes.NewReader(body))
@@ -129,7 +129,7 @@ func TestPostgresRustFSCargoPromotionAndReplicationReadback(t *testing.T) {
 	if err != nil || !replicated.Yanked || replicated.Digest != publication.Digest || !bytes.Equal(replicated.IndexRow, publication.IndexRow) {
 		t.Fatalf("restarted target Cargo=%+v err=%v", replicated, err)
 	}
-	handlerB := NewGatewayHandler(Dependencies{NativeCargoObjectStore: destinationObjects}, storeB, TestAdapter{}, testAuthenticator())
+	handlerB := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: destinationObjects}})
 	download := "/cargo/" + replicationTarget.Name + "/api/v1/crates/" + crateName + "/1.0.0/download"
 	if w := request(handlerB, http.MethodGet, download, nil); w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), archive) {
 		t.Fatalf("replicated target download=%d %s", w.Code, w.Body.String())

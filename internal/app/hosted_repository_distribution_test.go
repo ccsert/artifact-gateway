@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/ccsert/artifact-gateway/internal/protocol/maven"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
@@ -30,7 +31,7 @@ func TestRepositoryPromotionHTTPAuthorizesBothRepositoriesAndPublishesTarget(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte("promoted jar")
 	digest := sha256.Sum256(body)
 	digestText := "sha256:" + fmt.Sprintf("%x", digest)
@@ -55,7 +56,7 @@ func TestRepositoryPromotionHTTPAuthorizesBothRepositoriesAndPublishesTarget(t *
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatMaven: objects}})
 	promote := func(targetID, key string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+targetID+`","coordinate":"`+session.Coordinate+`","digest":"`+digestText+`"}`))
 		authorize(req, authenticator.IssueToken("promoter"))
@@ -112,7 +113,7 @@ func TestRepositoryNPMPromotionPublishesTargetVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"widget@1.0.0","digest":"`+sourceVersion.Digest+`"}`))
 	authorize(request, "admin-secret")
 	request.Header.Set("Idempotency-Key", "npm-promote-widget")
@@ -136,7 +137,7 @@ func TestRepositoryNPMPromotionPublishesTargetVersion(t *testing.T) {
 func TestRepositoryNPMReplicationCopiesAndPublishesTargetVersion(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "npm-replication-source", Format: repository.FormatNPM})
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +160,7 @@ func TestRepositoryNPMReplicationCopiesAndPublishesTargetVersion(t *testing.T) {
 	if err = objects.Put(ctx, sourceVersion.ObjectKey, body); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/replications", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"widget@2.0.0","digest":"`+sourceVersion.Digest+`"}`))
 	authorize(request, "admin-secret")
 	request.Header.Set("Idempotency-Key", "npm-replicate-widget")
@@ -199,7 +200,7 @@ func TestRepositoryOCIPromotionHTTPEnqueuesIdempotentJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func() *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"team/widget","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`))
 		authorize(r, authenticator.IssueToken("promoter"))
@@ -243,7 +244,7 @@ func TestRepositoryRawReplicationHTTPAuthorizesPlansAndAudits(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(key, artifactDigest string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/replications", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"releases/widget.txt","digest":"`+artifactDigest+`"}`))
 		authorize(r, authenticator.IssueToken("replicator"))
@@ -362,7 +363,7 @@ func TestRepositoryConanReplicationHTTPPlansAllVisibleRevisionAssets(t *testing.
 		}
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/replications", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+reference+`#`+revision+`","digest":"`+digest+`"}`))
 	authorize(request, authenticator.IssueToken("replicator"))
 	request.Header.Set("Idempotency-Key", "conan-copy")
@@ -395,7 +396,7 @@ func TestRepositoryRawPromotionHTTPPublishesTargetReference(t *testing.T) {
 	body := []byte("promoted Raw content")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	asset := repository.RawAsset{RepositoryID: source.ID, Path: "releases/widget.txt", Digest: digest, ObjectKey: "native/raw/sha256/" + fmt.Sprintf("%x", sum[:]), Size: int64(len(body)), ContentType: "text/plain"}
 	if err = objects.Put(ctx, asset.ObjectKey, body); err != nil {
 		t.Fatal(err)
@@ -411,7 +412,7 @@ func TestRepositoryRawPromotionHTTPPublishesTargetReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+asset.Path+`","digest":"`+digest+`"}`))
 	authorize(request, authenticator.IssueToken("promoter"))
 	request.Header.Set("Idempotency-Key", "promote-raw-widget")
@@ -449,7 +450,7 @@ func TestRepositoryConanPromotionHTTPPublishesTargetRevision(t *testing.T) {
 	body := []byte("promoted Conan recipe")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + fmt.Sprintf("%x", sum[:])
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	key := "native/conan/objects/" + fmt.Sprintf("%x", sum[:])
 	if err = objects.Put(ctx, key, body); err != nil {
 		t.Fatal(err)
@@ -469,7 +470,7 @@ func TestRepositoryConanPromotionHTTPPublishesTargetRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatConan: objects}})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/promotions", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+reference+`#`+revision+`","digest":"`+digest+`"}`))
 	authorize(request, authenticator.IssueToken("promoter"))
 	request.Header.Set("Idempotency-Key", "promote-conan-widget")

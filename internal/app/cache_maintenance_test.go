@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestCacheMaintenanceReportsCapacityAndCleanupState(t *testing.T) {
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	cache := NewOCICache(objectStore, time.Hour, time.Hour, time.Hour, nil)
 	maintenance := NewCacheMaintenance(objectStore, cache)
 	content := []byte("cached")
@@ -32,9 +33,9 @@ func TestCacheMaintenanceReportsCapacityAndCleanupState(t *testing.T) {
 }
 
 func TestCacheCollectionRequiresAdministratorAndRunsCollector(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	maintenance := NewCacheMaintenance(store, NewDefaultOCICache(store, nil))
-	handler := NewGatewayHandlerWithCacheMaintenance(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator(), NewDefaultOCICache(store, nil), nil, maintenance)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: NewDefaultOCICache(store, nil), Maven: nil, Maintenance: maintenance}})
 
 	denied := httptest.NewRecorder()
 	handler.ServeHTTP(denied, httptest.NewRequest(http.MethodPost, "/api/v1/operations/cache/collect", nil))
@@ -55,7 +56,7 @@ func TestCacheCollectionRequiresAdministratorAndRunsCollector(t *testing.T) {
 }
 
 func TestCacheMaintenanceSchedulerStopsWithContext(t *testing.T) {
-	store := NewMemoryOCIObjectStore()
+	store := objectstore.NewMemoryStore()
 	maintenance := NewCacheMaintenance(store, NewDefaultOCICache(store, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := maintenance.Start(ctx, time.Millisecond)
@@ -82,9 +83,9 @@ func TestCacheMaintenanceSchedulerStopsWithContext(t *testing.T) {
 
 func TestCacheOperationsRequiresAdminAndReturnsStatus(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	cache := NewDefaultOCICache(objectStore, nil)
-	handler := NewGatewayHandlerWithCacheMaintenance(Dependencies{}, store, TestAdapter{}, testAuthenticator(), cache, nil, NewCacheMaintenance(objectStore, cache))
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: cache, Maven: nil, Maintenance: NewCacheMaintenance(objectStore, cache)}})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/operations/cache", nil)
 	authorize(request, "resolver-secret")
@@ -113,10 +114,10 @@ func TestRepositoryOperationsReportsRepositoryMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objectStore := NewMemoryOCIObjectStore()
+	objectStore := objectstore.NewMemoryStore()
 	cache := NewOCICache(objectStore, time.Hour, time.Hour, time.Hour, []string{"registry.example"})
 	client := &countingOCIClient{content: []byte(`{"schemaVersion":2}`), status: http.StatusOK}
-	handler := NewGatewayHandlerWithCacheMaintenance(Dependencies{}, store, TestAdapter{}, testAuthenticator(), cache, nil, NewCacheMaintenance(objectStore, cache), client)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: cache, Maven: nil, Maintenance: NewCacheMaintenance(objectStore, cache)}, Upstream: client})
 
 	for range 2 {
 		request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)

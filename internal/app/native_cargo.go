@@ -29,7 +29,7 @@ type nativeCargoHandler struct {
 	proxy              repository.CargoProxyStore
 	upstream           UpstreamClient
 	repos              repository.HostedRepositoryStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
 	audit              repository.Store
@@ -52,10 +52,7 @@ type cargoRoute struct {
 	version    string
 }
 
-func newNativeCargoHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeCargoHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativeCargoHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeCargoHandler {
 	return nativeCargoHandler{store: store, proxy: store, repos: store, objects: objects, auth: auth,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}, audit: store, anonymous: store,
 		readPolicies: store, quarantine: store, tombstones: store}

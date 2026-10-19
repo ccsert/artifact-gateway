@@ -18,7 +18,7 @@ import (
 
 type backgroundRuntime struct {
 	store           *repository.PostgresStore
-	objects         app.OCIObjectStore
+	objects         app.ObjectStore
 	taskQueue       *app.PostgresCacheTaskQueue
 	maintenance     *app.CacheMaintenance
 	metrics         *app.Metrics

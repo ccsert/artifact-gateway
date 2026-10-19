@@ -17,7 +17,7 @@ func TestWebhookManagementAPIEncryptsSecretsUsesCASAndReplaysDeadDelivery(t *tes
 	t.Setenv(secrets.KeyEnv, "0123456789abcdef0123456789abcdef")
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, token, body, ifMatch string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, token)
@@ -107,7 +107,7 @@ func TestWebhookManagementAPIEncryptsSecretsUsesCASAndReplaysDeadDelivery(t *tes
 func TestWebhookManagementAPIRequiresSettingsEncryptionKey(t *testing.T) {
 	t.Setenv(secrets.KeyEnv, "")
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/webhook-subscriptions", strings.NewReader(`{"name":"missing-key","endpointUrl":"https://events.example.test/hooks/artifacts","secret":"0123456789abcdef0123456789abcdef","eventTypes":["artifact.quarantined"],"enabled":true}`))
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()

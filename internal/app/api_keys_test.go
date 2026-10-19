@@ -13,7 +13,7 @@ import (
 
 func TestAPIKeyManagementCreatesAuthenticatesAndRevokesKey(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 	create := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", bytes.NewBufferString(`{"name":"automation","roles":["admin"]}`))
 	create.Header.Set("Authorization", "Bearer root")
 	create.Header.Set("Content-Type", "application/json")
@@ -66,7 +66,7 @@ func TestAPIKeyManagementCreatesAuthenticatesAndRevokesKey(t *testing.T) {
 
 func TestAPIKeyManagementValidatesExpiryAndRequestShape(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 
 	for _, tc := range []struct {
 		name string
@@ -91,7 +91,7 @@ func TestAPIKeyManagementValidatesExpiryAndRequestShape(t *testing.T) {
 
 func TestAPIKeyManagementAllowsRepositoryOnlyKey(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", bytes.NewBufferString(`{"name":"scanner"}`))
 	request.Header.Set("Authorization", "Bearer root")
 	request.Header.Set("Content-Type", "application/json")

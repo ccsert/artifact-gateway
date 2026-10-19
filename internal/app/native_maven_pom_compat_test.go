@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -132,7 +133,7 @@ func TestNativeMavenPOMCompatibilityRetainsUploadGuardrails(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		handler := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+		handler := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 		const path = "/repository/maven/deploys/org/objenesis/objenesis/3.3/objenesis-3.3.pom"
 		for _, fixture := range []struct {
 			name, actor, password string
@@ -172,7 +173,7 @@ func assertMavenPOMRejected(t *testing.T, strict bool, coordinate string, pom []
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	handler := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	parts := strings.Split(coordinate, ":")
 	name := parts[1] + "-" + parts[2] + ".pom"
 	path := "/repository/maven/deploys/" + strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1] + "/" + parts[2] + "/" + name
@@ -216,7 +217,7 @@ func assertMavenPOMPublication(t *testing.T, strict bool, coordinate string, pom
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	handler := newNativeMavenHandler(store, objectstore.NewMemoryStore(), testAuthenticator())
 	parts := strings.Split(coordinate, ":")
 	name := parts[1] + "-" + parts[2] + ".pom"
 	path := "/repository/maven/deploys/" + strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1] + "/" + parts[2] + "/" + name

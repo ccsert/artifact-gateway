@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	mavenprotocol "github.com/ccsert/artifact-gateway/internal/protocol/maven"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
@@ -42,7 +43,7 @@ func TestPostgresRustFSArchetypeSnapshotImportCLIExplicitTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	bucket := "snapshot-cli-" + uuid.NewString()
-	objects, err := NewRustFSOCIObjectStore(os.Getenv("TEST_RUSTFS_ENDPOINT"), os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY"), bucket)
+	objects, err := objectstore.NewRustFSStore(os.Getenv("TEST_RUSTFS_ENDPOINT"), os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY"), bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +234,7 @@ func TestPostgresRustFSArchetypeSnapshotImportCLIExplicitTarget(t *testing.T) {
 
 	// A changed physical bucket is rejected even with the same human targetId.
 	spec.S3Bucket = "snapshot-other-" + uuid.NewString()
-	other, err := NewRustFSOCIObjectStore(spec.S3Endpoint, os.Getenv(spec.S3AccessKeyEnv), os.Getenv(spec.S3SecretKeyEnv), spec.S3Bucket)
+	other, err := objectstore.NewRustFSStore(spec.S3Endpoint, os.Getenv(spec.S3AccessKeyEnv), os.Getenv(spec.S3SecretKeyEnv), spec.S3Bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +292,7 @@ func TestPostgresSnapshotImportExpiredClaimAndNewProcessRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	var asset repository.MavenAsset
 	for _, a := range plans[0].Assets {
 		if a.Path == f.Path {
@@ -413,7 +414,7 @@ func TestPostgresSnapshotImportOneConnectionPoolsAndSourceBuildBoundary(t *testi
 		t.Fatalf("%v %v", rejected, err)
 	}
 	defer func() { _ = p.Close() }()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	report, err := snapshotimport.Run(ctx, p, store, objects, repo.ID, "synthetic-target", "synthetic-operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, p, repo.ID, "synthetic-target", "synthetic-operator"))
 	if err != nil || report.Status != "verified" {
 		t.Fatalf("one-connection apply=%v %v", report, err)
@@ -474,7 +475,7 @@ func TestPostgresRustFSMavenSnapshotImportAtomicReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects, err := NewRustFSOCIObjectStore(os.Getenv("TEST_RUSTFS_ENDPOINT"), os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY"), "synthetic-snapshot-"+uuid.NewString())
+	objects, err := objectstore.NewRustFSStore(os.Getenv("TEST_RUSTFS_ENDPOINT"), os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY"), "synthetic-snapshot-"+uuid.NewString())
 	if err != nil {
 		t.Fatal(err)
 	}

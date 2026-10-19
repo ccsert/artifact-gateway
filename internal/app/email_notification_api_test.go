@@ -15,7 +15,7 @@ import (
 )
 
 func TestAdministratorCanPreviewWarningEmailWithoutSMTP(t *testing.T) {
-	h := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	r := httptest.NewRequest(http.MethodPost, "/api/v2/email-notifications:preview", strings.NewReader(`{"scenario":"warning","locale":"zh-CN"}`))
 	authorize(r, "admin-secret")
 	w := httptest.NewRecorder()
@@ -39,7 +39,7 @@ func TestAdministratorCanPreviewWarningEmailWithoutSMTP(t *testing.T) {
 
 func TestEmailTargetsRequireAdministratorAndHideRecipient(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", "01234567890123456789012345678901")
-	h := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	r := httptest.NewRequest(http.MethodPost, "/api/v2/email-targets", strings.NewReader(`{"name":"Operations","recipient":"private@example.test","locale":"en"}`))
 	authorize(r, "admin-secret")
 	w := httptest.NewRecorder()
@@ -67,7 +67,7 @@ func TestAdministratorEmailTestEnqueuesOnceAndDoesNotSendInHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewGatewayHandler(Dependencies{Email: emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "gateway@example.test", ApprovedIPs: []string{"192.0.2.10"}}}, store, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "gateway@example.test", ApprovedIPs: []string{"192.0.2.10"}}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	key := uuid.NewString()
 	var id string
 	for i := 0; i < 2; i++ {
@@ -98,7 +98,7 @@ func TestAdministratorEmailTestEnqueuesOnceAndDoesNotSendInHTTP(t *testing.T) {
 
 func TestEmailManagementAuthorizationAndDisabledGate(t *testing.T) {
 	store := repository.NewMemoryStore()
-	h := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	id := uuid.NewString()
 	for _, endpoint := range []struct{ method, path string }{{"POST", "/api/v2/email-notifications:preview"}, {"GET", "/api/v2/email-notifications"}, {"GET", "/api/v2/email-targets"}, {"POST", "/api/v2/email-targets"}, {"GET", "/api/v2/email-targets/" + id}, {"PUT", "/api/v2/email-targets/" + id}, {"POST", "/api/v2/email-notifications:test"}, {"GET", "/api/v2/email-deliveries"}, {"GET", "/api/v2/email-deliveries/" + id}, {"POST", "/api/v2/email-deliveries/" + id + ":replay"}} {
 		for _, auth := range []struct {
@@ -147,7 +147,7 @@ func TestEmailIdempotencyRetainsV1DescriptorAcrossTemplateUpgrade(t *testing.T) 
 		t.Fatal(err)
 	}
 	cfg := emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "new@example.test", ApprovedIPs: []string{"192.0.2.10"}}
-	h := NewGatewayHandler(Dependencies{Email: cfg}, s, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: cfg}, Store: s, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	r := httptest.NewRequest("POST", "/api/v2/email-notifications:test", strings.NewReader(`{"targetId":"`+target.ID+`","scenario":"warning"}`))
 	authorize(r, "admin-secret")
 	r.Header.Set("If-Match", target.Version)
@@ -170,7 +170,7 @@ func TestEmailManagementRejectsForcedPasswordChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	auth := testAuthenticatorWithUsers(store)
-	h := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	for _, path := range []string{"/api/v2/email-notifications:preview", "/api/v2/email-targets", "/api/v2/email-notifications:test"} {
 		r := httptest.NewRequest("POST", path, strings.NewReader(`{}`))
 		authorize(r, auth.IssueToken("user:email-reset"))
@@ -188,7 +188,7 @@ func TestEmailTargetCASValidationMissingKeyAndDeadReplay(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", "01234567890123456789012345678901")
 	store := repository.NewMemoryStore()
 	cfg := emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "gateway@example.test", ApprovedIPs: []string{"192.0.2.10"}}
-	h := NewGatewayHandler(Dependencies{Email: cfg}, store, TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: cfg}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, body, match, key string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, "admin-secret")
@@ -269,7 +269,7 @@ func TestEmailTargetCASValidationMissingKeyAndDeadReplay(t *testing.T) {
 }
 
 func TestEmailEarlyRejectionsAreNotCached(t *testing.T) {
-	h := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, test := range []struct {
 		method, path, token string
 		status              int

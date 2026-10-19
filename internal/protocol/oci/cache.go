@@ -606,3 +606,11 @@ func (c *Cache) RecordUpstreamSuccess(ctx context.Context, endpoint string) {
 	defer c.mu.Unlock()
 	delete(c.openUntil, endpoint)
 }
+
+// Validate rejects an unconfigured byte store before the cache is used.
+func (c *Cache) Validate() error {
+	if c == nil {
+		return objectstore.Validate(nil)
+	}
+	return objectstore.Validate(c.store)
+}

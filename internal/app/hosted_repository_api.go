@@ -306,6 +306,7 @@ type generatedRepositoryAPIAdapter struct {
 	queueStats             repository.BackgroundOperationQueueStore
 	browse                 repository.ArtifactBrowseStore
 	diagnostics            Dependencies
+	objects                ObjectStores
 	logBuffer              *operationalog.Buffer
 	artifactScanner        scanning.Scanner
 	artifactScanFormats    []repository.Format

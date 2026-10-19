@@ -11,6 +11,7 @@ import (
 
 	"net/http/httptest"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -36,9 +37,8 @@ func TestNativeCargoOfficialClientHostedFlow(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects},
-		store, TestAdapter{}, testAuthenticator()))
+	objects := objectstore.NewMemoryStore()
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}}))
 	defer server.Close()
 	home := t.TempDir()
 	config := "[registries.fixture]\nindex = \"sparse+" + server.URL + "/cargo/cargo-official/\"\ncredential-provider = \"cargo:token\"\n"

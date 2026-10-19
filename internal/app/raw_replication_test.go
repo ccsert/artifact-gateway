@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestRawReplicationPublishesVerifiedTargetAsset(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte("replicated Raw content")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
@@ -47,18 +48,18 @@ func TestReplicationStartsQueuedPlansImmediately(t *testing.T) {
 	tests := []struct {
 		name   string
 		format repository.Format
-		start  func(context.Context, *repository.MemoryStore, *MemoryOCIObjectStore)
+		start  func(context.Context, *repository.MemoryStore, *objectstore.MemoryStore)
 	}{
-		{name: "Raw", format: repository.FormatRaw, start: func(ctx context.Context, store *repository.MemoryStore, objects *MemoryOCIObjectStore) {
+		{name: "Raw", format: repository.FormatRaw, start: func(ctx context.Context, store *repository.MemoryStore, objects *objectstore.MemoryStore) {
 			RawReplication{Store: store, Source: objects, Destination: objects}.Start(ctx, time.Hour)
 		}},
-		{name: "Maven", format: repository.FormatMaven, start: func(ctx context.Context, store *repository.MemoryStore, objects *MemoryOCIObjectStore) {
+		{name: "Maven", format: repository.FormatMaven, start: func(ctx context.Context, store *repository.MemoryStore, objects *objectstore.MemoryStore) {
 			MavenReplication{Store: store, Source: objects, Destination: objects}.Start(ctx, time.Hour)
 		}},
-		{name: "Conan", format: repository.FormatConan, start: func(ctx context.Context, store *repository.MemoryStore, objects *MemoryOCIObjectStore) {
+		{name: "Conan", format: repository.FormatConan, start: func(ctx context.Context, store *repository.MemoryStore, objects *objectstore.MemoryStore) {
 			ConanReplication{Store: store, Source: objects, Destination: objects}.Start(ctx, time.Hour)
 		}},
-		{name: "OCI", format: repository.FormatOCI, start: func(ctx context.Context, store *repository.MemoryStore, objects *MemoryOCIObjectStore) {
+		{name: "OCI", format: repository.FormatOCI, start: func(ctx context.Context, store *repository.MemoryStore, objects *objectstore.MemoryStore) {
 			OCIReplication{Store: store, Source: objects, Destination: objects}.Start(ctx, time.Hour)
 		}},
 	}
@@ -68,7 +69,7 @@ func TestReplicationStartsQueuedPlansImmediately(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			store := repository.NewMemoryStore()
-			objects := NewMemoryOCIObjectStore()
+			objects := objectstore.NewMemoryStore()
 			body := []byte("queued replication")
 			sum := sha256.Sum256(body)
 			digest := "sha256:" + hex.EncodeToString(sum[:])

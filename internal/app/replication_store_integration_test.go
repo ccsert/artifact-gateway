@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/replication"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -177,11 +178,11 @@ func TestPostgresRustFSReplicationStreamsLargeObjectAndRecoversCheckpointFailure
 		t.Fatal(err)
 	}
 	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	sourceObjects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "replication-source-"+suffix)
+	sourceObjects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "replication-source-"+suffix)
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetObjects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "replication-target-"+suffix)
+	targetObjects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "replication-target-"+suffix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +255,7 @@ func TestPostgresReplicationPublicationIsFencedAfterLeaseExpiry(t *testing.T) {
 	}
 	body := []byte("lease-fenced replication publication")
 	digest := sha256DigestForIntegration(body)
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, "source/fenced", body); err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +343,7 @@ func TestPostgresReplicationHeartbeatsAcrossObjectLockAndFencesPublication(t *te
 	}
 	body := []byte("heartbeat and publication fence")
 	digest := sha256DigestForIntegration(body)
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, "source/heartbeat", body); err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +464,7 @@ func TestPostgresRawReplicationManagementAPI(t *testing.T) {
 	if _, err = store.PutRawAsset(ctx, asset); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if err = objects.Put(ctx, asset.ObjectKey, body); err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +476,7 @@ func TestPostgresRawReplicationManagementAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+source.ID+"/replications", strings.NewReader(`{"targetRepositoryId":"`+target.ID+`","coordinate":"`+asset.Path+`","digest":"`+digest+`"}`))
 	authorize(req, authenticator.IssueToken("replicator"))
 	req.Header.Set("Idempotency-Key", "postgres-replication")
@@ -519,7 +520,7 @@ func TestPostgresRustFSRawPromotionRetainsSharedObject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "promotion-raw-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "promotion-raw-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -570,7 +571,7 @@ func TestPostgresRustFSRawReplicationPublishesTargetAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "replication-raw-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "replication-raw-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}

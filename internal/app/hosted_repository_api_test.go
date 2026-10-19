@@ -20,7 +20,7 @@ import (
 
 func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"releases","format":"maven"}`))
 	authorize(request, "admin-secret")
 	request.Header.Set("Idempotency-Key", "create-releases")
@@ -69,7 +69,7 @@ func TestRepositoryCatalogFollowsReadScopeWithoutGrantingManagement(t *testing.T
 	}
 	auth := testAuthenticator()
 	auth.RepositoryReaders = map[string][]string{}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	request := func(token, path string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -125,7 +125,7 @@ func TestRepositoryCatalogFollowsReadScopeWithoutGrantingManagement(t *testing.T
 
 func TestMavenStrictPublicationIsAnOptInRepositorySetting(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	create := func(body, key string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
@@ -212,12 +212,12 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	if _, err = store.ReplaceRepositoryGrants(context.Background(), conan.ID, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
 		ArtifactScanner: scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) {
 			return scanning.Report{}, nil
 		}),
 		ArtifactScannerFormats: []repository.Format{repository.FormatOCI, repository.FormatConan, repository.FormatMaven, repository.FormatRaw, repository.FormatGo, repository.FormatNPM},
-	}, store, TestAdapter{}, authenticator)
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+conan.ID+"/capabilities", nil)
 	authorize(request, authenticator.IssueToken("reader"))
 	response := httptest.NewRecorder()
@@ -264,7 +264,7 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 
 func TestHostedRepositoryManagementCreatesProxyRepository(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	create := func(body, key string) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
@@ -332,7 +332,7 @@ func TestHostedRepositoryManagementCreatesProxyRepository(t *testing.T) {
 }
 
 func TestHostedRepositoryManagementRejectsInvalidProxyShapes(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	create := func(body string) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
@@ -384,7 +384,7 @@ func TestRepositoryListIsScopedToReadableRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	listNames := func(token string) []string {
 		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories", nil)
 		authorize(request, token)
@@ -459,7 +459,7 @@ func TestMemberRoleCarriesNoImplicitRepositoryAccess(t *testing.T) {
 		}
 	}
 	authenticator := testAuthenticatorWithUsers(store)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	status := func(token, path string) int {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		authorize(request, token)
@@ -510,7 +510,7 @@ func TestMemberRoleCarriesNoImplicitRepositoryAccess(t *testing.T) {
 }
 
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	denied := httptest.NewRecorder()
 	handler.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, "/api/v2/repositories", nil))
 	if denied.Code != http.StatusUnauthorized {
@@ -575,7 +575,7 @@ func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing
 
 func TestHostedRepositoryIdempotencyAndPagination(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	create := func(name, key string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"`+name+`","format":"raw"}`))
 		authorize(r, "admin-secret")
@@ -635,7 +635,7 @@ func TestHostedRepositoryIdempotencyAndPagination(t *testing.T) {
 func TestNativeRepositoryGuardAllowsAnonymousReadPolicyAndDeniesDisabledProtocols(t *testing.T) {
 	store := repository.NewMemoryStore()
 	enableAnonymousAccess(t, store)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, format := range []repository.Format{repository.FormatRaw, repository.FormatOCI, repository.FormatMaven} {
 		repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: string(format) + "-native", Format: format, AnonymousRead: true})
 		if err != nil {
@@ -686,7 +686,7 @@ func TestRepositoryManagementUpdatesProxyConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	patch := func(version, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+repo.ID, strings.NewReader(body))
@@ -741,7 +741,7 @@ func TestRepositoryManagementUpdatesProxyConfiguration(t *testing.T) {
 
 func TestRepositoryManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	create := func(body, key string) repository.HostedRepository {
 		t.Helper()
@@ -800,7 +800,7 @@ func TestRepositoryManagementCancelsReplicationPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	cancel := func(repoID, planID string) int {
 		req := httptest.NewRequest(http.MethodDelete, "/api/v2/repositories/"+repoID+"/replications/"+planID, nil)
@@ -837,7 +837,7 @@ func TestRepositoryManagementCancelsReplicationPlan(t *testing.T) {
 
 func TestUserManagementLoginAndSessionAuth(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	createUser := func(body string) int {
 		req := httptest.NewRequest(http.MethodPost, "/api/v2/users", strings.NewReader(body))

@@ -31,7 +31,7 @@ func TestContainsArtifactSearchFindsPathFragment(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	for name, path := range map[string]string{
 		"global":     "/api/v2/artifact-search?q=ALPHA&match=contains",
 		"repository": "/api/v2/repositories/" + repo.ID + "/artifact-search?q=ALPHA&match=contains",
@@ -86,7 +86,7 @@ func verifyContainsSearchBoundaries(t *testing.T, store GatewayStore) {
 		t.Fatal(err)
 	}
 	auth := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	call := func(t *testing.T, endpoint, subject string, values url.Values) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest("GET", endpoint+"?"+values.Encode(), nil)
@@ -289,7 +289,7 @@ func verifyPyPILiteralMatchAndLegacyNormalization(t *testing.T, store GatewaySto
 	if _, err = store.PublishPyPIFile(ctx, repository.PyPIFile{RepositoryID: repo.ID, Project: "my-alpha", Version: "1.0.0", Filename: "my_alpha-1.0.0.tar.gz", FileType: "sdist", PythonVersion: "source", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(repo.ID))), ObjectKey: "pypi-match/" + repo.ID, Size: 7}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, tc := range []struct {
 		match, q string
 		want     int
@@ -332,7 +332,7 @@ func (s *searchDeadlineStore) FindActiveAPIKeyByHash(ctx context.Context, hash s
 
 func TestContainsSearchBudgetPrecedesRepositoryAndAnonymousReads(t *testing.T) {
 	store := &searchDeadlineStore{GatewayStore: repository.NewMemoryStore()}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, anonymous := range []bool{false, true} {
 		for _, match := range []string{"prefix", "contains"} {
 			store.deadlines = nil
@@ -360,7 +360,7 @@ func TestContainsSearchBudgetIncludesCredentialReads(t *testing.T) {
 	store := &searchDeadlineStore{GatewayStore: repository.NewMemoryStore()}
 	auth := testAuthenticator()
 	auth.APIKeys = store
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	req := httptest.NewRequest("GET", "/api/v2/artifact-search?q=alpha&match=contains", nil)
 	authorize(req, "unknown-api-key")
 	res := httptest.NewRecorder()

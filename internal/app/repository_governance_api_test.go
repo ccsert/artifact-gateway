@@ -10,6 +10,7 @@ import (
 	"time"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -22,7 +23,7 @@ func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
 		AuthorizationSource: "repository_grants", AuthorizationReason: "scope_not_granted",
 		Evidence: map[string]string{"policyVersion": "v2"},
 	}}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/audits?group=releases&repository=releases&limit=1", nil)
 	authorize(request, "admin-secret")
@@ -68,7 +69,7 @@ func TestHostedGroupManagementLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	create := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(`{"name":"maven-group","format":"maven","members":[{"repositoryId":"`+second.ID+`","position":1},{"repositoryId":"`+first.ID+`","position":0}]}`))
 	authorize(create, "admin-secret")
 	create.Header.Set("Idempotency-Key", "group-create")
@@ -135,7 +136,7 @@ func TestRepositoryGrantRevocationAppliesToTheNextRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	// One token, minted before the revocation and reused after it: a caller
 	// that never authenticates again has to lose access on its next request.
 	token := authenticator.IssueToken("build-agent")
@@ -172,7 +173,7 @@ func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	list := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/grants", nil)
 	authorize(list, "admin-secret")
 	listed := httptest.NewRecorder()
@@ -244,7 +245,7 @@ func TestRepositoryConsoleAggregatesRequireAdminAndReturnCrossRepositoryData(t *
 		t.Fatal(err)
 	}
 
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(path, token string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		if token != "" {
@@ -298,7 +299,7 @@ func TestRepositoryManagementUsesScopedGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(method, path, actor, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, authenticator.IssueToken(actor))
@@ -350,7 +351,7 @@ func TestRepositoryGrantReplacementWritesAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants",
 		strings.NewReader(`[{"principal":"user:alice","scopes":["repositories:read"],"resourcePrefix":"stable"}]`))
 	request.Header.Set("If-Match", "1")
@@ -383,7 +384,7 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
 	authorize(request, authenticator.IssueToken("reader"))
@@ -468,7 +469,7 @@ func TestRepositoryEffectiveAccessRevealsRepositoriesToIntelligenceCredentials(t
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
 	authorize(request, authenticator.IssueToken("scanner"))
 	response := httptest.NewRecorder()
@@ -490,7 +491,7 @@ func TestRepositoryEffectiveAccessSupportsAdministratorSimulation(t *testing.T) 
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=build-agent&resource=releases%2Fapp.bin", nil)
 	authorize(request, "admin-secret")
@@ -555,7 +556,7 @@ func TestRepositoryEffectiveAccessSupportsAdministratorSimulation(t *testing.T) 
 
 func TestCurrentIdentityReportsSafeCredentialMetadata(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil)
 	authorize(request, "admin-secret")
@@ -579,7 +580,7 @@ func TestAnonymousRepositoryBrowseAllowsReadOnlyQueries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
 	put := httptest.NewRequest(http.MethodPut, "/v2/public-oci/app/manifests/latest", strings.NewReader(string(manifest)))
 	put.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
@@ -615,7 +616,7 @@ func TestGroupManagementAnonymousReadPolicyDefaultsAndUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	create := httptest.NewRequest(http.MethodPost, "/api/v2/groups", strings.NewReader(`{"name":"group-policy","format":"raw","members":[{"repositoryId":"`+repo.ID+`","position":0}]}`))
 	authorize(create, "admin-secret")
@@ -667,7 +668,7 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 	// An explicitly configured reader policy keeps the permissive unconfigured
 	// fallback from masking whether a credential level grants anything.
 	authenticator.RepositoryReaders = map[string][]string{}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 
 	createKey := func(t *testing.T, roles string) string {
 		t.Helper()

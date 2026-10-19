@@ -27,8 +27,8 @@ func TestNativeCargoHostedPublishSparseIndexAndDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects}, store, TestAdapter{}, testAuthenticator()))
+	objects := objectstore.NewMemoryStore()
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}}))
 	defer server.Close()
 	request := func(method, path, token string, body []byte, headers map[string]string) *http.Response {
 		t.Helper()
@@ -224,7 +224,7 @@ func TestNativeCargoMaintenanceReclaimsUncommittedObject(t *testing.T) {
 	if _, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "cargo-repo", Name: "cargo-repo", Format: repository.FormatCargo}); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	body := []byte("uncommitted Cargo crate bytes")
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
@@ -257,7 +257,7 @@ func TestNativeCargoBuildMetadataDownloadAndCollision(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator()))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectstore.NewMemoryStore()}}))
 	defer server.Close()
 	publish := func(version string) int {
 		t.Helper()

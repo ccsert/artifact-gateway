@@ -42,7 +42,7 @@ func TestPostgresAdministratorEmailReopensAndDeliversActualTLSMIME(t *testing.T)
 	}
 	f := testsupport.NewSMTPFixture(t, true)
 	cfg := emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "gateway@example.test", ApprovedIPs: []string{"192.0.2.10"}, CAFile: f.CAFile, ConsoleOrigin: "https://console.example.invalid"}
-	handler := NewGatewayHandler(Dependencies{Email: cfg}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: cfg}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, body, match, key string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, "admin-secret")
@@ -107,7 +107,7 @@ func TestPostgresAdministratorEmailReopensAndDeliversActualTLSMIME(t *testing.T)
 	if err = reopened.FinishEmailDelivery(context.Background(), delivery.ID, claim.LeaseToken, repository.EmailAttemptResult{}); err != repository.ErrVersionConflict {
 		t.Fatal("old worker completed a restarted lease")
 	}
-	handler = NewGatewayHandler(Dependencies{Email: cfg}, reopened, TestAdapter{}, testAuthenticator())
+	handler = newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Email: cfg}, Store: reopened, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	got := request("GET", "/api/v2/email-deliveries/"+delivery.ID, "", "", "")
 	if got.Code != 200 {
 		t.Fatal("delivery unavailable")

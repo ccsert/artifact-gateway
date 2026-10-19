@@ -16,12 +16,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 type failNthGoPutStore struct {
-	*MemoryOCIObjectStore
+	*objectstore.MemoryStore
 	failAt int
 	puts   int
 }
@@ -42,7 +43,7 @@ func (s *failNthGoPutStore) PutVerifiedReader(ctx context.Context, key string, r
 	if s.puts == s.failAt {
 		return errors.New("injected Go object write failure")
 	}
-	return s.MemoryOCIObjectStore.PutVerifiedReader(ctx, key, reader, size, digest)
+	return s.MemoryStore.PutVerifiedReader(ctx, key, reader, size, digest)
 }
 
 func TestNativeGoProxyCachesModuleAndServesOffline(t *testing.T) {
@@ -84,8 +85,8 @@ func TestNativeGoProxyCachesModuleAndServesOffline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	get := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -141,10 +142,7 @@ func TestNativeGoHostedPublishesCanonicalZipAndServesModule(t *testing.T) {
 		t.Fatal(err)
 	}
 	enablePublicationScan(t, store, repo.ID)
-	handler := NewGatewayHandler(
-		publicationScanDependencies(Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, repository.FormatGo),
-		store, TestAdapter{}, testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatGo), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}})
 	base := "/go/" + repo.Name + "/" + escapedModule
 	request := func(method, suffix string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
@@ -234,10 +232,7 @@ func TestNativeGoHostedTombstonesAndRestoresModuleVersion(t *testing.T) {
 	}
 	enablePublicationScan(t, store, repo.ID)
 	grantGoPublisher(t, store, repo.ID)
-	handler := NewGatewayHandler(
-		publicationScanDependencies(Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, repository.FormatGo),
-		store, TestAdapter{}, testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatGo), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}})
 	base := "/go/" + repo.Name + "/" + escapedModule
 	protocolRequest := func(method, suffix string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
@@ -340,8 +335,8 @@ func TestNativeGoHostedDoesNotWriteBeforeDurableReclaimIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	grantGoPublisher(t, store.MemoryStore, repo.ID)
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}})
 	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
 		"go.mod": "module " + modulePath + "\n", "durable.go": "package durable\n",
 	})
@@ -374,8 +369,8 @@ func TestNativeGoHostedRejectsQuotaBeforeWritingObjects(t *testing.T) {
 	if _, err = store.ReplaceRepositoryCapacityQuota(context.Background(), repo.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}})
 	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
 		"go.mod": "module " + modulePath + "\n", "quota.go": "package quota\n",
 	})
@@ -405,8 +400,8 @@ func TestNativeGoHostedCleansObjectsAfterPartialWriteFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	grantGoPublisher(t, store, repo.ID)
-	objects := &failNthGoPutStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), failAt: 2}
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	objects := &failNthGoPutStore{MemoryStore: objectstore.NewMemoryStore(), failAt: 2}
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}})
 	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
 		"go.mod": "module " + modulePath + "\n", "failure.go": "package failure\n",
 	})
@@ -444,7 +439,7 @@ func TestNativeGoLatestSelectsHighestSemanticVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/go/"+repo.Name+"/"+modulePath+"/@latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -479,7 +474,7 @@ func TestNativeGoProxyHonorsAnonymousPolicyAndRepositoryGrantPrefix(t *testing.T
 	}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := func(repositoryName, modulePath, token string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, "/go/"+repositoryName+"/"+modulePath+"/@v/list", nil)
@@ -520,7 +515,7 @@ func TestNativeGoListTreatsGoneAsNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/go/"+repo.Name+"/example.com/missing/module/@v/list", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -653,8 +648,8 @@ func TestNativeGoGroupMergesVersionsAndResolvesMemberAssets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: firstUpstream.Client()})
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}, Upstream: UpstreamClient{HTTPClient: firstUpstream.Client()}})
 	get := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -715,8 +710,8 @@ func TestNativeGoGroupPrefersHostedModuleOverProxyConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objects}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	hostedMod := []byte("module " + modulePath + "\n\ngo 1.26\n")
 	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
 		"go.mod": string(hostedMod), "priority.go": "package priority\n",
@@ -786,7 +781,7 @@ func TestNativeGoGroupFiltersMembersByRepositoryGrant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: allowedUpstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: allowedUpstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/go/"+group.Name+"/example.com/team/widget/@v/list", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -842,10 +837,7 @@ func TestNativeGoRealClientDownloadsThroughProxyAndOfflineCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(NewGatewayHandler(
-		Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store,
-		TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()},
-	))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}}))
 	defer server.Close()
 	temporary := t.TempDir()
 	t.Cleanup(func() {
@@ -912,10 +904,7 @@ func TestNativeGoRealClientDownloadsHostedPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	grantGoPublisher(t, store, repo.ID)
-	server := httptest.NewServer(NewGatewayHandler(
-		Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store,
-		TestAdapter{}, testAuthenticator(),
-	))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}}))
 	defer server.Close()
 	publish, err := http.NewRequest(http.MethodPut, server.URL+"/repository/"+repo.Name+"/"+version+".zip", bytes.NewReader(archive))
 	if err != nil {

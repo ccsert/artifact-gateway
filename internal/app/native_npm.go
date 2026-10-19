@@ -34,7 +34,7 @@ type nativeNPMHandler struct {
 	repos              repository.HostedRepositoryStore
 	readPolicies       repository.RepositoryQuarantineReadPolicyStore
 	quarantine         repository.ArtifactQuarantineStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
 	audit              repository.Store
@@ -103,10 +103,7 @@ type npmAuditTarget struct {
 	MemberName string
 }
 
-func newNativeNPMHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeNPMHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativeNPMHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeNPMHandler {
 	return nativeNPMHandler{
 		store: store, repos: store, readPolicies: store, quarantine: store, objects: objects, auth: auth, audit: store,
 		proxy: UpstreamClient{}, protection: newNPMProxyProtection(nil, 0), metadataTTL: npmMetadataTTL, negativeTTL: 10 * time.Minute,

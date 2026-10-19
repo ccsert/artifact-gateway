@@ -3,7 +3,7 @@ package app
 import "context"
 
 type blockingLifecycleDeleteStore struct {
-	OCIObjectStore
+	ObjectStore
 	entered chan struct{}
 	release chan struct{}
 }
@@ -14,6 +14,6 @@ func (s blockingLifecycleDeleteStore) Delete(ctx context.Context, key string) er
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-s.release:
-		return s.OCIObjectStore.Delete(ctx, key)
+		return s.ObjectStore.Delete(ctx, key)
 	}
 }

@@ -24,7 +24,7 @@ import (
 )
 
 type blockingGoDeleteObjectStore struct {
-	OCIObjectStore
+	ObjectStore
 	once    sync.Once
 	entered chan string
 	release chan struct{}
@@ -134,7 +134,7 @@ func (s *blockingGoDeleteObjectStore) Delete(ctx context.Context, key string) er
 	if waitErr != nil {
 		return waitErr
 	}
-	return s.OCIObjectStore.Delete(ctx, key)
+	return s.ObjectStore.Delete(ctx, key)
 }
 
 func TestPostgresRustFSGoProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T) {
@@ -157,14 +157,14 @@ func TestPostgresRustFSGoProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T)
 	}
 	defer storeB.Close()
 	bucket := "native-go-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,15 +205,9 @@ func TestPostgresRustFSGoProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(
-		Dependencies{NativeGoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectsA}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(
-		Dependencies{NativeGoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectsB}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}}))
 	defer serverB.Close()
 
 	basePath := "/go/" + repo.Name + "/" + escapedModule
@@ -319,14 +313,14 @@ func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *test
 	}
 	defer storeB.Close()
 	bucket := "native-go-hosted-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,9 +332,9 @@ func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *test
 		t.Fatal(err)
 	}
 	grantGoPublisher(t, storeA, repo.ID)
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectsB}}))
 	defer serverB.Close()
 
 	const (
@@ -467,14 +461,14 @@ func TestPostgresRustFSGoPromotionAndReplicationPublishCompleteSnapshotsAcrossGa
 	}
 	defer storeB.Close()
 	bucket := "native-go-distribution-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +595,7 @@ func TestPostgresRustFSGoPromotionAndReplicationPublishCompleteSnapshotsAcrossGa
 		}
 	}
 
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectsA}}))
 	defer server.Close()
 	basePath := "/go/" + replicatedTarget.Name + "/" + escapedModule + "/@v/" + version
 	for suffix, expected := range map[string][]byte{".info": bodies["info"], ".mod": bodies["mod"], ".zip": bodies["zip"]} {
@@ -823,14 +817,14 @@ func TestPostgresRustFSGoHostedLifecycleIsSerializedAcrossGatewayInstances(t *te
 	}
 	defer storeB.Close()
 	bucket := "native-go-lifecycle-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -842,9 +836,9 @@ func TestPostgresRustFSGoHostedLifecycleIsSerializedAcrossGatewayInstances(t *te
 		t.Fatal(err)
 	}
 	grantGoPublisher(t, storeA, repo.ID)
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectsB}}))
 	defer serverB.Close()
 
 	const (
@@ -1017,7 +1011,7 @@ func TestPostgresRustFSGoHostedLifecycleIsSerializedAcrossGatewayInstances(t *te
 	if _, err = storeA.TombstoneGoModuleVersion(ctx, repo.ID, modulePath, version); err != nil {
 		t.Fatal(err)
 	}
-	blockingObjects := &blockingGoDeleteObjectStore{OCIObjectStore: objectsB, entered: make(chan string, 1), release: make(chan struct{})}
+	blockingObjects := &blockingGoDeleteObjectStore{ObjectStore: objectsB, entered: make(chan string, 1), release: make(chan struct{})}
 	maintenance := NativeGoMaintenance{Store: storeB, Objects: blockingObjects}
 	if err = maintenance.EnqueueReclaimJobs(ctx, time.Now().UTC().Add(time.Hour), 10); err != nil {
 		t.Fatal(err)
@@ -1165,7 +1159,7 @@ func TestPostgresRustFSGoReclaimSerializesSharedTombstoneAndKeepsVisibleObject(t
 	}
 	defer storeB.Close()
 	bucket := "go-shared-lock-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1284,7 +1278,7 @@ func TestPostgresRustFSGoReclaimFailsRestoreClosedAfterCollectedMarkFailure(t *t
 	}
 	defer storeB.Close()
 	bucket := "go-collecting-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}

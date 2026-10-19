@@ -28,7 +28,7 @@ type countingDeleteObjectStore struct {
 }
 
 type failingLegacyIndexStore struct {
-	OCIObjectStore
+	ObjectStore
 	key string
 	err error
 }
@@ -37,7 +37,7 @@ func (s failingLegacyIndexStore) Get(ctx context.Context, key string) ([]byte, e
 	if key == s.key {
 		return nil, s.err
 	}
-	return s.OCIObjectStore.Get(ctx, key)
+	return s.ObjectStore.Get(ctx, key)
 }
 
 func (s *countingDeleteObjectStore) Delete(ctx context.Context, key string) error {
@@ -116,7 +116,7 @@ type integrationOCIResponse struct {
 // rawPublicationGateStore pauses a Raw index write after its object has been
 // staged, making the store/collector race deterministic across cache instances.
 type rawPublicationGateStore struct {
-	OCIObjectStore
+	ObjectStore
 	indexKey     string
 	objectStored chan struct{}
 	allowIndex   chan struct{}
@@ -125,7 +125,7 @@ type rawPublicationGateStore struct {
 
 func (s *rawPublicationGateStore) Put(ctx context.Context, key string, value []byte) error {
 	if strings.HasPrefix(key, "raw/objects/") {
-		if err := s.OCIObjectStore.Put(ctx, key, value); err != nil {
+		if err := s.ObjectStore.Put(ctx, key, value); err != nil {
 			return err
 		}
 		s.once.Do(func() { close(s.objectStored) })
@@ -138,11 +138,11 @@ func (s *rawPublicationGateStore) Put(ctx context.Context, key string, value []b
 			return ctx.Err()
 		}
 	}
-	return s.OCIObjectStore.Put(ctx, key, value)
+	return s.ObjectStore.Put(ctx, key, value)
 }
 
 func (s *rawPublicationGateStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
-	if err := s.OCIObjectStore.PutVerifiedReader(ctx, key, value, size, digest); err != nil {
+	if err := s.ObjectStore.PutVerifiedReader(ctx, key, value, size, digest); err != nil {
 		return err
 	}
 	if strings.HasPrefix(key, "raw/objects/") {
@@ -188,7 +188,7 @@ func TestPostgresCacheControlStoreKeepsAllFormatIndexesOutOfS3(t *testing.T) {
 	}
 
 	bucket := fmt.Sprintf("cache-control-%d", time.Now().UnixNano())
-	objects, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objects, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestPostgresCacheControlStoreReadsAndMigratesLegacyS3IndexesWithoutDeleting
 
 	ctx := context.Background()
 	bucket := fmt.Sprintf("legacy-cache-control-%d", time.Now().UnixNano())
-	objects, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objects, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestPostgresCacheControlStoreReadsAndMigratesLegacyS3IndexesWithoutDeleting
 
 	infrastructureErr := errors.New("RustFS authorization failed")
 	failingKey := prefix + "infrastructure-error.json"
-	control.objects = failingLegacyIndexStore{OCIObjectStore: objects, key: failingKey, err: infrastructureErr}
+	control.objects = failingLegacyIndexStore{ObjectStore: objects, key: failingKey, err: infrastructureErr}
 	if _, err := control.Get(ctx, failingKey); !errors.Is(err, infrastructureErr) {
 		t.Fatalf("legacy S3 infrastructure error was reduced to a cache miss: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestPostgresNativeOCIReclaimLeasePreventsDuplicateDeletion(t *testing.T) {
 	if _, err = storeA.CreateOCIUpload(ctx, upload); err != nil {
 		t.Fatal(err)
 	}
-	objects := &countingDeleteObjectStore{Store: NewMemoryOCIObjectStore()}
+	objects := &countingDeleteObjectStore{Store: objectstore.NewMemoryStore()}
 	if err = objects.Put(ctx, upload.ObjectKey, []byte("partial")); err != nil {
 		t.Fatal(err)
 	}
@@ -455,14 +455,14 @@ func TestOCIProxyCacheWithPostgresAndS3AcrossGatewayInstances(t *testing.T) {
 	}
 
 	const bucket = "oci-cache-integration"
-	storeA, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	storeA, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := storeA.EnsureBucket(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	storeB, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	storeB, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -650,14 +650,14 @@ func TestRawCachePublicationAndCollectionAcrossGatewayInstances(t *testing.T) {
 	}
 
 	const bucket = "oci-cache-integration"
-	storeA, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	storeA, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := storeA.EnsureBucket(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	storeB, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	storeB, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -665,10 +665,10 @@ func TestRawCachePublicationAndCollectionAcrossGatewayInstances(t *testing.T) {
 	unique := fmt.Sprintf("raw-publication-%d", time.Now().UnixNano())
 	indexKey := NewDefaultRawCache(storeA, nil).Key(unique, "artifact", "proxy", "https://proxy.example")
 	gatedStore := &rawPublicationGateStore{
-		OCIObjectStore: storeA,
-		indexKey:       indexKey,
-		objectStored:   make(chan struct{}),
-		allowIndex:     make(chan struct{}),
+		ObjectStore:  storeA,
+		indexKey:     indexKey,
+		objectStored: make(chan struct{}),
+		allowIndex:   make(chan struct{}),
 	}
 	coordinatorA, err := NewPostgresCacheCoordinator(databaseURL)
 	if err != nil {

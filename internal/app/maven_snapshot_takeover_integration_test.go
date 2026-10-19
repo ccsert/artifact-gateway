@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
 	testsupport "github.com/ccsert/artifact-gateway/internal/testsupport/snapshotfixture"
@@ -52,7 +53,7 @@ func TestPostgresSnapshotCompletionExpiresWhileWaitingForQuota(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = p.Close() }()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if _, err = snapshotimport.Run(ctx, p, store, objects, repo.ID, "target", "operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, p, repo.ID, "target", "operator")); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +312,7 @@ func TestPostgresSnapshotTakeoverSerializesWithSourceTombstone(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = p.Close() }()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if _, err = snapshotimport.Run(ctx, p, store, objects, repo.ID, "target", "operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, p, repo.ID, "target", "operator")); err != nil {
 		t.Fatal(err)
 	}

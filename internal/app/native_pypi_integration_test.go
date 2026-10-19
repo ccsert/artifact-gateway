@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -41,14 +42,14 @@ func TestPostgresRustFSPyPIPublicationLifecycleAcrossGatewayInstances(t *testing
 	}
 	defer storeB.Close()
 	bucket := "native-pypi-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,9 +57,9 @@ func TestPostgresRustFSPyPIPublicationLifecycleAcrossGatewayInstances(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativePyPIObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativePyPIObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objectsB}}))
 	defer serverB.Close()
 	wheel := pypiFixtureWheel(t, "postgres_widget", "1.2.3")
 	sum := sha256.Sum256(wheel)
@@ -140,7 +141,7 @@ func TestPostgresRustFSPyPIPublicationLifecycleAcrossGatewayInstances(t *testing
 	if _, err = db.ExecContext(ctx, `UPDATE native_pypi_files SET deleted_at=now()-interval '25 hours' WHERE repository_id::text=$1 AND project=$2 AND version=$3`, repo.ID, "postgres-widget", "1.2.3"); err != nil {
 		t.Fatal(err)
 	}
-	blocking := blockingLifecycleDeleteStore{OCIObjectStore: objectsA, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	blocking := blockingLifecycleDeleteStore{ObjectStore: objectsA, entered: make(chan struct{}, 1), release: make(chan struct{})}
 	maintenance := NativePyPIMaintenance{Store: storeA, Objects: blocking}
 	if err = maintenance.EnqueueReclaimJobs(ctx, time.Now().UTC().Add(-24*time.Hour), 10); err != nil {
 		t.Fatalf("enqueue PyPI reclaim with repository scope: %v", err)

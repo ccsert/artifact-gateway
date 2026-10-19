@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -44,7 +45,7 @@ func TestConanProxyTLSE2EPinsVerifiedAddressAndUsesPersistentCache(t *testing.T)
 	endpoint := "https://example.com:" + port
 	member := repository.Member{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, AllowedHosts: []string{"example.com"}}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	first := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
 	second := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
@@ -124,7 +125,7 @@ func TestConanProxyAllowlistIsolatedPerMember(t *testing.T) {
 	client := &conanAnonymousClient{}
 	for group, want := range map[string]int{"allowed-group": http.StatusOK, "denied-group": http.StatusForbidden} {
 		w := httptest.NewRecorder()
-		ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache([]string{"shared.example"})}.ServeHTTP(w, conanRequest("/conan/v2/"+group+"/conans/pkg/1.0/user/stable/revisions"))
+		ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore())}.ServeHTTP(w, conanRequest("/conan/v2/"+group+"/conans/pkg/1.0/user/stable/revisions"))
 		if w.Code != want {
 			t.Fatalf("%s status=%d", group, w.Code)
 		}

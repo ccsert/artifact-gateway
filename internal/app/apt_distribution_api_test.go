@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -19,7 +20,7 @@ import (
 func TestAPTDistributionManagementWorkflow(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	create := func() repository.HostedRepository {
 		v, e := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "apt-api-" + uuid.NewString(), Format: repository.FormatAPT, Type: repository.RepositoryTypeHosted})
 		if e != nil {
@@ -41,7 +42,7 @@ func TestAPTDistributionManagementWorkflow(t *testing.T) {
 		t.Fatal(e)
 	}
 	publisher := aptpublication.NewPublisher(store, objects, aptManagementSigner{})
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects, APTSigner: aptManagementSigner{}}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{APTSigner: aptManagementSigner{}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objects}})
 	call := func(method, path, body, key, token string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, token)

@@ -37,12 +37,12 @@ func newArtifactScanAPIFixture(t *testing.T) artifactScanAPIFixture {
 	if _, err = store.ReplaceRepositorySecurityPolicy(ctx, repo.ID, policy, policy.Version); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
 		ArtifactScanner: scanning.ScannerFunc(func(context.Context, scanning.Artifact) (scanning.Report, error) {
 			return scanning.Report{}, nil
 		}),
 		ArtifactScannerFormats: []repository.Format{repository.FormatRaw},
-	}, store, TestAdapter{}, Authenticator{AdminToken: "admin", AdminActor: "operator"})
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "admin", AdminActor: "operator"}})
 	return artifactScanAPIFixture{ctx: ctx, store: store, repo: repo, handler: handler}
 }
 

@@ -12,19 +12,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 type interruptedCargoCopyStore struct {
-	OCIObjectStore
+	ObjectStore
 	interrupt bool
 }
 
 func (s *interruptedCargoCopyStore) PutReader(ctx context.Context, key string, reader io.Reader, size int64) error {
 	if !s.interrupt {
-		return s.OCIObjectStore.PutReader(ctx, key, reader, size)
+		return s.ObjectStore.PutReader(ctx, key, reader, size)
 	}
 	s.interrupt = false
 	partial, err := io.ReadAll(io.LimitReader(reader, size/2))
@@ -38,19 +39,19 @@ func (s *interruptedCargoCopyStore) PutReader(ctx context.Context, key string, r
 }
 
 type interruptedCargoAdmissionStore struct {
-	OCIObjectStore
+	ObjectStore
 	stats int
 }
 
-func (s *interruptedCargoAdmissionStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
+func (s *interruptedCargoAdmissionStore) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 	s.stats++
 	if s.stats == 2 {
-		return OCIObjectInfo{}, errors.New("interrupted before Cargo metadata commit")
+		return ObjectInfo{}, errors.New("interrupted before Cargo metadata commit")
 	}
-	return s.OCIObjectStore.Stat(ctx, key)
+	return s.ObjectStore.Stat(ctx, key)
 }
 
-func publishCargoDistributionFixture(t *testing.T, store *repository.MemoryStore, objects OCIObjectStore, repo repository.HostedRepository, name, version, marker string) repository.CargoPublication {
+func publishCargoDistributionFixture(t *testing.T, store *repository.MemoryStore, objects ObjectStore, repo repository.HostedRepository, name, version, marker string) repository.CargoPublication {
 	t.Helper()
 	payload, _ := cargoC0PublishFixture(t, name, version, name, marker)
 	if marker == "other" {
@@ -61,7 +62,7 @@ func publishCargoDistributionFixture(t *testing.T, store *repository.MemoryStore
 	r.Host = "localhost:8080"
 	authorize(r, "admin-secret")
 	w := httptest.NewRecorder()
-	NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects}, store, TestAdapter{}, testAuthenticator()).ServeHTTP(w, r)
+	newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}}).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
 		t.Fatalf("publish Cargo fixture=%d %s", w.Code, w.Body.String())
 	}
@@ -75,7 +76,7 @@ func publishCargoDistributionFixture(t *testing.T, store *repository.MemoryStore
 func TestCargoPromotionPreservesImmutableIdentityAndYank(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	source, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-promote-source", Format: repository.FormatCargo})
 	target, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-promote-target", Format: repository.FormatCargo})
 	other, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-promote-other", Format: repository.FormatCargo})
@@ -121,8 +122,8 @@ func TestCargoPromotionPreservesImmutableIdentityAndYank(t *testing.T) {
 func TestCargoReplicationPublishesOnlyAfterVerifiedObject(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	sourceObjects := NewMemoryOCIObjectStore()
-	destinationObjects := NewMemoryOCIObjectStore()
+	sourceObjects := objectstore.NewMemoryStore()
+	destinationObjects := objectstore.NewMemoryStore()
 	source, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-repl-source", Format: repository.FormatCargo})
 	target, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-repl-target", Format: repository.FormatCargo})
 	publication := publishCargoDistributionFixture(t, store, sourceObjects, source, "demo", "2.0.0", "source")
@@ -164,20 +165,20 @@ func TestCargoReplicationPublishesOnlyAfterVerifiedObject(t *testing.T) {
 func TestCargoReplicationRecoversCopyAndAdmissionInterruptions(t *testing.T) {
 	for _, scenario := range []struct {
 		name string
-		wrap func(OCIObjectStore) OCIObjectStore
+		wrap func(ObjectStore) ObjectStore
 	}{
-		{"copy", func(store OCIObjectStore) OCIObjectStore {
-			return &interruptedCargoCopyStore{OCIObjectStore: store, interrupt: true}
+		{"copy", func(store ObjectStore) ObjectStore {
+			return &interruptedCargoCopyStore{ObjectStore: store, interrupt: true}
 		}},
-		{"admission", func(store OCIObjectStore) OCIObjectStore {
-			return &interruptedCargoAdmissionStore{OCIObjectStore: store}
+		{"admission", func(store ObjectStore) ObjectStore {
+			return &interruptedCargoAdmissionStore{ObjectStore: store}
 		}},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			ctx := context.Background()
 			store := repository.NewMemoryStore()
-			sourceObjects := NewMemoryOCIObjectStore()
-			targetObjects := NewMemoryOCIObjectStore()
+			sourceObjects := objectstore.NewMemoryStore()
+			targetObjects := objectstore.NewMemoryStore()
 			source, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-fault-source", Format: repository.FormatCargo})
 			target, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-fault-target", Format: repository.FormatCargo})
 			publication := publishCargoDistributionFixture(t, store, sourceObjects, source, "fault", "1.0.0", "source")
@@ -218,12 +219,12 @@ func TestCargoReplicationRecoversCopyAndAdmissionInterruptions(t *testing.T) {
 func TestCargoDistributionManagementAPI(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	source, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-dist-api-source", Format: repository.FormatCargo})
 	promotionTarget, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-dist-api-promo", Format: repository.FormatCargo})
 	replicationTarget, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-dist-api-repl", Format: repository.FormatCargo})
 	publication := publishCargoDistributionFixture(t, store, objects, source, "demo", "3.0.0", "source")
-	handler := NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objects}})
 	post := func(path, targetID, key, digest string) *httptest.ResponseRecorder {
 		t.Helper()
 		body := `{"targetRepositoryId":"` + targetID + `","coordinate":"demo@3.0.0","digest":"` + digest + `"}`
@@ -259,7 +260,7 @@ func TestCargoDistributionManagementAPI(t *testing.T) {
 func TestCargoDistributionRequiresReadableSameRegistryDependencies(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-dependency-target", Format: repository.FormatCargo})
 	if err != nil {
 		t.Fatal(err)

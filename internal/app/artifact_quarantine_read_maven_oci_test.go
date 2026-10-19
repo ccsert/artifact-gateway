@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-func publishQuarantineReadMaven(t *testing.T, store *repository.MemoryStore, objects *MemoryOCIObjectStore, repo repository.HostedRepository) (repository.MavenArtifact, string) {
+func publishQuarantineReadMaven(t *testing.T, store *repository.MemoryStore, objects *objectstore.MemoryStore, repo repository.HostedRepository) (repository.MavenArtifact, string) {
 	t.Helper()
 	ctx := context.Background()
 	coordinate := "org.example:widget:1.0.0"
@@ -49,7 +50,7 @@ func quarantineReadIdentity(t *testing.T, store *repository.MemoryStore, repo re
 func TestMavenQuarantineReadPolicyBlocksDirectAndGroupWithoutProxyFallback(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "maven-read-hosted", Name: "maven-read-hosted", Format: repository.FormatMaven})
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +69,7 @@ func TestMavenQuarantineReadPolicyBlocksDirectAndGroupWithoutProxyFallback(t *te
 		t.Fatal(err)
 	}
 	createV2Group(t, store, "maven-read-group", repository.FormatMaven, repository.GroupMember{RepositoryID: hosted.ID}, repository.GroupMember{RepositoryID: proxy.ID, Position: 1})
-	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost}), UpstreamClient{HTTPClient: server.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: NewMavenCache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})}, Upstream: UpstreamClient{HTTPClient: server.Client()}})
 
 	for _, path := range []string{"/maven/" + hosted.Name + "/" + assetPath, "/maven/maven-read-group/" + assetPath} {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
@@ -102,7 +103,7 @@ func TestMavenQuarantineReadPolicyBlocksDirectAndGroupWithoutProxyFallback(t *te
 func TestMavenGroupQuarantinedCoordinateClaimsDifferentClassifier(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	first, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "maven-read-classifier-first", Name: "maven-read-classifier-first", Format: repository.FormatMaven})
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +134,7 @@ func TestMavenGroupQuarantinedCoordinateClaimsDifferentClassifier(t *testing.T) 
 	enableQuarantineReadPolicy(t, store, first.ID)
 	quarantineReadIdentity(t, store, first, artifact.Coordinate, artifact.Digest)
 	createV2Group(t, store, "maven-read-classifier-group", repository.FormatMaven, repository.GroupMember{RepositoryID: first.ID}, repository.GroupMember{RepositoryID: second.ID, Position: 1})
-	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objects}})
 	request := httptest.NewRequest(http.MethodGet, "/maven/maven-read-classifier-group/"+classifierPath, nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -143,7 +144,7 @@ func TestMavenGroupQuarantinedCoordinateClaimsDifferentClassifier(t *testing.T) 
 	}
 }
 
-func publishQuarantineReadOCI(t *testing.T, store *repository.MemoryStore, objects *MemoryOCIObjectStore, repo repository.HostedRepository) repository.OCIManifest {
+func publishQuarantineReadOCI(t *testing.T, store *repository.MemoryStore, objects *objectstore.MemoryStore, repo repository.HostedRepository) repository.OCIManifest {
 	t.Helper()
 	body := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
 	sum := sha256.Sum256(body)
@@ -162,7 +163,7 @@ func publishQuarantineReadOCI(t *testing.T, store *repository.MemoryStore, objec
 func TestOCIQuarantineReadPolicyUsesDeniedAndPreventsGroupFallback(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	hosted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "oci-read-hosted", Name: "oci-read-hosted", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +181,7 @@ func TestOCIQuarantineReadPolicyUsesDeniedAndPreventsGroupFallback(t *testing.T)
 		t.Fatal(err)
 	}
 	createV2Group(t, store, "oci-read-group", repository.FormatOCI, repository.GroupMember{RepositoryID: hosted.ID}, repository.GroupMember{RepositoryID: proxy.ID, Position: 1})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost}), UpstreamClient{HTTPClient: server.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})}, Upstream: UpstreamClient{HTTPClient: server.Client()}})
 
 	for _, path := range []string{"/v2/" + hosted.Name + "/app/manifests/latest", "/v2/oci-read-group/app/manifests/latest"} {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
@@ -218,7 +219,7 @@ func TestOCIQuarantineReadPolicyUsesDeniedAndPreventsGroupFallback(t *testing.T)
 func TestOCIQuarantineReadPolicyBlocksBlobClosure(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "oci-read-blob", Name: "oci-read-blob", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
@@ -250,7 +251,7 @@ func TestOCIQuarantineReadPolicyBlocksBlobClosure(t *testing.T) {
 	}
 	enableQuarantineReadPolicy(t, store, repo.ID)
 	quarantineReadIdentity(t, store, repo, manifest.Name, manifest.Digest)
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	request := httptest.NewRequest(http.MethodGet, "/v2/"+repo.Name+"/app/blobs/"+blobDigest, nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -263,7 +264,7 @@ func TestOCIQuarantineReadPolicyBlocksBlobClosure(t *testing.T) {
 func TestOCIQuarantineReadPolicyRecursivelyBlocksIndexClosure(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "oci-read-index", Name: "oci-read-index", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
@@ -308,7 +309,7 @@ func TestOCIQuarantineReadPolicyRecursivelyBlocksIndexClosure(t *testing.T) {
 		t.Fatalf("child closure blocked=%v err=%v", blocked, blockErr)
 	}
 	createV2Group(t, store, "oci-read-index-group", repository.FormatOCI, repository.GroupMember{RepositoryID: repo.ID})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	for _, path := range []string{
 		"/v2/" + repo.Name + "/app/manifests/" + childDigest,
 		"/v2/oci-read-index-group/app/manifests/" + childDigest,
@@ -340,7 +341,7 @@ func TestOCIQuarantineReadPolicyRecursivelyBlocksIndexClosure(t *testing.T) {
 func TestOCIQuarantineReadPolicyPaginationSkipsBlockedTagsAndReferrers(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "oci-read-pagination", Name: "oci-read-pagination", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
@@ -395,7 +396,7 @@ func TestOCIQuarantineReadPolicyPaginationSkipsBlockedTagsAndReferrers(t *testin
 	}
 
 	createV2Group(t, store, "oci-read-pagination-group", repository.FormatOCI, repository.GroupMember{RepositoryID: repo.ID})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	for _, path := range []string{
 		"/v2/" + repo.Name + "/app/tags/list?n=1",
 		"/v2/oci-read-pagination-group/app/tags/list?n=1",

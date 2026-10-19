@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"io"
 	"net"
 	"net/http"
@@ -31,7 +32,7 @@ func TestConan2ClientListsRevisionThroughGateway(t *testing.T) {
 	store := repository.NewMemoryStore()
 	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
 	server := httptest.NewServer(h)
 	defer server.Close()
 	home := t.TempDir()
@@ -55,7 +56,7 @@ func TestConan2ClientDownloadsRevisionedRecipeThroughGateway(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	client := newConanDownloadClient()
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
 	var gatewayPaths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gatewayPaths = append(gatewayPaths, r.URL.Path)
@@ -83,7 +84,7 @@ func TestConan2ClientDownloadsRevisionedPackageThroughGateway(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	client := newConanPackageClient()
-	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}})
+	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}})
 	defer server.Close()
 	home := t.TempDir()
 	command := exec.Command(conan, "download", "pkg/1.0@user/stable#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:package-id#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "-r=gateway")
@@ -110,7 +111,7 @@ func TestConan2ClientGatewayResolutionAndCacheMatrix(t *testing.T) {
 	proxy := repository.Member{Name: "proxy", Type: repository.MemberProxy, Anonymous: true, Position: 1, Endpoint: "https://proxy.example", AllowedHosts: []string{"proxy.example"}}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{hosted, proxy}})
 	client := &conanMatrixClient{}
-	handler := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	handler := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -212,7 +213,7 @@ func TestConan2ClientRejectsChecksumMismatch(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Anonymous: true}}})
 	client := &conanChecksumClient{}
-	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}})
+	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}})
 	defer server.Close()
 	home := t.TempDir()
 	add := exec.Command(conan, "remote", "add", "--force", "gateway", server.URL+"/conan/central")
@@ -253,7 +254,7 @@ func TestConan2ClientAuthenticationAndAnonymousPolicyMatrix(t *testing.T) {
 		ResolverToken:     "resolver-secret",
 		RepositoryReaders: map[string][]string{"reader": {"authenticated", "hosted"}, "denied": {"authenticated"}},
 	}
-	handler := ConanHandler{Store: store, Authenticator: authenticator, Client: &conanAnonymousClient{}, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	handler := ConanHandler{Store: store, Authenticator: authenticator, Client: &conanAnonymousClient{}, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
 	var requests []string
 	var requestMu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +335,7 @@ func TestConan2ClientUsesAllowlistedHTTPSProxy(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "allowed", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, Anonymous: true, AllowedHosts: []string{"example.com"}}}})
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "denied", Anonymous: true, Members: []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: endpoint, Anonymous: true, AllowedHosts: []string{"other.example"}}}})
-	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewConanCache(nil), Metrics: &Metrics{}})
+	server := httptest.NewServer(ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}})
 	defer server.Close()
 	home := t.TempDir()
 	run := func(args ...string) {

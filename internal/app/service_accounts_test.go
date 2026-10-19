@@ -31,10 +31,7 @@ func TestOCIClientLoginExchangesServiceAccountBasicCredentialForStablePrincipalT
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{}, store, TestAdapter{},
-		Authenticator{ResolverToken: "principal-token-signing-secret", APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{ResolverToken: "principal-token-signing-secret", APIKeys: store}})
 
 	tokenRequest := httptest.NewRequest(http.MethodGet, "/auth/token", nil)
 	tokenRequest.SetBasicAuth("ci", credentialToken)
@@ -82,12 +79,7 @@ func TestOCIClientLoginExchangesServiceAccountBasicCredentialForStablePrincipalT
 
 func TestServiceAccountCredentialsKeepOneStablePrincipalAcrossRotation(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(
-		Dependencies{},
-		store,
-		TestAdapter{},
-		Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 
 	request := func(method, path, token, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
@@ -213,12 +205,7 @@ func TestServiceAccountCredentialsKeepOneStablePrincipalAcrossRotation(t *testin
 
 func TestServiceAccountListUsesBoundedSignedIDPagination(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(
-		Dependencies{},
-		store,
-		TestAdapter{},
-		Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 	for _, account := range []repository.ServiceAccount{
 		{ID: "00000000-0000-0000-0000-000000000002", Name: "release-bot"},
 		{ID: "00000000-0000-0000-0000-000000000001", Name: "build-bot"},
@@ -314,12 +301,7 @@ func TestServiceAccountListUsesBoundedSignedIDPagination(t *testing.T) {
 
 func TestDisablingServiceAccountRejectsEveryExistingCredential(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(
-		Dependencies{},
-		store,
-		TestAdapter{},
-		Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 	request := func(method, path, token, body, version string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		if token != "" {
@@ -378,12 +360,7 @@ func TestDisablingServiceAccountRejectsEveryExistingCredential(t *testing.T) {
 
 func TestDisabledServiceAccountCredentialDoesNotRecordRejectedUse(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(
-		Dependencies{},
-		store,
-		TestAdapter{},
-		Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 	request := func(method, path, token, body, version string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		if token != "" {
@@ -448,12 +425,7 @@ func TestDisabledServiceAccountCredentialDoesNotRecordRejectedUse(t *testing.T) 
 
 func TestServiceAccountCredentialsStayOutOfStandaloneAPIKeyManagement(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(
-		Dependencies{},
-		store,
-		TestAdapter{},
-		Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		req.Header.Set("Authorization", "Bearer root")
@@ -507,12 +479,7 @@ func TestServiceAccountCredentialsStayOutOfStandaloneAPIKeyManagement(t *testing
 
 func TestServiceAccountLifecycleWritesManagementAuditWithoutCredentialSecret(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(
-		Dependencies{},
-		store,
-		TestAdapter{},
-		Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: Authenticator{AdminToken: "root", AdminActor: "root", APIKeys: store}})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		req.Header.Set("Authorization", "Bearer root")

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -22,7 +23,7 @@ import (
 type rawQuarantineDistributionFixture struct {
 	ctx        context.Context
 	store      *repository.MemoryStore
-	objects    *MemoryOCIObjectStore
+	objects    *objectstore.MemoryStore
 	handler    http.Handler
 	source     repository.HostedRepository
 	target     repository.HostedRepository
@@ -31,7 +32,7 @@ type rawQuarantineDistributionFixture struct {
 }
 
 type blockingOpenRangeStore struct {
-	OCIObjectStore
+	ObjectStore
 	opened  chan struct{}
 	release chan struct{}
 	once    sync.Once
@@ -43,7 +44,7 @@ func (s *blockingOpenRangeStore) OpenRange(ctx context.Context, key string, offs
 	case <-ctx.Done():
 		return nil, 0, ctx.Err()
 	case <-s.release:
-		return s.OCIObjectStore.OpenRange(ctx, key, offset, length)
+		return s.ObjectStore.OpenRange(ctx, key, offset, length)
 	}
 }
 
@@ -53,7 +54,7 @@ func (s *blockingOpenRangeStore) Open(ctx context.Context, key string) (io.ReadC
 	case <-ctx.Done():
 		return nil, 0, ctx.Err()
 	case <-s.release:
-		return s.OCIObjectStore.Open(ctx, key)
+		return s.ObjectStore.Open(ctx, key)
 	}
 }
 
@@ -61,7 +62,7 @@ func newRawQuarantineDistributionFixture(t *testing.T) rawQuarantineDistribution
 	t.Helper()
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: uuid.NewString(), Name: "quarantine-distribution-source", Format: repository.FormatRaw,
 	})
@@ -94,7 +95,7 @@ func newRawQuarantineDistributionFixture(t *testing.T) rawQuarantineDistribution
 	}
 	return rawQuarantineDistributionFixture{
 		ctx: ctx, store: store, objects: objects,
-		handler:    NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator()),
+		handler:    newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()}),
 		source:     source,
 		target:     target,
 		coordinate: coordinate,
@@ -207,11 +208,11 @@ func TestRawReplicationWorkerRechecksQuarantineBeforePublish(t *testing.T) {
 		t.Fatalf("replication plans=%#v err=%v", plans, err)
 	}
 	plan := plans[0]
-	destination := NewMemoryOCIObjectStore()
+	destination := objectstore.NewMemoryStore()
 	blockingSource := &blockingOpenRangeStore{
-		OCIObjectStore: fixture.objects,
-		opened:         make(chan struct{}),
-		release:        make(chan struct{}),
+		ObjectStore: fixture.objects,
+		opened:      make(chan struct{}),
+		release:     make(chan struct{}),
 	}
 	workerDone := make(chan error, 1)
 	go func() {
@@ -310,7 +311,7 @@ func TestSecurityPolicyEvaluationReportsQuarantineWhenPolicyIsDisabled(t *testin
 func TestRawProtocolReadRemainsAvailableWhileArtifactIsQuarantined(t *testing.T) {
 	fixture := newRawQuarantineDistributionFixture(t)
 	fixture.replaceQuarantine(t, repository.ArtifactQuarantineStateQuarantined, "0")
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: fixture.objects}, fixture.store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: fixture.store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: fixture.objects, repository.FormatRaw: fixture.objects}})
 	request := httptest.NewRequest(http.MethodGet, "/raw/"+fixture.source.Name+"/"+fixture.coordinate, nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()

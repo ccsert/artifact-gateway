@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -23,8 +24,8 @@ func TestNativeOCIHostedUploadMountManifestRangeAndDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	enablePublicationScan(t, store, repo.ID)
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeOCIObjectStore: objects}, repository.FormatOCI), store, TestAdapter{}, testAuthenticator())
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatOCI), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	auth := func(r *http.Request) { authorize(r, "resolver-secret") }
 
 	start := httptest.NewRecorder()
@@ -122,7 +123,7 @@ func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	start := httptest.NewRequest(http.MethodPost, "/v2/team/app/blobs/uploads/", nil)
 	authorize(start, "admin-secret")
 	started := httptest.NewRecorder()
@@ -178,7 +179,7 @@ func TestNativeOCIHostedUsesManagedRepositoryGrants(t *testing.T) {
 func TestNativeOCITagsListPaginatesAndSupportsHead(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	for _, tag := range []string{"gamma", "alpha", "beta"} {
 		manifest := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/"+tag, strings.NewReader(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`))
 		manifest.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
@@ -229,7 +230,7 @@ func TestNativeOCITagsListPaginatesAndSupportsHead(t *testing.T) {
 func TestNativeOCIDeleteTagDoesNotDeleteSharedManifest(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	manifest := `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`
 	for _, tag := range []string{"one", "two"} {
 		request := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/"+tag, strings.NewReader(manifest))
@@ -270,7 +271,7 @@ func TestNativeOCIDeleteTagDoesNotDeleteSharedManifest(t *testing.T) {
 func TestNativeOCIReferrersPaginateAndExcludeDeletedManifests(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	publish := func(tag string, body string) string {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/"+tag, strings.NewReader(body))
@@ -358,7 +359,7 @@ func TestNativeOCICatalogPaginatesAndFiltersRepositoryGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw", Name: "catalog-raw", Format: repository.FormatRaw})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	publish := func(repositoryName, image string) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPut, "/v2/"+repositoryName+"/"+image+"/manifests/latest", strings.NewReader(`{"schemaVersion":2}`))
@@ -424,7 +425,7 @@ func TestNativeOCIImageBrowseSearchProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	for _, image := range []string{"team/alpha", "team/beta", "other/gamma"} {
 		req := httptest.NewRequest(http.MethodPut, "/v2/oci-images/"+image+"/manifests/latest", strings.NewReader(`{"schemaVersion":2}`))
 		authorize(req, "resolver-secret")
@@ -493,7 +494,7 @@ func TestNativeOCIHostedAnonymousReadPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`)
 	for _, repo := range []string{"public", "private"} {
 		put := httptest.NewRequest(http.MethodPut, "/v2/"+repo+"/app/manifests/latest", bytes.NewReader(manifest))
@@ -521,7 +522,7 @@ func TestNativeOCIHostedAnonymousReadPolicy(t *testing.T) {
 func TestNativeOCIUploadCanBeCancelled(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	start := httptest.NewRequest(http.MethodPost, "/v2/team/app/blobs/uploads/", nil)
 	authorize(start, "resolver-secret")
 	started := httptest.NewRecorder()
@@ -556,7 +557,7 @@ func TestNativeOCIUploadCanBeCancelled(t *testing.T) {
 func TestNativeOCIManifestAcceptNegotiation(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	manifest := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/latest", strings.NewReader(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`))
 	manifest.Header.Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
 	authorize(manifest, "resolver-secret")
@@ -598,7 +599,7 @@ func TestNativeOCIManifestAcceptNegotiation(t *testing.T) {
 func TestNativeOCIRejectsDigestMismatchAndNonHostedRepository(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/sha256:"+strings.Repeat("0", 64), strings.NewReader(`{"schemaVersion":2}`))
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -611,7 +612,7 @@ func TestNativeOCIRejectsDigestMismatchAndNonHostedRepository(t *testing.T) {
 func TestNativeOCIConcurrentPatchUsesUploadOffsetFence(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	start := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v2/team/app/blobs/uploads/", nil)
 	authorize(request, "resolver-secret")
@@ -640,8 +641,8 @@ func TestNativeOCIConcurrentPatchUsesUploadOffsetFence(t *testing.T) {
 func TestNativeOCIValidatesManifestDescriptors(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "oci-repo", Name: "team", Format: repository.FormatOCI})
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	auth := func(r *http.Request) { authorize(r, "resolver-secret") }
 
 	missing := httptest.NewRequest(http.MethodPut, "/v2/team/app/manifests/latest", strings.NewReader(`{"schemaVersion":2,"config":{"digest":"sha256:`+strings.Repeat("a", 64)+`","size":1}}`))
@@ -699,7 +700,7 @@ func TestNativeOCIMountRequiresSourceRepositoryOwnership(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	digest := uploadNativeOCIBlob(t, handler, "/v2/source/app", []byte("source-only"))
 
 	mount := httptest.NewRequest(http.MethodPost, "/v2/target/app/blobs/uploads/?mount="+digest+"&from=source/app", nil)

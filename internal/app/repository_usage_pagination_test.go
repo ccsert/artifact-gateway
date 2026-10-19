@@ -44,7 +44,7 @@ func TestRepositoryArtifactUsagePaginationAndSearch(t *testing.T) {
 	}
 	auth := testAuthenticator()
 	auth.LegacyReadPermissive = false
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	request := func(id, query string, authenticated bool) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+id+"/artifact-usage"+query, nil)
 		if authenticated {

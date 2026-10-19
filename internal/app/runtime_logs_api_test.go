@@ -18,7 +18,7 @@ func TestRuntimeLogQueryIsAdministratorOnlyLocalAndBounded(t *testing.T) {
 	logger.Error("worker failed", "component", "worker", "operation", "job.run", "requestId", "job-1", "traceId", "trace-1", "apiToken", "private-token")
 	logger.Info("worker resumed", "component", "worker", "operation", "job.run", "requestId", "job-1")
 	dependencies := Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: "gateway-01", SessionID: "session-01"}}
-	handler := NewGatewayHandler(dependencies, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: dependencies, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(path, token string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, path, nil)
 		if token != "" {
@@ -65,7 +65,7 @@ func TestRuntimeLogQueryIsAdministratorOnlyLocalAndBounded(t *testing.T) {
 }
 
 func TestRuntimeLogQueryReportsDisabledBuffer(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{Runtime: DiagnosticRuntime{InstanceID: "gateway-01"}}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{Runtime: DiagnosticRuntime{InstanceID: "gateway-01"}}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/runtime/logs", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()

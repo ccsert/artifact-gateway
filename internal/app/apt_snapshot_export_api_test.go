@@ -56,7 +56,7 @@ func TestAPTArchiveExportRequiresAdminAndRepositoryOwnershipWithoutSigner(t *tes
 		t.Fatal(err)
 	}
 	auth := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth, Storage: ObjectStores{repository.FormatAPT: objects}})
 	path := "/api/v2/repositories/" + repo.ID + "/apt/snapshots/" + snapshot.ID + "/archive"
 	for _, tc := range []struct {
 		token string
@@ -145,7 +145,7 @@ func TestAPTArchiveStreamingCorruptionAbortsHTTPDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	changing := &changingAPTArchiveObjects{Store: objects, key: assets[0].ObjectKey}
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeAPTObjectStore: changing}, store, TestAdapter{}, testAuthenticator()))
+	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: changing}}))
 	defer server.Close()
 	request, err := http.NewRequest(http.MethodGet, server.URL+"/api/v2/repositories/"+repo.ID+"/apt/snapshots/"+snapshot.ID+"/archive", nil)
 	if err != nil {

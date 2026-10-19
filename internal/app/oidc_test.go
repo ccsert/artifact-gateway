@@ -225,7 +225,7 @@ func TestOIDCSubjectIsRecordedForDeniedRepositoryRead(t *testing.T) {
 		RepositoryReaders: map[string][]string{"ci-user": {"team/allowed/*"}},
 		OIDC:              NewOIDCValidator(OIDCConfig{Issuer: "https://issuer.example.test", Audience: "artifact-gateway", JWKSURL: server.URL}),
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	token := signedOIDCToken(t, privateKey, keyID, "https://issuer.example.test", "artifact-gateway", "ci-user", time.Now().Add(time.Minute))
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/denied/manifests/latest", nil)
 	authorize(request, token)

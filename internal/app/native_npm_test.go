@@ -19,6 +19,7 @@ import (
 	"time"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -35,8 +36,8 @@ func TestNativeNPMHostedPublishInstallAndAnonymousBrowse(t *testing.T) {
 	if _, err = store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
-	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{NativeNPMObjectStore: objects}, repository.FormatNPM), store, TestAdapter{}, testAuthenticator())
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatNPM), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
 	tarball := npmFixtureTarball(t, "@scope/widget", "1.2.3")
 	publishBody := npmFixturePublishDocument(t, "@scope/widget", "1.2.3", "@scope/widget-1.2.3.tgz", tarball)
 
@@ -171,7 +172,7 @@ func TestNativeNPMHostedUsesManagedRepositoryGrants(t *testing.T) {
 	}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 	for _, name := range []string{"widget", "other"} {
 		document := npmFixturePublishDocument(t, name, "1.0.0", name+"-1.0.0.tgz", npmFixtureTarball(t, name, "1.0.0"))
 		publish := httptest.NewRequest(http.MethodPut, "/npm/npm-granted/"+name, strings.NewReader(document))
@@ -212,7 +213,7 @@ func TestNativeNPMHostedRejectsTarballIdentityMismatch(t *testing.T) {
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "npm-private", Format: repository.FormatNPM}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	validTarball := npmFixtureTarball(t, "widget", "1.0.0")
 	trailingJSON := httptest.NewRequest(http.MethodPut, "/npm/npm-private/widget", strings.NewReader(npmFixturePublishDocument(t, "widget", "1.0.0", "widget-1.0.0.tgz", validTarball)+` {}`))
 	trailingJSON.Header.Set("Authorization", "Bearer resolver-secret")
@@ -286,13 +287,9 @@ func TestNativeNPMProxyCachesPackumentAndVerifiedTarball(t *testing.T) {
 	if _, err = store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	metrics := &Metrics{}
-	handler := NewGatewayHandlerWithFormatCachesAndMetrics(
-		Dependencies{NativeNPMObjectStore: objects}, store, TestAdapter{}, testAuthenticator(),
-		NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, nil, NewConanCache(nil), nil, metrics,
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: nil, Conan: NewConanCache(objectstore.NewMemoryStore()), Maintenance: nil}, Metrics: metrics, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 
 	metadataPath := "/npm/" + repo.Name + "/@scope%2Fproxy-widget"
 	metadata := httptest.NewRecorder()
@@ -429,10 +426,7 @@ func TestNativeNPMProxyColdVersionMetadataResolvesForCorepack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/pnpm/10.7.1", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -494,10 +488,7 @@ func TestNativeNPMProxyColdTarballResolvesWithoutPackumentRequest(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+packageName+"-"+version+".tgz", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -553,7 +544,7 @@ func TestNativeNPMProxyKeepsValidVersionsWhenLegacyMetadataLacksIntegrity(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	versionRequest := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/"+validVersion, nil)
 	authorize(versionRequest, "resolver-secret")
 	versionResponse := httptest.NewRecorder()
@@ -617,7 +608,7 @@ func TestNativeNPMProxyRequestsBoundedInstallMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/"+version, nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -676,10 +667,7 @@ func TestNativeNPMProxyColdScopedLegacyRootTarballResolvesWithoutPackumentReques
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+tarballName, nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -750,10 +738,7 @@ func TestNativeNPMProxyColdTarballMetadataFailuresAuditExactlyOnce(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			handler := NewGatewayHandler(
-				Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
-				UpstreamClient{HTTPClient: upstream.Client()},
-			)
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 			request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName+"/-/"+tarballName, nil)
 			authorize(request, "resolver-secret")
 			response := httptest.NewRecorder()
@@ -825,13 +810,11 @@ func TestNativeNPMProxyNegativeCachesAndServesStaleMetadata(t *testing.T) {
 	if _, err = store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{
-			NativeNPMObjectStore: NewMemoryOCIObjectStore(),
-			NPMMetadataTTL:       10 * time.Millisecond,
-			NPMNegativeTTL:       time.Minute,
-		},
-		store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()},
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{
+
+		NPMMetadataTTL: 10 * time.Millisecond,
+		NPMNegativeTTL: time.Minute,
+	}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}},
 	)
 
 	for range 2 {
@@ -882,10 +865,7 @@ func TestNativeNPMProxyRetriesAndOpensUpstreamCircuit(t *testing.T) {
 	if _, err = store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()},
-		store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	path := "/npm/" + repo.Name + "/unavailable-widget"
 	first := httptest.NewRecorder()
 	handler.ServeHTTP(first, httptest.NewRequest(http.MethodGet, path, nil))
@@ -928,10 +908,7 @@ func TestNPMProxyPackageRejectsDisallowedTarballHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(),
-		UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/widget", nil)
 	request.Header.Set("Authorization", "Bearer resolver-secret")
 	result := httptest.NewRecorder()
@@ -981,10 +958,7 @@ func TestNativeNPMProxyRevalidatesExpiredMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1")
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore(), NPMMetadataTTL: time.Millisecond},
-		store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()},
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{NPMMetadataTTL: time.Millisecond}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	requestPath := "/npm/" + repo.Name + "/" + packageName
 	for range 2 {
 		result := httptest.NewRecorder()
@@ -1006,7 +980,7 @@ func TestNativeNPMWhoamiReportsCallerPrincipalWithoutRepositoryAuthorization(t *
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{}, repository.FormatNPM), store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: publicationScanDependencies(Dependencies{}, repository.FormatNPM), Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	anonymous := httptest.NewRecorder()
 	handler.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, "/npm/npm-releases/-/whoami", nil))
@@ -1100,7 +1074,7 @@ func TestNativeNPMProxyDoesNotCacheIntegrityMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = store.ReplaceAnonymousAccessPolicy(context.Background(), repository.AnonymousAccessPolicy{Enabled: true}, "1")
-	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	metadata := httptest.NewRecorder()
 	handler.ServeHTTP(metadata, httptest.NewRequest(http.MethodGet, "/npm/"+repo.Name+"/"+packageName, nil))
 	if metadata.Code != http.StatusOK {

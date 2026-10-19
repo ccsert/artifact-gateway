@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -33,7 +34,7 @@ func TestPostgresRustFSConanPromotionSharesVisibleRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, "promotion-conan-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, "promotion-conan-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +95,7 @@ func TestPostgresRustFSConanReplicationPublishesTargetOwnedRevision(t *testing.T
 		t.Fatal(err)
 	}
 	defer store.Close()
-	objects, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, "conan-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	objects, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, "conan-replication-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +149,7 @@ func TestPostgresRustFSConanReplicationPublishesTargetOwnedRevision(t *testing.T
 }
 
 type failOnceConanReclaimStore struct {
-	OCIObjectStore
+	ObjectStore
 	fail bool
 }
 
@@ -157,7 +158,7 @@ func (s *failOnceConanReclaimStore) Delete(ctx context.Context, key string) erro
 		s.fail = false
 		return errors.New("simulated object store delete failure")
 	}
-	return s.OCIObjectStore.Delete(ctx, key)
+	return s.ObjectStore.Delete(ctx, key)
 }
 
 type repositoryScopedConanReclaimStore struct {
@@ -296,7 +297,7 @@ func TestPostgresAndRustFSConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	defer store.Close()
 	ctx := context.Background()
 	bucket := "conan-reclaim-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objects, err := NewRustFSOCIObjectStore(s3Endpoint, accessKey, secretKey, bucket)
+	objects, err := objectstore.NewRustFSStore(s3Endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +324,7 @@ func TestPostgresAndRustFSConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}})
 	restore := func() *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/restore", strings.NewReader(`{"coordinate":"`+revision.Reference+`#`+revision.Revision+`"}`))
@@ -341,7 +342,7 @@ func TestPostgresAndRustFSConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
 		t.Fatal(err)
 	}
-	maintenance := NativeConanMaintenance{Store: repositoryScopedConanReclaimStore{PostgresStore: store, repositoryID: repo.ID}, Objects: &failOnceConanReclaimStore{OCIObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	maintenance := NativeConanMaintenance{Store: repositoryScopedConanReclaimStore{PostgresStore: store, repositoryID: repo.ID}, Objects: &failOnceConanReclaimStore{ObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
 	if err = maintenance.Collect(ctx); err == nil {
 		t.Fatal("first reclaim must fail")
 	}

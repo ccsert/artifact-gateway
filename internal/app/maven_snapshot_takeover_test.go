@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
 	testsupport "github.com/ccsert/artifact-gateway/internal/testsupport/snapshotfixture"
@@ -38,7 +39,7 @@ func TestMavenSnapshotTakeoverPreservesHistoryAndCurrentUntilReadyPublish(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	if r, err := snapshotimport.Run(ctx, p, s, objects, repo.ID, "target", "operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, p, repo.ID, "target", "operator")); err != nil || r.Status != "verified" {
 		t.Fatalf("import=%v %v", r, err)
 	}

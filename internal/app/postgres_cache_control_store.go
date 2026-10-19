@@ -14,15 +14,15 @@ import (
 
 // PostgresCacheControlStore stores cache indexes, negative entries, and GC
 // candidates in PostgreSQL while delegating immutable byte objects to S3.
-// It deliberately preserves OCIObjectStore so protocol caches retain their
+// It deliberately preserves ObjectStore so protocol caches retain their
 // tested publication ordering while their source of truth moves out of S3.
 type PostgresCacheControlStore struct {
-	objects OCIObjectStore
+	objects ObjectStore
 	db      *sql.DB
 	ownsDB  bool
 }
 
-func NewPostgresCacheControlStore(objects OCIObjectStore, databaseURL string) (*PostgresCacheControlStore, error) {
+func NewPostgresCacheControlStore(objects ObjectStore, databaseURL string) (*PostgresCacheControlStore, error) {
 	db, err := database.OpenPostgres(databaseURL, database.DefaultPoolConfig())
 	if err != nil {
 		return nil, fmt.Errorf("open PostgreSQL cache control store: %w", err)
@@ -30,7 +30,7 @@ func NewPostgresCacheControlStore(objects OCIObjectStore, databaseURL string) (*
 	return &PostgresCacheControlStore{objects: objects, db: db, ownsDB: true}, nil
 }
 
-func NewPostgresCacheControlStoreWithDB(objects OCIObjectStore, db *sql.DB) (*PostgresCacheControlStore, error) {
+func NewPostgresCacheControlStoreWithDB(objects ObjectStore, db *sql.DB) (*PostgresCacheControlStore, error) {
 	if db == nil {
 		return nil, errors.New("PostgreSQL cache control store requires a database pool")
 	}
@@ -143,7 +143,7 @@ func (s *PostgresCacheControlStore) List(ctx context.Context, prefix string) ([]
 	return keys, nil
 }
 
-func (s *PostgresCacheControlStore) Stat(ctx context.Context, key string) (OCIObjectInfo, error) {
+func (s *PostgresCacheControlStore) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 	return s.objects.Stat(ctx, key)
 }
 

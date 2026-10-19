@@ -22,7 +22,7 @@ func TestHostedRepositoryDeleteAdvancesToDeletedAfterWorkerRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	request := httptest.NewRequest(http.MethodDelete, "/api/v2/repositories/"+repo.ID, nil)
 	authorize(request, "admin-secret")

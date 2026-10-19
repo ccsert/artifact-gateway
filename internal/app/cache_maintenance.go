@@ -11,7 +11,7 @@ import (
 // outside request handling. Maven cache entries expire on reads; OCI also has
 // digest-addressed objects that must be collected after their grace period.
 type CacheMaintenance struct {
-	store OCIObjectStore
+	store ObjectStore
 	oci   *OCICache
 	raw   *RawCache
 	conan *ConanCache
@@ -31,10 +31,10 @@ type CacheMaintenanceStatus struct {
 	FailedRuns        uint64    `json:"failed_runs"`
 }
 
-func NewCacheMaintenance(store OCIObjectStore, oci *OCICache) *CacheMaintenance {
+func NewCacheMaintenance(store ObjectStore, oci *OCICache) *CacheMaintenance {
 	return &CacheMaintenance{store: store, oci: oci}
 }
-func NewCacheMaintenanceWithRaw(store OCIObjectStore, oci *OCICache, raw *RawCache) *CacheMaintenance {
+func NewCacheMaintenanceWithRaw(store ObjectStore, oci *OCICache, raw *RawCache) *CacheMaintenance {
 	return &CacheMaintenance{store: store, oci: oci, raw: raw}
 }
 func (m *CacheMaintenance) WithConan(conan *ConanCache) *CacheMaintenance { m.conan = conan; return m }

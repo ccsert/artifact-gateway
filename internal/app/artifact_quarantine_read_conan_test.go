@@ -9,10 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-func publishQuarantineReadConan(t *testing.T, store *repository.MemoryStore, objects *MemoryOCIObjectStore, repo repository.HostedRepository, reference, recipeRevision string, marker byte) repository.ConanRecipeRevision {
+func publishQuarantineReadConan(t *testing.T, store *repository.MemoryStore, objects *objectstore.MemoryStore, repo repository.HostedRepository, reference, recipeRevision string, marker byte) repository.ConanRecipeRevision {
 	t.Helper()
 	put := func(path string, body []byte) repository.ConanAsset {
 		sum := sha256.Sum256(body)
@@ -43,7 +44,7 @@ func publishQuarantineReadConan(t *testing.T, store *repository.MemoryStore, obj
 func TestConanQuarantineReadPolicyBlocksRecipeAndPackageClosureAndHidesRevision(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "conan-read-hosted", Name: "conan-read-hosted", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +53,7 @@ func TestConanQuarantineReadPolicyBlocksRecipeAndPackageClosureAndHidesRevision(
 	recipe := publishQuarantineReadConan(t, store, objects, repo, reference, rrev, 'a')
 	enableQuarantineReadPolicy(t, store, repo.ID)
 	quarantineReadIdentity(t, store, repo, reference+"#"+rrev, recipe.Digest)
-	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}})
 
 	base := "/conan/v2/" + repo.Name + "/conans/" + reference + "/revisions"
 	for _, path := range []string{base + "/" + rrev + "/files/conanfile.py", base + "/" + rrev + "/packages/package-id/revisions/prev/files/conan_package.tgz"} {
@@ -79,7 +80,7 @@ func TestConanQuarantineReadPolicyBlocksRecipeAndPackageClosureAndHidesRevision(
 func TestConanGroupDoesNotFallThroughPastQuarantinedRecipeRevision(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	first, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "conan-read-first", Name: "conan-read-first", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +98,7 @@ func TestConanGroupDoesNotFallThroughPastQuarantinedRecipeRevision(t *testing.T)
 		repository.GroupMember{RepositoryID: first.ID},
 		repository.GroupMember{RepositoryID: second.ID, Position: 1},
 	)
-	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}})
 	base := "/conan/v2/conan-read-group/conans/" + reference + "/revisions"
 
 	listRequest := httptest.NewRequest(http.MethodGet, base, nil)

@@ -15,7 +15,7 @@ import (
 
 func TestScheduledTaskManagementLifecycleAndDispatchHistory(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, body, version string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, "admin-secret")
@@ -106,7 +106,7 @@ func TestScheduledTaskRepositoryTierFollowsTheTargetRepository(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	call := func(token, method, path, body, version string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(r, token)
@@ -228,7 +228,7 @@ func TestScheduledTaskRepositoryTierFollowsTheTargetRepository(t *testing.T) {
 
 func TestScheduledTaskRejectsInvalidTargetAndNonAdmin(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	reader := httptest.NewRequest(http.MethodPost, "/api/v2/scheduled-tasks", strings.NewReader(`{"name":"audit","kind":"audit-retention","intervalMinutes":60,"enabled":true}`))
 	authorize(reader, "reader-secret")
 	readerResponse := httptest.NewRecorder()

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -51,7 +52,7 @@ func TestNativeAPTHostedReadsSwitchOnlyAfterSignedSnapshotIsVisible(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	publish := func(id string, sequence int64, body string, visible bool) {
 		t.Helper()
 		snapshot, createErr := store.CreateAPTRepositorySnapshot(ctx, repository.APTRepositorySnapshot{
@@ -109,7 +110,7 @@ func TestNativeAPTHostedReadsSwitchOnlyAfterSignedSnapshotIsVisible(t *testing.T
 	publish("apt-snapshot-one", 1, "first", true)
 	publish("apt-snapshot-two", 2, "second", false)
 
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objects}})
 	request := func(method string, headers http.Header) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/apt/"+repo.Name+"/dists/stable/InRelease", nil)
 		if headers != nil {
@@ -155,7 +156,7 @@ func TestAPTArtifactSearchReturnsEmptyAndCachedAssetPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	search := func(query string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-search?q="+query, nil)
 		authorize(request, authenticator.IssueToken("apt-reader"))
@@ -257,7 +258,7 @@ func newAPTProxyTestFixture(t *testing.T) aptProxyTestFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	return aptProxyTestFixture{handler: handler, repositoryName: repo.Name, metadataPayload: metadataPayload, packagePayload: packagePayload, lastModified: lastModified, requests: requests, conditionalRequests: conditionalRequests}
 }
 
@@ -353,7 +354,7 @@ func TestNativeAPTProxyDoesNotForwardClientValidatorsToColdUpstream(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := httptest.NewRequest(http.MethodGet, "/apt/"+repo.Name+"/dists/stable/InRelease", nil)
 	request.Header.Set("If-None-Match", `"client-cache"`)
 	response := httptest.NewRecorder()
@@ -380,7 +381,7 @@ func TestNativeAPTProxyServesStaleAssetWhenUpstreamBodyIsTruncated(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	path := "/apt/" + repo.Name + "/dists/stable/InRelease"
 	first := httptest.NewRecorder()
 	firstRequest := httptest.NewRequest(http.MethodGet, path, nil)
@@ -410,7 +411,7 @@ func TestNativeAPTProxyReturnsNotFoundWhenUpstreamRemovesCachedAsset(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	path := "/apt/" + repo.Name + "/dists/stable/InRelease"
 	first := httptest.NewRecorder()
 	firstRequest := httptest.NewRequest(http.MethodGet, path, nil)
@@ -433,7 +434,7 @@ func TestNativeAPTProxyAnonymousReadRequiresGlobalAndRepositoryPolicy(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	path := "/apt/" + repo.Name + "/dists/stable/InRelease"
 	denied := httptest.NewRecorder()
 	handler.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, path, nil))
@@ -459,7 +460,7 @@ func TestNativeAPTProxyAcceptsBasicAndBearerCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator, UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	path := "/apt/" + repo.Name + "/dists/stable/InRelease"
 	basic := httptest.NewRequest(http.MethodGet, path, nil)
 	basic.SetBasicAuth("apt-client", "resolver-secret")
@@ -486,7 +487,7 @@ func TestNativeAPTProxyEnforcesResourcePrefixGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, authenticator, UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	request := func(resource string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/apt/"+repo.Name+"/"+resource, nil)
 		authorize(req, authenticator.IssueToken("apt-reader"))
@@ -542,7 +543,7 @@ func TestV2GroupAPTUsesOrderedProxyFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: upstream.Client()})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}, Upstream: UpstreamClient{HTTPClient: upstream.Client()}})
 	path := "/apt/" + group.Name + "/dists/stable/InRelease"
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	authorize(req, "resolver-secret")

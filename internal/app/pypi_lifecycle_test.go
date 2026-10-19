@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -37,7 +38,7 @@ func TestRepositoryPyPIRetentionTombstoneAndRestoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
 		authorize(req, "admin-secret")
@@ -81,7 +82,7 @@ func TestRepositoryPyPIRetentionTombstoneAndRestoreLifecycle(t *testing.T) {
 func TestNativePyPIMaintenanceReclaimsAfterRecoveryWindow(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "pypi-reclaim", Name: "pypi-reclaim", Format: repository.FormatPyPI})
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +114,7 @@ func TestNativePyPIMaintenanceReclaimsAfterRecoveryWindow(t *testing.T) {
 func TestNativePyPIMaintenanceSerializesReclaimAndRestore(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "pypi-reclaim-race", Name: "pypi-reclaim-race", Format: repository.FormatPyPI})
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +133,7 @@ func TestNativePyPIMaintenanceSerializesReclaimAndRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blocking := blockingLifecycleDeleteStore{OCIObjectStore: objects, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	blocking := blockingLifecycleDeleteStore{ObjectStore: objects, entered: make(chan struct{}, 1), release: make(chan struct{})}
 	maintenance := NativePyPIMaintenance{Store: store, Objects: blocking}
 	if err = maintenance.EnqueueReclaimJobs(ctx, time.Now().UTC().Add(time.Hour), 10); err != nil {
 		t.Fatal(err)
@@ -170,7 +171,7 @@ func TestNativePyPIMaintenanceSerializesReclaimAndRestore(t *testing.T) {
 func TestNativePyPIMaintenanceCompletesStaleReclaimWhenObjectIsVisibleAgain(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "pypi-reclaim-visible", Name: "pypi-reclaim-visible", Format: repository.FormatPyPI})
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +208,7 @@ func TestNativePyPIMaintenanceCompletesStaleReclaimWhenObjectIsVisibleAgain(t *t
 func TestRepositoryPyPIPromotionAndReplication(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "pypi-source", Format: repository.FormatPyPI})
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +230,7 @@ func TestRepositoryPyPIPromotionAndReplication(t *testing.T) {
 	if _, err = store.PublishPyPIFile(ctx, file); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 	post := func(target, key, payload string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(payload))
 		authorize(request, "admin-secret")
@@ -299,7 +300,7 @@ func TestRepositoryPyPIDistributionRejectsVersionWhenAnyFileIsQuarantined(t *tes
 				t.Fatal(err)
 			}
 
-			handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 			request := httptest.NewRequest(
 				http.MethodPost,
 				"/api/v2/repositories/"+source.ID+"/"+operation,
@@ -375,7 +376,7 @@ func TestNativePyPIPromotionRechecksEveryVersionFileBeforePublish(t *testing.T) 
 func TestPyPIReplicationRechecksFilesAddedAfterPlanBeforePublish(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	source, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "pypi-replication-multifile-source", Format: repository.FormatPyPI})
 	if err != nil {
 		t.Fatal(err)
@@ -403,7 +404,7 @@ func TestPyPIReplicationRechecksFilesAddedAfterPlanBeforePublish(t *testing.T) {
 	if _, err = store.PublishPyPIVersion(ctx, files[:1]); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{NativePyPIObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/v2/repositories/"+source.ID+"/replications",

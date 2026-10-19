@@ -26,7 +26,7 @@ import (
 type nativeRawHandler struct {
 	store              repository.NativeRawStore
 	repos              repository.HostedRepositoryStore
-	objects            OCIObjectStore
+	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
 	audit              repository.Store
@@ -56,10 +56,7 @@ func (h nativeRawHandler) withProxy(client RawClient, cache *RawCache) nativeRaw
 	return h
 }
 
-func newNativeRawHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeRawHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativeRawHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeRawHandler {
 	return nativeRawHandler{store: store, repos: store, objects: objects, auth: auth, audit: store, readPolicies: store, quarantine: store, authorizer: RepositoryAuthorizer{
 		Grants: store,
 		Legacy: auth,
@@ -840,7 +837,7 @@ func (h nativeRawHandler) recordAuthorizationDenial(r *http.Request, principal P
 	})
 }
 
-func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, asset repository.RawAsset, objects OCIObjectStore) rawprotocol.ServeResult {
+func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, asset repository.RawAsset, objects ObjectStore) rawprotocol.ServeResult {
 	statusWriter := &nativeRawStatusWriter{ResponseWriter: w}
 	digest := strings.TrimPrefix(asset.Digest, "sha256:")
 	w.Header().Set("Content-Type", asset.ContentType)

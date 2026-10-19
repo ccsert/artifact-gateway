@@ -28,28 +28,18 @@ type Checker interface {
 }
 
 type Dependencies struct {
-	checkers       []Checker
-	BuildVersion   string
-	BuildRevision  string
-	BuildModified  bool
-	BuildGoVersion string
-	Runtime        DiagnosticRuntime
-	AccessLog      AccessLogOptions
-	LogBuffer      *operationalog.Buffer
-	LocalCapacity  *localcapacity.Observer
-	HTTPErrorRate  *httperrorrate.Observer
-	Email          emailnotification.Config
-	// NativeMavenObjectStore is supplied by the runtime after RustFS is initialized.
-	// Tests omit it and receive an isolated in-memory store.
-	NativeMavenObjectStore        OCIObjectStore
-	NativeOCIObjectStore          OCIObjectStore
-	NativeConanObjectStore        OCIObjectStore
-	NativeNPMObjectStore          OCIObjectStore
-	NativePyPIObjectStore         OCIObjectStore
-	NativeGoObjectStore           OCIObjectStore
-	NativeCargoObjectStore        OCIObjectStore
+	checkers                      []Checker
+	BuildVersion                  string
+	BuildRevision                 string
+	BuildModified                 bool
+	BuildGoVersion                string
+	Runtime                       DiagnosticRuntime
+	AccessLog                     AccessLogOptions
+	LogBuffer                     *operationalog.Buffer
+	LocalCapacity                 *localcapacity.Observer
+	HTTPErrorRate                 *httperrorrate.Observer
+	Email                         emailnotification.Config
 	CargoUpstreamClient           *http.Client
-	NativeAPTObjectStore          OCIObjectStore
 	APTArchiveTrust               aptpublication.SnapshotArchiveTrustVerifier
 	APTSigner                     aptpublication.Signer
 	APTSigning                    APTSigningRuntime

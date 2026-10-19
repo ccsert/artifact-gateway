@@ -73,7 +73,7 @@ type nativeAPTHandler struct {
 	store        repository.NativeAPTStore
 	publications repository.NativeAPTPublicationStore
 	repos        repository.HostedRepositoryStore
-	objects      OCIObjectStore
+	objects      ObjectStore
 	auth         Authenticator
 	authorizer   RepositoryAuthorizer
 	audit        repository.Store
@@ -86,10 +86,7 @@ type aptRoute struct {
 	path       string
 }
 
-func newNativeAPTHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeAPTHandler {
-	if objects == nil {
-		objects = NewMemoryOCIObjectStore()
-	}
+func newNativeAPTHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeAPTHandler {
 	return nativeAPTHandler{
 		store: store, publications: store, repos: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {

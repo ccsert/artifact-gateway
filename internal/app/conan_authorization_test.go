@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,7 +36,7 @@ func TestConanAnonymousReadRequiresPublicGroupAndMember(t *testing.T) {
 		}
 	}
 	client := &conanAnonymousClient{}
-	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(nil), Metrics: &Metrics{}}
+	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
 	path := "/conan/v2/%s/conans/pkg/1.0/user/stable/revisions"
 	for _, group := range []string{"private", "partial"} {
 		w := httptest.NewRecorder()
@@ -57,7 +58,7 @@ func TestConanAnonymousReadDoesNotUsePrivateMemberCache(t *testing.T) {
 	private := repository.Member{Name: "private", Type: repository.MemberHosted, Endpoint: "https://private.example"}
 	public := repository.Member{Name: "public", Type: repository.MemberHosted, Endpoint: "https://public.example", Anonymous: true}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Anonymous: true, Members: []repository.Member{private, public}})
-	cache := NewConanCache(nil)
+	cache := NewConanCache(objectstore.NewMemoryStore())
 	path := "pkg/1.0/user/stable/revisions"
 	if err := cache.store(context.Background(), cache.key("central", path, private), conanCacheEntry{body: []byte(`{"revisions":[{"revision":"private","time":1}]}`), contentType: "application/json", member: private.Name, endpoint: private.Endpoint}, "central", 1024, time.Minute); err != nil {
 		t.Fatal(err)
@@ -75,7 +76,7 @@ func TestConanAuthenticatedReadChecksMemberAuthorizationBeforeCache(t *testing.T
 	private := repository.Member{Name: "private", Type: repository.MemberHosted, Endpoint: "https://private.example", Position: 0}
 	public := repository.Member{Name: "public", Type: repository.MemberHosted, Endpoint: "https://public.example", Position: 1}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{private, public}})
-	cache := NewConanCache(nil)
+	cache := NewConanCache(objectstore.NewMemoryStore())
 	path := "pkg/1.0/user/stable/revisions"
 	if err := cache.store(context.Background(), cache.key("central", path, private), conanCacheEntry{body: []byte(`{"revisions":[]}`), contentType: "application/json", member: private.Name, endpoint: private.Endpoint}, "central", 1024, time.Minute); err != nil {
 		t.Fatal(err)
@@ -119,7 +120,7 @@ func TestConanUsesManagedRepositoryGrantsForBoundMembers(t *testing.T) {
 		Authorizer:    RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		Authenticator: authenticator,
 		Client:        conanStatusClient{status: http.StatusOK, body: `{"revisions":[{"revision":"abc","time":1}]}`},
-		Cache:         NewConanCache(nil),
+		Cache:         NewConanCache(objectstore.NewMemoryStore()),
 		Metrics:       metrics,
 	}
 	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
@@ -171,7 +172,7 @@ func TestConanBasicAuthenticationRespectsGroupAndMemberPermissions(t *testing.T)
 				Store:         store,
 				Authenticator: Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"conan": readers}},
 				Client:        &conanAnonymousClient{},
-				Cache:         NewConanCache(nil),
+				Cache:         NewConanCache(objectstore.NewMemoryStore()),
 			}.ServeHTTP(response, request)
 			want := http.StatusOK
 			if name == "denied" {
@@ -188,7 +189,7 @@ func TestConanHandshakeRejectsMissingAndDisabledGroups(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "disabled", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted}}})
 	_ = store.DisableConanGroup(context.Background(), "disabled")
-	h := ConanHandler{Store: store, Authenticator: Authenticator{ResolverToken: "resolver-secret"}, Client: &conanAnonymousClient{}, Cache: NewConanCache(nil)}
+	h := ConanHandler{Store: store, Authenticator: Authenticator{ResolverToken: "resolver-secret"}, Client: &conanAnonymousClient{}, Cache: NewConanCache(objectstore.NewMemoryStore())}
 	for _, path := range []string{
 		"/conan/missing/v1/ping",
 		"/conan/missing/v1/users/authenticate",

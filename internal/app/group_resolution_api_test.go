@@ -28,7 +28,7 @@ func TestGroupResolutionUsesRuntimeOrderAndExcludesUnavailableMembers(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(token string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, "/api/v2/groups/"+group.ID+"/resolution", nil)
 		if token != "" {

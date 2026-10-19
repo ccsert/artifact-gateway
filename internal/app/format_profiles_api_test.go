@@ -15,7 +15,7 @@ import (
 func TestFormatProfilesAPINeedsAnAuthenticatedCallerAndReturnsCapabilities(t *testing.T) {
 	store := repository.NewMemoryStore()
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 
 	unauthenticated := httptest.NewRecorder()
 	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, "/api/v2/formats", nil))
@@ -91,7 +91,7 @@ func TestFormatProfilesAPINeedsAnAuthenticatedCallerAndReturnsCapabilities(t *te
 
 func TestCargoPublicAdmissionCreatesHostedProxyAndGroup(t *testing.T) {
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(method, path, strings.NewReader(body))

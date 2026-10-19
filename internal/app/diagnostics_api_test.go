@@ -46,7 +46,7 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 			WorkerFormats: []repository.Format{repository.FormatMaven}, WorkerKinds: []string{"retention"},
 		},
 	}
-	handler := NewGatewayHandler(dependencies, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: dependencies, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	reader := httptest.NewRequest(http.MethodGet, "/api/v2/diagnostics", nil)
 	authorize(reader, "reader-secret")
@@ -91,7 +91,7 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 }
 
 func TestDiagnosticsReportsMissingDependencyConfiguration(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/diagnostics", nil)
 	authorize(request, "admin-secret")
 	response := httptest.NewRecorder()

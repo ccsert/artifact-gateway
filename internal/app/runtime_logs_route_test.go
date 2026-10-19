@@ -24,7 +24,7 @@ func TestRuntimeLogsPreserveRegisteredRouteAndResolvedRepositoryClass(t *testing
 			buffer := operationalog.NewBuffer(8)
 			var output bytes.Buffer
 			logger := operationalog.NewLogger(io.MultiWriter(buffer, &output), "node", "session")
-			handler := NewGatewayHandler(Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: logger}}, store, TestAdapter{}, testAuthenticator())
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: logger}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 			metrics := &Metrics{}
 			if instrument {
 				handler = metrics.Instrument(handler)
@@ -110,7 +110,7 @@ func TestResolvedRepositoryAccessClassUsesExistingFormatCoverage(t *testing.T) {
 
 func TestRuntimeLogsRouteTemplatesDoNotGuessRepositoryFormat(t *testing.T) {
 	buffer := operationalog.NewBuffer(8)
-	handler := NewGatewayHandler(Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(buffer, "node", "session")}}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(buffer, "node", "session")}}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, test := range []struct{ path, route, class string }{
 		{"/repository/raw-private-name/private-object", "/repository/", "other"},
 		{"/raw/private-name/private-object", "/raw/", "raw"},

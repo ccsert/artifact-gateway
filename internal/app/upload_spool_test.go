@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"io"
 	"os"
 	"strings"
@@ -74,11 +75,11 @@ func TestUploadSpoolAppendsWithoutHoldingCombinedBody(t *testing.T) {
 }
 
 func TestSpoolObjectAppendStagesOnlyNewChunk(t *testing.T) {
-	base := NewMemoryOCIObjectStore()
+	base := objectstore.NewMemoryStore()
 	if err := base.Put(context.Background(), "upload", []byte("first")); err != nil {
 		t.Fatal(err)
 	}
-	objects := &observedOpenObjectStore{OCIObjectStore: base}
+	objects := &observedOpenObjectStore{ObjectStore: base}
 	spool, chunkSize, err := spoolObjectAppend(context.Background(), objects, "upload", 5, strings.NewReader("second"), 6)
 	if err != nil {
 		t.Fatal(err)
@@ -91,23 +92,23 @@ func TestSpoolObjectAppendStagesOnlyNewChunk(t *testing.T) {
 }
 
 type observedOpenObjectStore struct {
-	OCIObjectStore
+	ObjectStore
 	opens      int
 	sizeOffset int64
 }
 
 func (s *observedOpenObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	s.opens++
-	reader, size, err := s.OCIObjectStore.Open(ctx, key)
+	reader, size, err := s.ObjectStore.Open(ctx, key)
 	return reader, size + s.sizeOffset, err
 }
 
 func TestSpoolStoredObjectReadsOnceAndReusesDigest(t *testing.T) {
-	base := NewMemoryOCIObjectStore()
+	base := objectstore.NewMemoryStore()
 	if err := base.Put(context.Background(), "upload", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
-	objects := &observedOpenObjectStore{OCIObjectStore: base}
+	objects := &observedOpenObjectStore{ObjectStore: base}
 	spool, err := spoolStoredObject(context.Background(), objects, "upload")
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +121,7 @@ func TestSpoolStoredObjectReadsOnceAndReusesDigest(t *testing.T) {
 }
 
 func TestSpoolStoredUploadAssemblesImmutableChunksOnce(t *testing.T) {
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	key := "native/raw/uploads/one"
 	if err := objects.Put(context.Background(), uploadPartKey(key, 0), []byte("first")); err != nil {
 		t.Fatal(err)
@@ -140,7 +141,7 @@ func TestSpoolStoredUploadAssemblesImmutableChunksOnce(t *testing.T) {
 }
 
 func TestSpoolStoredUploadRejectsChunkGap(t *testing.T) {
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	key := "native/raw/uploads/gap"
 	if err := objects.Put(context.Background(), uploadPartKey(key, 1), []byte("content")); err != nil {
 		t.Fatal(err)
@@ -151,11 +152,11 @@ func TestSpoolStoredUploadRejectsChunkGap(t *testing.T) {
 }
 
 func TestSpoolStoredObjectRejectsChangedSize(t *testing.T) {
-	base := NewMemoryOCIObjectStore()
+	base := objectstore.NewMemoryStore()
 	if err := base.Put(context.Background(), "upload", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
-	objects := &observedOpenObjectStore{OCIObjectStore: base, sizeOffset: 1}
+	objects := &observedOpenObjectStore{ObjectStore: base, sizeOffset: 1}
 	if spool, err := spoolStoredObject(context.Background(), objects, "upload"); err == nil || spool != nil {
 		t.Fatalf("spool=%v err=%v", spool, err)
 	}

@@ -78,7 +78,7 @@ func TestGroupDirectoryMergesContributionsAndInvalidatesNavigation(t *testing.T)
 		}
 	}
 	group := newBrowseGroup(t, store, repository.FormatRaw, repos...)
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: auth})
 	token := auth.IssueToken("reader")
 	res, root := groupDirectoryRequest(t, handler, token, group.ID, "", "", 1)
 	if res.Code != 200 || len(root.Items) != 1 || root.Items[0].Name != "docs" || len(root.Candidates) != 2 || root.NextPageToken == nil {

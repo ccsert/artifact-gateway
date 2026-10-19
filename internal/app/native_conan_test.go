@@ -13,13 +13,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "repo", Name: "conan-hosted", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +44,7 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 	if _, err = store.PutConanRecipeRevision(context.Background(), revision, []repository.ConanAsset{asset}); err != nil {
 		t.Fatal(err)
 	}
-	handler := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: testAuthenticator()}, Authenticator: testAuthenticator(), NativeObjects: objects, Client: &conanAnonymousClient{}, Cache: NewConanCache(nil)}
+	handler := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: testAuthenticator()}, Authenticator: testAuthenticator(), NativeObjects: objects, Client: &conanAnonymousClient{}, Cache: NewConanCache(objectstore.NewMemoryStore())}
 
 	for _, test := range []struct {
 		path string
@@ -70,7 +71,7 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 
 func TestNativeConanHostedDeletesRecipeRevisionWithWriteGrant(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "repo", Name: "conan-hosted", Format: repository.FormatConan})
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +162,7 @@ func TestNativeConanReferenceBrowseSearchProjection(t *testing.T) {
 	if err = store.CommitConanPublishSession(ctx, session.ID); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	browserToken := authenticator.IssueToken("conan-browser")
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+conanRepo.ID+"/conan/references?q=pkg%2F&pageSize=1", nil)
 	authorize(request, browserToken)

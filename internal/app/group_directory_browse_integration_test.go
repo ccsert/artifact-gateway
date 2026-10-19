@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -28,7 +29,7 @@ func TestGroupDirectoryPostgresMavenGroupOnlyCache(t *testing.T) {
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL required")
 	}
-	control, err := NewPostgresCacheControlStore(NewMemoryOCIObjectStore(), databaseURL)
+	control, err := NewPostgresCacheControlStore(objectstore.NewMemoryStore(), databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +39,7 @@ func TestGroupDirectoryPostgresMavenGroupOnlyCache(t *testing.T) {
 	t.Cleanup(func() { _ = control.Delete(context.Background(), f.cache.Key(f.group.Name, groupMavenPath)) })
 	f.expectGet(200, f.repos[1].Name)
 	oci := NewDefaultOCICache(control, nil)
-	handler := NewGatewayHandlerWithCacheMaintenance(Dependencies{}, f.store, TestAdapter{}, testAuthenticator(), oci, f.cache, NewCacheMaintenance(control, oci))
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: f.store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: oci, Maven: f.cache, Maintenance: NewCacheMaintenance(control, oci)}})
 	namespace := groupDirectoryOnlyItem(t, handler, f.group.ID, "")
 	component := groupDirectoryOnlyItem(t, handler, f.group.ID, namespace.Id)
 	version := groupDirectoryOnlyItem(t, handler, f.group.ID, component.Id)
@@ -74,7 +75,7 @@ func TestGroupDirectoryPostgresHostedProxyUnionAndExactSnapshots(t *testing.T) {
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL required")
 	}
-	control, err := NewPostgresCacheControlStore(noBrowseObjectReads{NewMemoryOCIObjectStore(), t}, databaseURL)
+	control, err := NewPostgresCacheControlStore(noBrowseObjectReads{objectstore.NewMemoryStore(), t}, databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestGroupDirectoryPostgresHostedProxyUnionAndExactSnapshots(t *testing.T) {
 			}
 			putBrowseIndex(t, control, proxy, path, nil)
 			oci := NewDefaultOCICache(control, nil)
-			handler := NewGatewayHandlerWithCacheMaintenance(Dependencies{}, store, TestAdapter{}, testAuthenticator(), oci, NewDefaultMavenCache(control, nil), NewCacheMaintenance(control, oci))
+			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: oci, Maven: NewDefaultMavenCache(control, nil), Maintenance: NewCacheMaintenance(control, oci)}})
 			parent := groupDirectoryOnlyItem(t, handler, group.ID, "")
 			if format == repository.FormatMaven {
 				parent = groupDirectoryOnlyItem(t, handler, group.ID, parent.Id)

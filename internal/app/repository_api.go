@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"strings"
 
@@ -178,35 +179,18 @@ type GatewayStore interface {
 	repository.ArtifactUsageStore
 }
 
-func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
-	return NewGatewayHandlerWithOCICache(dependencies, store, adapter, authenticator, NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), ociClients...)
-}
-
-func NewGatewayHandlerWithOCICache(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, ociClients ...OCIClient) http.Handler {
-	return NewGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, nil, ociClients...)
-}
-
-func NewGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, NewConanCache(nil), nil, nil, ociClients...)
-}
-
-func NewGatewayHandlerWithCacheMaintenance(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, nil, NewConanCache(nil), maintenance, nil, ociClients...)
-}
-
-func NewGatewayHandlerWithRawCache(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, rawCache, NewConanCache(nil), maintenance, nil, ociClients...)
-}
-
-func NewGatewayHandlerWithFormatCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, conanCache *ConanCache, maintenance *CacheMaintenance, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, rawCache, conanCache, maintenance, nil, ociClients...)
-}
-
-func NewGatewayHandlerWithFormatCachesAndMetrics(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, conanCache *ConanCache, maintenance *CacheMaintenance, metrics *Metrics, ociClients ...OCIClient) http.Handler {
-	return newGatewayHandlerWithCaches(dependencies, store, adapter, authenticator, cache, mavenCache, rawCache, conanCache, maintenance, metrics, ociClients...)
-}
-
-func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, conanCache *ConanCache, maintenance *CacheMaintenance, metrics *Metrics, ociClients ...OCIClient) http.Handler {
+// NewGatewayHandler validates persistent dependencies before exposing any route.
+// Tests and client fixtures must explicitly supply their object stores too.
+func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
+	if err := options.validate(); err != nil {
+		return nil, err
+	}
+	options.Storage = maps.Clone(options.Storage)
+	dependencies, store := options.Dependencies, options.Store
+	adapter, authenticator := options.Adapter, options.Authenticator
+	cache, mavenCache := options.Caches.OCI, options.Caches.Maven
+	rawCache, conanCache := options.Caches.Raw, options.Caches.Conan
+	maintenance, metrics := options.Caches.Maintenance, options.Metrics
 	mux := newRuntimeLogMux(dependencies.LogBuffer)
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
@@ -224,8 +208,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
 	upstreamClient := OCIClient(UpstreamClient{OCIBearerCache: NewOCIBearerTokenCache()})
-	if len(ociClients) > 0 {
-		upstreamClient = ociClients[0]
+	if options.Upstream != nil {
+		upstreamClient = options.Upstream
 	}
 	mavenClient := MavenClient(UpstreamClient{})
 	if client, ok := upstreamClient.(MavenClient); ok {
@@ -253,8 +237,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: upstreamClient, Authenticator: authenticator, Cache: cache}
 	publicationScanner := NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
-	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
-	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache).withPublicationScanner(publicationScanner)
+	nativeOCI := newNativeOCIHandler(store, options.Storage[repository.FormatOCI], authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
+	nativeRaw := newNativeRawHandler(store, options.Storage[repository.FormatRaw], authenticator).withMetrics(metrics).withProxy(rawClient, rawCache).withPublicationScanner(publicationScanner)
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
@@ -267,22 +251,13 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	conanAPI := conanAPIHandler{store: store, authenticator: authenticator}
 	mux.Handle("/api/v1/conan/groups", conanAPI)
 	mux.Handle("/api/v1/conan/groups/", conanAPI)
-	nativeObjects := dependencies.NativeMavenObjectStore
-	if nativeObjects == nil {
-		nativeObjects = NewMemoryOCIObjectStore()
-	}
+	nativeObjects := options.Storage[repository.FormatMaven]
 	nativeMaven := newNativeMavenHandler(store, nativeObjects, authenticator).withMetrics(metrics).withProxy(mavenClient, mavenCache).withPublicationScanner(publicationScanner)
 	mavenProxyOperations := mavenProxyOperationsHandler{store: store, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, client: mavenClient, cache: mavenCache, maintenance: maintenance}
 	proxyCacheBrowse := proxyCacheBrowseHandler{store: store, entriesStore: store, audit: store, maintenance: maintenance, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}
-	nativeConanObjects := dependencies.NativeConanObjectStore
-	if nativeConanObjects == nil {
-		nativeConanObjects = NewMemoryOCIObjectStore()
-	}
+	nativeConanObjects := options.Storage[repository.FormatConan]
 	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator).withPublicationScanner(publicationScanner)
-	nativeNPMObjects := dependencies.NativeNPMObjectStore
-	if nativeNPMObjects == nil {
-		nativeNPMObjects = NewMemoryOCIObjectStore()
-	}
+	nativeNPMObjects := options.Storage[repository.FormatNPM]
 	nativeNPM := newNativeNPMHandler(store, nativeNPMObjects, authenticator).withMetrics(metrics).withProxy(npmClient).withPublicationScanner(publicationScanner)
 	if dependencies.NPMMetadataTTL > 0 {
 		nativeNPM.metadataTTL = dependencies.NPMMetadataTTL
@@ -291,22 +266,13 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativeNPM.negativeTTL = dependencies.NPMNegativeTTL
 	}
 	nativeNPM.protection = newNPMProxyProtection(dependencies.NPMProxyCoordinator, dependencies.NPMBreakerTTL)
-	nativePyPIObjects := dependencies.NativePyPIObjectStore
-	if nativePyPIObjects == nil {
-		nativePyPIObjects = NewMemoryOCIObjectStore()
-	}
+	nativePyPIObjects := options.Storage[repository.FormatPyPI]
 	nativePyPI := newNativePyPIHandler(store, nativePyPIObjects, authenticator).withMetrics(metrics).withProxy(pypiClient).withPublicationScanner(publicationScanner)
-	nativeGoObjects := dependencies.NativeGoObjectStore
-	if nativeGoObjects == nil {
-		nativeGoObjects = NewMemoryOCIObjectStore()
-	}
+	nativeGoObjects := options.Storage[repository.FormatGo]
 	nativeGo := newNativeGoHandler(store, nativeGoObjects, authenticator).withMetrics(metrics).withProxy(goClient).withPublicationScanner(publicationScanner)
-	nativeCargo := newNativeCargoHandler(store, dependencies.NativeCargoObjectStore, authenticator).withPublicationScanner(publicationScanner)
+	nativeCargo := newNativeCargoHandler(store, options.Storage[repository.FormatCargo], authenticator).withPublicationScanner(publicationScanner)
 	nativeCargo.upstream = UpstreamClient{HTTPClient: dependencies.CargoUpstreamClient}
-	nativeAPTObjects := dependencies.NativeAPTObjectStore
-	if nativeAPTObjects == nil {
-		nativeAPTObjects = NewMemoryOCIObjectStore()
-	}
+	nativeAPTObjects := options.Storage[repository.FormatAPT]
 	aptClient := APTClient(UpstreamClient{})
 	if client, ok := upstreamClient.(APTClient); ok {
 		aptClient = client
@@ -327,7 +293,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, conanPublish: nativeConanPublish, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, cargo: store, cargoProxy: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, quotaAlerts: store, queueStats: store, browse: store, diagnostics: dependencies, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, conanPublish: nativeConanPublish, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, cargo: store, cargoProxy: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, quotaAlerts: store, queueStats: store, browse: store, diagnostics: dependencies, objects: options.Storage, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -463,5 +429,5 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.HandleFunc("GET /auth/oidc/callback", oidcLogin.callback)
 	mux.HandleFunc("GET /auth/session", oidcLogin.session)
 	mux.HandleFunc("POST /auth/logout", oidcLogin.logout)
-	return sessionCookieAuthentication(tracedHTTPHandler(dependencies.requestObservability(openAPIServeMux{mux: mux})))
+	return sessionCookieAuthentication(tracedHTTPHandler(dependencies.requestObservability(openAPIServeMux{mux: mux}))), nil
 }

@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestNativeOCICollectorRetainsExpiredUploadTrace(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	now := time.Now().UTC()
 	upload := repository.OCIUpload{ID: "expired-upload", RepositoryID: "repo", Name: "image", ObjectKey: "native/oci/uploads/expired-upload", State: "open", ExpiresAt: now.Add(-time.Minute)}
 	if _, err := store.CreateOCIUpload(context.Background(), upload); err != nil {
@@ -58,7 +59,7 @@ func TestNativeOCICollectorRetainsExpiredUploadTrace(t *testing.T) {
 
 func TestNativeOCICollectorCollectsUnclaimedObjectIntent(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	intent := repository.OCIObjectIntent{RepositoryID: "repo", ObjectKey: "native/oci/manifests/orphan", Digest: "sha256:" + strings.Repeat("a", 64), Size: 6}
 	if err := store.StageOCIObjectIntent(context.Background(), intent); err != nil {
 		t.Fatal(err)
@@ -87,7 +88,7 @@ func TestNativeOCICollectorCollectsUnclaimedObjectIntent(t *testing.T) {
 
 func TestNativeOCICollectorRechecksIntentAfterAcquiringObjectLock(t *testing.T) {
 	store := repository.NewMemoryStore()
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	intent := repository.OCIObjectIntent{RepositoryID: "repo", ObjectKey: "native/oci/manifests/published", Digest: "sha256:" + strings.Repeat("b", 64), Size: 9}
 	if err := store.StageOCIObjectIntent(context.Background(), intent); err != nil {
 		t.Fatal(err)

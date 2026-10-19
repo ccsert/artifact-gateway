@@ -38,14 +38,14 @@ func TestPostgresRustFSCargoTombstoneRestoreAndReclaim(t *testing.T) {
 	}
 	defer func() { _ = storeB.Close() }()
 	bucket := "cargo-life-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
-	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsA, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := objectsA.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	objectsB, err := objectstore.NewRustFSStore(endpoint, accessKey, secretKey, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +53,8 @@ func TestPostgresRustFSCargoTombstoneRestoreAndReclaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handlerA := NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator())
-	handlerB := NewGatewayHandler(Dependencies{NativeCargoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator())
+	handlerA := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsA}})
+	handlerB := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatCargo: objectsB}})
 	request := func(handler http.Handler, method, path string, body []byte) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, path, bytes.NewReader(body))

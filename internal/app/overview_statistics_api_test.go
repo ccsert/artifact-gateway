@@ -47,7 +47,7 @@ func TestOverviewStatisticsScopesRowsAndTotals(t *testing.T) {
 		}
 	}
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	call := func(token string) adminopenapi.OverviewStatistics {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, "/api/v2/overview-statistics", nil)

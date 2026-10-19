@@ -200,7 +200,7 @@ func TestRepositoryRetentionAPIDryRunsAndExecutesOCI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	dryRunRequest := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/retention:dry-run", nil)
 	authorize(dryRunRequest, "admin-secret")
 	dryRunResponse := httptest.NewRecorder()

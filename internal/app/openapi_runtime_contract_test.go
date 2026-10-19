@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/secrets"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -34,7 +35,7 @@ func TestAPTPublicationRuntimeResponsesConformToOpenAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{NativeAPTObjectStore: NewMemoryOCIObjectStore(), APTSigner: aptManagementSigner{}}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{APTSigner: aptManagementSigner{}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatAPT: objectstore.NewMemoryStore()}})
 	validate := func(req *http.Request) *httptest.ResponseRecorder {
 		t.Helper()
 		route, params, routeErr := router.FindRoute(req)
@@ -202,7 +203,7 @@ func TestRuntimeManagementRoutesConformToOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, path := range []string{
 		"/api/v2/repositories/" + repo.ID,
 		"/api/v2/repositories/" + repo.ID + "/capabilities",
@@ -270,7 +271,7 @@ func TestWebhookRuntimeResponsesConformToOpenAPI(t *testing.T) {
 	}
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, path, body, ifMatch string, wantStatus int) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, "https://gateway.example.com"+path, strings.NewReader(body))
@@ -355,7 +356,7 @@ func TestArtifactQuarantineRuntimeResponsesConformToOpenAPI(t *testing.T) {
 	if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: source.ID, Path: coordinate, Digest: digest, ObjectKey: "raw/contract", Size: 8}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	quarantinePath := "/api/v2/repositories/" + source.ID + "/artifact-quarantine?coordinate=" + coordinate + "&digest=" + digest
 	distributionBody := `{"targetRepositoryId":"` + target.ID + `","coordinate":"` + coordinate + `","digest":"` + digest + `"}`
 
@@ -412,7 +413,7 @@ func TestRuntimeManagementOperationInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
 	operationCount := 0
 	operationIDs := map[string]string{}

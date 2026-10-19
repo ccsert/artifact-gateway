@@ -42,7 +42,7 @@ func TestGlobalArtifactSearchPaginatesReadableRepositoriesWithoutLeakingDeniedOn
 	last := createRepository("00000000-0000-0000-0000-000000000001", "last", "packages/omega.bin", "c", "search-user")
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	request := func(query, pageToken string) *httptest.ResponseRecorder {
 		t.Helper()
 		values := url.Values{"q": {query}, "format": {"raw"}, "pageSize": {"1"}}
@@ -94,7 +94,7 @@ func TestGlobalArtifactSearchPaginatesReadableRepositoriesWithoutLeakingDeniedOn
 }
 
 func TestGlobalArtifactSearchRequiresAuthenticationAndNonEmptyQuery(t *testing.T) {
-	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	unauthenticated := httptest.NewRecorder()
 	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, "/api/v2/artifact-search?q=demo", nil))
 	if unauthenticated.Code != http.StatusUnauthorized {
@@ -139,7 +139,7 @@ func TestGlobalArtifactSearchFindsExactDigestWithOrWithoutAlgorithmPrefix(t *tes
 	}
 
 	authenticator := testAuthenticator()
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	search := func(query string) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(http.MethodGet, "/api/v2/artifact-search?q="+url.QueryEscape(query), nil)
