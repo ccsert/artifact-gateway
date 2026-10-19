@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { defaultSiteSettings } from "../../src/lib/siteSettings";
 import { authenticateAsAdmin } from "../support/auth";
+import { migrationSource } from "../../src/test/migrationFixtures";
 import * as fixtures from "./fixtures";
 
 type Json = unknown;
@@ -16,6 +17,8 @@ const routes: Record<string, Json> = {
   "/api/v2/audits/page": fixtures.auditPage,
   "/api/v2/artifact-search": fixtures.artifactSearch,
   "/api/v2/scheduled-tasks": fixtures.scheduledTasks,
+  "/api/v2/migration-sources": { items: [migrationSource], nextCursor: "" },
+  [`/api/v2/migration-sources/${migrationSource.id}`]: migrationSource,
   "/api/v2/runtime/nodes": fixtures.runtimeNodes,
   "/api/v2/diagnostics": fixtures.diagnostics,
   "/api/v2/anonymous-access-policy": fixtures.anonymousAccessPolicy,
