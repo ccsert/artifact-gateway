@@ -32,18 +32,53 @@ import {
 } from "./nexusBatchModel";
 import { batchOptions, useBatchCommand } from "./nexusBatchQueries";
 import { NexusCapacityFields } from "./NexusCapacityFields";
+import { useMigrationAccess } from "./migrationAccess";
 
-export function NexusBatchStart({
-  draft,
-  binding,
-  onClose,
-  onCreated,
-}: {
+type StartProps = {
   draft: BatchDraft | null;
   binding: NexusMigrationCapabilities;
   onClose: () => void;
   onCreated: (batch: NexusMigrationBatch) => void;
-}) {
+};
+
+export function NexusBatchStart(props: StartProps) {
+  const access = useMigrationAccess();
+  const sources = useMigrationSources();
+  const { t } = usePreferences();
+  const [seed] = useState(() => ({
+    epoch: access.epoch,
+    draft: access.error ? null : props.draft,
+  }));
+  if (access.error)
+    return (
+      <Card className="ag-nexus-start">
+        <div className="ag-migration-header">
+          <h2>{t("nexusBatch.new")}</h2>
+          <Button onClick={props.onClose}>{t("nexusBatch.close")}</Button>
+        </div>
+        <ErrorBanner
+          error={access.error}
+          onRetry={() => {
+            void sources.refetch();
+          }}
+        />
+      </Card>
+    );
+  return (
+    <NexusBatchStartContent
+      key={access.epoch}
+      {...props}
+      draft={access.epoch === seed.epoch ? seed.draft : null}
+    />
+  );
+}
+
+function NexusBatchStartContent({
+  draft,
+  binding,
+  onClose,
+  onCreated,
+}: StartProps) {
   const { t } = usePreferences();
   const client = useQueryClient();
   const [sourceId, setSourceId] = useState(draft?.sourceId ?? "");

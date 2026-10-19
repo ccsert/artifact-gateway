@@ -55,6 +55,13 @@ A new catch-up batch
 performs a complete enumeration and target revalidation; source deletions are
 reported, never mirrored destructively.
 
+A source request refused with 401/403 hides loaded source metadata, preflight
+and mapping observations, and closes editor, deletion and batch-draft forms.
+Changing sources, switching views or remounting the panel does not restore the
+cache. Only a successful fresh read started after the refusal restores access;
+preflight and capacity must then be entered again. Temporary service errors
+(500) retain the last authorized observation with a refresh-failure warning.
+
 Controls use the captured `If-Match` version and a stable `Idempotency-Key` for
 identical retries within the open form. Version conflicts require reading the
 current batch. A network/server failure can leave the outcome unknown; first

@@ -1,16 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { usePreferences } from "../../lib/preferences";
 import { MigrationSourcesPanel } from "./MigrationSourcesPanel";
 import { NexusBatchesPanel } from "./NexusBatchesPanel";
 import type { BatchDraft } from "./nexusBatchModel";
+import { useMigrationAccess } from "./migrationAccess";
 
 export function NexusMigrationWorkspace() {
   const { t } = usePreferences();
   const [params, setParams] = useSearchParams();
   const batches = params.get("view") === "batches" || params.has("batch");
   const [draft, setDraft] = useState<BatchDraft | null>(null);
+  const access = useMigrationAccess();
+  useEffect(() => {
+    setDraft(null);
+  }, [access.epoch]);
   const show = (view: "sources" | "batches") => {
     const next = new URLSearchParams(params);
     next.set("view", view);

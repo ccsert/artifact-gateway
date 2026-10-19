@@ -1,4 +1,5 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +13,6 @@ import {
 } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
-import { TestQueryProvider } from "../../test/queryClient";
 import {
   migrationPreflight,
   migrationSource,
@@ -23,6 +23,7 @@ import {
   nexusTargets,
 } from "../../test/nexusBatchFixtures";
 import { NexusBatchStart } from "./NexusBatchStart";
+import { migrationKeys } from "./migrationQueries";
 
 vi.mock("../../client", () => ({
   getMigrationSource: vi.fn(),
@@ -56,10 +57,14 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
-function show() {
+function show(
+  client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  }),
+) {
   const accepted = vi.fn();
   render(
-    <TestQueryProvider>
+    <QueryClientProvider client={client}>
       <PreferencesProvider>
         <AntdProvider>
           <MemoryRouter>
@@ -80,7 +85,7 @@ function show() {
           </MemoryRouter>
         </AntdProvider>
       </PreferencesProvider>
-    </TestQueryProvider>,
+    </QueryClientProvider>,
   );
   return accepted;
 }
@@ -107,6 +112,71 @@ async function fillCapacity() {
   );
 }
 describe("explicit start", () => {
+  for (const status of [401, 403])
+    for (const query of ["list", "detail", "preflight"] as const)
+      it(`discards an executable draft and its source facts after ${query} refuses ${status}`, async () => {
+        const client = new QueryClient({
+          defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+        });
+        const accepted = show(client);
+        await userEvent.click(
+          await screen.findByRole("button", { name: "运行预检" }),
+        );
+        await screen.findByRole("combobox", { name: "releases 的目标仓库" });
+        await fillCapacity();
+        expect(
+          screen.getByRole("button", { name: "应用映射并创建批次" }),
+        ).toBeEnabled();
+        if (query === "preflight") {
+          vi.mocked(preflightMigrationSource).mockResolvedValue({
+            error: { status },
+          } as never);
+          await userEvent.click(
+            screen.getByRole("button", { name: "运行预检" }),
+          );
+        } else {
+          (query === "list"
+            ? vi.mocked(listMigrationSources)
+            : vi.mocked(getMigrationSource)
+          ).mockResolvedValue({ error: { status } } as never);
+          await act(async () => {
+            await client.refetchQueries({
+              queryKey:
+                query === "list"
+                  ? migrationKeys.list()
+                  : migrationKeys.detail(migrationSource.id),
+              exact: true,
+            });
+          });
+        }
+        await screen.findByText(/没有读取或管理此迁移源的权限/);
+        expect(document.body).not.toHaveTextContent(migrationSource.name);
+        expect(
+          screen.queryByRole("combobox", { name: "已保存的迁移源" }),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole("button", { name: "应用映射并创建批次" }),
+        ).not.toBeInTheDocument();
+        expect(startNexusMigrationBatch).not.toHaveBeenCalled();
+        cleanup();
+        show(client);
+        await screen.findByText(/没有读取或管理此迁移源的权限/);
+        vi.mocked(listMigrationSources).mockResolvedValue({
+          data: { items: [migrationSource], nextCursor: "" },
+        } as never);
+        await userEvent.click(screen.getByRole("button", { name: /重试/ }));
+        await screen.findByRole("combobox", { name: "已保存的迁移源" });
+        expect(
+          screen.getByRole("combobox", { name: "已保存的迁移源" }),
+        ).toHaveValue("");
+        expect(
+          screen.getByRole("textbox", { name: "存储池可用字节" }),
+        ).toHaveValue("");
+        expect(
+          screen.queryByRole("combobox", { name: "releases 的目标仓库" }),
+        ).not.toBeInTheDocument();
+        expect(accepted).not.toHaveBeenCalled();
+      });
   it("does not execute a draft or unknown capacity, then binds real target IDs and re-reads the response", async () => {
     const accepted = show();
     const submit = screen.getByRole("button", { name: "应用映射并创建批次" });

@@ -6,6 +6,7 @@ import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
 import { migrationSource } from "../../test/migrationFixtures";
 import { MigrationSourceEditor } from "./MigrationSourceEditor";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   createMigrationSource: vi.fn(),
@@ -20,16 +21,18 @@ function editor(edit = true) {
   const onClose = vi.fn();
   const onReload = vi.fn().mockResolvedValue(undefined);
   render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <MigrationSourceEditor
-          source={edit ? migrationSource : null}
-          onSaved={onSaved}
-          onClose={onClose}
-          onReload={onReload}
-        />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <MigrationSourceEditor
+            source={edit ? migrationSource : null}
+            onSaved={onSaved}
+            onClose={onClose}
+            onReload={onReload}
+          />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   return { onSaved, onClose, onReload };
 }

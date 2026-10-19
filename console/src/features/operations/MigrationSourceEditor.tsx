@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, Input, Select, Space } from "antd";
 import {
   createMigrationSource,
@@ -15,6 +16,7 @@ import {
   migrationRequest,
   validSourceUrl,
 } from "./migrationModel";
+import { migrationWrite } from "./migrationAccess";
 
 type CredentialAction = "keep" | "replace" | "clear";
 
@@ -31,6 +33,7 @@ export function MigrationSourceEditor({
   onReload: () => Promise<void>;
 }) {
   const { t } = usePreferences();
+  const client = useQueryClient();
   const [name, setName] = useState(source?.name ?? "");
   const [baseUrl, setBaseUrl] = useState(source?.baseUrl ?? "");
   const [credentialAction, setCredentialAction] = useState<CredentialAction>(
@@ -73,14 +76,16 @@ export function MigrationSourceEditor({
     };
     clearInputs();
     try {
-      const saved = await migrationRequest(
-        source
-          ? updateMigrationSource({
-              path: { sourceId: source.id },
-              headers: { "If-Match": source.version },
-              body,
-            })
-          : createMigrationSource({ body }),
+      const saved = await migrationWrite(client, () =>
+        migrationRequest(
+          source
+            ? updateMigrationSource({
+                path: { sourceId: source.id },
+                headers: { "If-Match": source.version },
+                body,
+              })
+            : createMigrationSource({ body }),
+        ),
       );
       onSaved(saved);
     } catch (failure) {

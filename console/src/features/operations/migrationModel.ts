@@ -52,6 +52,11 @@ export function migrationError(error: unknown): LocalizedError {
   return new LocalizedError(key, undefined, { status });
 }
 
+export function migrationReadDenied(error: unknown) {
+  const status = (error as { status?: unknown } | null)?.status;
+  return status === 401 || status === 403;
+}
+
 export async function migrationRequest<T>(
   request: Promise<{ data?: T; error?: unknown }>,
 ): Promise<T> {

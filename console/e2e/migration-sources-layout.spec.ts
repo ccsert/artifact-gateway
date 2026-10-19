@@ -1,6 +1,8 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { authenticateAsAdmin, authenticateAsMember } from "./support/auth";
 import { defaultSiteSettings } from "../src/lib/siteSettings";
+import { waitForModalOpen } from "./support/motion";
+import { nexusCapabilities } from "../src/test/nexusBatchFixtures";
 import {
   migrationDiscovery,
   migrationMapping,
@@ -112,6 +114,119 @@ async function capture(page: Page, info: TestInfo, name: string) {
     });
 }
 for (const width of [1440, 390]) {
+  test(`source refusal clears cached metadata and open controls across workspace views at ${width}px`, async ({
+    page,
+  }, info) => {
+    const errors = await setup(page, width);
+    const chinese = width === 1440;
+    await page.route("**/api/v2/migrations/nexus/capabilities", (route) =>
+      route.fulfill({ json: nexusCapabilities }),
+    );
+    await page.route("**/api/v2/migrations/nexus/batches?**", (route) =>
+      route.fulfill({ json: { items: [], nextCursor: "" } }),
+    );
+    await page.goto(`/operations?tab=migrations&source=${migrationSource.id}`);
+    await expect(
+      page.getByRole("heading", { name: migrationSource.name, exact: true }),
+    ).toBeVisible();
+    let refuse!: () => Promise<void>;
+    await page.route(
+      chinese
+        ? "**/api/v2/migration-sources?**"
+        : `**/api/v2/migration-sources/${migrationSource.id}`,
+      (route) =>
+        new Promise<void>((resolve) => {
+          refuse = async () => {
+            await route.fulfill({
+              status: 403,
+              json: { status: 403, message: "never-render-private-message" },
+            });
+            resolve();
+          };
+        }),
+    );
+    const request = page.waitForRequest((request) =>
+      request
+        .url()
+        .includes(
+          chinese
+            ? "/api/v2/migration-sources?"
+            : `/api/v2/migration-sources/${migrationSource.id}`,
+        ),
+    );
+    await page
+      .getByRole("button", {
+        name: chinese ? "刷新源" : "Refresh source",
+        exact: true,
+      })
+      .nth(chinese ? 0 : 1)
+      .click();
+    await request;
+    await page
+      .getByRole("button", {
+        name: chinese ? "编辑源" : "Edit source",
+        exact: true,
+      })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: chinese ? "编辑迁移源" : "Edit migration source",
+      exact: true,
+    });
+    await waitForModalOpen(dialog);
+    await refuse();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("body")).not.toContainText(migrationSource.name);
+    await expect(page.locator("body")).not.toContainText(
+      migrationSource.baseUrl,
+    );
+    await expect(page.locator("body")).not.toContainText(
+      "never-render-private-message",
+    );
+    await expect(
+      page.getByRole("button", {
+        name: chinese ? "添加迁移源" : "Add migration source",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", {
+        name: chinese ? "批次与验收" : "Batches and acceptance",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", {
+        name: chinese ? "创建迁移批次" : "Create migration batch",
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole("combobox", {
+        name: chinese ? "已保存的迁移源" : "Saved migration source",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", {
+        name: chinese ? "连接与映射" : "Connections and mappings",
+        exact: true,
+      })
+      .click();
+    await expect(page.locator("body")).not.toContainText(
+      migrationSource.baseUrl,
+    );
+    await geometry(page, width);
+    await capture(page, info, "source-access-refused");
+    expect(errors.pageErrors).toEqual([]);
+    expect(
+      errors.consoleErrors.filter(
+        (message) =>
+          !/^Failed to load resource: the server responded with a status of 403/.test(
+            message,
+          ),
+      ),
+    ).toEqual([]);
+  });
   test(`migration source real route preserves geometry and previous results at ${width}px`, async ({
     page,
   }, info) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -29,6 +29,7 @@ import {
 } from "./migrationQueries";
 import "./migration.css";
 import type { BatchDraft } from "./nexusBatchModel";
+import { migrationWrite, useMigrationAccess } from "./migrationAccess";
 
 /** Administrator route owns access. URL state contains only the source ID. */
 export function MigrationSourcesPanel({
@@ -36,18 +37,38 @@ export function MigrationSourcesPanel({
 }: {
   onPlanBatch?: (draft: BatchDraft) => void;
 }) {
+  const access = useMigrationAccess();
+  return (
+    <MigrationSourcesContent key={access.epoch} onPlanBatch={onPlanBatch} />
+  );
+}
+
+function MigrationSourcesContent({
+  onPlanBatch,
+}: {
+  onPlanBatch?: (draft: BatchDraft) => void;
+}) {
   const { t } = usePreferences();
+  const access = useMigrationAccess();
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const sourceId = params.get("source") ?? "";
   const list = useMigrationSources();
   const detail = useMigrationSource(sourceId);
+  const source = detail.data;
   const sources = list.data?.pages.flatMap((page) => page.items) ?? null;
   const [editor, setEditor] = useState<{
     session: number;
     source: MigrationSource | null;
   } | null>(null);
   const [remove, setRemove] = useState<MigrationSource | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const select = (id: string) => {
     const next = new URLSearchParams(params);
     if (id) next.set("source", id);
@@ -60,6 +81,25 @@ export function MigrationSourcesPanel({
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: migrationKeys.all });
   };
+  if (access.error)
+    return (
+      <div
+        className="ag-page-stack ag-migration-panel"
+        data-testid="migration-panel"
+      >
+        <Notice
+          tone="info"
+          title={t("migration.scope")}
+          description={t("migration.scopeHint")}
+        />
+        <ErrorBanner
+          error={access.error}
+          onRetry={() => {
+            void list.refetch();
+          }}
+        />
+      </div>
+    );
   return (
     <div
       className="ag-page-stack ag-migration-panel"
@@ -155,25 +195,23 @@ export function MigrationSourcesPanel({
           {detail.error !== null && (
             <ErrorBanner
               error={detail.error}
-              tone={detail.data ? "warning" : "error"}
+              tone={source ? "warning" : "error"}
               onRetry={() => {
                 void detail.refetch();
               }}
             />
           )}
-          {!detail.data ? (
+          {!source ? (
             detail.error === null && <Loading />
           ) : (
             <>
               <Card>
                 <div className="ag-migration-header">
                   <div className="min-w-0">
-                    <h2>{detail.data.name}</h2>
-                    <p className="ag-migration-technical">
-                      {detail.data.baseUrl}
-                    </p>
+                    <h2>{source.name}</h2>
+                    <p className="ag-migration-technical">{source.baseUrl}</p>
                     <p className="text-xs text-fg-secondary">
-                      {t("migration.version", { version: detail.data.version })}
+                      {t("migration.version", { version: source.version })}
                     </p>
                   </div>
                   <div className="ag-migration-actions">
@@ -188,14 +226,14 @@ export function MigrationSourcesPanel({
                     </Button>
                     <Button
                       icon={<EditOutlined aria-hidden />}
-                      onClick={() => openEditor(detail.data)}
+                      onClick={() => openEditor(source)}
                     >
                       {t("migration.edit")}
                     </Button>
                     <Button
                       danger
                       icon={<DeleteOutlined aria-hidden />}
-                      onClick={() => setRemove(detail.data)}
+                      onClick={() => setRemove(source)}
                     >
                       {t("migration.delete")}
                     </Button>
@@ -203,8 +241,8 @@ export function MigrationSourcesPanel({
                 </div>
               </Card>
               <MigrationSourceInspection
-                key={`${detail.data.id}:${detail.data.version}`}
-                source={detail.data}
+                key={`${source.id}:${source.version}`}
+                source={source}
                 onPlanBatch={onPlanBatch}
               />
             </>
@@ -217,7 +255,7 @@ export function MigrationSourcesPanel({
           source={editor.source}
           onClose={() => setEditor(null)}
           onSaved={(saved) => {
-            queryClient.setQueryData(migrationKeys.detail(saved.id), saved);
+            if (!mounted.current) return;
             setEditor(null);
             select(saved.id);
             invalidate();
@@ -225,10 +263,10 @@ export function MigrationSourcesPanel({
           onReload={async () => {
             if (!editor.source) return;
             const source = await queryClient.fetchQuery(
-              migrationSourceOptions(editor.source.id),
+              migrationSourceOptions(editor.source.id, queryClient),
             );
-            queryClient.setQueryData(migrationKeys.detail(source.id), source);
-            setEditor({ session: editor.session + 1, source });
+            if (!mounted.current) return;
+            setEditor({ session: editor.session + 1, source: source.value });
             invalidate();
           }}
         />
@@ -240,12 +278,15 @@ export function MigrationSourcesPanel({
         confirmLabel={t("migration.delete")}
         onClose={() => setRemove(null)}
         onConfirm={async (source) => {
-          await migrationRequest(
-            deleteMigrationSource({
-              path: { sourceId: source.id },
-              headers: { "If-Match": source.version },
-            }),
+          await migrationWrite(queryClient, () =>
+            migrationRequest(
+              deleteMigrationSource({
+                path: { sourceId: source.id },
+                headers: { "If-Match": source.version },
+              }),
+            ),
           );
+          if (!mounted.current) return;
           queryClient.removeQueries({
             queryKey: migrationKeys.detail(source.id),
           });

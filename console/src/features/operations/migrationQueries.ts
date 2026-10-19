@@ -2,10 +2,13 @@ import {
   queryOptions,
   useInfiniteQuery,
   useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getMigrationSource, listMigrationSources } from "../../client";
 import { migrationError, migrationRequest } from "./migrationModel";
+import { migrationReadSnapshot, useMigrationAccess } from "./migrationAccess";
+import type { QueryClient } from "@tanstack/react-query";
 
 export const migrationKeys = {
   all: ["migration-sources"] as const,
@@ -14,37 +17,65 @@ export const migrationKeys = {
 };
 
 export function useMigrationSources() {
-  return useInfiniteQuery({
+  const client = useQueryClient();
+  const access = useMigrationAccess();
+  const query = useInfiniteQuery({
     queryKey: migrationKeys.list(),
+    enabled: !access.error,
     initialPageParam: "",
     queryFn: ({ signal, pageParam }) =>
-      migrationRequest(
-        listMigrationSources({
-          query: { limit: 100, cursor: pageParam || undefined },
-          signal,
-        }),
+      migrationReadSnapshot(client, () =>
+        migrationRequest(
+          listMigrationSources({
+            query: { limit: 100, cursor: pageParam || undefined },
+            signal,
+          }),
+        ),
       ),
-    getNextPageParam: (page) => page.nextCursor || undefined,
+    getNextPageParam: (page) => page.value.nextCursor || undefined,
     staleTime: 0,
   });
+  const data =
+    !access.error &&
+    query.data?.pages.every((page) => page.epoch === access.epoch)
+      ? { ...query.data, pages: query.data.pages.map((page) => page.value) }
+      : undefined;
+  return { ...query, data };
 }
 
-export function migrationSourceOptions(id: string) {
+export function migrationSourceOptions(id: string, client: QueryClient) {
   return queryOptions({
     queryKey: migrationKeys.detail(id),
     queryFn: ({ signal }) =>
-      migrationRequest(getMigrationSource({ path: { sourceId: id }, signal })),
+      migrationReadSnapshot(client, () =>
+        migrationRequest(
+          getMigrationSource({ path: { sourceId: id }, signal }),
+        ),
+      ),
     enabled: Boolean(id),
     staleTime: 0,
   });
 }
 
 export function useMigrationSource(id: string) {
-  return useQuery(migrationSourceOptions(id));
+  const client = useQueryClient();
+  const access = useMigrationAccess();
+  const query = useQuery({
+    ...migrationSourceOptions(id, client),
+    enabled: Boolean(id) && !access.error,
+  });
+  return {
+    ...query,
+    data:
+      !access.error && query.data?.epoch === access.epoch
+        ? query.data.value
+        : undefined,
+  };
 }
 
 /** Read-only POST observations keep old data on failure and abort stale work. */
 export function useMigrationRead<T>() {
+  const client = useQueryClient();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -67,9 +98,11 @@ export function useMigrationRead<T>() {
     setBusy(true);
     setError(null);
     try {
-      const result = await read(controller.signal);
+      const result = await migrationReadSnapshot(client, () =>
+        read(controller.signal),
+      );
       if (id === request.current.id) {
-        setData(result);
+        setData(result.value);
         setRevision((current) => current + 1);
       }
     } catch (failure) {
