@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Raw memory fixtures now share public storage-contract tests with PostgreSQL (#278, [ADR 0010](docs/adr/0010-memory-store-contracts.md)). Their default read/reclaim batches are bounded at 100, collected bytes restore as not found, and contended locks honor cancellation. Memory remains an explicit test fixture; it does not prove PostgreSQL transaction or recovery behavior.
+
 - Record the native management architecture and retirement of Nexus compatibility requirements in [ADR 0009](docs/adr/0009-native-architecture.md); enforce protocol dependency and aggregate-store boundaries through `make lint` (#277). Existing routes remain until their removal slice.
 
 - Backup release verification continues to accept original binaries built under the previous module path. The module and command paths and retained build-info linker flags must belong to the same exact approved namespace; artifact digest, platform, approved archive, version, revision and complete migration-ledger checks remain required.

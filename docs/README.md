@@ -41,6 +41,7 @@ agree with executable tests and the
 - [ADR 0007: agctl CLI shape and cross-cutting contract](adr/0007-agctl-cli-shape.md)
 - [ADR 0008: Go module path follows the source repository](adr/0008-go-module-path.md)
 - [ADR 0009: Native management architecture](adr/0009-native-architecture.md)
+- [ADR 0010: Memory store contracts](adr/0010-memory-store-contracts.md)
 
 ## Protocols and formats
 
