@@ -280,6 +280,8 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `PUT /repositories/{repositoryId}/artifact-intelligence`<br>`replaceArtifactIntelligence` | `artifact intelligence set --repo <id>` | #138 | M2 | RI | C |
 | `GET /repositories/{repositoryId}/artifact-quarantine`<br>`getArtifactQuarantine` | `artifact quarantine show --repo <id>` | #131 | M1 implemented | R | Q |
 | `PUT /repositories/{repositoryId}/artifact-quarantine`<br>`replaceArtifactQuarantine` | `artifact quarantine set --repo <id>` | #138 | M2 | RA | C |
+| `GET /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank`<br>`getPyPIYankState` | `pypi yank show --repo <id>` | #311 | M2 planned | R* | Q |
+| `PATCH /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank`<br>`updatePyPIYankState` | `pypi yank set --repo <id>` | #311 | M2 planned | W | C |
 | `GET /repositories/{repositoryId}/oci/images`<br>`listOCIImages` | `oci images --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/oci/manifests`<br>`listOCIManifests` | `oci manifests --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/maven/coordinates`<br>`listMavenCoordinates` | `maven coordinates --repo <id>` | #131 | M1 implemented | R* | Q |

@@ -508,6 +508,13 @@ func (h nativePyPIHandler) writeSimpleProject(w http.ResponseWriter, r *http.Req
 				gateway["cached-at"] = file.CachedAt
 			}
 			item := map[string]any{"filename": file.Filename, "url": "../../packages/" + url.PathEscape(file.Filename), "hashes": map[string]string{"sha256": strings.TrimPrefix(file.Digest, "sha256:")}, "_artifact-gateway": gateway}
+			item["yanked"] = false
+			if file.Yanked {
+				item["yanked"] = true
+				if file.YankReason != "" {
+					item["yanked"] = file.YankReason
+				}
+			}
 			if file.RequiresPython != "" {
 				item["requires-python"] = file.RequiresPython
 			}
@@ -522,6 +529,9 @@ func (h nativePyPIHandler) writeSimpleProject(w http.ResponseWriter, r *http.Req
 		attributes := ""
 		if file.RequiresPython != "" {
 			attributes = ` data-requires-python="` + html.EscapeString(file.RequiresPython) + `"`
+		}
+		if file.Yanked {
+			attributes += ` data-yanked="` + html.EscapeString(file.YankReason) + `"`
 		}
 		fmt.Fprintf(&body, `<a href="../../packages/%s#sha256=%s"%s>%s</a>`+"\n", url.PathEscape(file.Filename), strings.TrimPrefix(file.Digest, "sha256:"), attributes, html.EscapeString(file.Filename))
 	}
@@ -721,6 +731,7 @@ type pypiSimpleJSON struct {
 		URL            string            `json:"url"`
 		Hashes         map[string]string `json:"hashes"`
 		RequiresPython string            `json:"requires-python"`
+		Yanked         json.RawMessage   `json:"yanked"`
 	} `json:"files"`
 }
 
@@ -737,7 +748,12 @@ func parsePyPISimpleResponse(response *http.Response, repositoryID, project stri
 			return nil, err
 		}
 		for _, incoming := range document.Files {
+			yanked, reason, yankErr := parsePyPIYanked(incoming.Yanked)
+			if yankErr != nil {
+				return nil, yankErr
+			}
 			if file, ok := pypiProxyFile(repositoryID, project, incoming.Filename, incoming.URL, incoming.Hashes["sha256"], incoming.RequiresPython, baseURL); ok {
+				file.Yanked, file.YankReason = yanked, reason
 				files = append(files, file)
 			}
 		}
@@ -747,16 +763,25 @@ func parsePyPISimpleResponse(response *http.Response, repositoryID, project stri
 			return nil, parseErr
 		}
 		var visit func(*xhtml.Node)
+		var yankErr error
 		visit = func(node *xhtml.Node) {
 			if node.Type == xhtml.ElementNode && node.Data == "a" {
 				var href, requiresPython string
+				var yanked bool
+				var yankReason string
 				for _, attribute := range node.Attr {
 					switch strings.ToLower(attribute.Key) {
 					case "href":
 						href = attribute.Val
 					case "data-requires-python":
 						requiresPython = attribute.Val
+					case "data-yanked":
+						yanked, yankReason = true, attribute.Val
 					}
+				}
+				if !repository.ValidPyPIYankReason(yankReason) {
+					yankErr = errors.New("invalid PyPI yank reason")
+					return
 				}
 				if parsed, parseErr := url.Parse(href); parseErr == nil {
 					filename, _ := url.PathUnescape(filepath.Base(parsed.Path))
@@ -767,6 +792,7 @@ func parsePyPISimpleResponse(response *http.Response, repositoryID, project stri
 						}
 					}
 					if file, ok := pypiProxyFile(repositoryID, project, filename, href, digest, requiresPython, baseURL); ok {
+						file.Yanked, file.YankReason = yanked, yankReason
 						files = append(files, file)
 					}
 				}
@@ -776,11 +802,35 @@ func parsePyPISimpleResponse(response *http.Response, repositoryID, project stri
 			}
 		}
 		visit(document)
+		if yankErr != nil {
+			return nil, yankErr
+		}
 	}
 	if len(files) == 0 {
 		return nil, repository.ErrNotFound
 	}
+	seen := make(map[string]repository.PyPIFile, len(files))
+	for _, file := range files {
+		if previous, exists := seen[file.Filename]; exists && (previous.Digest != file.Digest || previous.Yanked != file.Yanked || previous.YankReason != file.YankReason || previous.SourceURL != file.SourceURL) {
+			return nil, errors.New("conflicting PyPI file metadata")
+		}
+		seen[file.Filename] = file
+	}
 	return files, nil
+}
+
+func parsePyPIYanked(raw json.RawMessage) (bool, string, error) {
+	if len(raw) == 0 || string(raw) == "false" {
+		return false, "", nil
+	}
+	if string(raw) == "true" {
+		return true, "", nil
+	}
+	var reason string
+	if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &reason) != nil || !repository.ValidPyPIYankReason(reason) {
+		return false, "", errors.New("invalid PyPI yanked metadata")
+	}
+	return true, reason, nil
 }
 
 func pypiProxyFile(repositoryID, project, filename, href, digest, requiresPython string, baseURL *url.URL) (repository.PyPIFile, bool) {

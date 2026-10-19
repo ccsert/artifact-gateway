@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- PyPI supports file yank/unyank and atomic version operations with strong revisions, repository write grants and transactional success audit (#311). HTML/JSON Simple, Proxy revalidation, Group authority, lifecycle and backup preserve the declaration without changing archive bytes. Console operators can choose files, enter reasons and restore; pinned pip 26.2 tests range skips and exact-pin warnings. See [PyPI file yanking](docs/pypi-yank.md).
+
 - `agctl email delivery wait` now fails with exit 1 and `delivery_failed` when the delivery is `dead` (#406). Its failure envelope retains the complete delivery record; accepted still exits 0, and timeout still exits 8 without replaying or canceling the queued work.
 
 - Maven / OCI Proxy rejects responses received after the complete request deadline or after cancellation, even when the runtime has not delivered the deadline notification yet (#403). Rejected response bodies are closed and their transport resources released, and their upstream trace records a safe error; timely bodies remain readable until the caller closes them.

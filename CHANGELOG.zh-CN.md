@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- PyPI 支持文件撤回/恢复与版本原子操作，以强修订、仓库写入授权和事务内成功审计保护变更（#311）。HTML/JSON Simple、Proxy 重验、Group 来源优先级、生命周期与备份保留声明，不改档案字节。Console 可选文件、填写原因并恢复，固定 pip 26.2 验证范围跳过与精确锁定警告。参见 [PyPI 文件撤回](docs/pypi-yank.zh-CN.md)。
+
 - `agctl email delivery wait` 遇到 `dead` 投递时以退出码 1 和 `delivery_failed` 报告失败（#406），失败信封保留完整投递记录。中继接收仍退出 0，超时仍退出 8，不自动重放或取消已入队工作。
 
 - Maven / OCI Proxy 拒绝超过整链截止时间或已取消后收到的响应，即使运行时尚未送达 deadline 取消通知也不会接受迟到响应（#403）。被拒响应关闭 body、释放 transport 资源，并在上游追踪中记录安全的错误；及时响应的 body 保持可读，直到调用方关闭。

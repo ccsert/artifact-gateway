@@ -19,6 +19,7 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { errorText } from "../../messages/translate";
 import { usePyPIProject, type PyPIFile } from "./protocolDetailQueries";
+import { PyPIYankPanel } from "./PyPIYankPanel";
 
 function fileVersion(file: PyPIFile): string {
   return file["_artifact-gateway"]?.version ?? "";
@@ -38,6 +39,7 @@ export function PyPIProjectDetail({
   publisher,
   onVersionChange,
   canQuarantine = false,
+  canWrite = false,
 }: {
   repositoryId?: string;
   repoName: string;
@@ -47,6 +49,7 @@ export function PyPIProjectDetail({
   publisher?: string;
   onVersionChange?: (version: string) => void;
   canQuarantine?: boolean;
+  canWrite?: boolean;
 }) {
   const { locale, t } = usePreferences();
   const projectQuery = usePyPIProject(repoName, project);
@@ -157,6 +160,25 @@ export function PyPIProjectDetail({
       ),
     },
     {
+      title: t("artifactDetail.yankState"),
+      key: "yank",
+      width: 210,
+      render: (_, file) => (
+        <div className="grid gap-1 text-xs">
+          <span>
+            {t(
+              file.yanked === true || typeof file.yanked === "string"
+                ? "artifactDetail.yanked"
+                : "artifactDetail.notYanked",
+            )}
+          </span>
+          {typeof file.yanked === "string" && file.yanked !== "" && (
+            <span className="break-words text-fg-tertiary">{file.yanked}</span>
+          )}
+        </div>
+      ),
+    },
+    {
       title: "SHA-256",
       key: "digest",
       width: 145,
@@ -169,7 +191,7 @@ export function PyPIProjectDetail({
   ];
 
   return (
-    <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+    <div className="ag-pypi-detail grid grid-cols-1 gap-4 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
       {projectQuery.isError && (
         <div className="xl:col-span-2">
           <ErrorBanner
@@ -225,7 +247,7 @@ export function PyPIProjectDetail({
           placeholder={t("artifactDetail.searchPyPIVersions")}
         />
       </div>
-      <div className="min-w-0">
+      <div className="grid min-w-0 grid-cols-1 content-start gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-xs text-fg-strong">
             {project}=={selectedVersion}
@@ -242,7 +264,16 @@ export function PyPIProjectDetail({
                 })}
           </Tag>
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-x-4 border-y border-line py-3 text-xs">
+        {repositoryId && canWrite && (
+          <PyPIYankPanel
+            repositoryId={repositoryId}
+            repoName={repoName}
+            project={project}
+            version={selectedVersion}
+            canManage={canWrite}
+          />
+        )}
+        <div className="grid grid-cols-2 gap-4 border-y border-line py-3 text-xs sm:grid-cols-4">
           <MetadataItem
             label={t("artifactDetail.published")}
             value={formatDate(latestMetadata?.["created-at"], locale)}
@@ -272,9 +303,9 @@ export function PyPIProjectDetail({
           columns={columns}
           dataSource={selectedFiles}
           pagination={false}
-          scroll={{ x: 760, y: 220 }}
+          scroll={{ x: 970, y: 220 }}
         />
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           {snippets.map((snippet) => (
             <UsageSnippetBlock
               key={snippet.label}

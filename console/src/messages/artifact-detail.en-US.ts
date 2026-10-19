@@ -1,6 +1,27 @@
 import type { ArtifactDetailMessageKey } from "./artifact-detail.zh-CN";
 
 export const artifactDetailEnUS: Record<ArtifactDetailMessageKey, string> = {
+  "artifactDetail.yankState": "Yank state",
+  "artifactDetail.yanked": "Yanked",
+  "artifactDetail.notYanked": "Available for selection",
+  "artifactDetail.yankManage": "Manage yanking",
+  "artifactDetail.yankSummary": "{yanked} / {total} files yanked",
+  "artifactDetail.yankTarget": "Scope",
+  "artifactDetail.yankAllFiles": "All {total} files in this version",
+  "artifactDetail.yankAction": "Action",
+  "artifactDetail.yankFiles": "Yank files",
+  "artifactDetail.unyankFiles": "Restore files",
+  "artifactDetail.yankReason": "Yank reason (optional)",
+  "artifactDetail.yankReasonLimit":
+    "At most 1024 bytes without control characters. Restoring clears the reason.",
+  "artifactDetail.yankExplanation":
+    "Yanking affects pip version selection; an exact version pin can still download the file. File bytes, quarantine and tombstones remain separate.",
+  "artifactDetail.yankConfirm": "Confirm yank",
+  "artifactDetail.unyankConfirm": "Confirm restore",
+  "artifactDetail.yankRefresh": "Refresh and confirm again",
+  "artifactDetail.yankMissingResponse":
+    "The yank response is incomplete. Refresh to verify the outcome.",
+  "artifactDetail.yankFailed": "Failed to load yank state",
   "artifactDetail.severity": "Severity",
   "artifactDetail.vulnerability": "Vulnerability",
   "artifactDetail.affectedComponent": "Affected component",

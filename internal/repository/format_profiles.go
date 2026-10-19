@@ -13,6 +13,7 @@ const (
 	RepositoryOperationReclaim   RepositoryOperation = "reclaim"
 	RepositoryOperationPromote   RepositoryOperation = "promote"
 	RepositoryOperationReplicate RepositoryOperation = "replicate"
+	RepositoryOperationYank      RepositoryOperation = "yank"
 )
 
 // FormatProfile is the capability contract for one supported artifact format.
@@ -62,6 +63,7 @@ var supportedFormatProfiles = []FormatProfile{
 		AnonymousRead:       true,
 		PublicationScanning: true,
 		HostedOperations: []RepositoryOperation{
+			RepositoryOperationYank,
 			RepositoryOperationRead,
 			RepositoryOperationPublish,
 			RepositoryOperationBrowse,

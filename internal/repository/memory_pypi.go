@@ -18,6 +18,9 @@ func (s *MemoryStore) LockPyPIObject(_ context.Context, objectKey string) (func(
 }
 
 func (s *MemoryStore) PublishPyPIFile(ctx context.Context, file PyPIFile) (PyPIFile, error) {
+	if !ValidPyPIYankReason(file.YankReason) || !file.Yanked && file.YankReason != "" {
+		return PyPIFile{}, ErrInvalidPyPIYank
+	}
 	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, file.RepositoryID, FormatPyPI, []string{file.Project + "@" + file.Version})
 	if err != nil {
 		return PyPIFile{}, err
@@ -49,6 +52,9 @@ func (s *MemoryStore) PublishPyPIFile(ctx context.Context, file PyPIFile) (PyPIF
 		file.CachedAt = now
 	}
 	file.State = "visible"
+	if file.YankRevision < 1 {
+		file.YankRevision = 1
+	}
 	s.pypiFiles[key] = file
 	return clonePyPIFile(file), nil
 }
@@ -71,6 +77,9 @@ func (s *MemoryStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile) 
 		}
 	}
 	for _, file := range files {
+		if !ValidPyPIYankReason(file.YankReason) || !file.Yanked && file.YankReason != "" {
+			return nil, ErrInvalidPyPIYank
+		}
 		if file.RepositoryID != files[0].RepositoryID || file.Project != files[0].Project || file.Version != files[0].Version || file.ObjectKey == "" {
 			return nil, ErrDisabled
 		}
@@ -100,6 +109,9 @@ func (s *MemoryStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile) 
 			file.CachedAt = now
 		}
 		file.State = "visible"
+		if file.YankRevision < 1 {
+			file.YankRevision = 1
+		}
 		s.pypiFiles[key] = file
 		result = append(result, file)
 	}
@@ -107,6 +119,9 @@ func (s *MemoryStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile) 
 }
 
 func (s *MemoryStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, project string, files []PyPIFile) error {
+	if err := validatePyPIProxyFiles(files); err != nil {
+		return err
+	}
 	coordinates := make([]string, 0, len(files))
 	for _, file := range files {
 		coordinates = append(coordinates, project+"@"+file.Version)
@@ -119,12 +134,15 @@ func (s *MemoryStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, proj
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
+	// Validate the entire revalidation before changing any cached metadata.
+	for _, file := range files {
+		if existing, ok := s.pypiFiles[pypiFileKey(repositoryID, file.Filename)]; ok && existing.Digest != "" && existing.Digest != file.Digest {
+			return ErrUpstreamChanged
+		}
+	}
 	for _, file := range files {
 		key := pypiFileKey(repositoryID, file.Filename)
 		if existing, ok := s.pypiFiles[key]; ok {
-			if existing.Digest != "" && existing.Digest != file.Digest {
-				return ErrUpstreamChanged
-			}
 			file.ObjectKey = existing.ObjectKey
 			file.Size = existing.Size
 			file.CachedAt = existing.CachedAt
@@ -132,6 +150,10 @@ func (s *MemoryStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, proj
 			file.State = existing.State
 			file.DeletedAt = existing.DeletedAt
 			file.CollectedAt = existing.CollectedAt
+			file.YankRevision = existing.YankRevision
+			if file.Yanked != existing.Yanked || file.YankReason != existing.YankReason {
+				file.YankRevision++
+			}
 		}
 		file.RepositoryID = repositoryID
 		file.Project = project
@@ -140,6 +162,9 @@ func (s *MemoryStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, proj
 		}
 		if file.State == "" {
 			file.State = "visible"
+		}
+		if file.YankRevision < 1 {
+			file.YankRevision = 1
 		}
 		s.pypiFiles[key] = file
 	}
@@ -264,6 +289,7 @@ func (s *MemoryStore) TombstonePyPIVersion(ctx context.Context, repositoryID, pr
 		if file.RepositoryID == repositoryID && file.Project == project && file.Version == version && file.State == "visible" {
 			file.State = "deleted"
 			file.DeletedAt = now
+			file.YankRevision++
 			s.pypiFiles[key] = file
 			files = append(files, file)
 		}
@@ -359,6 +385,7 @@ func (s *MemoryStore) restorePyPIVersionLocked(repositoryID, project, version st
 		}
 		file.State = "visible"
 		file.DeletedAt = time.Time{}
+		file.YankRevision++
 		s.pypiFiles[key] = file
 		files = append(files, file)
 	}

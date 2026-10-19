@@ -8,6 +8,7 @@ type managementServer struct {
 	repositoryManagementHandler
 	artifactManagementHandler
 	accessManagementHandler
+	pypiYankManagementHandler
 	generatedRepositoryAPIAdapter
 }
 

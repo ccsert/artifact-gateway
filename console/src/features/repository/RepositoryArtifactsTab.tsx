@@ -158,6 +158,7 @@ export function RepositoryArtifactsTab({
   });
 
   const FormatDetail = formatViews(format).ArtifactDetail;
+  const containExpandedDetail = format === "npm" || format === "pypi";
   const expandedRowRender = (r: ArtifactRow) => {
     // Proxy Maven lists cache entries, which have their own detail.
     if (proxyMaven) {
@@ -176,14 +177,15 @@ export function RepositoryArtifactsTab({
         initialReference={referenceTarget}
         managed={repo.type !== "proxy"}
         canDelete={canWrite && repo.type === "hosted"}
+        canWrite={canWrite && repo.type === "hosted"}
         canQuarantine={canQuarantine}
         onDeleted={() => void load(q)}
         onVersionChange={(version) => onVersionChange?.(r.coordinate, version)}
       />
     );
-    // Expanded rows share the table's scroll width. Keep npm's reading pane
+    // Expanded rows share the table's scroll width. Keep these reading panes
     // within the visible table container, minus its two 16px cell gutters.
-    return format === "npm" ? (
+    return containExpandedDetail ? (
       <div style={{ maxWidth: "calc(100cqi - 32px)" }}>{detail}</div>
     ) : (
       detail
@@ -353,7 +355,9 @@ export function RepositoryArtifactsTab({
           <ConsoleTable<ArtifactRow>
             rowKey="key"
             style={
-              format === "npm" ? { containerType: "inline-size" } : undefined
+              containExpandedDetail
+                ? { containerType: "inline-size" }
+                : undefined
             }
             dataSource={rows}
             columns={columns}

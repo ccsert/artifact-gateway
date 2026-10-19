@@ -49,6 +49,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 ## 协议与仓库格式
 
 - [协议兼容性](protocol-compatibility.zh-CN.md) — 各格式已实现行为和明确限制。
+- [PyPI 文件撤回](pypi-yank.zh-CN.md) — 文件选择、原子管理、pip 与恢复证据。
 - [Maven Hosted 发布](maven-hosted-publication.zh-CN.md) — 默认 Nexus 兼容直接模式与严格可选提交。
 - [APT Proxy 与 Group](apt-proxy.zh-CN.md) — 字节保持读取、缓存、授权与限制。
 - [APT Hosted 签名](apt-hosted-signing.zh-CN.md) — H2 预览、外部 signer、H3 轮换和生产边界。

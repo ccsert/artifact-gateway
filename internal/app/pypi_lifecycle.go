@@ -159,7 +159,7 @@ func samePyPIPromotionFiles(left, right []repository.PyPIFile) bool {
 		return false
 	}
 	for index := range left {
-		if left[index].Filename != right[index].Filename || left[index].ObjectKey != right[index].ObjectKey || left[index].Digest != right[index].Digest || left[index].Size != right[index].Size {
+		if left[index].Filename != right[index].Filename || left[index].ObjectKey != right[index].ObjectKey || left[index].Digest != right[index].Digest || left[index].Size != right[index].Size || left[index].Yanked != right[index].Yanked || left[index].YankReason != right[index].YankReason || left[index].YankRevision != right[index].YankRevision {
 			return false
 		}
 	}
