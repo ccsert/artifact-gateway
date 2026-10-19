@@ -808,7 +808,9 @@ command, flag, or argument count the client does not have.
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,
-  reorder, delete that keeps the members); publishes a Raw file and a Maven
+  reorder, delete that keeps the members); creates and updates a Maven Proxy
+  with a synthetic upstream (no fetch), verifies its capabilities and read-only
+  connection guide, refuses a stale update, and accepts deletion; publishes a Raw file and a Maven
   POM through the native protocols and searches, browses, lists, inspects,
   and deletes them; checks that a credential without permissions is refused
   (6), sees an empty global search, and that the refusal is in the audit log

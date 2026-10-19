@@ -661,7 +661,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。剧本创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
-  `If-Match` 的改名、重排、保留成员的删除）；通过原生协议发布一个 Raw 文件和
+  `If-Match` 的改名、重排、保留成员的删除）；创建和更新合成上游的 Maven Proxy
+  （不读取上游）、验证能力与只读接入指引、拒绝过期版本并受理删除；通过原生协议发布一个 Raw 文件和
   一个 Maven POM，并检索、浏览、列出、查看和删除它们；检查无权限凭据被拒绝
   （6）、全局检索为空，且该拒绝能按报告的请求 ID 在审计日志中找到；为模拟的
   成员主体写入、检查、按前缀收窄并删除授权（被拒时 access check 退出码 6），在
