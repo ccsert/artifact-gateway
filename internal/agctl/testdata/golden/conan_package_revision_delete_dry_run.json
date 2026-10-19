@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "DELETE",
+    "path": "/api/v2/repositories/00000000-0000-4000-8000-000000000001/conan/package-revisions/p1?packageId=pkg1&recipeRevision=r1&reference=widget%2F1.0%2Fuser%2Fstable",
+    "headers": {},
+    "body": null,
+    "current": {
+      "createdAt": "2026-10-19T00:00:00Z",
+      "digest": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+      "packageId": "pkg1",
+      "recipeRevision": "r1",
+      "reference": "widget/1.0/user/stable",
+      "revision": "p1",
+      "state": "visible"
+    },
+    "verified": [
+      "the exact package revision is currently visible"
+    ],
+    "notVerified": [
+      "caller permission (repositories:write)",
+      "tombstone state when already absent",
+      "byte reclamation or references held by lifecycle jobs"
+    ]
+  },
+  "error": null,
+  "meta": null
+}

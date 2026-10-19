@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "createdAt": "2026-10-19T00:00:00Z",
+        "digest": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+        "packageId": "pkg1",
+        "recipeRevision": "r1",
+        "reference": "widget/1.0/user/stable",
+        "revision": "p1",
+        "state": "visible"
+      }
+    ],
+    "nextCursor": null
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "none"
+    },
+    "scope": {
+      "packageId": "pkg1",
+      "recipeRevision": "r1",
+      "reference": "widget/1.0/user/stable",
+      "repositoryId": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

@@ -249,11 +249,11 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /repositories/{repositoryId}/apt/snapshots/restore`<br>`restoreAPTRepositorySnapshot` | `apt snapshot restore --repo <id>` | #138 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive`<br>`exportAPTRepositorySnapshot` | `apt snapshot archive --repo <id> --output <file>` | #138 | M2 | RA | Q |
 | `GET /repositories/{repositoryId}/apt/signing-state`<br>`getAPTRepositorySigningState` | `apt signing-state --repo <id>` | #138 | M2 | RA | Q |
-| `GET /repositories/{repositoryId}/conan/references`<br>`listConanReferences` | `conan references --repo <id>` | #131 | M2 | R* | Q |
-| `GET /repositories/{repositoryId}/conan/recipe-revisions`<br>`listConanRecipeRevisions` | `conan recipe-revisions --repo <id>` | #131 | M2 | R* | Q |
-| `GET /repositories/{repositoryId}/conan/package-revisions`<br>`listConanPackageRevisions` | `conan package-revisions --repo <id>` | #131 | M2 | R* | Q |
-| `GET /repositories/{repositoryId}/conan/package-ids`<br>`listConanPackageIds` | `conan package-ids --repo <id>` | #131 | M2 | R* | Q |
-| `DELETE /repositories/{repositoryId}/conan/package-revisions/{revision}`<br>`deleteConanPackageRevision` | `conan package-revision delete --repo <id>` | #131 | M2 | W | W |
+| `GET /repositories/{repositoryId}/conan/references`<br>`listConanReferences` | `conan references --repo <id>` | #131 | M2 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/conan/recipe-revisions`<br>`listConanRecipeRevisions` | `conan recipe-revisions --repo <id>` | #131 | M2 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/conan/package-revisions`<br>`listConanPackageRevisions` | `conan package-revisions --repo <id>` | #131 | M2 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/conan/package-ids`<br>`listConanPackageIds` | `conan package-ids --repo <id>` | #131 | M2 implemented | R* | Q |
+| `DELETE /repositories/{repositoryId}/conan/package-revisions/{revision}`<br>`deleteConanPackageRevision` | `conan package-revision delete --repo <id>` | #131 | M2 implemented | W | W |
 | `GET /repositories/{repositoryId}/cache/entries`<br>`listProxyCacheEntries` | `cache entries --repo <id>` | #137 | M2 | R* | Q |
 | `POST /repositories/{repositoryId}/cache/invalidate`<br>`invalidateProxyCache` | `cache invalidate --repo <id>` | #137 | M2 | RA | W |
 | `POST /repositories/{repositoryId}/cache/negative:clear`<br>`clearProxyNegativeCache` | `cache clear-negative --repo <id>` | #137 | M2 | RA | W |

@@ -484,6 +484,12 @@ oci_id=$(field "$out" data.id)
 expect 0 "$out" -- oci images --repo "$oci_id" --json
 require "$(field "$out" data.items)" "[]" "empty OCI repository"
 
+# Conan's existing session API seeds isolated bytes; all four views and the
+# confirmed package-revision tombstone are exercised through this agctl build.
+HOME="$workdir/home" AGCTL_SERVER="$server" AGCTL_TOKEN="$admin_token" AGCTL_PROFILE="" \
+  CLI_CONAN_E2E_RESOLVER_TOKEN="$resolver_token" \
+  python3 scripts/cli-conan-e2e.py "$workdir/agctl"
+
 # A credential without repository permissions: refused for one repository
 # (exit 6), an empty global search rather than an error, and the refusal is
 # in the audit log under the request id the CLI reported.

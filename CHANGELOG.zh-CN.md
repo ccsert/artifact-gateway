@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- `agctl` 补齐 Conan 四类管理视图和确认后的包修订墓碑（#131）。reference 与配方修订使用服务端游标，package ID 与包修订如实报告一次性列表范围；删除要求显式确认、支持只读计划，并在 HTTP 204 后回读精确 package 的可见修订。确认或回读不确定时保留未知结果；隔离 CLI E2E 核对已知身份、页预算、授权、审计和对象完整字节。
+
 - `agctl repo connect` 为 Maven Hosted 的读取与发布生成原生 `/repository/maven/<repository>/` 端点（#130）。真实 E2E 用生成的发布地址上传 POM 并逐字节回读；Proxy 指引仍使用 `/maven/<repository>/`。
 
 - Console 管理员可将 Nexus Hosted 显式映射绑定真实原生目标，凭操作员容量证据、CAS 和幂等请求控制持久迁移批次（#383）。扫描、源校验、复制、目标读回与可见身份分别展示；观察报告包含完整摘要、端点调整与库存不完整标记。冷客户端验收、冻结源后的最终追平与生产切流在另行取得证据前保持未验证。见 [Console Nexus 迁移](docs/nexus-migration-console.zh-CN.md)。

@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- `agctl` completes Conan's four management views and confirmed package-revision tombstones (#131). Reference and recipe-revision views use server cursors; package IDs and package revisions report their actual unpaged scope. Deletion needs explicit confirmation, supports a read-only plan, and verifies the exact package's visible revisions after HTTP 204; uncertain acknowledgements or read-back retain an unknown outcome. Isolated CLI E2E covers literal identities, page budgets, authorization, audit and complete object bytes.
+
 - `agctl repo connect` now emits the native `/repository/maven/<repository>/` endpoint for Maven Hosted reads and publication (#130). Generated deployment snippets are exercised by a real POM PUT and byte read-back; Proxy guides retain `/maven/<repository>/`.
 
 - Console administrators can bind explicit Nexus Hosted mappings to real native targets and control durable migration batches with operator capacity evidence, CAS and idempotent requests (#383). Scan, source verification, copy, target read-back and visible identities remain separate; full hashes, endpoint adjustments and incomplete inventory appear in observation reports. Cold-client acceptance, a final catch-up after source freeze and production cutover stay unverified until separately established. See [Console Nexus migration](docs/nexus-migration-console.md).

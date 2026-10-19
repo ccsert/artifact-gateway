@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "repositoryId": "00000000-0000-4000-8000-000000000001",
+    "reference": "widget/1.0/user/stable",
+    "recipeRevision": "r1",
+    "packageId": "pkg1",
+    "revision": "p1",
+    "status": "tombstoned",
+    "visibility": "not_listed"
+  },
+  "error": null,
+  "meta": null
+}
