@@ -61,6 +61,8 @@ Changing sources, switching views or remounting the panel does not restore the
 cache. Only a successful fresh read started after the refusal restores access;
 preflight and capacity must then be entered again. Temporary service errors
 (500) retain the last authorized observation with a refresh-failure warning.
+Changing the signed-in token or actor starts a new read scope automatically;
+the previous identity's late responses cannot restore or refuse the new scope.
 
 Controls use the captured `If-Match` version and a stable `Idempotency-Key` for
 identical retries within the open form. Version conflicts require reading the

@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import {
+  CancelledError,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { migrationError, migrationReadDenied } from "./migrationModel";
 
 type Snapshot = {
@@ -9,16 +13,32 @@ type Snapshot = {
 type Scope = {
   snapshot: Snapshot;
   listeners: Set<() => void>;
+  generation?: object;
 };
-// Source access belongs to this identity's QueryClient, not a particular view.
-// A remount, a cache write or a late response cannot undo a refusal.
+// IdentityCacheScope removes this non-shared marker on every token/actor change.
+// Its object identity fences requests even though the QueryClient is reused.
+const accessKey = ["migration-source-access-generation"] as const;
 const scopes = new WeakMap<QueryClient, Scope>();
 function scopeFor(client: QueryClient) {
   let scope = scopes.get(client);
   if (!scope) {
-    scope = { snapshot: { epoch: 0, error: null }, listeners: new Set() };
+    const created: Scope = {
+      snapshot: { epoch: 0, error: null },
+      listeners: new Set(),
+    };
+    scope = created;
     scopes.set(client, scope);
+    client.getQueryCache().subscribe((event) => {
+      if (event.type === "removed" && event.query === created.generation) {
+        created.generation = undefined;
+        // Keep the epoch monotonic so forms and observations are also replaced.
+        publish(created, { epoch: created.snapshot.epoch + 1, error: null });
+      }
+    });
   }
+  scope.generation ??= client
+    .getQueryCache()
+    .build(client, { queryKey: accessKey, gcTime: Infinity });
   return scope;
 }
 function publish(scope: Scope, snapshot: Snapshot) {
@@ -49,14 +69,18 @@ export async function migrationReadSnapshot<T>(
 ) {
   const scope = scopeFor(client);
   const epoch = scope.snapshot.epoch;
+  const generation = scope.generation;
   let value: T;
   try {
     value = await read();
   } catch (error) {
+    if (generation !== scope.generation)
+      throw new CancelledError({ silent: true });
     refuse(scope, error);
     throw error;
   }
-  if (epoch !== scope.snapshot.epoch) throw migrationError({ status: 403 });
+  if (generation !== scope.generation || epoch !== scope.snapshot.epoch)
+    throw new CancelledError({ silent: true });
   // Only a successful read started after the last refusal restores access.
   if (scope.snapshot.error) publish(scope, { epoch, error: null });
   return { epoch, value };
@@ -65,10 +89,18 @@ export async function migrationWrite<T>(
   client: QueryClient,
   write: () => Promise<T>,
 ) {
+  const scope = scopeFor(client);
+  const generation = scope.generation;
+  const epoch = scope.snapshot.epoch;
   try {
-    return await write();
+    const value = await write();
+    if (generation !== scope.generation || epoch !== scope.snapshot.epoch)
+      throw new CancelledError({ silent: true });
+    return value;
   } catch (error) {
-    refuse(scopeFor(client), error);
+    if (generation !== scope.generation)
+      throw new CancelledError({ silent: true });
+    refuse(scope, error);
     throw error;
   }
 }
