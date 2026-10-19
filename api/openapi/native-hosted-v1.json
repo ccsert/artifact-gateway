@@ -4095,8 +4095,25 @@
       ],
       "get": {
         "operationId": "readRawContent",
-        "description": "Returns Raw bytes for a file path. `.sha256` and `.sha512` suffixes return a derived lowercase hexadecimal checksum plus newline. When the catch-all path ends in `/`, it instead returns a lexicographically ordered listing of visible Hosted assets below that canonical prefix; `n` and `last` control pagination. With an `uploadId`, returns no content and the current Upload-Offset for an open resumable upload rather than artifact bytes.",
+        "description": "Returns Raw bytes for a file path. `.sha256` and `.sha512` suffixes return a derived lowercase hexadecimal checksum plus newline. When the catch-all path ends in `/`, it instead returns a lexicographically ordered listing of visible Hosted assets below that canonical prefix; `n` and `last` control pagination. With an `uploadId`, returns no content and the current Upload-Offset for an open resumable upload rather than artifact bytes. File GET supports a single Range or bounded multipart/byteranges from one immutable object. A Range field accepts at most 8192 bytes and 16 intervals; overlapping, duplicate and adjacent intervals coalesce in ascending order. Valid unsatisfiable intervals are omitted if another interval is satisfiable. Multipart payload is limited to 64 MiB, with at most 32 KiB of framing; these aggregate limits do not restrict a single coalesced interval. Malformed fields, multiple Range field lines, no satisfiable intervals or exceeded limits return 416. A strong matching If-Range enables Range; weak, date or non-matching validators return the full object. Cold Proxy GET fetches and verifies the complete object before applying local ranges; Range and client validators are never forwarded to the upstream.",
         "parameters": [
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "One bytes range-set, containing at most 16 intervals.",
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "description": "The current strong ETag; other values ignore Range.",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "uploadId",
             "in": "query",
@@ -4127,16 +4144,40 @@
               }
             }
           },
+          "206": {
+            "description": "One byte interval, or a bounded multipart/byteranges body with per-part Content-Range and Content-Type, exact total Content-Length, and the original object's ETag and Digest. Multipart responses have no top-level Content-Range. Streams use the captured immutable object; an unavailable or interrupted stream truncates the response and never switches to a newly published path reference.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentEncoding": "binary"
+                }
+              },
+              "multipart/byteranges": {
+                "schema": {
+                  "type": "string",
+                  "contentEncoding": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The requested representation's ETag matches If-None-Match."
+          },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
           },
           "404": {
             "$ref": "#/components/responses/ProtocolNotFound"
+          },
+          "416": {
+            "description": "Invalid, wholly unsatisfiable or excessive ranges. Content-Range is bytes */size and no object stream is opened."
           }
         }
       },
       "head": {
         "operationId": "headRawContent",
+        "description": "Returns full-object metadata without a body. Range and If-Range are ignored on HEAD. A matching If-None-Match returns 304.",
         "security": [
           {
             "protocolBasicAuth": []
@@ -4149,6 +4190,9 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/RawBinaryObject"
+          },
+          "304": {
+            "description": "The requested representation's ETag matches If-None-Match."
           },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"

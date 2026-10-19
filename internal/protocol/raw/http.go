@@ -157,21 +157,30 @@ func ServeContent(w http.ResponseWriter, r *http.Request, name string, content C
 		size = int64(len(content.Body))
 	}
 	ranges := r.Header.Values("Range")
-	if len(ranges) > 0 && !ifRangeMatches(r.Header.Get("If-Range"), w.Header().Get("ETag")) {
+	// RFC 9110 Range applies to GET. HEAD describes the full representation
+	// and never opens an object stream, even if a Range field is present.
+	if r.Method != http.MethodGet {
+		ranges = nil
+	}
+	if len(ranges) > 0 && (len(r.Header.Values("If-Range")) > 1 || !ifRangeMatches(r.Header.Get("If-Range"), w.Header().Get("ETag"))) {
 		ranges = nil
 	}
 	if len(ranges) > 0 {
-		if len(ranges) != 1 || strings.Contains(ranges[0], ",") {
+		if len(ranges) != 1 {
 			w.Header().Set("Content-Range", "bytes */"+utoa(uint64(size)))
 			statusWriter.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 			return statusWriter.result()
 		}
-		start, end, ok := parseRange(ranges[0], size)
+		intervals, ok := parseRanges(ranges[0], size)
 		if !ok {
 			w.Header().Set("Content-Range", "bytes */"+utoa(uint64(size)))
 			statusWriter.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 			return statusWriter.result()
 		}
+		if len(intervals) > 1 {
+			return serveMultipart(statusWriter, r, content, size, intervals)
+		}
+		start, end := intervals[0].start, intervals[0].end
 		length := end - start + 1
 		var reader io.ReadCloser
 		if r.Method != http.MethodHead {
@@ -211,14 +220,6 @@ func ServeContent(w http.ResponseWriter, r *http.Request, name string, content C
 	return statusWriter.result()
 }
 
-func ifRangeMatches(value, etag string) bool {
-	if value == "" {
-		return true
-	}
-	value = strings.TrimSpace(value)
-	return etag != "" && value == etag && !strings.HasPrefix(value, "W/") && !strings.HasPrefix(etag, "W/")
-}
-
 func openContent(ctx context.Context, content Content) (io.ReadCloser, int64, error) {
 	if content.Source != nil {
 		return content.Source.Open(ctx)
@@ -234,61 +235,6 @@ func openContentRange(ctx context.Context, content Content, offset, length int64
 		return nil, 0, errors.New("raw content range is out of bounds")
 	}
 	return io.NopCloser(bytes.NewReader(content.Body[offset : offset+length])), int64(len(content.Body)), nil
-}
-
-func parseRange(value string, size int64) (int64, int64, bool) {
-	if size < 0 || !strings.HasPrefix(value, "bytes=") {
-		return 0, 0, false
-	}
-	parts := strings.SplitN(strings.TrimPrefix(value, "bytes="), "-", 2)
-	if len(parts) != 2 || strings.Contains(value, ",") {
-		return 0, 0, false
-	}
-	start, end := int64(0), size-1
-	if parts[0] == "" {
-		suffix, err := parseRangeByte(parts[1])
-		if err != nil || suffix <= 0 || size == 0 {
-			return 0, 0, false
-		}
-		if suffix < size {
-			start = size - suffix
-		}
-		return start, end, true
-	}
-	valueStart, err := parseRangeByte(parts[0])
-	if err != nil || valueStart >= size {
-		return 0, 0, false
-	}
-	start = valueStart
-	if parts[1] != "" {
-		valueEnd, err := parseRangeByte(parts[1])
-		if err != nil || valueEnd < start {
-			return 0, 0, false
-		}
-		end = valueEnd
-		if end >= size {
-			end = size - 1
-		}
-	}
-	return start, end, true
-}
-
-func parseRangeByte(value string) (int64, error) {
-	if value == "" {
-		return 0, errors.New("empty range")
-	}
-	var result int64
-	for _, char := range value {
-		if char < '0' || char > '9' {
-			return 0, errors.New("invalid range")
-		}
-		digit := int64(char - '0')
-		if result > ((1<<63-1)-digit)/10 {
-			return 0, errors.New("range overflow")
-		}
-		result = result*10 + digit
-	}
-	return result, nil
 }
 
 type statusWriter struct {

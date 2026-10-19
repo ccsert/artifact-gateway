@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ccsert/artifact-gateway/internal/artifacthttp"
 	"github.com/ccsert/artifact-gateway/internal/authorization"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -114,7 +113,7 @@ func (h *Module) serveHostedRead(w http.ResponseWriter, r *http.Request, repo re
 	if h.blockQuarantinedRead(w, r, repo, asset, principal) {
 		return true
 	}
-	artifacthttp.ServeObject(w, r, path, artifacthttp.Object{Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, ContentType: asset.ContentType}, h.objects)
+	h.serveAsset(w, r, path, asset)
 	return true
 }
 

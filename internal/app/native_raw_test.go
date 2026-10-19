@@ -467,8 +467,8 @@ func TestNativeRawHostedStreamsRangeFromObjectStore(t *testing.T) {
 	if headResponse.Code != http.StatusOK || headResponse.Body.Len() != 0 {
 		t.Fatalf("head=%d body=%q", headResponse.Code, headResponse.Body.String())
 	}
-	if objects.openCalls != 2 {
-		t.Fatalf("head did not stream metadata through Open: open=%d", objects.openCalls)
+	if objects.openCalls != 1 {
+		t.Fatalf("HEAD opened an object stream: open=%d", objects.openCalls)
 	}
 }
 
