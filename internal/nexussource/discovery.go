@@ -2,12 +2,9 @@ package nexussource
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -66,7 +63,7 @@ func (s *Service) connect(ctx context.Context, id string) (*session, Source, con
 	hooks.PrivateEndpointCIDRs = s.options.PrivateEndpoints
 	client, err := egress.ApplyContext(ctx, s.options.Client, nil, base.String(), hooks)
 	if err != nil {
-		if ctx.Err() != nil {
+		if sourceTimedOut(ctx, err) {
 			return bad(fail("source_timeout"))
 		}
 		return bad(fail("source_egress_denied"))
@@ -76,6 +73,9 @@ func (s *Service) connect(ctx context.Context, id string) (*session, Source, con
 	return &session{ctx: ctx, client: client, base: base, credential: credential}, source, func() { client.CloseIdleConnections(); cancel() }, nil
 }
 func (s *session) read(endpoint string, query url.Values, out any) error {
+	if sourceTimedOut(s.ctx, nil) {
+		return fail("source_timeout")
+	}
 	if s.stats.Requests >= maxRequests {
 		return fail("source_limit_exceeded")
 	}
@@ -93,18 +93,12 @@ func (s *session) read(endpoint string, query url.Values, out any) error {
 	s.stats.Requests++
 	resp, err := s.client.Do(req)
 	if err != nil {
-		var timeout net.Error
-		var certificate *tls.CertificateVerificationError
-		var unknown x509.UnknownAuthorityError
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || errors.As(err, &timeout) && timeout.Timeout() {
-			return fail("source_timeout")
-		}
-		if errors.As(err, &certificate) || errors.As(err, &unknown) {
-			return fail("source_tls_failed")
-		}
-		return fail("source_unreachable")
+		return sourceRequestError(s.ctx, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if sourceTimedOut(s.ctx, nil) {
+		return fail("source_timeout")
+	}
 	switch {
 	case resp.StatusCode == 401:
 		return fail("source_unauthorized")
@@ -119,16 +113,20 @@ func (s *session) read(endpoint string, query url.Values, out any) error {
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	s.stats.ResponseBytes += int64(len(body))
+	if sourceTimedOut(s.ctx, err) {
+		return fail("source_timeout")
+	}
 	if err != nil {
-		if s.ctx.Err() != nil {
-			return fail("source_timeout")
-		}
 		return fail("source_invalid_response")
 	}
 	if len(body) > maxResponseBytes || s.stats.ResponseBytes > maxTotalBytes {
 		return fail("source_limit_exceeded")
 	}
-	if json.Unmarshal(body, out) != nil {
+	decodeErr := json.Unmarshal(body, out)
+	if sourceTimedOut(s.ctx, nil) {
+		return fail("source_timeout")
+	}
+	if decodeErr != nil {
 		return fail("source_invalid_response")
 	}
 	return nil
