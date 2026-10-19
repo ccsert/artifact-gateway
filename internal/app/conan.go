@@ -72,7 +72,7 @@ type ConanHandler struct {
 	Metrics            *Metrics
 	ReadPolicies       repository.RepositoryQuarantineReadPolicyStore
 	Quarantine         repository.ArtifactQuarantineStore
-	Publications       repository.ConanNativePublicationStore
+	Publications       repository.ConanPublicationStore
 	PublicationScanner *publicationScanScheduler
 }
 

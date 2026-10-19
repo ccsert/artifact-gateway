@@ -43,6 +43,10 @@ Raw/OCI resumable upload 把每个 offset range 保存为不可变 chunk，PATCH
 
 Hosted、Proxy、Group 均以 `/conan/<repository>` 注册远程仓库；官方客户端自动附加 `/v1/ping` 或 `/v2/users/authenticate`、`/v2/users/check_credentials`、`/v2/conans/...`。旧版号在名称之前的布局直接返回 404，无兼容别名。原生 Hosted 上传遵循[完整 manifest 自动提交](conan-native-publication.zh-CN.md)契约，使用独立协议签名密钥及绑定源凭据的短期令牌。Group/Proxy 只读，客户端凭据不会转发上游。
 
+管理与原生发布都要求从官方 manifest/conaninfo 身份派生的小写 32 位十六进制 RREV/PREV 和
+40 位 Package ID，共用完整受支持资产集合校验，并以不可变暂存 key 和 Session 版本 fence
+保护 revision、会话状态及真实调用者审计的原子提交。管理 HTTP 形状不变，旧不完整声明不再接受。
+
 Recipe 坐标为 `name/version/user/channel#rrev`，package revision 增加 `/package_id#prev`。每段独立存储，只严格 decode 一次；revision 一旦观察即不可变。省略 rrev/prev 只在 metadata TTL 内缓存选择结果，不创建永久 alias。
 
 支持 revision list、recipe search handshake、recipe files、package revision list/latest、package files 及各文件 GET/HEAD。每个字段恰占一个 path segment，拒绝空值、dot segment、斜杠、反斜杠、NUL、编码 slash 和 raw/encoded `#`。坐标绝不重建为 `#` 分隔路径。

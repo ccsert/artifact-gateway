@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"time"
 )
 
 func (s *MemoryStore) CreateConanPublishSession(_ context.Context, session ConanPublishSession) (ConanPublishSession, error) {
@@ -14,6 +13,7 @@ func (s *MemoryStore) CreateConanPublishSession(_ context.Context, session Conan
 	if session.State == "" {
 		session.State = "open"
 	}
+	session.Native, session.Version = false, 1
 	s.conanSessions[session.ID] = cloneConanSession(session)
 	s.conanUploads[session.ID] = map[string]string{}
 	return cloneConanSession(session), nil
@@ -29,25 +29,6 @@ func (s *MemoryStore) GetConanPublishSession(_ context.Context, id string) (Cona
 	return cloneConanSession(session), nil
 }
 
-func (s *MemoryStore) MarkConanPublishObject(_ context.Context, sessionID, name, objectKey string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, ok := s.conanSessions[sessionID]
-	if !ok {
-		return ErrNotFound
-	}
-	if session.Native || session.State != "open" || time.Now().After(session.ExpiresAt) {
-		return ErrDisabled
-	}
-	for _, object := range session.Objects {
-		if object.Name == name {
-			s.conanUploads[sessionID][name] = objectKey
-			return nil
-		}
-	}
-	return ErrNotFound
-}
-
 func (s *MemoryStore) ListConanPublishUploads(_ context.Context, sessionID string) (map[string]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -60,22 +41,4 @@ func (s *MemoryStore) ListConanPublishUploads(_ context.Context, sessionID strin
 		out[name] = key
 	}
 	return out, nil
-}
-
-func (s *MemoryStore) CommitConanPublishSession(_ context.Context, sessionID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, ok := s.conanSessions[sessionID]
-	if !ok {
-		return ErrNotFound
-	}
-	if session.Native || session.State != "open" || time.Now().After(session.ExpiresAt) {
-		return ErrDisabled
-	}
-	if len(s.conanUploads[sessionID]) != len(session.Objects) {
-		return ErrDisabled
-	}
-	session.State = "committed"
-	s.conanSessions[sessionID] = session
-	return nil
 }

@@ -6,7 +6,8 @@ Register the canonical remote root `/conan/<repository>`. Conan appends
 `/v1/ping` or `/v2/...` itself. Hosted, Proxy and Group use this same layout;
 `/conan/v2/<repository>` has no alias and returns 404. Hosted repositories
 accept upload; Proxy and Group reject writes. Existing management session,
-revision browse, lifecycle and audit APIs remain available.
+revision browse, lifecycle and audit APIs remain available. Management and
+native publication both require a complete validated revision.
 
 The name `v2` is reserved for Conan repositories and Groups to keep the retired layout unreachable.
 
@@ -53,7 +54,7 @@ need read access. A successful login is not an artifact permission grant.
 
 ## Visibility, retry and lifecycle
 
-Each file PUT declares `X-Checksum-Sha1`; the Gateway spools a bounded body and
+Each native file PUT declares `X-Checksum-Sha1`; the Gateway spools a bounded body and
 verifies its length, SHA-1 and independent storage SHA-256. It opens or resumes
 the publisher's durable one-hour recipe/package session using the exact
 reference, RREV, package ID and PREV. Every attempt uses a fresh immutable object
@@ -64,10 +65,24 @@ The official client sends `conanmanifest.txt` last. The Gateway reads back and
 checks the bytes, size and SHA-256 of every staged asset, streams the uncompressed
 manifest tree, checks every declared MD5, derives RREV/PREV and binds the package
 ID to `conaninfo.txt`. It then commits the immutable revision, session state and
-publication audit in one metadata transaction. The session version fences any
+publication audit for the actual commit caller in one metadata transaction.
+The session version fences any
 concurrent pointer change. Identical retries keep one visible identity; changed
 bytes at an existing identity return 409. Missing or wrong assets/manifest and
 identity mismatch return 422. Permission denial does not expose a revision.
+
+Management publication retains its HTTP request and response shapes:
+`POST /api/v2/repositories/{id}/conan-publish-sessions` declares the complete
+recipe or package file set with exact SHA-256 and size;
+`PUT /api/v2/conan-publish-sessions/{id}/objects/{name}` verifies and stages
+each declared object under a fresh immutable key; and
+`POST /api/v2/conan-publish-sessions/{id}:commit` validates the full staged
+snapshot before visibility. Both entry points use the same manifest, asset
+and identity checks and the same version-fenced atomic revision/session/audit
+commit. The audit actor is the authenticated commit caller, even when an
+authorized caller differs from the session creator. A successful create or
+object PUT does not publish a partial revision. Legacy declarations with
+non-hash identities, missing manifest or incomplete assets are rejected.
 
 After an interrupted upload, rerun the original `conan upload` with the same
 cache, identity, target and credential. An open session resumes across Gateway,
@@ -122,6 +137,10 @@ and network. No production or external Nexus is accessed.
 Unit/storage contracts cover authentication, quotas, immutable conflict, concurrent
 publishers, snapshot fencing, expiry and open-session GC retention. The existing
 management publication/read and lifecycle tests remain regression coverage.
+Public HTTP and Memory/PostgreSQL contracts also cover ordinary management
+sessions racing with native sessions: invalid complete byte declarations
+cannot publish a mismatched manifest, expose metadata or replace staged bytes;
+audit actor and session snapshot checks apply to both paths.
 Evidence is local to the tested source tree; CI and a merged/released head are
 separate gates. kkRepo commit `2d0ce09290dbd9a2f47a5d4df7a373337a503c36`
 `ConanService`/`ConanLeaseManager`/manifest policy and its black-box tests informed

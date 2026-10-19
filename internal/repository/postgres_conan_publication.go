@@ -84,7 +84,7 @@ func (s *PostgresStore) BeginConanNativeSession(ctx context.Context, incoming Co
 	return incoming, tx.Commit()
 }
 
-func (s *PostgresStore) StageConanNativeObject(ctx context.Context, id string, object MavenDeclaredObject, key string) (ConanPublishSession, error) {
+func (s *PostgresStore) StageConanPublicationObject(ctx context.Context, id string, object MavenDeclaredObject, key string) (ConanPublishSession, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return ConanPublishSession{}, err
@@ -94,7 +94,7 @@ func (s *PostgresStore) StageConanNativeObject(ctx context.Context, id string, o
 	if err != nil {
 		return ConanPublishSession{}, err
 	}
-	if !session.Native || session.State != "open" || !session.ExpiresAt.After(time.Now()) {
+	if session.State != "open" || !session.ExpiresAt.After(time.Now()) {
 		return ConanPublishSession{}, ErrDisabled
 	}
 	var verified bool
@@ -105,17 +105,10 @@ func (s *PostgresStore) StageConanNativeObject(ctx context.Context, id string, o
 	if !verified {
 		return ConanPublishSession{}, ErrDisabled
 	}
-	found := false
-	for i, existing := range session.Objects {
-		if existing.Name == object.Name {
-			session.Objects[i], found = object, true
-			break
-		}
+	session, err = stageConanPublication(session, object)
+	if err != nil {
+		return ConanPublishSession{}, err
 	}
-	if !found {
-		session.Objects = append(session.Objects, object)
-	}
-	session.Version++
 	data, err := json.Marshal(session.Objects)
 	if err != nil {
 		return ConanPublishSession{}, err
@@ -129,7 +122,7 @@ func (s *PostgresStore) StageConanNativeObject(ctx context.Context, id string, o
 	return session, tx.Commit()
 }
 
-func (s *PostgresStore) CommitConanNativeSession(ctx context.Context, id string, version int64, digest string) (ConanPublishSession, bool, error) {
+func (s *PostgresStore) CommitConanPublicationSession(ctx context.Context, id string, version int64, digest, actor string) (ConanPublishSession, bool, error) {
 	identity, err := s.GetConanPublishSession(ctx, id)
 	if err != nil {
 		return ConanPublishSession{}, false, err
@@ -146,7 +139,7 @@ func (s *PostgresStore) CommitConanNativeSession(ctx context.Context, id string,
 	if err != nil {
 		return ConanPublishSession{}, false, err
 	}
-	if !session.Native || session.Version != version || session.State != "open" && session.State != "committed" || !session.ExpiresAt.After(time.Now()) {
+	if actor == "" || session.Version != version || session.State != "open" && session.State != "committed" || !session.ExpiresAt.After(time.Now()) {
 		return ConanPublishSession{}, false, ErrVersionConflict
 	}
 	var repo HostedRepository
@@ -218,7 +211,7 @@ func (s *PostgresStore) CommitConanNativeSession(ctx context.Context, id string,
 		return ConanPublishSession{}, false, err
 	}
 	session.State = "committed"
-	if err = insertAudit(ctx, tx, conanNativePublicationAudit(repo, session, digest, replay)); err != nil {
+	if err = insertAudit(ctx, tx, conanPublicationAudit(repo, session, digest, actor, replay)); err != nil {
 		return ConanPublishSession{}, false, err
 	}
 	return session, replay, tx.Commit()

@@ -15,7 +15,7 @@ import (
 type conanPublicationContractStore interface {
 	HostedRepositoryStore
 	NativeConanStore
-	ConanNativePublicationStore
+	ConanPublicationStore
 	RepositoryCapacityStore
 }
 
@@ -75,7 +75,7 @@ func exerciseConanNativePublication(t *testing.T, store conanPublicationContract
 		if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: digest, Size: int64(len(body))}); err != nil {
 			t.Fatal(err)
 		}
-		next, err := store.StageConanNativeObject(ctx, session.ID, MavenDeclaredObject{Name: name, Digest: digest, Size: int64(len(body))}, key)
+		next, err := store.StageConanPublicationObject(ctx, session.ID, MavenDeclaredObject{Name: name, Digest: digest, Size: int64(len(body))}, key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,17 +86,14 @@ func exerciseConanNativePublication(t *testing.T, store conanPublicationContract
 		t.Fatal(err)
 	}
 	session = stage(session, "conanfile.py", "initial")
-	if err = store.MarkConanPublishObject(ctx, session.ID, "conanfile.py", "foreign-management-key"); !errors.Is(err, ErrDisabled) {
-		t.Fatalf("management changed a native snapshot: %v", err)
-	}
-	if err = store.CommitConanPublishSession(ctx, session.ID); !errors.Is(err, ErrDisabled) {
-		t.Fatalf("management committed a native session without manifest validation: %v", err)
+	if _, _, err = store.CommitConanPublicationSession(ctx, session.ID, session.Version, "sha256:"+fmt.Sprintf("%064x", 1), "machine"); !errors.Is(err, ErrDisabled) {
+		t.Fatalf("incomplete publication committed before the manifest: %v", err)
 	}
 	staleVersion := session.Version
 	session = stage(session, "conanfile.py", "corrected")
 	session = stage(session, "conanmanifest.txt", "manifest")
 	digest := "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	if _, _, err = store.CommitConanNativeSession(ctx, session.ID, staleVersion, digest); !errors.Is(err, ErrVersionConflict) {
+	if _, _, err = store.CommitConanPublicationSession(ctx, session.ID, staleVersion, digest, "machine"); !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("stale snapshot commit=%v", err)
 	}
 	if _, err = store.GetConanRecipeRevision(ctx, repo.ID, incoming.Reference, incoming.RecipeRevision); !errors.Is(err, ErrNotFound) {
@@ -105,7 +102,7 @@ func exerciseConanNativePublication(t *testing.T, store conanPublicationContract
 	if _, err = store.ReplaceRepositoryCapacityQuota(ctx, repo.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = store.CommitConanNativeSession(ctx, session.ID, session.Version, digest); !IsQuotaExceeded(err) {
+	if _, _, err = store.CommitConanPublicationSession(ctx, session.ID, session.Version, digest, "machine"); !IsQuotaExceeded(err) {
 		t.Fatalf("quota publication=%v", err)
 	}
 	current, err := store.GetConanPublishSession(ctx, session.ID)
@@ -118,7 +115,7 @@ func exerciseConanNativePublication(t *testing.T, store conanPublicationContract
 	if _, err = store.ReplaceRepositoryCapacityQuota(ctx, repo.ID, 0); err != nil {
 		t.Fatal(err)
 	}
-	committed, replay, err := store.CommitConanNativeSession(ctx, session.ID, session.Version, digest)
+	committed, replay, err := store.CommitConanPublicationSession(ctx, session.ID, session.Version, digest, "machine")
 	if err != nil || replay || committed.State != "committed" {
 		t.Fatalf("commit=%+v replay=%t error=%v", committed, replay, err)
 	}
@@ -146,7 +143,7 @@ func exerciseConanNativePublication(t *testing.T, store conanPublicationContract
 	results := make(chan error, 2)
 	go func() {
 		<-start
-		_, _, err := store.CommitConanNativeSession(ctx, pkg.ID, pkg.Version, digest)
+		_, _, err := store.CommitConanPublicationSession(ctx, pkg.ID, pkg.Version, digest, "machine")
 		results <- err
 	}()
 	go func() {
@@ -192,7 +189,7 @@ func exerciseConanNativePublication(t *testing.T, store conanPublicationContract
 	if err != nil || fresh.ID == pending.ID || len(fresh.Objects) != 0 {
 		t.Fatalf("expired session reused: %+v %v", fresh, err)
 	}
-	if _, _, err = store.CommitConanNativeSession(ctx, pending.ID, pending.Version, digest); !errors.Is(err, ErrVersionConflict) {
+	if _, _, err = store.CommitConanPublicationSession(ctx, pending.ID, pending.Version, digest, "machine"); !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("expired writer publication=%v", err)
 	}
 	reclaimable, err = store.ListReclaimableConanObjects(ctx, time.Now().Add(48*time.Hour), 100)

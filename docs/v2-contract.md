@@ -92,7 +92,7 @@ records `storage_error`, and increments a bounded spool-rejection counter.
 V2 supports Conan 2 resolution for a Conan 2.x client using v2 REST, including
 native Hosted metadata and files. Conan 1, remote-to-remote copying, upstream
 index aggregation, and server-side recipe generation are out of scope. Hosted
-publication uses the versioned publish-session management API; immutable
+publication supports native file PUT and the versioned publish-session management API; immutable
 revision deletion and restore use the canonical `/conan/<repository>/v2` family.
 
 Register `/conan/<repository>` as the only remote root for Hosted, Proxy and Group.
@@ -102,6 +102,13 @@ layout has no alias and returns 404. Native Hosted publication follows
 [the manifest-last contract](conan-native-publication.md), including an independent
 protocol signing secret and credential-bound tokens. Group/Proxy remain read-only;
 client credentials are never forwarded to an upstream.
+
+Both publication entry points require lowercase 32-hex RREV/PREV and a 40-hex
+package ID derived from the official manifest/conaninfo identities. They
+validate the complete supported asset set through one shared validator and
+commit the revision, session state and actual caller's audit atomically,
+guarded by immutable staging keys and a session version fence. The management
+HTTP shapes remain unchanged; incomplete legacy declarations are rejected.
 
 `CONTRACT: conan-coordinate`
 

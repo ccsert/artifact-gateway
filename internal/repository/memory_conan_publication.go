@@ -35,7 +35,7 @@ func (s *MemoryStore) BeginConanNativeSession(ctx context.Context, incoming Cona
 	return incoming, nil
 }
 
-func (s *MemoryStore) StageConanNativeObject(ctx context.Context, id string, object MavenDeclaredObject, key string) (ConanPublishSession, error) {
+func (s *MemoryStore) StageConanPublicationObject(ctx context.Context, id string, object MavenDeclaredObject, key string) (ConanPublishSession, error) {
 	if err := ctx.Err(); err != nil {
 		return ConanPublishSession{}, err
 	}
@@ -45,31 +45,24 @@ func (s *MemoryStore) StageConanNativeObject(ctx context.Context, id string, obj
 	if !ok {
 		return ConanPublishSession{}, ErrNotFound
 	}
-	if !session.Native || session.State != "open" || !session.ExpiresAt.After(time.Now()) {
+	if session.State != "open" || !session.ExpiresAt.After(time.Now()) {
 		return ConanPublishSession{}, ErrDisabled
 	}
 	intent, ok := s.conanObjects[key]
 	if !ok || intent.RepositoryID != session.RepositoryID || intent.Digest != object.Digest || intent.Size != object.Size || !intent.ClaimedAt.IsZero() || !intent.CollectedAt.IsZero() {
 		return ConanPublishSession{}, ErrDisabled
 	}
-	found := false
-	session = cloneConanSession(session)
-	for i, existing := range session.Objects {
-		if existing.Name == object.Name {
-			session.Objects[i], found = object, true
-			break
-		}
+	var err error
+	session, err = stageConanPublication(session, object)
+	if err != nil {
+		return ConanPublishSession{}, err
 	}
-	if !found {
-		session.Objects = append(session.Objects, object)
-	}
-	session.Version++
 	s.conanSessions[id] = session
 	s.conanUploads[id][object.Name] = key
 	return cloneConanSession(session), nil
 }
 
-func (s *MemoryStore) CommitConanNativeSession(ctx context.Context, id string, version int64, digest string) (ConanPublishSession, bool, error) {
+func (s *MemoryStore) CommitConanPublicationSession(ctx context.Context, id string, version int64, digest, actor string) (ConanPublishSession, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return ConanPublishSession{}, false, err
 	}
@@ -79,7 +72,7 @@ func (s *MemoryStore) CommitConanNativeSession(ctx context.Context, id string, v
 	if !ok {
 		return ConanPublishSession{}, false, ErrNotFound
 	}
-	if !session.Native || session.Version != version || session.State != "open" && session.State != "committed" || !session.ExpiresAt.After(time.Now()) {
+	if actor == "" || session.Version != version || session.State != "open" && session.State != "committed" || !session.ExpiresAt.After(time.Now()) {
 		return ConanPublishSession{}, false, ErrVersionConflict
 	}
 	repo := s.hostedRepositories[session.RepositoryID]
@@ -117,6 +110,6 @@ func (s *MemoryStore) CommitConanNativeSession(ctx context.Context, id string, v
 	}
 	session.State = "committed"
 	s.conanSessions[id] = session
-	s.appendAuditLocked(withRequestContextAudit(ctx, conanNativePublicationAudit(repo, session, digest, replay)))
+	s.appendAuditLocked(withRequestContextAudit(ctx, conanPublicationAudit(repo, session, digest, actor, replay)))
 	return cloneConanSession(session), replay, nil
 }

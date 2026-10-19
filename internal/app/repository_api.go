@@ -271,7 +271,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	mavenProxyOperations := mavenProxyOperationsHandler{store: store, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, client: mavenClient, cache: mavenCache, maintenance: maintenance}
 	proxyCacheBrowse := proxyCacheBrowseHandler{store: store, entriesStore: store, audit: store, maintenance: maintenance, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}
 	nativeConanObjects := options.Storage[repository.FormatConan]
-	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator).withPublicationScanner(publicationScanner)
+	nativeConanPublish := newNativeConanPublishHandler(store, options.ConanPublications, nativeConanObjects, authenticator).withPublicationScanner(publicationScanner)
 	nativeNPMObjects := options.Storage[repository.FormatNPM]
 	nativeNPM := newNativeNPMHandler(store, options.NPMMetadata, nativeNPMObjects, authenticator).withMetrics(metrics).withProxy(npmClient).withPublicationScanner(publicationScanner)
 	if dependencies.NPMMetadataTTL > 0 {

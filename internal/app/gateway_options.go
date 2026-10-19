@@ -45,7 +45,7 @@ type GatewayCaches struct {
 type GatewayOptions struct {
 	Dependencies      Dependencies
 	Store             GatewayStore
-	ConanPublications repository.ConanNativePublicationStore
+	ConanPublications repository.ConanPublicationStore
 	NPMMetadata       repository.NPMMetadataStore
 	NPMRestore        repository.NPMRestoreStore
 	Storage           ObjectStores

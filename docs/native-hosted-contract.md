@@ -34,7 +34,11 @@ server-side staging session under a derived coordinate. It is finalized by
 POST is the explicit visibility signal. Conan 2 uploads at `/conan/{repository}/v2/conans/.../files/{file}`
 reuse the durable recipe/package sessions. A complete validated
 `conanmanifest.txt` commits the revision; clients do not call management commit.
-The explicit management publication API remains available. See
+The explicit management publication API applies the same complete-manifest,
+hash-identity and asset validation before committing a revision. Both paths
+use immutable staging keys and a version fence, and atomically persist the
+revision, committed session and publish audit for the actual commit caller.
+Incomplete declarations cannot become visible through either path. See
 [Conan native publication](conan-native-publication.md). Maven sessions
 expire and cannot be reused after `committed`, `aborted`, or `expired`.
 `Idempotency-Key` scopes Maven

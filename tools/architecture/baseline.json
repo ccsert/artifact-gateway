@@ -1,6 +1,6 @@
 {
   "violations": [
-    "internal/repository -\u003e internal/protocol/cargo"
+    "internal/repository -> internal/protocol/cargo"
   ],
   "gatewayStoreMembers": [
     "repository.APIKeyStore",
@@ -234,7 +234,6 @@
     "internal/repository.NativeCargoStore.SearchCargoCrates func(context.Context, string, string, int, string, bool, ...ArtifactSearchMatch) ([]CargoCrateSummary, int, error)",
     "internal/repository.NativeCargoStore.SetCargoYanked func(context.Context, string, string, string, bool) (CargoPublication, bool, error)",
     "internal/repository.NativeCargoStore.TombstoneCargoPublication func(context.Context, string, string, string) (CargoPublication, error)",
-    "internal/repository.NativeConanStore.CommitConanPublishSession func(context.Context, string) error",
     "internal/repository.NativeConanStore.ConanObjectHasVisibleReference func(context.Context, string) (bool, error)",
     "internal/repository.NativeConanStore.CreateConanPublishSession func(context.Context, ConanPublishSession) (ConanPublishSession, error)",
     "internal/repository.NativeConanStore.GetConanPackageAsset func(context.Context, string, string, string, string, string, string) (ConanAsset, error)",
@@ -250,7 +249,6 @@
     "internal/repository.NativeConanStore.ListConanRecipeRevisions func(context.Context, string, string) ([]ConanRecipeRevision, error)",
     "internal/repository.NativeConanStore.ListReclaimableConanObjects func(context.Context, time.Time, int) ([]ConanObjectIntent, error)",
     "internal/repository.NativeConanStore.MarkConanObjectCollected func(context.Context, string) error",
-    "internal/repository.NativeConanStore.MarkConanPublishObject func(context.Context, string, string, string) error",
     "internal/repository.NativeConanStore.PromoteConanRecipeRevision func(context.Context, ConanPromotion) (ConanRecipeRevision, error)",
     "internal/repository.NativeConanStore.PublishReplicatedConanRevision func(context.Context, ConanReplicationPublication) (ConanRecipeRevision, error)",
     "internal/repository.NativeConanStore.PutConanPackageRevision func(context.Context, ConanPackageRevision, []ConanAsset) (ConanPackageRevision, error)",

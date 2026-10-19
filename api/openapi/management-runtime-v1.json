@@ -7313,7 +7313,7 @@
       ],
       "post": {
         "operationId": "createConanPublishSession",
-        "description": "Opens a one-hour Conan publish session for a recipe revision or a package revision of a Hosted Conan repository. Declared objects are uploaded and verified individually, and the revision becomes visible only on commit.",
+        "description": "Opens a one-hour Hosted Conan recipe or package publication under exact repository resource write permission. Requires official lowercase 32-hex RREV/PREV, a 40-hex package ID for packages, and the complete supported manifest asset set. Uses the same content and identity validation as native publication; no revision or file is visible before commit.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -7658,12 +7658,13 @@
           "required": true,
           "schema": {
             "type": "string",
-            "pattern": "^[^/]+$"
+            "pattern": "^(conanfile\\.py|conan_export\\.tgz|conan_sources\\.tgz|conanmanifest\\.txt|conaninfo\\.txt|conan_package\\.tgz)$"
           }
         }
       ],
       "put": {
         "operationId": "uploadConanPublishObject",
+        "description": "Verifies the declared size and SHA-256, writes a fresh immutable staging key and atomically advances the open session's versioned object pointer. This does not make the file visible. Only declared supported filenames are accepted; the management endpoint cannot modify a native session.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -7702,6 +7703,7 @@
       ],
       "post": {
         "operationId": "commitConanPublishSession",
+        "description": "Reads back the complete staged snapshot and applies the same bounded asset, manifest MD5 tree, RREV/PREV and package-ID validation as native publication. A session version fence rejects concurrent pointer changes. One transaction makes the immutable revision visible, marks the session committed and writes a publish audit for the actual commit caller. Validation, quota or storage failure leaves the revision invisible; incomplete legacy declarations cannot bypass this boundary. This endpoint cannot commit a native session.\n",
         "responses": {
           "200": {
             "$ref": "#/components/responses/ConanPublishCommit"
@@ -10523,7 +10525,7 @@
       },
       "CreateConanPublishSession": {
         "type": "object",
-        "description": "A recipe session declares recipeRevision only; a package session also declares packageId and packageRevision. The session coordinate is reference#recipeRevision, extended with /packageId#packageRevision for package sessions.",
+        "description": "A one-hour Hosted publication using Conan 2 hash identities and the same complete-manifest validation as native upload. A recipe session declares recipeRevision only; a package session also requires packageId and packageRevision. The session coordinate is reference#recipeRevision, extended with /packageId#packageRevision for package sessions. Objects remain invisible until commit verifies their full bytes, manifest tree, revision and package identity. Incomplete legacy declarations are rejected.\n",
         "required": [
           "kind",
           "reference",
@@ -10546,20 +10548,25 @@
           },
           "recipeRevision": {
             "type": "string",
-            "pattern": "^[^/\\\\#]+$"
+            "pattern": "^[a-f0-9]{32}$",
+            "description": "Lowercase Conan 2 hash revision derived from the recipe manifest."
           },
           "packageId": {
             "type": "string",
-            "pattern": "^[^/\\\\#]*$",
-            "description": "Required for package sessions; absent or empty for recipe sessions."
+            "pattern": "^([a-f0-9]{40})?$",
+            "description": "Required lowercase 40-hex package identity derived from conaninfo.txt for package sessions; absent or empty for recipe sessions."
           },
           "packageRevision": {
             "type": "string",
-            "pattern": "^[^/\\\\#]*$",
-            "description": "Required for package sessions; absent or empty for recipe sessions."
+            "pattern": "^([a-f0-9]{32})?$",
+            "description": "Required lowercase 32-hex package manifest revision for package sessions; absent or empty for recipe sessions."
           },
           "objects": {
             "type": "array",
+            "minItems": 2,
+            "maxItems": 4,
+            "uniqueItems": true,
+            "description": "Distinct filenames with exact byte size and SHA-256. Recipes require conanmanifest.txt and conanfile.py or conan_export.tgz, may include both, and may include conan_sources.tgz. Packages require exactly conanmanifest.txt, conaninfo.txt and conan_package.tgz. Other names are rejected. Each object is bounded to 1 GiB; manifest and conaninfo.txt are bounded to 1 MiB. Commit applies the native expanded-tree bounds and rejects missing, extra or mismatched manifest entries.\n",
             "items": {
               "$ref": "#/components/schemas/DeclaredObject"
             }
@@ -18521,7 +18528,7 @@
       "officialSpecification": "https://maven.apache.org/repositories/index.html"
     },
     "conan": {
-      "description": "Official Conan 2.21.0 hash-revision upload and read workflow. Register /conan/{repository} as the remote root; the client appends /v1 or /v2. Hosted PUTs reuse durable publication sessions and immutable object intents. Only a complete validated manifest commits a recipe or package revision. Group and Proxy remotes are read-only. The retired /conan/v2/{repository} layout is not an alias. Conan 1, SCM revisions and optional metadata uploads are unsupported. See docs/conan-native-publication.md for bounds and evidence.\n",
+      "description": "Official Conan 2.21.0 hash-revision upload and read workflow. Register /conan/{repository} as the remote root; the client appends /v1 or /v2. Hosted PUTs reuse durable publication sessions and immutable object intents. Only a complete validated manifest commits a recipe or package revision. Management publication uses the same validator, snapshot fence and atomic revision/session/audit commit; it cannot publish partial revisions. Group and Proxy remotes are read-only. The retired /conan/v2/{repository} layout is not an alias. Conan 1, SCM revisions and optional metadata uploads are unsupported. See docs/conan-native-publication.md for bounds and evidence.\n",
       "officialSpecification": "https://docs.conan.io/2/reference/commands/upload.html",
       "gatewayOverlay": "docs/conan-native-publication.md"
     }

@@ -10,12 +10,14 @@ import (
 	"strings"
 	"time"
 
+	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 type nativeConanPublishHandler struct {
 	store              GatewayStore
+	publications       repository.ConanPublicationStore
 	objects            ObjectStore
 	auth               Authenticator
 	authorizer         RepositoryAuthorizer
@@ -32,8 +34,8 @@ type nativeConanPublishRequest struct {
 	Objects         []repository.MavenDeclaredObject `json:"objects"`
 }
 
-func newNativeConanPublishHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeConanPublishHandler {
-	return nativeConanPublishHandler{store: store, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}}
+func newNativeConanPublishHandler(store GatewayStore, publications repository.ConanPublicationStore, objects ObjectStore, auth Authenticator) nativeConanPublishHandler {
+	return nativeConanPublishHandler{store: store, publications: publications, objects: objects, auth: auth, authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}}
 }
 
 func (h nativeConanPublishHandler) withPublicationScanner(scanner publicationScanScheduler) nativeConanPublishHandler {
@@ -53,15 +55,19 @@ func (h nativeConanPublishHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v2/conan-publish-sessions/"), "/")
 		id := strings.TrimSuffix(parts[0], ":commit")
 		if len(parts) == 1 && strings.HasSuffix(parts[0], ":commit") && r.Method == http.MethodPost {
-			h.withSession(w, r, id, RepositoryWrite, func(session repository.ConanPublishSession) { h.commit(w, r, session) })
+			h.withSession(w, r, id, RepositoryWrite, func(principal Principal, session repository.ConanPublishSession) {
+				h.commit(w, r, session, principal.Actor)
+			})
 			return
 		}
 		if len(parts) == 3 && parts[1] == "objects" && r.Method == http.MethodPut {
-			h.withSession(w, r, id, RepositoryWrite, func(session repository.ConanPublishSession) { h.upload(w, r, session, parts[2]) })
+			h.withSession(w, r, id, RepositoryWrite, func(_ Principal, session repository.ConanPublishSession) { h.upload(w, r, session, parts[2]) })
 			return
 		}
 		if len(parts) == 1 && r.Method == http.MethodGet {
-			h.withSession(w, r, id, RepositoryRead, func(session repository.ConanPublishSession) { writeNativeConanSession(w, http.StatusOK, session) })
+			h.withSession(w, r, id, RepositoryRead, func(_ Principal, session repository.ConanPublishSession) {
+				writeNativeConanSession(w, http.StatusOK, session)
+			})
 			return
 		}
 	}
@@ -92,6 +98,10 @@ func (h nativeConanPublishHandler) create(w http.ResponseWriter, r *http.Request
 	}
 	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, conanPublishResource(body)); !decision.Allowed {
 		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		return
+	}
+	if nilDependency(h.publications) || nilDependency(h.objects) {
+		writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "Conan publication capability is unavailable")
 		return
 	}
 	session, err := h.store.CreateConanPublishSession(r.Context(), repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Publisher: principal.Actor, Kind: body.Kind, Reference: body.Reference, RecipeRevision: body.RecipeRevision, PackageID: body.PackageID, PackageRevision: body.PackageRevision, State: "open", Objects: body.Objects, ExpiresAt: time.Now().UTC().Add(time.Hour)})
@@ -128,84 +138,48 @@ func (h nativeConanPublishHandler) upload(w http.ResponseWriter, r *http.Request
 		writeHostedProblem(w, http.StatusUnprocessableEntity, "digest_mismatch", "uploaded object digest does not match declaration")
 		return
 	}
-	key := "native/conan/sessions/" + session.ID + "/" + name
+	key := "native/conan/sessions/" + session.ID + "/" + uuid.NewString() + "/" + name
 	if err = h.store.StageConanObject(r.Context(), repository.ConanObjectIntent{RepositoryID: session.RepositoryID, ObjectKey: key, Digest: digest, Size: spool.Size()}); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "stage Conan object failed")
-		return
-	}
-	if err = h.store.MarkConanPublishObject(r.Context(), session.ID, name, key); err != nil {
-		writeHostedProblem(w, http.StatusConflict, "session_closed", "publish session is closed")
 		return
 	}
 	if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), spool.Size(), digest); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "stage Conan object failed")
 		return
 	}
+	if _, err = h.publications.StageConanPublicationObject(r.Context(), session.ID, *declared, key); err != nil {
+		writeConanPublicationError(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h nativeConanPublishHandler) commit(w http.ResponseWriter, r *http.Request, session repository.ConanPublishSession) {
-	if session.State != "open" || time.Now().After(session.ExpiresAt) {
+func (h nativeConanPublishHandler) commit(w http.ResponseWriter, r *http.Request, session repository.ConanPublishSession, actor string) {
+	if session.State != "open" && session.State != "committed" || time.Now().After(session.ExpiresAt) {
 		writeHostedProblem(w, http.StatusConflict, "session_closed", "publish session is closed")
 		return
 	}
-	if h.conanRevisionExists(r, session) {
-		writeHostedProblem(w, http.StatusConflict, "revision_exists", "Conan revision already exists")
-		return
-	}
 	uploads, err := h.store.ListConanPublishUploads(r.Context(), session.ID)
-	if err != nil || len(uploads) != len(session.Objects) {
-		writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_publish_session", "every declared object must be uploaded")
+	if err != nil {
+		writeConanPublicationError(w, err)
 		return
 	}
-	assets := make([]repository.ConanAsset, 0, len(session.Objects))
-	for _, object := range session.Objects {
-		key := uploads[object.Name]
-		info, statErr := h.objects.Stat(r.Context(), key)
-		if statErr != nil || info.Size != object.Size || info.Digest != object.Digest {
-			writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_publish_session", "staged object is unavailable or has changed")
-			return
-		}
-		assets = append(assets, repository.ConanAsset{RepositoryID: session.RepositoryID, Reference: session.Reference, RecipeRevision: session.RecipeRevision, PackageID: session.PackageID, PackageRevision: session.PackageRevision, Path: object.Name, ObjectKey: key, Digest: object.Digest, Size: object.Size})
+	if err = validateConanPublication(r.Context(), h.objects, session, uploads); err != nil {
+		writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_publication", err.Error())
+		return
 	}
 	digest := conanPublishDigest(session.Objects)
-	if session.Kind == "recipe" {
-		_, err = h.store.PutConanRecipeRevision(r.Context(), repository.ConanRecipeRevision{RepositoryID: session.RepositoryID, Reference: session.Reference, Revision: session.RecipeRevision, Digest: digest}, assets)
-	} else {
-		_, err = h.store.PutConanPackageRevision(r.Context(), repository.ConanPackageRevision{RepositoryID: session.RepositoryID, Reference: session.Reference, RecipeRevision: session.RecipeRevision, PackageID: session.PackageID, Revision: session.PackageRevision, Digest: digest}, assets)
-	}
-	if errors.Is(err, repository.ErrDisabled) {
-		writeHostedProblem(w, http.StatusConflict, "revision_exists", "Conan revision already exists")
-		return
-	}
-	if repository.IsQuotaExceeded(err) {
-		writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota exceeded")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_publish_session", "Conan revision cannot be published")
-		return
-	}
-	if err = h.store.CommitConanPublishSession(r.Context(), session.ID); err != nil {
-		writeHostedProblem(w, 500, "internal_error", "mark Conan publish session committed failed")
+	if _, _, err = h.publications.CommitConanPublicationSession(r.Context(), session.ID, session.Version, digest, actor); err != nil {
+		writeConanPublicationError(w, err)
 		return
 	}
 	if h.publicationScanner != nil {
-		_ = h.publicationScanner.ScheduleRepository(r.Context(), session.RepositoryID, repository.FormatConan, conanSessionCoordinate(session), digest, session.Publisher)
+		_ = h.publicationScanner.ScheduleRepository(r.Context(), session.RepositoryID, repository.FormatConan, conanSessionCoordinate(session), digest, actor)
 	}
 	writeNativeMavenJSON(w, http.StatusOK, map[string]string{"state": "visible", "revision": session.RecipeRevision})
 }
 
-func (h nativeConanPublishHandler) conanRevisionExists(r *http.Request, session repository.ConanPublishSession) bool {
-	if session.Kind == "recipe" {
-		_, err := h.store.GetConanRecipeRevision(r.Context(), session.RepositoryID, session.Reference, session.RecipeRevision)
-		return err == nil
-	}
-	_, err := h.store.GetConanPackageRevision(r.Context(), session.RepositoryID, session.Reference, session.RecipeRevision, session.PackageID, session.PackageRevision)
-	return err == nil
-}
-
-func (h nativeConanPublishHandler) withSession(w http.ResponseWriter, r *http.Request, id string, operation RepositoryOperation, next func(repository.ConanPublishSession)) {
+func (h nativeConanPublishHandler) withSession(w http.ResponseWriter, r *http.Request, id string, operation RepositoryOperation, next func(Principal, repository.ConanPublishSession)) {
 	session, err := h.store.GetConanPublishSession(r.Context(), id)
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan publish session not found")
@@ -215,12 +189,16 @@ func (h nativeConanPublishHandler) withSession(w http.ResponseWriter, r *http.Re
 		writeHostedProblem(w, 500, "internal_error", "load Conan publish session failed")
 		return
 	}
-	h.withRepositoryResource(w, r, session.RepositoryID, operation, conanSessionResource(session), func(Principal, repository.HostedRepository) {
+	h.withRepositoryResource(w, r, session.RepositoryID, operation, conanSessionResource(session), func(principal Principal, _ repository.HostedRepository) {
 		if operation == RepositoryWrite && session.Native {
 			writeHostedProblem(w, http.StatusConflict, "session_closed", "native Conan sessions are written and committed only by the manifest-last protocol")
 			return
 		}
-		next(session)
+		if operation == RepositoryWrite && (nilDependency(h.publications) || nilDependency(h.objects)) {
+			writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "Conan publication capability is unavailable")
+			return
+		}
+		next(principal, session)
 	})
 }
 
@@ -281,19 +259,26 @@ func conanSessionResource(session repository.ConanPublishSession) string {
 }
 
 func validConanPublishRequest(request nativeConanPublishRequest) bool {
-	parts := strings.Split(request.Reference, "/")
-	if len(parts) != 4 || request.Kind != "recipe" && request.Kind != "package" || !validDeclaredObjects(request.Objects) {
+	if request.Kind != "recipe" && request.Kind != "package" || len(request.Objects) < 2 || len(request.Objects) > 4 || !validDeclaredObjects(request.Objects) {
 		return false
 	}
-	for _, part := range append(parts, request.RecipeRevision, request.PackageID, request.PackageRevision) {
-		if part != "" && !validConanSegment(part) {
+	base := "/conan/publication/v2/conans/" + request.Reference + "/revisions/" + request.RecipeRevision
+	if request.Kind == "package" {
+		base += "/packages/" + request.PackageID + "/revisions/" + request.PackageRevision
+	} else if request.PackageID != "" || request.PackageRevision != "" {
+		return false
+	}
+	names := make(map[string]bool, len(request.Objects))
+	for _, object := range request.Objects {
+		if names[object.Name] || object.Size > 1<<30 || (object.Name == conanprotocol.ManifestName || object.Name == "conaninfo.txt") && object.Size > conanprotocol.ManifestMaxBytes {
 			return false
 		}
+		if _, err := conanprotocol.ParseUploadPath(base + "/files/" + object.Name); err != nil {
+			return false
+		}
+		names[object.Name] = true
 	}
-	if request.RecipeRevision == "" {
-		return false
-	}
-	return request.Kind == "recipe" && request.PackageID == "" && request.PackageRevision == "" || request.Kind == "package" && request.PackageID != "" && request.PackageRevision != ""
+	return names[conanprotocol.ManifestName] && (request.Kind == "recipe" && (names["conanfile.py"] || names["conan_export.tgz"]) || request.Kind == "package" && names["conaninfo.txt"] && names["conan_package.tgz"])
 }
 
 func conanPublishDigest(objects []repository.MavenDeclaredObject) string {

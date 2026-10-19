@@ -4,7 +4,8 @@
 
 唯一规范远程入口为 `/conan/<repository>`，Conan 自行附加 `/v1/ping` 或 `/v2/...`。
 Hosted、Proxy、Group 使用同一布局；`/conan/v2/<repository>` 没有别名，直接返回 404。
-Hosted 接收上传，Proxy/Group 禁写。已有管理 Session、修订浏览、生命周期和审计 API 继续可用。
+Hosted 接收上传，Proxy/Group 禁写。已有管理 Session、修订浏览、生命周期和审计 API 继续可用；
+管理与原生发布均要求完整且校验通过的修订。
 
 Conan 仓库及 Group 保留名称 `v2`，避免旧布局重新成为可达入口。
 
@@ -39,16 +40,25 @@ Conan Basic 登录接受本地机器账户凭据或配置的 Resolver 凭据，�
 
 ## 可见边界、重试与生命周期
 
-每个 PUT 要求 `X-Checksum-Sha1`，服务端有界暂存并验证长度、SHA-1 和独立存储 SHA-256。
+每个原生文件 PUT 要求 `X-Checksum-Sha1`，服务端有界暂存并验证长度、SHA-1 和独立存储 SHA-256。
 以发布者、reference、RREV、Package ID、PREV 打开或恢复一小时持久 Recipe/Package Session。
 每次尝试使用新不可变对象 key，在既有 Session/object intent 表中写入带版本指针。
 未完整提交的修订不会出现在协议索引中。
 
 官方客户端最后上传 `conanmanifest.txt`。服务端先回读所有暂存资产，逐字节核 size/SHA-256，
 再流式校验完整展开树的每项 MD5、RREV/PREV 和由 `conaninfo.txt` 派生的 Package ID。
-最终在同一元数据事务写不可变修订、会话 committed 和 publication audit；Session 版本阻止
+最终在同一元数据事务写不可变修订、会话 committed 和以真实提交调用者为 Actor 的 publication audit；Session 版本阻止
 验证期间的并发指针变化。同内容重放只保留一个可见身份；已有身份不同字节返回 409。
 缺失或错误资产、manifest 或身份不一致返回 422，权限拒绝不会公开修订。
+
+管理发布保留原有 HTTP 请求和响应形状：
+`POST /api/v2/repositories/{id}/conan-publish-sessions` 声明完整 Recipe/Package
+文件集合及精确 SHA-256、大小；
+`PUT /api/v2/conan-publish-sessions/{id}/objects/{name}` 验证声明并以新不可变 key 暂存；
+`POST /api/v2/conan-publish-sessions/{id}:commit` 校验完整暂存快照后才切换可见。
+两个入口共用 manifest、资产、身份校验及版本 fence 保护的 revision/session/audit 原子提交。
+审计 Actor 是真实认证的 commit 调用者；获准调用者与会话创建者不同时也不冒用创建者身份。
+成功创建会话或上传对象不公开部分修订。旧式非 hash 身份、缺 manifest 或不完整资产声明不再接受。
 
 上传中断后，用相同缓存、身份、目标及凭据重跑原 `conan upload`。未过期会话可跨 Gateway、
 PostgreSQL 和 S3 服务重启继续；过期会话被 fencing，重试获得全新暂存 key。失败 commit
@@ -86,7 +96,10 @@ metadata 上传、其他压缩格式和任意远程索引聚合。
 不访问生产或外部 Nexus。
 
 单元/存储契约覆盖认证、配额、不可变冲突、并发发布、快照 fencing、过期与 open 会话 GC
-保护；已有管理发布/读取与生命周期用例继续回归。本机证据只对应所测源码树，CI、合并与
+保护；已有管理发布/读取与生命周期用例继续回归。公开 HTTP 与 Memory/PostgreSQL 合同也覆盖
+普通管理会话和原生会话并发：即使全部声明字节及 SHA-256 匹配，也不能以错误 manifest 发布、
+公开元数据或替换暂存字节；两个入口都核对真实审计 Actor 与会话快照。
+本机证据只对应所测源码树，CI、合并与
 发布 SHA 分开验收。kkRepo 固定 `2d0ce09290dbd9a2f47a5d4df7a373337a503c36` 的
 ConanService、ConanLeaseManager、manifest policy 与黑盒测试仅作为源码/夹具参考，
 不声称已实际运行 kkRepo。

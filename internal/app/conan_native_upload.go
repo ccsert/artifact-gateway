@@ -2,7 +2,6 @@ package app
 
 import (
 	"crypto/sha1" // The Conan 2 upload wire checksum is SHA-1, not the storage identity.
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -84,7 +83,7 @@ func (h ConanHandler) uploadNativeConan(w http.ResponseWriter, r *http.Request) 
 	}
 	session, err := h.Publications.BeginConanNativeSession(r.Context(), incoming)
 	if err != nil {
-		h.conanPublicationError(w, err)
+		writeConanPublicationError(w, err)
 		return
 	}
 	// Never reuse a mutable staging key: retries and concurrent writers may
@@ -92,16 +91,16 @@ func (h ConanHandler) uploadNativeConan(w http.ResponseWriter, r *http.Request) 
 	key := "native/conan/sessions/" + session.ID + "/" + uuid.NewString() + "/" + p.File
 	object := repository.MavenDeclaredObject{Name: p.File, Digest: spool.Digest(), Size: spool.Size()}
 	if err = h.NativeStore.StageConanObject(r.Context(), repository.ConanObjectIntent{RepositoryID: repo.ID, ObjectKey: key, Digest: object.Digest, Size: object.Size}); err != nil {
-		h.conanPublicationError(w, err)
+		writeConanPublicationError(w, err)
 		return
 	}
 	if err = h.NativeObjects.PutVerifiedReader(r.Context(), key, spool.Reader(), object.Size, object.Digest); err != nil {
-		h.conanPublicationError(w, err)
+		writeConanPublicationError(w, err)
 		return
 	}
-	session, err = h.Publications.StageConanNativeObject(r.Context(), session.ID, object, key)
+	session, err = h.Publications.StageConanPublicationObject(r.Context(), session.ID, object, key)
 	if err != nil {
-		h.conanPublicationError(w, err)
+		writeConanPublicationError(w, err)
 		return
 	}
 	w.Header().Set("X-Artifact-Gateway-Publish-Session", session.ID)
@@ -112,17 +111,17 @@ func (h ConanHandler) uploadNativeConan(w http.ResponseWriter, r *http.Request) 
 	}
 	uploads, err := h.NativeStore.ListConanPublishUploads(r.Context(), session.ID)
 	if err != nil {
-		h.conanPublicationError(w, err)
+		writeConanPublicationError(w, err)
 		return
 	}
-	if err = h.validateConanNativePublication(r, session, uploads); err != nil {
+	if err = validateConanPublication(r.Context(), h.NativeObjects, session, uploads); err != nil {
 		writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_publication", err.Error())
 		return
 	}
 	digest := conanPublishDigest(session.Objects)
-	committed, _, err := h.Publications.CommitConanNativeSession(r.Context(), session.ID, session.Version, digest)
+	committed, _, err := h.Publications.CommitConanPublicationSession(r.Context(), session.ID, session.Version, digest, principal.Actor)
 	if err != nil {
-		h.conanPublicationError(w, err)
+		writeConanPublicationError(w, err)
 		return
 	}
 	if h.PublicationScanner != nil {
@@ -132,39 +131,7 @@ func (h ConanHandler) uploadNativeConan(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h ConanHandler) validateConanNativePublication(r *http.Request, session repository.ConanPublishSession, uploads map[string]string) error {
-	if len(uploads) != len(session.Objects) {
-		return errors.New("conan publication snapshot has changed")
-	}
-	names := make([]string, 0, len(session.Objects))
-	for _, object := range session.Objects {
-		body, _, err := h.NativeObjects.Open(r.Context(), uploads[object.Name])
-		if err != nil {
-			return errors.New("conan staged asset is unavailable")
-		}
-		hash := sha256.New()
-		n, readErr := io.Copy(hash, io.LimitReader(body, object.Size+1))
-		_ = body.Close()
-		if readErr != nil || n != object.Size || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != object.Digest {
-			return errors.New("conan staged asset bytes no longer match their declaration")
-		}
-		names = append(names, object.Name)
-	}
-	manifest, err := h.NativeObjects.Get(r.Context(), uploads[conanprotocol.ManifestName])
-	if err != nil {
-		return errors.New("conan manifest is unavailable")
-	}
-	revision := session.RecipeRevision
-	if session.Kind == "package" {
-		revision = session.PackageRevision
-	}
-	return conanprotocol.ValidatePublication(r.Context(), session.Kind, revision, session.PackageID, manifest, names, func(name string) (io.ReadCloser, error) {
-		body, _, err := h.NativeObjects.Open(r.Context(), uploads[name])
-		return body, err
-	})
-}
-
-func (h ConanHandler) conanPublicationError(w http.ResponseWriter, err error) {
+func writeConanPublicationError(w http.ResponseWriter, err error) {
 	switch {
 	case repository.IsQuotaExceeded(err):
 		writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota exceeded")

@@ -6,11 +6,14 @@ Publication seeds only this fixture through the supported session API; all
 views, authorization checks and deletion under test run through agctl.
 """
 
+import gzip
 import hashlib
+import io
 import json
 import os
 import subprocess
 import sys
+import tarfile
 import urllib.error
 import urllib.request
 import uuid
@@ -56,12 +59,34 @@ def digest(payload):
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
-def publish(repo, reference, recipe_revision, package_id="", package_revision=""):
-    name = "conaninfo.txt" if package_id else "conanfile.py"
-    payload = f"agctl conan fixture {reference} {recipe_revision} {package_id} {package_revision}\n".encode()
+def manifest(tree):
+    entries = "".join(f"{name}: {hashlib.md5(tree[name]).hexdigest()}\n" for name in sorted(tree))
+    return hashlib.md5(entries.encode()).hexdigest(), ("1700000000\n" + entries).encode()
+
+
+def recipe_fixture(reference, marker):
+    payload = f'# agctl conan fixture {reference} {marker}\nfrom conan import ConanFile\nclass Fixture(ConanFile):\n    pass\n'.encode()
+    revision, body = manifest({"conanfile.py": payload})
+    return revision, {"conanfile.py": payload, "conanmanifest.txt": body}
+
+
+def package_fixture(settings, marker):
+    info = f"[settings]\n{settings}\n".encode()
+    payload = f"agctl package payload {marker}\n".encode()
+    package_id = hashlib.sha1(info).hexdigest()
+    revision, body = manifest({"conaninfo.txt": info, "payload.txt": payload})
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w") as tar:
+        entry = tarfile.TarInfo("payload.txt")
+        entry.size, entry.mode = len(payload), 0o644
+        tar.addfile(entry, io.BytesIO(payload))
+    return package_id, revision, {"conaninfo.txt": info, "conan_package.tgz": gzip.compress(archive.getvalue(), mtime=0), "conanmanifest.txt": body}
+
+
+def publish(repo, reference, recipe_revision, bodies, package_id="", package_revision=""):
     declaration = {"kind": "package" if package_id else "recipe", "reference": reference,
                    "recipeRevision": recipe_revision,
-                   "objects": [{"name": name, "digest": digest(payload), "size": len(payload)}]}
+                   "objects": [{"name": asset, "digest": digest(body), "size": len(body)} for asset, body in sorted(bodies.items())]}
     coordinate = reference + "#" + recipe_revision
     if package_id:
         declaration.update(packageId=package_id, packageRevision=package_revision)
@@ -70,23 +95,25 @@ def publish(repo, reference, recipe_revision, package_id="", package_revision=""
     assert session["repositoryId"] == repo and session["coordinate"] == coordinate
     assert session["objects"] == declaration["objects"]
     session_id = session["id"]
-    request("PUT", f"/api/v2/conan-publish-sessions/{session_id}/objects/{name}", payload, 204)
+    for asset, body in bodies.items():
+        request("PUT", f"/api/v2/conan-publish-sessions/{session_id}/objects/{asset}", body, 204)
     committed = json.loads(request("POST", f"/api/v2/conan-publish-sessions/{session_id}:commit", status=200))
     assert committed == {"state": "visible", "revision": recipe_revision}
-    expected_digest = digest((name + "\0" + digest(payload) + "\0").encode())
+    expected_digest = digest("".join(asset + "\0" + digest(body) + "\0" for asset, body in sorted(bodies.items())).encode())
     native = f"/conan/{repo_name}/v2/conans/{reference}/revisions/{recipe_revision}"
     if package_id:
         native += f"/packages/{package_id}/revisions/{package_revision}"
-    native += "/files/" + name
-    downloaded = request("GET", native)
-    assert downloaded == payload and len(downloaded) == len(payload) and digest(downloaded) == digest(payload)
-    return native, payload, expected_digest
+    native += "/files/"
+    for asset, body in bodies.items():
+        downloaded = request("GET", native + asset)
+        assert downloaded == body and len(downloaded) == len(body) and digest(downloaded) == digest(body)
+    return native, bodies, expected_digest
 
 
 def scope_args(command, package=False):
-    args = ["conan", command, "--repo", repo_id, "--reference", reference, "--recipe-revision", "r1"]
+    args = ["conan", command, "--repo", repo_id, "--reference", reference, "--recipe-revision", r1]
     if package:
-        args.extend(["--package-id", "pkg1"])
+        args.extend(["--package-id", pkg1])
     return args
 
 
@@ -94,12 +121,19 @@ repo_name = "cli-conan-" + uuid.uuid4().hex[:12]
 repo_id = cli("repo", "create", repo_name, "--format", "conan")["data"]["id"]
 reference = "widget/1.0/user/stable"
 try:
+    r1, recipe1 = recipe_fixture(reference, "first revision")
+    r2, recipe2 = recipe_fixture(reference, "second revision")
+    other_rrev, other_recipe = recipe_fixture("widget/2.0/user/stable", "first revision")
     fixtures = {}
-    for ref, rrev in [(reference, "r1"), (reference, "r2"), ("widget/2.0/user/stable", "r1")]:
-        fixtures[(ref, rrev)] = publish(repo_id, ref, rrev)
+    for ref, rrev, bodies in [(reference, r1, recipe1), (reference, r2, recipe2), ("widget/2.0/user/stable", other_rrev, other_recipe)]:
+        fixtures[(ref, rrev)] = publish(repo_id, ref, rrev, bodies)
+    pkg1, p1, package1 = package_fixture("os=Linux\narch=x86_64", "first package revision")
+    repeated_pkg1, p2, package2 = package_fixture("os=Linux\narch=x86_64", "second package revision")
+    pkg2, p3, package3 = package_fixture("os=Linux\narch=armv8", "third package revision")
+    assert repeated_pkg1 == pkg1 and pkg2 != pkg1 and p2 != p1
     packages = {}
-    for pkg, prev in [("pkg1", "p1"), ("pkg1", "p2"), ("pkg2", "p3")]:
-        packages[(pkg, prev)] = publish(repo_id, reference, "r1", pkg, prev)
+    for pkg, prev, bodies in [(pkg1, p1, package1), (pkg1, p2, package2), (pkg2, p3, package3)]:
+        packages[(pkg, prev)] = publish(repo_id, reference, r1, bodies, pkg, prev)
 
     refs = cli("conan", "references", "--repo", repo_id, "--q", "widget/", "--page-size", "1")
     assert [item["reference"] for item in refs["data"]["items"]] == [reference]
@@ -117,25 +151,25 @@ try:
 
     revisions = cli("conan", "recipe-revisions", "--repo", repo_id, "--reference", reference, "--page-size", "1", "--all")
     assert [(item["revision"], item["digest"], item["state"]) for item in revisions["data"]["items"]] == [
-        (rrev, fixtures[(reference, rrev)][2], "visible") for rrev in ["r1", "r2"]]
+        (rrev, fixtures[(reference, rrev)][2], "visible") for rrev in sorted([r1, r2])]
     assert revisions["meta"]["scope"]["reference"] == reference
-    filtered = cli("conan", "recipe-revisions", "--repo", repo_id, "--reference", reference, "--q", "r2")
-    assert [item["revision"] for item in filtered["data"]["items"]] == ["r2"]
+    filtered = cli("conan", "recipe-revisions", "--repo", repo_id, "--reference", reference, "--q", r2)
+    assert [item["revision"] for item in filtered["data"]["items"]] == [r2]
 
     ids = cli(*scope_args("package-ids"))
-    assert ids["data"]["items"] == ["pkg1", "pkg2"] and ids["data"]["nextCursor"] is None
+    assert ids["data"]["items"] == sorted([pkg1, pkg2]) and ids["data"]["nextCursor"] is None
     assert ids["meta"]["pagination"]["mode"] == "none"
     package_args = scope_args("package-revisions", package=True)
     listed = cli(*package_args)
     assert sorted((item["revision"], item["digest"], item["state"]) for item in listed["data"]["items"]) == [
-        (prev, packages[("pkg1", prev)][2], "visible") for prev in ["p1", "p2"]]
-    assert listed["meta"]["scope"]["packageId"] == "pkg1"
+        (prev, packages[(pkg1, prev)][2], "visible") for prev in sorted([p1, p2])]
+    assert listed["meta"]["scope"]["packageId"] == pkg1
 
-    delete_args = ["conan", "package-revision", "delete", *package_args[2:], "--revision", "p1"]
+    delete_args = ["conan", "package-revision", "delete", *package_args[2:], "--revision", p1]
     cli(*delete_args, want=2)
     plan = cli(*delete_args, "--dry-run")
     assert plan["data"]["mode"] == "client-plan"
-    assert plan["data"]["current"]["digest"] == packages[("pkg1", "p1")][2]
+    assert plan["data"]["current"]["digest"] == packages[(pkg1, p1)][2]
     assert len(cli(*package_args)["data"]["items"]) == 2
 
     if resolver_token:
@@ -149,17 +183,19 @@ try:
     assert missing["error"]["httpStatus"] == 404
 
     deleted = cli(*delete_args, "--yes")["data"]
-    assert deleted == {"repositoryId": repo_id, "reference": reference, "recipeRevision": "r1",
-                       "packageId": "pkg1", "revision": "p1", "status": "tombstoned", "visibility": "not_listed"}
-    assert [item["revision"] for item in cli(*package_args)["data"]["items"]] == ["p2"]
+    assert deleted == {"repositoryId": repo_id, "reference": reference, "recipeRevision": r1,
+                       "packageId": pkg1, "revision": p1, "status": "tombstoned", "visibility": "not_listed"}
+    assert [item["revision"] for item in cli(*package_args)["data"]["items"]] == [p2]
     assert cli(*delete_args, "--yes")["data"] == deleted
     cli(*[*delete_args[:-1], "missing", "--yes"], want=4)
-    request("GET", packages[("pkg1", "p1")][0], status=404)
-    for native, payload, _ in [*fixtures.values(), packages[("pkg1", "p2")], packages[("pkg2", "p3")]]:
-        actual = request("GET", native)
-        assert actual == payload and len(actual) == len(payload) and digest(actual) == digest(payload)
+    for asset in packages[(pkg1, p1)][1]:
+        request("GET", packages[(pkg1, p1)][0] + asset, status=404)
+    for native, bodies, _ in [*fixtures.values(), packages[(pkg1, p2)], packages[(pkg2, p3)]]:
+        for asset, payload in bodies.items():
+            actual = request("GET", native + asset)
+            assert actual == payload and len(actual) == len(payload) and digest(actual) == digest(payload)
     audits = cli("audit", "list", "--repository", repo_name, "--operation", "conan.package_revision.tombstone", "--all")["data"]["items"]
-    coordinate = reference + "#r1/pkg1#p1"
+    coordinate = reference + "#" + r1 + "/" + pkg1 + "#" + p1
     assert any(item["resource"] == coordinate and item["status"] == 204 and item["outcome"] == "resolved" for item in audits)
     print("Conan CLI E2E passed: four views, exact cursors/filters, read-back tombstone, repeat/refusals, audit and complete object bytes")
 finally:

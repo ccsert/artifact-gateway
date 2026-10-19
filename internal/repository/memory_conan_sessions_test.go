@@ -7,35 +7,36 @@ import (
 )
 
 func TestMemoryConanPublishSessionRequiresEveryDeclaredObject(t *testing.T) {
+	ctx := context.Background()
 	store := NewMemoryStore()
-	for _, id := range []string{"repo"} {
-		if _, err := store.CreateHostedRepository(context.Background(), HostedRepository{ID: id, Name: id, Format: FormatConan}); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "repo", Name: "repo", Format: FormatConan}); err != nil {
+		t.Fatal(err)
 	}
-
-	session, err := store.CreateConanPublishSession(context.Background(), ConanPublishSession{
+	session, err := store.CreateConanPublishSession(ctx, ConanPublishSession{
 		ID: "session", RepositoryID: "repo", Publisher: "publisher", Kind: "recipe",
-		Reference: "pkg/1.0/user/stable", RecipeRevision: "rrev", State: "open", ExpiresAt: time.Now().Add(time.Hour),
-		Objects: []MavenDeclaredObject{{Name: "conanfile.py", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Size: 1}, {Name: "manifest.txt", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Size: 1}},
+		Reference: "pkg/1.0/user/stable", RecipeRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", State: "open", ExpiresAt: time.Now().Add(time.Hour),
+		Objects: []MavenDeclaredObject{{Name: "conanfile.py", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Size: 1}, {Name: "conanmanifest.txt", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Size: 1}},
 	})
-	if err != nil || session.State != "open" {
+	if err != nil || session.State != "open" || session.Version != 1 || session.Native {
 		t.Fatalf("create session=%#v err=%v", session, err)
 	}
-	if err = store.MarkConanPublishObject(context.Background(), session.ID, "conanfile.py", "native/conan/session/conanfile.py"); err != nil {
-		t.Fatal(err)
+	for i, object := range session.Objects {
+		key := "native/conan/session/" + object.Name
+		if err = store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: key, Digest: object.Digest, Size: object.Size}); err != nil {
+			t.Fatal(err)
+		}
+		session, err = store.StageConanPublicationObject(ctx, session.ID, object, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			if _, _, err = store.CommitConanPublicationSession(ctx, session.ID, session.Version, object.Digest, "committer"); err != ErrDisabled {
+				t.Fatalf("incomplete commit error=%v, want %v", err, ErrDisabled)
+			}
+		}
 	}
-	if err = store.CommitConanPublishSession(context.Background(), session.ID); err != ErrDisabled {
-		t.Fatalf("incomplete commit error=%v, want %v", err, ErrDisabled)
-	}
-	if err = store.MarkConanPublishObject(context.Background(), session.ID, "manifest.txt", "native/conan/session/manifest.txt"); err != nil {
-		t.Fatal(err)
-	}
-	if err = store.CommitConanPublishSession(context.Background(), session.ID); err != nil {
-		t.Fatal(err)
-	}
-	committed, err := store.GetConanPublishSession(context.Background(), session.ID)
-	if err != nil || committed.State != "committed" {
+	committed, _, err := store.CommitConanPublicationSession(ctx, session.ID, session.Version, "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "committer")
+	if err != nil || committed.State != "committed" || committed.Publisher != "publisher" {
 		t.Fatalf("committed session=%#v err=%v", committed, err)
 	}
 }

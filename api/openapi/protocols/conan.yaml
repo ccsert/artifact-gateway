@@ -5,6 +5,8 @@ x-gateway-protocol-overlay:
     /conan/{repository} as the remote root; the client appends /v1 or /v2.
     Hosted PUTs reuse durable publication sessions and immutable object intents.
     Only a complete validated manifest commits a recipe or package revision.
+    Management publication uses the same validator, snapshot fence and atomic
+    revision/session/audit commit; it cannot publish partial revisions.
     Group and Proxy remotes are read-only. The retired /conan/v2/{repository}
     layout is not an alias. Conan 1, SCM revisions and optional metadata uploads
     are unsupported. See docs/conan-native-publication.md for bounds and evidence.
@@ -159,7 +161,9 @@ conan_recipe_file:
       Stages one immutable verified object in the publisher's one-hour session.
       conanmanifest.txt is the visibility signal: validates every declared MD5
       tree entry, hash revision and package identity, then atomically commits
-      revision metadata, session state and a correlated publish audit. Repeating
+      revision metadata, session state and a publish audit for the actual
+      commit caller, using the same validator and commit boundary as management
+      publication. The session version fences concurrent staged-pointer changes. Repeating
       identical bytes preserves the visible identity; changed bytes conflict.
       Limits are 1 GiB per object and expanded tree including tar framing,
       1 MiB manifest/conaninfo and 4096 manifest/archive entries. Sessions do not
@@ -248,7 +252,9 @@ conan_package_file:
       Stages one immutable verified object in the publisher's one-hour session.
       conanmanifest.txt is the visibility signal: validates every declared MD5
       tree entry, hash revision and package identity, then atomically commits
-      revision metadata, session state and a correlated publish audit. Repeating
+      revision metadata, session state and a publish audit for the actual
+      commit caller, using the same validator and commit boundary as management
+      publication. The session version fences concurrent staged-pointer changes. Repeating
       identical bytes preserves the visible identity; changed bytes conflict.
       Limits are 1 GiB per object and expanded tree including tar framing,
       1 MiB manifest/conaninfo and 4096 manifest/archive entries. Sessions do not

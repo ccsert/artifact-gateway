@@ -27,7 +27,7 @@ import (
 
 type conanClientBackend struct {
 	store        GatewayStore
-	publications repository.ConanNativePublicationStore
+	publications repository.ConanPublicationStore
 	objects      ObjectStore
 }
 
