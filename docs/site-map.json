@@ -20,6 +20,7 @@
       "id": "architecture",
       "title": { "en": "Architecture and design", "zh-CN": "架构与设计" },
       "items": [
+        { "id": "native-architecture", "title": { "en": "Native management architecture", "zh-CN": "原生管理架构" }, "en": "docs/adr/0009-native-architecture.md", "zh-CN": "docs/adr/0009-native-architecture.zh-CN.md" },
         { "id": "architecture-overview", "title": { "en": "Architecture", "zh-CN": "整体架构" }, "en": "ARCHITECTURE.md", "zh-CN": "ARCHITECTURE.zh-CN.md" },
         { "id": "architecture-diagrams", "title": { "en": "Architecture diagrams", "zh-CN": "架构图" }, "en": "docs/architecture-diagrams.md", "zh-CN": "docs/architecture-diagrams.zh-CN.md" },
         { "id": "design", "title": { "en": "Design notes", "zh-CN": "设计说明" }, "en": "DESIGN.md", "zh-CN": "DESIGN.zh-CN.md" },

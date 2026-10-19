@@ -162,7 +162,14 @@ integration-down:
 	@docker volume create artifact-gateway-go-build >/dev/null
 	@docker compose --env-file /dev/null --project-name artifact-gateway-integration -f compose.integration.yml down -v --remove-orphans
 
-lint:
+architecture-check:
+	@go run ./tools/architecture
+	@go test ./tools/architecture
+
+architecture-metrics:
+	@go run ./tools/architecture -metrics
+
+lint: architecture-check
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(LINT_IMAGE) golangci-lint run
 
 vet:
@@ -306,3 +313,5 @@ backup-transfer-test:
 .PHONY: published-native-backup-test
 published-native-backup-test:
 	@./scripts/published-native-backup-test.sh --recovery
+
+.PHONY: architecture-check architecture-metrics

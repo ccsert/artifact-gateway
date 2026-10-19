@@ -40,6 +40,7 @@ agree with executable tests and the
 - [ADR 0006: account levels and per-repository authority](adr/0006-account-levels-and-repository-grants.md)
 - [ADR 0007: agctl CLI shape and cross-cutting contract](adr/0007-agctl-cli-shape.md)
 - [ADR 0008: Go module path follows the source repository](adr/0008-go-module-path.md)
+- [ADR 0009: Native management architecture](adr/0009-native-architecture.md)
 
 ## Protocols and formats
 
