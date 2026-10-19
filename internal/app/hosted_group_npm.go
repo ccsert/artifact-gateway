@@ -391,6 +391,7 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 			}
 			for _, hidden := range pkg.TombstonedVersions {
 				if hidden.Version == version.Version {
+					resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
 					h.native.writeError(w, http.StatusNotFound, "package tarball not found")
 					return
 				}

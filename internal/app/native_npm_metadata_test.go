@@ -319,9 +319,25 @@ func TestNativeNPMGroupTombstoneAuthority(t *testing.T) {
 	if _, exists := group["versions"].(map[string]any)["2.0.0"]; !exists {
 		t.Fatal("Group hid the remaining authoritative version")
 	}
-	for _, suffix := range []string{"/1.0.0", "/-/widget-1.0.0.tgz"} {
-		if result := npmDistTagRequest(t, handler, http.MethodGet, "/npm/npm-group/widget"+suffix, "resolver-secret", ""); result.Code != 404 {
-			t.Fatalf("Group tombstone %s=%d %s", suffix, result.Code, result.Body.String())
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		for _, target := range []struct{ suffix, resource string }{{"/1.0.0", "widget@1.0.0"}, {"/-/widget-1.0.0.tgz", "widget/-/widget-1.0.0.tgz"}} {
+			suffix := target.suffix
+			query := repository.AuditQuery{GroupName: groupRecord.Name, Format: "npm", Actor: "build-agent", Operation: strings.ToLower(method), Outcome: string(repository.AuditNotFound), Limit: 100}
+			before, err := store.ListAudits(ctx, query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result := npmDistTagRequest(t, handler, method, "/npm/npm-group/widget"+suffix, "resolver-secret", ""); result.Code != http.StatusNotFound {
+				t.Fatalf("Group tombstone %s %s=%d %s", method, suffix, result.Code, result.Body.String())
+			}
+			after, err := store.ListAudits(ctx, query)
+			if err != nil || len(after) != len(before)+1 {
+				t.Fatalf("Group tombstone %s %s lost or duplicated its read audit: before=%d after=%d err=%v", method, suffix, len(before), len(after), err)
+			}
+			audit := after[0]
+			if audit.GroupName != groupRecord.Name || audit.Repository != groupRecord.Name || audit.Resource != target.resource || audit.Actor != "build-agent" || audit.Status != http.StatusNotFound || audit.Outcome != repository.AuditNotFound {
+				t.Fatalf("Group tombstone read audit identifies the wrong target: %+v", audit)
+			}
 		}
 	}
 	expectedDigest := sha256.Sum256(visibleTarball)
