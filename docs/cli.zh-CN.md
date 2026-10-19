@@ -658,7 +658,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的；设置
   `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查；设置
   `CLI_E2E_OIDC_ISSUER`（Gateway 已配置的 OIDC issuer，会规范化首尾空白和末尾斜杠）会加入身份绑定检查，
-  隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。剧本创建仓库、
+  隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。Agent 菜谱
+  先用 `commands --json` 和 `info --json` 在同一真实 Gateway 核对 schema、能力与身份，再创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
   `If-Match` 的改名、重排、保留成员的删除）；创建和更新合成上游的 Maven Proxy

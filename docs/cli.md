@@ -804,7 +804,9 @@ command, flag, or argument count the client does not have.
   Gateway's configured OIDC issuer, with surrounding whitespace and trailing
   slashes normalized) adds the identity link checks; isolated
   Compose mode configures a synthetic issuer itself, and CI configures one on
-  the shared Gateway. The scenario creates a repository, replays the
+  the shared Gateway. Agent recipes first inspect the same real Gateway through
+  `commands --json` and `info --json`, retaining schema/capability and identity
+  checks. The scenario creates a repository, replays the
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,

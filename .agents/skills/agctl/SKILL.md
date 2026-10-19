@@ -168,6 +168,23 @@ rule starts disabled; there is no default policy, so name every threshold.
 `ready` and `accepted` mean configured and handed to the relay, not read by a
 person.
 
+## Local operations
+
+When a task needs a command absent from introspection, read the phase and
+supported entry point in [the command map](../../../docs/cli-command-map.md#contract-external-http-local-entry-points-and-capabilities-without-an-api)
+before choosing a recipe. Planned and API-only operations are not installed
+CLI commands. Manual Nexus full/rescan batches use the existing Console/API;
+periodic synchronization remains a separate open capability.
+
+Host-local `gateway` tools (preflight, evidence, backup/restore, snapshot-import,
+APT archive verification and directory themes) run on the explicitly selected
+host with its own file/OS permissions. Read the command map and the named tool's
+help before using them. Backup/import also need the target PG/S3/Docker
+permissions; a remote administrator token does not grant those permissions.
+Use the authorized input/output paths and isolated targets. A local binary
+version or an offline archive digest is not proof of remote recovery, trusted
+signatures or production cutover.
+
 ## When something is missing
 
 If `agctl commands --json` does not list what you need, the CLI does not
