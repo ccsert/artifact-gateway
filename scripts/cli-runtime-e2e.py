@@ -108,7 +108,7 @@ def check():
             password_file = work / "password"
             password_file.write_text(password + "\n")
             password_file.chmod(0o600)
-            for role, must_change, code in (("none", False, "authorization_pending"),
+            for role, must_change, code in (("none", False, "access_denied"),
                                              ("admin", True, "password_change_required")):
                 name = "runtime-" + role
                 args = ["user", "create", name, "--role", role, "--password-file", str(password_file)]
