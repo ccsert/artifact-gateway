@@ -21,7 +21,7 @@ import (
 // repository cannot be read fails closed, so both need the platform tier.
 // Nothing is cached: a member that is removed, a repository that is deleted, and
 // a grant that is withdrawn all change the answer on the next request.
-func (h generatedRepositoryAPIAdapter) authorizeGroupMembership(w http.ResponseWriter, r *http.Request, principal Principal, groupName string, members []repository.GroupMember) bool {
+func (h repositoryManagementHandler) authorizeGroupMembership(w http.ResponseWriter, r *http.Request, principal Principal, groupName string, members []repository.GroupMember) bool {
 	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
 		writeHostedProblem(w, http.StatusForbidden, code, message)
 		return false
@@ -61,7 +61,7 @@ func groupMemberLabel(member repository.GroupMember, repositoryName string) stri
 	return "position " + strconv.Itoa(member.Position)
 }
 
-func (h generatedRepositoryAPIAdapter) recordGroupMembershipDenial(r *http.Request, groupName, repositoryName, actor string) {
+func (h repositoryManagementHandler) recordGroupMembershipDenial(r *http.Request, groupName, repositoryName, actor string) {
 	if h.audit == nil {
 		return
 	}
@@ -77,7 +77,7 @@ func (h generatedRepositoryAPIAdapter) recordGroupMembershipDenial(r *http.Reque
 // principal outside the platform tier administers every member: the rule that
 // lets it write the Group also lets it read the Group. A member without a
 // readable repository fails closed.
-func (h generatedRepositoryAPIAdapter) administersGroupMembers(r *http.Request, principal Principal, members []repository.GroupMember) bool {
+func (h repositoryManagementHandler) administersGroupMembers(r *http.Request, principal Principal, members []repository.GroupMember) bool {
 	for _, member := range members {
 		if member.RepositoryID == "" {
 			return false
@@ -94,7 +94,7 @@ func (h generatedRepositoryAPIAdapter) administersGroupMembers(r *http.Request, 
 // Group; a caller who administers every member reads that Group, the same rule
 // writes use. Any other caller gets 404, as if the Group did not exist, so a
 // read does not reveal a Group the caller only partly administers.
-func (h generatedRepositoryAPIAdapter) readGroup(w http.ResponseWriter, r *http.Request, id string) (repository.HostedGroup, bool) {
+func (h repositoryManagementHandler) readGroup(w http.ResponseWriter, r *http.Request, id string) (repository.HostedGroup, bool) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return repository.HostedGroup{}, false
@@ -125,7 +125,7 @@ var groupListScanBudget = 1000
 // store batches and stops after groupListScanBudget Groups, so it can be short
 // or empty while more remain; its token is the last Group scanned, so the next
 // page resumes after it rather than after the last Group returned.
-func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
+func (h repositoryManagementHandler) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -192,7 +192,7 @@ func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http
 	writeNativeMavenJSON(w, http.StatusOK, map[string]any{"items": items, "nextPageToken": next})
 }
 
-func (h generatedRepositoryAPIAdapter) CreateGroup(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateGroupParams) {
+func (h repositoryManagementHandler) CreateGroup(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateGroupParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -235,11 +235,11 @@ func (h generatedRepositoryAPIAdapter) CreateGroup(w http.ResponseWriter, r *htt
 	writeNativeMavenJSON(w, http.StatusCreated, created)
 }
 
-func (h generatedRepositoryAPIAdapter) GetGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+func (h repositoryManagementHandler) GetGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
 	h.writeGroup(w, r, id.String())
 }
 
-func (h generatedRepositoryAPIAdapter) ListGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+func (h repositoryManagementHandler) ListGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
 	group, ok := h.readGroup(w, r, id.String())
 	if !ok {
 		return
@@ -247,7 +247,7 @@ func (h generatedRepositoryAPIAdapter) ListGroupMembers(w http.ResponseWriter, r
 	writeNativeMavenJSON(w, 200, group.Members)
 }
 
-func (h generatedRepositoryAPIAdapter) GetGroupCapacity(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+func (h repositoryManagementHandler) GetGroupCapacity(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
 	group, ok := h.readGroup(w, r, id.String())
 	if !ok {
 		return
@@ -272,7 +272,7 @@ func (h generatedRepositoryAPIAdapter) GetGroupCapacity(w http.ResponseWriter, r
 	writeNativeMavenJSON(w, http.StatusOK, map[string]any{"groupId": group.ID, "format": group.Format, "members": items})
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
+func (h repositoryManagementHandler) DeleteGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -296,7 +296,7 @@ func (h generatedRepositoryAPIAdapter) DeleteGroup(w http.ResponseWriter, r *htt
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h generatedRepositoryAPIAdapter) ReplaceGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupParams) {
+func (h repositoryManagementHandler) ReplaceGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -327,7 +327,7 @@ func (h generatedRepositoryAPIAdapter) ReplaceGroup(w http.ResponseWriter, r *ht
 	h.writeGroupMutation(w, updated, err)
 }
 
-func (h generatedRepositoryAPIAdapter) ReplaceGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupMembersParams) {
+func (h repositoryManagementHandler) ReplaceGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupMembersParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -357,13 +357,13 @@ func (h generatedRepositoryAPIAdapter) ReplaceGroupMembers(w http.ResponseWriter
 	h.writeGroupMutation(w, updated, err)
 }
 
-func (h generatedRepositoryAPIAdapter) writeGroup(w http.ResponseWriter, r *http.Request, id string) {
+func (h repositoryManagementHandler) writeGroup(w http.ResponseWriter, r *http.Request, id string) {
 	if group, ok := h.readGroup(w, r, id); ok {
 		writeNativeMavenJSON(w, 200, group)
 	}
 }
 
-func (h generatedRepositoryAPIAdapter) writeGroupMutation(w http.ResponseWriter, group repository.HostedGroup, err error) {
+func (h repositoryManagementHandler) writeGroupMutation(w http.ResponseWriter, group repository.HostedGroup, err error) {
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return
@@ -383,7 +383,7 @@ func (h generatedRepositoryAPIAdapter) writeGroupMutation(w http.ResponseWriter,
 	writeNativeMavenJSON(w, 200, group)
 }
 
-func (h generatedRepositoryAPIAdapter) validHostedGroup(r *http.Request, group repository.HostedGroup) bool {
+func (h repositoryManagementHandler) validHostedGroup(r *http.Request, group repository.HostedGroup) bool {
 	profile, supported := repository.FormatProfileFor(group.Format)
 	if !hostedRepositoryName.MatchString(group.Name) || !supported || !profile.GroupSupported || len(group.Members) == 0 {
 		return false

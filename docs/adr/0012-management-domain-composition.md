@@ -1,0 +1,56 @@
+# Management API Domain Composition
+
+[简体中文](0012-management-domain-composition.zh-CN.md) · [Documentation index](../README.md)
+
+Status: accepted; implemented domain by domain under #280, starting with #392.
+
+## Problem and alternatives
+
+The generated management interface describes every operation, but one adapter
+also owned every dependency. File splitting alone leaves that coupling intact.
+
+1. Keep one adapter and a common aggregate dependency: fewer constructors, but
+   unrelated domains remain coupled and cannot be constructed independently.
+2. Compose domain handlers implementing disjoint subsets of the generated
+   interface: explicit domain constructors and narrow ports, with one compile-time
+   assertion proving the complete management surface.
+3. Migrate all handlers to the generated strict interface at the same time:
+   typed request/response objects, but a second whole-surface migration that also
+   changes streaming upload/download orchestration and error ownership.
+
+Choose option 2. The pinned generator already emits strict-server types; their
+existence does not require using them. Strict request/response adapters can be
+considered for a future concrete domain contract change. They do not replace
+splitting domain dependencies, and are not a prerequisite for #280.
+
+## Decision and implementation
+
+`managementServer` composes domain handlers by embedding. Each domain owns its
+operations once, declares its store ports, and has an independent constructor.
+The generated `ServerInterface` assertion rejects missing or duplicate methods.
+Generated routing and parameter binding stay at the HTTP edge. This slice does
+not change OpenAPI, Console or agctl behavior and introduces no second API.
+
+`managementScope` contains only repository lookup, an explicit anonymous-policy
+reader, audit recording, authentication, authorization and denial metrics. It
+carries no `GatewayStore`, identity store, lifecycle queue, or format store.
+Domain persistence is supplied separately. Anonymous policy is not inferred
+from the concrete type behind the repository lookup port.
+
+The first domain is repository/Group configuration: repository CRUD and
+capabilities, format profiles, Group CRUD/members/capacity/resolution, and the
+repository egress probe. Artifact browsing, access, identity, lifecycle,
+operations, site and APT follow in separate PRs. The temporary legacy adapter
+owns only operations that have not moved. It is removed after the last domain;
+it is not a compatibility surface.
+
+## Verification and limits
+
+Construct domain handlers directly with only their repository/Group ports and
+exercise the generated HTTP boundary. Verify filtering, authorization and denial
+audit, idempotency, Group membership checks and version conflicts. Keep the
+full Go unit, coverage, lint, vet, OpenAPI and documentation gates.
+
+This refactor neither changes persistence nor moves package protocol handlers.
+It does not claim complete SQL-package isolation (#282), shared middleware
+extraction (#283), or production acceptance.
