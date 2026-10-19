@@ -1,4 +1,4 @@
-package app
+package raw
 
 import (
 	"errors"
@@ -121,7 +121,7 @@ func rawEntityTagDigest(tag string) string {
 
 // checkRawWriteCondition fails fast before the body is read. The store
 // re-evaluates the same condition atomically when it replaces the reference.
-func (h nativeRawHandler) checkRawWriteCondition(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) (repository.RawWriteCondition, bool) {
+func (h *Module) checkRawWriteCondition(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) (repository.RawWriteCondition, bool) {
 	condition, err := rawWriteCondition(r.Header)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

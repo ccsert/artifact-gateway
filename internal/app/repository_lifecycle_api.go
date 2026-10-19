@@ -9,6 +9,8 @@ import (
 	"time"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -219,38 +221,40 @@ func (h generatedRepositoryAPIAdapter) TombstoneRepositoryArtifact(w http.Respon
 			return
 		}
 		var err error
-		switch repo.Format {
-		case repository.FormatMaven:
-			artifact, lookupErr := h.sessions.store.GetMavenArtifactByCoordinate(r.Context(), repo.ID, request.Coordinate)
-			if lookupErr != nil {
-				err = lookupErr
-			} else {
-				_, err = h.sessions.store.TombstoneMavenArtifact(r.Context(), repo.ID, artifact.ID)
+		if capability, ok := formatmodule.Capability[formatmodule.Governance](rawFormatRegistry(rawformat.Options{Store: h.sessions.store}), repo.Format); ok {
+			err = capability.Tombstone(r.Context(), repo.ID, request.Coordinate)
+		} else {
+			switch repo.Format {
+			case repository.FormatMaven:
+				artifact, lookupErr := h.sessions.store.GetMavenArtifactByCoordinate(r.Context(), repo.ID, request.Coordinate)
+				if lookupErr != nil {
+					err = lookupErr
+				} else {
+					_, err = h.sessions.store.TombstoneMavenArtifact(r.Context(), repo.ID, artifact.ID)
+				}
+			case repository.FormatOCI:
+				name, digest, _ := parseOCIRestoreCoordinate(request.Coordinate)
+				err = h.oci.DeleteOCIManifest(r.Context(), repo.ID, name, digest)
+			case repository.FormatConan:
+				reference, revision, packageID, packageRevision, packageDelete, _ := parseConanRestoreCoordinate(request.Coordinate)
+				if packageDelete {
+					_, err = h.conan.TombstoneConanPackageRevision(r.Context(), repo.ID, reference, revision, packageID, packageRevision)
+				} else {
+					_, err = h.conan.TombstoneConanRecipeRevision(r.Context(), repo.ID, reference, revision)
+				}
+			case repository.FormatNPM:
+				name, version, _ := parseNPMVersionCoordinate(request.Coordinate)
+				_, err = h.sessions.store.TombstoneNPMVersion(r.Context(), repo.ID, name, version)
+			case repository.FormatPyPI:
+				project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
+				_, err = h.sessions.store.TombstonePyPIVersion(r.Context(), repo.ID, project, version)
+			case repository.FormatGo:
+				modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
+				_, err = h.sessions.store.TombstoneGoModuleVersion(r.Context(), repo.ID, modulePath, version)
+			case repository.FormatCargo:
+				name, version, _ := splitVersionCoordinate(request.Coordinate)
+				_, err = h.cargo.TombstoneCargoPublication(r.Context(), repo.ID, name, version)
 			}
-		case repository.FormatOCI:
-			name, digest, _ := parseOCIRestoreCoordinate(request.Coordinate)
-			err = h.oci.DeleteOCIManifest(r.Context(), repo.ID, name, digest)
-		case repository.FormatConan:
-			reference, revision, packageID, packageRevision, packageDelete, _ := parseConanRestoreCoordinate(request.Coordinate)
-			if packageDelete {
-				_, err = h.conan.TombstoneConanPackageRevision(r.Context(), repo.ID, reference, revision, packageID, packageRevision)
-			} else {
-				_, err = h.conan.TombstoneConanRecipeRevision(r.Context(), repo.ID, reference, revision)
-			}
-		case repository.FormatRaw:
-			err = h.sessions.store.DeleteRawAsset(r.Context(), repo.ID, request.Coordinate)
-		case repository.FormatNPM:
-			name, version, _ := parseNPMVersionCoordinate(request.Coordinate)
-			_, err = h.sessions.store.TombstoneNPMVersion(r.Context(), repo.ID, name, version)
-		case repository.FormatPyPI:
-			project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
-			_, err = h.sessions.store.TombstonePyPIVersion(r.Context(), repo.ID, project, version)
-		case repository.FormatGo:
-			modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
-			_, err = h.sessions.store.TombstoneGoModuleVersion(r.Context(), repo.ID, modulePath, version)
-		case repository.FormatCargo:
-			name, version, _ := splitVersionCoordinate(request.Coordinate)
-			_, err = h.cargo.TombstoneCargoPublication(r.Context(), repo.ID, name, version)
 		}
 		if errors.Is(err, repository.ErrNotFound) {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "artifact not found")
@@ -268,6 +272,9 @@ func (h generatedRepositoryAPIAdapter) TombstoneRepositoryArtifact(w http.Respon
 }
 
 func validTombstoneCoordinate(format repository.Format, coordinate string) bool {
+	if capability, ok := formatmodule.Capability[formatmodule.Governance](rawFormatRegistry(rawformat.Options{}), format); ok {
+		return capability.ValidCoordinate(coordinate)
+	}
 	switch format {
 	case repository.FormatMaven:
 		return validMavenCoordinate(coordinate)
@@ -275,8 +282,6 @@ func validTombstoneCoordinate(format repository.Format, coordinate string) bool 
 		return validOCIRestoreCoordinate(coordinate)
 	case repository.FormatConan:
 		return validConanRestoreCoordinate(coordinate)
-	case repository.FormatRaw:
-		return coordinate != "" && validRawAssetPrefix(coordinate)
 	case repository.FormatNPM:
 		return validNPMVersionCoordinate(coordinate)
 	case repository.FormatPyPI:

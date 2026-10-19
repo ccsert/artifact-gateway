@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
@@ -53,11 +55,13 @@ func (r *NativeArtifactScanResolver) ResolveArtifactScan(ctx context.Context, re
 	if r == nil || r.Objects == nil {
 		return scanning.Artifact{}, errors.New("artifact object store is unavailable")
 	}
+	modules := rawFormatRegistry(rawformat.Options{Store: r.Raw, Objects: r.Objects})
+	if scanner, ok := formatmodule.Capability[formatmodule.Scanner](modules, payload.Format); ok {
+		return scanner.ResolveArtifactScan(ctx, repositoryID, payload)
+	}
 	switch payload.Format {
 	case repository.FormatAPT:
 		return r.resolveAPT(ctx, repositoryID, payload)
-	case repository.FormatRaw:
-		return r.resolveRaw(ctx, repositoryID, payload)
 	case repository.FormatOCI:
 		return r.resolveOCI(ctx, repositoryID, payload)
 	case repository.FormatMaven:
@@ -75,20 +79,6 @@ func (r *NativeArtifactScanResolver) ResolveArtifactScan(ctx context.Context, re
 	default:
 		return scanning.Artifact{}, fmt.Errorf("format %q cannot be scanned", payload.Format)
 	}
-}
-
-func (r *NativeArtifactScanResolver) resolveRaw(ctx context.Context, repositoryID string, payload repository.ArtifactScanPayload) (scanning.Artifact, error) {
-	if r.Raw == nil {
-		return scanning.Artifact{}, errors.New("raw repository store is unavailable")
-	}
-	asset, err := r.Raw.GetRawAsset(ctx, repositoryID, payload.Coordinate)
-	if err != nil {
-		return scanning.Artifact{}, err
-	}
-	if asset.Digest != payload.Digest {
-		return scanning.Artifact{}, errors.New("raw asset digest changed")
-	}
-	return scanning.Artifact{RepositoryID: repositoryID, Format: payload.Format, Coordinate: payload.Coordinate, Digest: payload.Digest, Assets: []scanning.Asset{r.asset(asset.Path, asset.ObjectKey, asset.Digest, asset.Size, asset.ContentType)}}, nil
 }
 
 func (r *NativeArtifactScanResolver) resolveCargo(ctx context.Context, repositoryID string, payload repository.ArtifactScanPayload) (scanning.Artifact, error) {

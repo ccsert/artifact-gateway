@@ -71,6 +71,7 @@ Deployment constraints and topology examples live in
 | --- | --- |
 | `cmd/gateway` | Process composition, runtime roles, lifecycle start/stop |
 | `internal/app` | HTTP composition and application use cases |
+| `internal/format` | Explicit capability registry and migrated format modules (Raw tracer) |
 | `internal/authorization` | Authentication and authorization policy |
 | `internal/protocol` | Native package protocol parsing and wire compatibility |
 | `internal/repository` | Domain records plus memory/PostgreSQL persistence |
@@ -114,6 +115,15 @@ choice.
 app tests use a thin helper around it to avoid an import cycle. Production never
 imports `apptest`; memory persistence is explicitly selected test infrastructure,
 and PostgreSQL/RustFS integration tests still prove durability and concurrency.
+
+## Format modules
+
+Raw's Hosted/Proxy/Group routes, publication, scanner, retention, distribution,
+and browse/usage rules are owned by `internal/format/raw` and dispatched through
+`internal/format` capabilities. Shared HTTP/identity adapters remain in app;
+existing PostgreSQL/S3 and native protocol operations retain their locking,
+CAS, complete verification and visibility semantics. See [ADR 0011](docs/adr/0011-format-modules.md)
+for module ports, shared byte helpers and the remaining per-format migration.
 
 ## Repository model
 

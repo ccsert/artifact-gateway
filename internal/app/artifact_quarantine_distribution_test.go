@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -216,7 +217,7 @@ func TestRawReplicationWorkerRechecksQuarantineBeforePublish(t *testing.T) {
 	}
 	workerDone := make(chan error, 1)
 	go func() {
-		workerDone <- (RawReplication{
+		workerDone <- (rawformat.Replication{
 			Store: fixture.store, Source: blockingSource, Destination: destination, ChunkBytes: 3,
 		}).RunJobs(fixture.ctx, 1)
 	}()
@@ -242,7 +243,7 @@ func TestRawReplicationWorkerRechecksQuarantineBeforePublish(t *testing.T) {
 	if err != nil || persisted.State != "failed" || persisted.LastError != repository.ArtifactQuarantinedReason || persisted.Attempts != 0 || !persisted.NextAttemptAt.IsZero() {
 		t.Fatalf("replication plan=%#v err=%v", persisted, err)
 	}
-	if err = (RawReplication{Store: fixture.store, Source: fixture.objects, Destination: destination}).RunJobs(fixture.ctx, 1); err != nil {
+	if err = (rawformat.Replication{Store: fixture.store, Source: fixture.objects, Destination: destination}).RunJobs(fixture.ctx, 1); err != nil {
 		t.Fatalf("parked worker run: %v", err)
 	}
 	if unchanged, loadErr := fixture.store.GetReplicationPlan(fixture.ctx, fixture.target.ID, plan.ID); loadErr != nil || unchanged.State != "failed" || unchanged.Attempts != 0 {
@@ -258,7 +259,7 @@ func TestRawReplicationWorkerRechecksQuarantineBeforePublish(t *testing.T) {
 	if err != nil || requeued.ID != plan.ID || requeued.State != "pending" || requeued.Attempts != 0 {
 		t.Fatalf("requeued plan=%#v err=%v", requeued, err)
 	}
-	if err = (RawReplication{Store: fixture.store, Source: fixture.objects, Destination: destination}).RunJobs(fixture.ctx, 1); err != nil {
+	if err = (rawformat.Replication{Store: fixture.store, Source: fixture.objects, Destination: destination}).RunJobs(fixture.ctx, 1); err != nil {
 		t.Fatalf("released worker run: %v", err)
 	}
 	published, err := fixture.store.GetRawAsset(fixture.ctx, fixture.target.ID, fixture.coordinate)

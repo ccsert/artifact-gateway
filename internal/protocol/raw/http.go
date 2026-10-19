@@ -8,12 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"mime"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/ccsert/artifact-gateway/internal/artifacthttp"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/v2contract"
 )
@@ -44,17 +44,7 @@ type ServeResult struct {
 
 // ContentDisposition keeps the protocol coordinate encoded while suggesting
 // a readable final path segment to browsers when a Raw response is saved.
-func ContentDisposition(path string) string {
-	name := path
-	if index := strings.LastIndex(name, "/"); index >= 0 {
-		name = name[index+1:]
-	}
-	decoded, err := url.PathUnescape(name)
-	if err != nil || decoded == "" || strings.ContainsAny(decoded, "\r\n") {
-		return ""
-	}
-	return mime.FormatMediaType("inline", map[string]string{"filename": decoded})
-}
+func ContentDisposition(path string) string { return artifacthttp.ContentDisposition(path) }
 
 // ParsePath accepts only a canonical Raw resource below a named group.
 func ParsePath(path string) (string, string, bool) {

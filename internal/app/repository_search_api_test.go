@@ -12,13 +12,14 @@ import (
 	"testing"
 	"time"
 
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/v2contract"
 	"github.com/google/uuid"
 )
 
 func TestValidRawAssetPrefixUsesProtocolPathBoundary(t *testing.T) {
-	if !validRawAssetPrefix(strings.Repeat("a", v2contract.MaxRawPathBytes)) {
+	if !rawformat.New(rawformat.Options{}).ValidPrefix(strings.Repeat("a", v2contract.MaxRawPathBytes)) {
 		t.Fatal("maximum-size Raw prefix was rejected")
 	}
 	for _, value := range []string{
@@ -27,7 +28,7 @@ func TestValidRawAssetPrefixUsesProtocolPathBoundary(t *testing.T) {
 		"release\u202egnp.txt",
 		"release//name.txt",
 	} {
-		if validRawAssetPrefix(value) {
+		if rawformat.New(rawformat.Options{}).ValidPrefix(value) {
 			t.Fatalf("unsafe Raw prefix was accepted: %q", value)
 		}
 	}

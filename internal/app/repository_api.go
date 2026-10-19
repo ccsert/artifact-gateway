@@ -10,6 +10,8 @@ import (
 	sourceapi "github.com/ccsert/artifact-gateway/internal/admin/nexussource"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -240,7 +242,18 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: upstreamClient, Authenticator: authenticator, Cache: cache}
 	publicationScanner := NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
 	nativeOCI := newNativeOCIHandler(store, options.Storage[repository.FormatOCI], authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
-	nativeRaw := newNativeRawHandler(store, options.Storage[repository.FormatRaw], authenticator).withMetrics(metrics).withProxy(rawClient, rawCache).withPublicationScanner(publicationScanner)
+	rawLegacy := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}
+	rawModule := rawformat.New(rawformat.Options{Store: store, Repositories: store, Groups: store, Objects: options.Storage[repository.FormatRaw], Authenticator: authenticator,
+		Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
+			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
+		}},
+		Audit: store, Anonymous: store, ReadPolicies: store, Quarantine: store, Client: rawClient, Cache: rawCache, Metrics: rawModuleMetrics{metrics}, Scanner: publicationScanner,
+		GroupRuntime: rawModuleGroupRuntime{resolver: v2GroupResolver{groups: store, repos: store, audit: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}, policy: store},
+		LegacyStore:  store, LegacyRuntime: rawRuntime{handler: rawLegacy}, RecordFailure: recordRawFailure})
+	formatModules, err := formatmodule.New(rawModule)
+	if err != nil {
+		return nil, err
+	}
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	mux.Handle("/api/v1/oci/groups", api)
 	mux.Handle("/api/v1/oci/groups/", api)
@@ -338,18 +351,9 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		})}
 	mavenProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: mavenGroupRouter}
 	mux.Handle("/maven/", mavenProtocol)
-	rawRepositoryHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if nativeRaw.ServeHTTP(w, r) {
-			return
-		}
-		RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
-	})
-	rawGroupRouter := v2GroupRouter{format: repository.FormatRaw, groups: store, repos: store, audit: store, auth: authenticator,
-		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
-		raw:        &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
-		next:       rawRepositoryHandler}
-	rawProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter}
-	mux.Handle("/raw/", rawProtocol)
+	if err := formatModules.Mount(mux); err != nil {
+		return nil, err
+	}
 	npmGroupRouter := v2GroupRouter{format: repository.FormatNPM, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		npm:        &v2GroupNPMHandler{native: &nativeNPM},

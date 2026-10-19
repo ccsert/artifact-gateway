@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/replication"
@@ -489,7 +490,7 @@ func TestPostgresRawReplicationManagementAPI(t *testing.T) {
 	if err != nil || len(plans) != 1 || plans[0].SourceRepositoryID != source.ID || plans[0].TargetRepositoryID != target.ID || plans[0].Format != repository.FormatRaw {
 		t.Fatalf("plans=%#v err=%v", plans, err)
 	}
-	if err = (RawReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+	if err = (rawformat.Replication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	plans, err = store.ListReplicationPlans(ctx, target.ID, 10)
@@ -600,7 +601,7 @@ func TestPostgresRustFSRawReplicationPublishesTargetAsset(t *testing.T) {
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: asset.ObjectKey, Digest: digest, Size: asset.Size}}); err != nil {
 		t.Fatal(err)
 	}
-	if err = (RawReplication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
+	if err = (rawformat.Replication{Store: store, Source: objects, Destination: objects}).RunJobs(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	targetAsset, err := store.GetRawAsset(ctx, target.ID, asset.Path)
