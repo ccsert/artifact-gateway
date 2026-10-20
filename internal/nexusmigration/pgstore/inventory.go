@@ -71,6 +71,20 @@ func (s *Store) inventoryTransaction(ctx context.Context, b m.Batch) (*sql.Tx, e
 	if m.InventoryBinding(actual, nil) != m.InventoryBinding(b, nil) {
 		return bad(m.Failed("source_changed"))
 	}
+	// Lock order is lease fence, batch, then source. Source Update/Delete only
+	// lock their source row. FOR SHARE also conflicts with a non-key version
+	// update, keeping this local binding valid until the page/Seal commits.
+	var sourceVersion string
+	err = tx.QueryRowContext(ctx, `SELECT version::text FROM nexus_migration_sources WHERE id::text=$1 FOR SHARE`, actual.SourceID).Scan(&sourceVersion)
+	if errors.Is(err, sql.ErrNoRows) {
+		return bad(m.Failed("source_changed"))
+	}
+	if err != nil {
+		return bad(err)
+	}
+	if sourceVersion != actual.SourceVersion {
+		return bad(m.Failed("source_changed"))
+	}
 	return tx, nil
 }
 
