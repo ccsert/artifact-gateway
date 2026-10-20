@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -89,7 +90,9 @@ func samplePublishedRecoveryQuota(t *testing.T, ctx context.Context, source *Own
 	}
 	args = append(args, image)
 	out, err := docker.command(ctx, environment, args...).Output()
-	id = strings.TrimSpace(string(out))
+	if receipt := strings.TrimSpace(string(out)); regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(receipt) {
+		id = receipt
+	}
 	if err != nil || id == "" {
 		t.Fatal("published quota sampler creation failed")
 	}
