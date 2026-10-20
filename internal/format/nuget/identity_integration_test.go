@@ -34,7 +34,7 @@ func TestPostgresRustFSNuGetCredentialRotationAndRevocation(t *testing.T) {
 	createCredential := func(name, token string) repository.APIKey {
 		t.Helper()
 		expires := time.Now().UTC().Add(time.Hour)
-		key, err := store.CreateServiceAccountCredential(ctx, repository.APIKey{ID: uuid.NewString(), ServiceAccountID: account.ID, Name: name, SecretHash: authorization.HashAPIKey(token), ExpiresAt: &expires})
+		key, err := store.CreateServiceAccountCredential(ctx, repository.APIKey{ID: uuid.NewString(), ServiceAccountID: account.ID, Name: name, SecretHash: authorization.HashAPIKey(token), Roles: []string{}, ExpiresAt: &expires})
 		if err != nil {
 			t.Fatal(err)
 		}
