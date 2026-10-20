@@ -192,6 +192,7 @@ required |= {'TestPostgresAPTEmptyAssetPage','TestPostgresAPTMetadataIsMutableAn
              'TestPostgresCargoProxyCacheAcrossConnections','TestPostgresCargoGroupPreflightsKnownHostedCoordinates',
              'TestPostgresArtifactIdentitiesExcludeUncachedProxyMetadata','TestPyPIYankPostgresContract'}
 required |= {'TestPrivateFormatNPMTarballPublication', 'TestPrivateFormatNPMTarballPublicationPostgres'}
+required |= {'TestPrivateFormatDefaultPortCredentials', 'TestPrivateFormatDefaultPortCredentialsPostgres'}
 for parent in ('TestPostgresRustFSPrivateFormatCredentials','TestPostgresRustFSPrivateFormatOfficialClients'):
     for fmt in ('npm','pypi','cargo','raw','apt','conan'):
         for scheme in ('basic','bearer'):
