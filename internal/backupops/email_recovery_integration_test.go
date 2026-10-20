@@ -123,11 +123,19 @@ func seedRecoveryEmail(t *testing.T, ctx context.Context, source *OwnedTarget, e
 			t.Fatal(e)
 		}
 		cfg := repository.QuotaAlertMailConfig{Enabled: true, From: "gateway@example.test", ConsoleOrigin: "https://console.example.invalid"}
-		for sample := 0; sample < 2; sample++ {
-			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
+		sampleQuota := func() {
+			t.Helper()
+			if source.spec.Release.NativeArchive != nil {
+				samplePublishedRecoveryQuota(t, ctx, source, s, endpoint, r.ID, cfg)
+				return
+			}
 			if worked, e := s.EvaluateNextRepositoryQuotaAlert(ctx, cfg, time.Hour); e != nil || !worked {
 				t.Fatalf("quota sample: %v %v", worked, e)
 			}
+		}
+		for sample := 0; sample < 2; sample++ {
+			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
+			sampleQuota()
 			if sample == 0 {
 				time.Sleep(1050 * time.Millisecond)
 			}
@@ -153,9 +161,7 @@ func seedRecoveryEmail(t *testing.T, ctx context.Context, source *OwnedTarget, e
 		if i == 1 {
 			time.Sleep(1050 * time.Millisecond)
 			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
-			if worked, e := s.EvaluateNextRepositoryQuotaAlert(ctx, cfg, time.Hour); e != nil || !worked {
-				t.Fatal("critical sample failed")
-			}
+			sampleQuota()
 			ordered, e := s.ListRepositoryQuotaAlertEvents(ctx, r.ID)
 			if e != nil || len(ordered) != 2 || ordered[0].Snapshot.Sequence != 2 || ordered[0].Snapshot.Scenario != "critical" || ordered[1].Snapshot.Sequence != 1 || ordered[1].Snapshot.Scenario != "warning" || ordered[0].Snapshot.EpisodeID != ordered[1].Snapshot.EpisodeID {
 				t.Fatal("ordered same-episode warning/critical missing")
