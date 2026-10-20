@@ -357,8 +357,10 @@ test("theme and language preferences persist on the sign-in surface", async ({
   ).toBeVisible();
 });
 
-test("sign-in artwork and source-derived backdrop stay theme-aware and size-appropriate", async ({
-  browser,
+// Keep independent desktop, mobile, and accessibility scenarios within their own
+// test budgets; CI tracing and software canvas rendering make their combined
+// work exceed the default timeout even when the individual checks pass.
+test("sign-in artwork and animated backdrop fit desktop sizes", async ({
   page,
 }, testInfo) => {
   const runtimeErrors: string[] = [];
@@ -480,7 +482,39 @@ test("sign-in artwork and source-derived backdrop stay theme-aware and size-appr
     )
     .toBeLessThanOrEqual(0);
 
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("sign-in artwork and controls update when switching to the light theme", async ({
+  page,
+}, testInfo) => {
+  const runtimeErrors: string[] = [];
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+
+  await mockDefaultSiteSettings(page);
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await page.route("**/auth/oidc/config", (route) =>
+    route.fulfill({ json: { enabled: false } }),
+  );
+
   await page.setViewportSize({ width: 1440, height: 900 });
+  const artworkResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("artifact-control-plane.webp") && response.ok(),
+  );
+  await page.goto("/login");
+  await artworkResponse;
+  const brandPanel = page.locator(".ag-login-brand-panel");
+  await expect(brandPanel).toBeVisible();
+  const beams = page.locator('[data-kokonutui-component="beams-background"]');
+  const beamsCanvas = beams.locator("canvas");
+  const desktopDarkArtwork = await measurePanelArtwork(brandPanel);
+
   const lightArtworkResponse = page.waitForResponse(
     (response) =>
       response.url().includes("artifact-control-plane-light.webp") &&
@@ -536,65 +570,71 @@ test("sign-in artwork and source-derived backdrop stay theme-aware and size-appr
     });
   }
 
-  const mobileContext = await browser.newContext({
-    viewport: { width: 900, height: 900 },
-  });
-  const mobilePage = await mobileContext.newPage();
-  mobilePage.on("pageerror", (error) => runtimeErrors.push(error.message));
-  mobilePage.on("console", (message) => {
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("sign-in artwork stays unloaded and the backdrop stays inactive on mobile", async ({
+  page,
+}, testInfo) => {
+  const runtimeErrors: string[] = [];
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+  page.on("console", (message) => {
     if (message.type() === "error") runtimeErrors.push(message.text());
   });
+
+  await page.setViewportSize({ width: 900, height: 900 });
   const mobileArtworkRequests: string[] = [];
-  mobilePage.on("request", (request) => {
+  page.on("request", (request) => {
     if (request.url().includes("artifact-control-plane"))
       mobileArtworkRequests.push(request.url());
   });
-  await mockDefaultSiteSettings(mobilePage);
-  await mobilePage.route("**/auth/session", (route) =>
+  await mockDefaultSiteSettings(page);
+  await page.route("**/auth/session", (route) =>
     route.fulfill({ json: { authenticated: false } }),
   );
-  await mobilePage.route("**/auth/oidc/config", (route) =>
+  await page.route("**/auth/oidc/config", (route) =>
     route.fulfill({ json: { enabled: false } }),
   );
-  await mobilePage.goto("/login");
-  await mobilePage.waitForLoadState("networkidle");
-  await expect(mobilePage.locator(".ag-login-brand-panel")).toBeHidden();
-  await expect(mobilePage.locator(".ag-login-panel")).toBeVisible();
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+  await expect(page.locator(".ag-login-brand-panel")).toBeHidden();
+  await expect(page.locator(".ag-login-panel")).toBeVisible();
   expect(mobileArtworkRequests).toEqual([]);
   await expect(
-    mobilePage.locator('[data-kokonutui-component="beams-background"]'),
+    page.locator('[data-kokonutui-component="beams-background"]'),
   ).toHaveAttribute("data-active", "false");
-  await expect(mobilePage.locator(".ag-login-beams canvas")).toHaveCount(0);
+  await expect(page.locator(".ag-login-beams canvas")).toHaveCount(0);
   await expect
     .poll(() =>
-      mobilePage.evaluate(
+      page.evaluate(
         () => document.body.scrollWidth - document.body.clientWidth,
       ),
     )
     .toBeLessThanOrEqual(0);
 
-  await mobilePage.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 390, height: 844 });
   if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
-    await mobilePage.screenshot({
+    await page.screenshot({
       path: testInfo.outputPath("login-artwork-mobile.png"),
       fullPage: true,
     });
   }
-  await mobileContext.close();
+  expect(runtimeErrors).toEqual([]);
+});
 
-  const reducedMotionContext = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    reducedMotion: "reduce",
-  });
-  const reducedMotionPage = await reducedMotionContext.newPage();
-  reducedMotionPage.on("pageerror", (error) =>
-    runtimeErrors.push(error.message),
-  );
-  reducedMotionPage.on("console", (message) => {
+test("sign-in artwork remains ready with reduced motion and pending OIDC discovery", async ({
+  page,
+}) => {
+  const runtimeErrors: string[] = [];
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+  page.on("console", (message) => {
     if (message.type() === "error") runtimeErrors.push(message.text());
   });
-  await mockDefaultSiteSettings(reducedMotionPage);
-  await reducedMotionPage.route("**/auth/session", (route) =>
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mockDefaultSiteSettings(page);
+  await page.route("**/auth/session", (route) =>
     route.fulfill({ json: { authenticated: false } }),
   );
   // Artwork readiness must not depend on unrelated OIDC discovery finishing.
@@ -607,26 +647,20 @@ test("sign-in artwork and source-derived backdrop stay theme-aware and size-appr
   const oidcConfigPending = new Promise<void>((resolve) => {
     markOIDCConfigPending = resolve;
   });
-  await reducedMotionPage.route("**/auth/oidc/config", async (route) => {
+  await page.route("**/auth/oidc/config", async (route) => {
     markOIDCConfigPending();
     await oidcConfigRelease;
     await route.fulfill({ json: { enabled: false } });
   });
   try {
-    await reducedMotionPage.goto("/login");
+    await page.goto("/login");
     await oidcConfigPending;
+    await expect(page.locator(".ag-login-brand-panel")).toBeVisible();
     await expect(
-      reducedMotionPage.locator(".ag-login-brand-panel"),
-    ).toBeVisible();
-    await expect(
-      reducedMotionPage.locator(
-        '[data-kokonutui-component="beams-background"]',
-      ),
+      page.locator('[data-kokonutui-component="beams-background"]'),
     ).toHaveAttribute("data-active", "false");
-    await expect(
-      reducedMotionPage.locator(".ag-login-beams canvas"),
-    ).toHaveCount(0);
-    const oidcConfigResponse = reducedMotionPage.waitForResponse(
+    await expect(page.locator(".ag-login-beams canvas")).toHaveCount(0);
+    const oidcConfigResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/auth/oidc/config") && response.ok(),
     );
@@ -634,7 +668,6 @@ test("sign-in artwork and source-derived backdrop stay theme-aware and size-appr
     await oidcConfigResponse;
   } finally {
     releaseOIDCConfig();
-    await reducedMotionContext.close();
   }
   expect(runtimeErrors).toEqual([]);
 });
