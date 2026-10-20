@@ -46,8 +46,8 @@ func privateNPMTarballPublication(t *testing.T, change string, backend privatePr
 	}
 	var generation atomic.Int32
 	started, release := make(chan struct{}), make(chan struct{})
+	oldBodyWritten := make(chan error, 1)
 	var startOnce, releaseOnce sync.Once
-	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
 	upstream := newProxyRedirectFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		current := generation.Load()
 		secret := "npm-race-first-secret"
@@ -76,11 +76,20 @@ func privateNPMTarballPublication(t *testing.T, change string, backend privatePr
 					return
 				}
 			}
-			_, _ = w.Write(body)
+			written, writeErr := w.Write(body)
+			if current == 0 {
+				if written != len(body) && writeErr == nil {
+					writeErr = fmt.Errorf("old source body wrote %d of %d bytes", written, len(body))
+				}
+				oldBodyWritten <- errors.Join(writeErr, http.NewResponseController(w).Flush())
+			}
 		default:
 			http.NotFound(w, r)
 		}
 	})
+	// Metadata refresh must finish while the old download is still live. A
+	// network timeout is not evidence that cache publication rejected it.
+	upstream.client.HTTPClient.Timeout = 30 * time.Second
 	store := backend.store
 	repo, err := store.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: "npm-race-" + uuid.NewString(), Format: repository.FormatNPM, Type: repository.RepositoryTypeProxy, Endpoint: "https://" + redirectOrigin, AllowedHosts: []string{redirectOrigin}, UpstreamAuth: &repository.UpstreamAuth{Scheme: repository.UpstreamAuthSchemeBearer, Secret: sealedUpstreamSecret(t, "npm-race-first-secret")}})
 	if err != nil {
@@ -91,7 +100,7 @@ func privateNPMTarballPublication(t *testing.T, change string, backend privatePr
 	}
 	handler := makeHandler()
 	request := func(method, path, body, version string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r := httptest.NewRequestWithContext(t.Context(), method, path, strings.NewReader(body))
 		authorize(r, "admin-secret")
 		if version != "" {
 			r.Header.Set("If-Match", version)
@@ -106,7 +115,21 @@ func privateNPMTarballPublication(t *testing.T, change string, backend privatePr
 		t.Fatalf("initial metadata=%d %s", initial.Code, initial.Body.String())
 	}
 	completed := make(chan *httptest.ResponseRecorder, 1)
-	go func() { completed <- request(http.MethodGet, tarballURL, "", "") }()
+	fetchDone := make(chan struct{})
+	// Registered after the TLS fixture so an early failure releases and joins
+	// the owned request before the fixture closes its server.
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		select {
+		case <-fetchDone:
+		case <-time.After(5 * time.Second):
+			t.Error("old tarball request did not stop during cleanup")
+		}
+	})
+	go func() {
+		defer close(fetchDone)
+		completed <- request(http.MethodGet, tarballURL, "", "")
+	}()
 	select {
 	case <-started:
 	case <-time.After(10 * time.Second):
@@ -155,11 +178,26 @@ func privateNPMTarballPublication(t *testing.T, change string, backend privatePr
 	if err != nil || current.ObjectKey != "" || current.Integrity != integrity(newBody) {
 		t.Fatalf("new authorized uncached metadata=%#v err=%v", current, err)
 	}
-	releaseOnce.Do(func() { close(release) })
 	select {
 	case old := <-completed:
-		if old.Code < 500 || bytes.Equal(old.Body.Bytes(), oldBody) {
-			t.Errorf("old authenticated download committed after %s: status=%d", change, old.Code)
+		t.Fatalf("old download completed before source release: status=%d body=%s", old.Code, old.Body.String())
+	default:
+	}
+	releaseOnce.Do(func() { close(release) })
+	select {
+	case writeErr := <-oldBodyWritten:
+		if writeErr != nil {
+			t.Fatalf("controlled source could not deliver the complete old body: %v", writeErr)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("controlled source did not deliver the old body after release")
+	}
+	select {
+	case old := <-completed:
+		const fenceMessage = "npm source or tarball metadata changed during download"
+		var failure struct{ Error, Reason string }
+		if err = json.Unmarshal(old.Body.Bytes(), &failure); err != nil || old.Code != http.StatusServiceUnavailable || failure.Error != fenceMessage || failure.Reason != fenceMessage {
+			t.Fatalf("old download was not rejected by the publication fence after %s: status=%d body=%s", change, old.Code, old.Body.String())
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("old tarball fetch did not complete after release")
