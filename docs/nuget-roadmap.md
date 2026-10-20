@@ -4,7 +4,9 @@
 
 ## Status and priority
 
-NuGet Hosted publication and native V3 reads are active under #287. Cargo is
+NuGet Hosted publication and native V3 reads now have an opt-in
+[Hosted preview](nuget-hosted-preview.md) under #287. Its official-client gate
+covers push, transitive restore, storage restart and offline execution. Cargo is
 already admitted, so the historical Cargo-first backlog ordering no longer
 applies. NuGet is the Microsoft-supported package
 mechanism for .NET, Visual Studio, and `dotnet` clients, and because its V3
@@ -13,9 +15,11 @@ service index gives a stable discovery boundary for private repositories.
 The N1 byte-contract foundation is implemented: Artifact Gateway can validate
 a complete `.nupkg` ZIP, read one bounded root `.nuspec`, reject ambiguous XML
 or archive paths, normalize NuGet versions, and derive a case-insensitive
-canonical identity. NuGet is intentionally absent from the format catalog,
-Console, OpenAPI, and repository creation until the declared protocol
-capabilities below are executable.
+canonical identity. The preview adds independent OpenAPI management and native
+contracts, durable publication sessions, quota reservation and V3 Hosted reads.
+NuGet remains absent from the formal format catalog, Console selector and formal
+repository creation until the #289 governance and admission gates pass. Proxy
+and Group are still future work under #288.
 
 Normative implementation references are Microsoft's
 [NuGet Server API overview](https://learn.microsoft.com/nuget/api/overview),
@@ -92,7 +96,7 @@ the format catalog advertise NuGet as a supported repository type.
 
 ## Delivery order
 
-Reuse N1 and implement Hosted publication/reads under #287, then Proxy/Group
-under #288 and lifecycle, Console and public admission under #289. APT Hosted
+Keep the #287 Hosted preview behind its explicit enablement flag, then implement
+Proxy/Group under #288 and lifecycle, Console and public admission under #289. APT Hosted
 admission continues on its own roadmap. The existing parser stays covered;
 capability discovery must not advertise unfinished NuGet repository behavior.

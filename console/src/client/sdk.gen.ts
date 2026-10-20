@@ -192,7 +192,7 @@ export const listNexusMigrationBatches = <ThrowOnError extends boolean = false>(
 });
 
 /**
- * Administrators only. Atomically persist immutable source version, mappings and policy. A background worker fully enumerates and seals the manifest; interrupted or bounded-out scanning fails and never becomes ready. Idempotency scope is actor and operation; a reused key with a different body conflicts. Capacity evidence is operator supplied and bound to target, pool and freshness; unknown or insufficient evidence prohibits target writes.
+ * Administrators only. Atomically persist immutable source version, mappings and policy. A background worker scans bounded pages using private durable checkpoints; interruption resumes the last committed cursor. A second paged observation must match before the complete manifest is sealed. Incomplete or bounded-out scans never become ready and cannot publish. Source drift or expired cursors require a new batch; REST enumeration is not a transactional source snapshot. Idempotency scope is actor and operation; a reused key with a different body conflicts. Capacity evidence is operator supplied and bound to target, pool and freshness; unknown or insufficient evidence prohibits target writes.
  */
 export const startNexusMigrationBatch = <ThrowOnError extends boolean = false>(options: Options<StartNexusMigrationBatchData, ThrowOnError>): RequestResult<StartNexusMigrationBatchResponses, StartNexusMigrationBatchErrors, ThrowOnError> => (options.client ?? client).post<StartNexusMigrationBatchResponses, StartNexusMigrationBatchErrors, ThrowOnError>({
     security: [{
