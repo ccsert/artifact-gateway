@@ -4,6 +4,55 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+export type NuGetPreviewRepositoryCreate = {
+  name: string;
+  anonymousRead?: boolean;
+};
+
+export type NuGetPreviewRepository = {
+  id: string;
+  name: string;
+  format: "nuget";
+  preview: true;
+  sourceUrl: string;
+};
+
+export type NuGetPublicationRequest = {
+  packageId: string;
+  version: string;
+  digest: string;
+  size: number;
+};
+
+export type NuGetPublicationSession = {
+  id: string;
+  repositoryId: string;
+  packageId: string;
+  version: string;
+  digest: string;
+  size: number;
+  state: "reserved" | "staged" | "committed" | "expired";
+  createdAt: string;
+  expiresAt: string;
+  committedAt?: string;
+};
+
+export type NuGetPreviewPackage = {
+  repositoryId: string;
+  packageId: string;
+  version: string;
+  digest: string;
+  size: number;
+  publishedAt: string;
+  packageUrl: string;
+  registrationUrl: string;
+};
+
+export type NuGetPreviewPackageList = {
+  items: Array<NuGetPreviewPackage>;
+  nextCursor?: string;
+};
+
 export type BrowseNode = {
   /**
    * Server-issued opaque node ID. Submit it unchanged as parent.
@@ -69,6 +118,11 @@ export type BrowseNodePage = {
 
 export type Format =
   "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "cargo" | "apt";
+
+/**
+ * Opt-in NuGet Hosted upload cleanup; does not admit NuGet to the formal format catalog.
+ */
+export type NuGetPreviewWorkerFormat = "nuget";
 
 export type FormatProfile = {
   format: Format;
@@ -1198,6 +1252,17 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+export type NuGetPreviewCapacity = {
+  repositoryId: string;
+  usedBytes: number;
+  objectCount: number;
+  quotaBytes: number;
+};
+
+export type NuGetPreviewQuota = {
+  quotaBytes: number;
+};
+
 export type NexusMigrationCapabilities = {
   targetId: string;
   poolId: string;
@@ -1782,6 +1847,10 @@ export type RuntimeNode = {
   revision?: string;
   roles: Array<string>;
   workerFormats: Array<Format>;
+  /**
+   * Separately enabled preview workers; absent when none are configured.
+   */
+  previewWorkerFormats?: Array<NuGetPreviewWorkerFormat>;
   workerKinds: Array<string>;
   startedAt: string;
   lastSeenAt: string;
@@ -1835,6 +1904,10 @@ export type DiagnosticRuntime = {
   sessionId?: string;
   roles: Array<string>;
   workerFormats: Array<Format>;
+  /**
+   * Separately enabled preview workers; absent when none are configured.
+   */
+  previewWorkerFormats?: Array<NuGetPreviewWorkerFormat>;
   workerKinds: Array<string>;
 };
 
@@ -2206,11 +2279,11 @@ export type EgressProxy = {
 };
 
 /**
- * Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ * Protected upstream credentials for Go, Maven, OCI, npm, PyPI, Cargo, APT, Raw and Conan Proxy repositories. Basic or Bearer authentication targets the bound upstream. Conan exchanges Basic credentials through its users/authenticate endpoint before reading protected metadata or files. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Hosted repositories and unsupported formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
 export type UpstreamAuth = {
   /**
-   * none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`.
+   * none removes any stored credential and reads the upstream anonymously; basic authenticates with an HTTP Basic credential (Conan exchanges it for a source token); bearer sends `Authorization - Bearer <secret>`.
    */
   scheme: "none" | "basic" | "bearer";
   /**
@@ -3019,11 +3092,11 @@ export type EgressProxyWritable = {
 };
 
 /**
- * Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ * Protected upstream credentials for Go, Maven, OCI, npm, PyPI, Cargo, APT, Raw and Conan Proxy repositories. Basic or Bearer authentication targets the bound upstream. Conan exchanges Basic credentials through its users/authenticate endpoint before reading protected metadata or files. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Hosted repositories and unsupported formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
 export type UpstreamAuthWritable = {
   /**
-   * none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`.
+   * none removes any stored credential and reads the upstream anonymously; basic authenticates with an HTTP Basic credential (Conan exchanges it for a source token); bearer sends `Authorization - Bearer <secret>`.
    */
   scheme: "none" | "basic" | "bearer";
   /**
@@ -3124,6 +3197,467 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type GetNuGetPreviewCapacityData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/capacity";
+};
+
+export type GetNuGetPreviewCapacityErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewCapacityResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPreviewCapacity;
+};
+
+export type GetNuGetPreviewCapacityResponse =
+  GetNuGetPreviewCapacityResponses[keyof GetNuGetPreviewCapacityResponses];
+
+export type ReplaceNuGetPreviewQuotaData = {
+  body: NuGetPreviewQuota;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/capacity";
+};
+
+export type ReplaceNuGetPreviewQuotaErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Identity, session or quota conflict
+   */
+  409: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceNuGetPreviewQuotaResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPreviewCapacity;
+};
+
+export type ReplaceNuGetPreviewQuotaResponse =
+  ReplaceNuGetPreviewQuotaResponses[keyof ReplaceNuGetPreviewQuotaResponses];
+
+export type CreateNuGetPreviewRepositoryData = {
+  body: NuGetPreviewRepositoryCreate;
+  path?: never;
+  query?: never;
+  url: "/previews/nuget/repositories";
+};
+
+export type CreateNuGetPreviewRepositoryErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Identity, session or quota conflict
+   */
+  409: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type CreateNuGetPreviewRepositoryResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  201: NuGetPreviewRepository;
+};
+
+export type CreateNuGetPreviewRepositoryResponse =
+  CreateNuGetPreviewRepositoryResponses[keyof CreateNuGetPreviewRepositoryResponses];
+
+export type GetNuGetPreviewRepositoryData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}";
+};
+
+export type GetNuGetPreviewRepositoryErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewRepositoryResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPreviewRepository;
+};
+
+export type GetNuGetPreviewRepositoryResponse =
+  GetNuGetPreviewRepositoryResponses[keyof GetNuGetPreviewRepositoryResponses];
+
+export type ListNuGetPreviewPackagesData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: {
+    limit?: number;
+    cursor?: string;
+  };
+  url: "/previews/nuget/repositories/{repositoryId}/packages";
+};
+
+export type ListNuGetPreviewPackagesErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type ListNuGetPreviewPackagesResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPreviewPackageList;
+};
+
+export type ListNuGetPreviewPackagesResponse =
+  ListNuGetPreviewPackagesResponses[keyof ListNuGetPreviewPackagesResponses];
+
+export type GetNuGetPreviewPackageData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    packageId: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}";
+};
+
+export type GetNuGetPreviewPackageErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewPackageResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPreviewPackage;
+};
+
+export type GetNuGetPreviewPackageResponse =
+  GetNuGetPreviewPackageResponses[keyof GetNuGetPreviewPackageResponses];
+
+export type CreateNuGetPublicationSessionData = {
+  body: NuGetPublicationRequest;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/publication-sessions";
+};
+
+export type CreateNuGetPublicationSessionErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Identity, session or quota conflict
+   */
+  409: unknown;
+  /**
+   * Publication session expired; create a new session with a new idempotency key
+   */
+  410: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type CreateNuGetPublicationSessionResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  201: NuGetPublicationSession;
+};
+
+export type CreateNuGetPublicationSessionResponse =
+  CreateNuGetPublicationSessionResponses[keyof CreateNuGetPublicationSessionResponses];
+
+export type GetNuGetPublicationSessionData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    sessionId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}";
+};
+
+export type GetNuGetPublicationSessionErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPublicationSessionResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPublicationSession;
+};
+
+export type GetNuGetPublicationSessionResponse =
+  GetNuGetPublicationSessionResponses[keyof GetNuGetPublicationSessionResponses];
+
+export type StageNuGetPublicationSessionData = {
+  body: string;
+  path: {
+    repositoryId: string;
+    sessionId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package";
+};
+
+export type StageNuGetPublicationSessionErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Identity, session or quota conflict
+   */
+  409: unknown;
+  /**
+   * Publication session expired; create a new session with a new idempotency key
+   */
+  410: unknown;
+  /**
+   * Package archive exceeds the 256 MiB preview bound
+   */
+  413: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type StageNuGetPublicationSessionResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPublicationSession;
+};
+
+export type StageNuGetPublicationSessionResponse =
+  StageNuGetPublicationSessionResponses[keyof StageNuGetPublicationSessionResponses];
+
+export type CommitNuGetPublicationSessionData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    sessionId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit";
+};
+
+export type CommitNuGetPublicationSessionErrors = {
+  /**
+   * Invalid request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository permission required
+   */
+  403: unknown;
+  /**
+   * Preview resource not found
+   */
+  404: unknown;
+  /**
+   * Identity, session or quota conflict
+   */
+  409: unknown;
+  /**
+   * Publication session expired; create a new session with a new idempotency key
+   */
+  410: unknown;
+  /**
+   * Preview capability unavailable
+   */
+  503: unknown;
+};
+
+export type CommitNuGetPublicationSessionResponses = {
+  /**
+   * NuGet Hosted preview response
+   */
+  200: NuGetPreviewPackage;
+};
+
+export type CommitNuGetPublicationSessionResponse =
+  CommitNuGetPublicationSessionResponses[keyof CommitNuGetPublicationSessionResponses];
 
 export type GetNexusMigrationCapabilitiesData = {
   body?: never;

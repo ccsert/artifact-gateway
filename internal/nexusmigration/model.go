@@ -138,7 +138,8 @@ type Capabilities struct {
 }
 type Source interface {
 	Get(context.Context, string) (nexussource.Source, error)
-	Discover(context.Context, string, nexussource.DiscoveryInput) (nexussource.Discovery, error)
+	InventoryRepositories(context.Context, string, string, []string) ([]nexussource.Repository, error)
+	ReadInventoryPage(context.Context, string, string, nexussource.Repository, string) (nexussource.InventoryPage, error)
 	OpenAsset(context.Context, string, string, string, AssetRequest) (*Content, error)
 }
 
@@ -181,6 +182,11 @@ type Store interface {
 	Renew(context.Context, string, string) error
 	RecordScanProgress(context.Context, string, string, int64, int64) error
 	RecordScanFailure(context.Context, string, string, ScanFailure) error
+	InventoryScan(context.Context, string) (InventoryScan, error)
+	BeginInventoryScan(context.Context, Batch, InventoryScan) error
+	AppendInventoryPage(context.Context, Batch, InventoryScan, nexussource.InventoryPage) error
+	InventoryPage(context.Context, string, int64) (InventoryPage, error)
+	VerifyInventoryPage(context.Context, Batch, int64, string, int64) error
 	Seal(context.Context, Batch, []Entry, string, int64, int64) error
 	BeginEntry(context.Context, Entry, string) error
 	Checkpoint(context.Context, Entry, string) error

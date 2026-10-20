@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ccsert/artifact-gateway/internal/egress"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 const npmProxyUserAgent = "npm/11 Artifact-Gateway/1.0"
@@ -90,6 +91,15 @@ func (c UpstreamClient) FetchNPM(ctx context.Context, method string, repo reposi
 		}
 	}
 
+	if err := upstreamauth.ApplyOrigin(request, repo.Endpoint, repo.UpstreamAuth); err != nil {
+		return nil, err
+	}
+	// All configured endpoints use HTTPS. Keep the existing explicit local
+	// HTTP fixture seam; real upstreams share the bounded per-hop egress engine.
+	if targetURL.Scheme == "https" {
+		member := repository.Member{Type: repository.MemberProxy, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
+		return c.doProxyUpstream(ctx, member, request)
+	}
 	client := c.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
@@ -97,26 +107,17 @@ func (c UpstreamClient) FetchNPM(ctx context.Context, method string, repo reposi
 		copy := *client
 		client = &copy
 	}
-	// Repository endpoints are configured as HTTPS by the management API.
-	// Tests may construct local HTTP repositories directly, so leave those
-	// unsupported fixtures on their injected transport. Every supported HTTPS
-	// endpoint, including allowed CDN tarball hosts, is pinned or proxied using
-	// the actual target URL to prevent DNS rebinding.
-	if targetURL.Scheme == "https" {
-		client, err = egress.Apply(client, repo.EgressProxy, targetURL.String(), rawEgressHooks())
-		if err != nil {
-			return nil, err
-		}
-	}
-	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+	client.Jar = nil
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if !proxyUpstreamURLAllowed(repo, next.URL) {
-			return fmt.Errorf("npm upstream redirect is not allowed")
+			return errors.New("npm upstream redirect is not allowed")
 		}
+		upstreamauth.StripRedirect(next, via, repo.Endpoint)
 		return nil
 	}
-	response, err := tracedHTTPClient(client).Do(request)
+	response, err := doProxyHTTP(client, request)
 	if err != nil {
-		return nil, fmt.Errorf("fetch npm upstream content: %w", err)
+		return nil, errors.New("npm upstream unavailable")
 	}
 	return response, nil
 }

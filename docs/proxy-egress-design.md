@@ -304,8 +304,9 @@ are 8 KiB/8 KiB/64 KiB. No refresh tokens or durable identities are requested.
 
 ## Protected Maven and OCI upstreams
 
-Go, Maven and OCI Proxy repositories accept the native `upstreamAuth` object.
-Hosted repositories and other formats reject this field. An administrator sets
+Go, Maven, OCI, npm, PyPI, Cargo, APT, Raw and Conan Proxy repositories accept
+the native `upstreamAuth` object. Hosted repositories and unsupported formats
+reject this field. An administrator sets
 Basic credentials with `{"scheme":"basic","username":"source-reader","secret":"synthetic-example"}`
 or a static Bearer credential with `{"scheme":"bearer","secret":"synthetic-example"}`.
 The source secret is distinct from Gateway client credentials and egress proxy
@@ -322,7 +323,8 @@ an explicit fresh `secret` or `{"upstreamAuth":{"scheme":"none"}}`. Otherwise
 the API returns `400 upstream_credential_rebind_required` without changing the
 Repository version, binding or stored ciphertext. Selecting `none` removes it. Updates use the
 Repository's `If-Match` version; a stale rotation or clear returns `412`. The
-Console exposes the same protected credential editor for these three formats.
+Console exposes the same protected credential editor for all nine supported
+Proxy formats. OCI issuer settings remain specific to OCI.
 
 Maven uses the credential for the bound source's metadata, POM, checksum and
 asset requests. OCI without `ociBearer` uses it directly for registry content;
@@ -361,5 +363,43 @@ settings, an owned registry file and allowlisted subprocess environments prevent
 use of the user's identities or artifact caches. Test hooks map only the owned
 synthetic HTTPS sources while preserving certificate verification. This is
 isolated protocol and persistence acceptance, not a production migration or cutover.
+
+## Private npm, PyPI, Cargo, APT, Raw and Conan upstreams
+
+The six additional formats use the same sealed credential configuration and
+endpoint rebind rules. npm packuments, exact-version metadata and tarballs;
+PyPI Simple metadata and distributions; Cargo configuration, sparse indexes and
+crate bytes; and APT metadata, signatures, indexes and packages all use the
+configured source credential. Each redirect passes the egress checks; a
+cross-origin hop strips the credential even when that host is allowlisted.
+Raw and Conan reject upstream redirects instead of forwarding credentials.
+Conan Basic authenticates at the bound source's `/v2/users/authenticate`, then
+uses its returned Bearer token for metadata and assets. A configured Conan
+Bearer token is used directly. Exchanged tokens are per fetch and never survive
+credential rotation or clearing.
+
+npm, PyPI, Cargo and APT persist the current Repository version with cached
+metadata and assets. Cache publication checks that version in the same
+PostgreSQL transaction as its references, so a late response cannot write into
+a newer source configuration. Entries with an unknown or different version are
+re-fetched, including offline reads; no old anonymous cache is trusted or
+assigned a fabricated binding. Raw and Conan use credential-bound namespaces
+and do not fall back to prior unscoped keys. Proxy and Group requests resolve
+the member's current configuration, and source `401`/`403` cannot serve stale
+content or continue anonymously to another member. Error responses and audits
+contain neither the source secret nor the source response body.
+
+Run `make private-upstream-formats-e2e` for the additional formats. Its 68
+mandatory cases include 48 official-client consumptions: six formats, Basic
+and Bearer, Proxy and Group, and cold and hot caches. Fixed npm, pip, Cargo,
+Conan and Debian clients plus curl use owned configuration and caches; Conan's
+bootstrap version probes also use an owned `CONAN_HOME`. Cargo and rustc are
+selected as an installed 1.96.0 pair and invoked by absolute path with owned
+client homes; missing binaries fail without automatic toolchain installation.
+The gate creates and
+cleans its own PostgreSQL/RustFS project, tests rotation/clearing, stale CAS,
+source failure, redirect isolation and late cache publication, and retains
+machine-readable results and zero-owned-resource cleanup records. It requires
+all mandatory cases to run without failure or skip.
 
 Console settings drafts belong to the repository UUID. Cached navigation to another repository rebuilds the form from that repository and drops all plaintext upstream/egress inputs, including OCI issuer edits. Repository version CAS still protects concurrent writes.

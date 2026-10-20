@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 type v2GroupAPTHandler struct {
@@ -59,6 +60,11 @@ func (h v2GroupAPTHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			continue
 		}
 		if loadErr != nil {
+			if errors.Is(loadErr, upstreamauth.ErrCredential) || repo.UpstreamAuth != nil {
+				resolver.auditResolution(r.Context(), group, repository.FormatAPT, route.path, strings.ToLower(r.Method), principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway)
+				http.Error(w, "APT upstream authentication unavailable", http.StatusBadGateway)
+				return
+			}
 			lastErr = loadErr
 			continue
 		}

@@ -127,8 +127,12 @@ func TestMemoryNPMDistTagContract(t *testing.T) {
 func TestMemoryNPMDistTagRejectsProxyPackages(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "npm-proxy", Name: "npm-proxy", Format: FormatNPM, Type: RepositoryTypeProxy, Endpoint: "https://registry.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.SyncNPMProxyPackage(ctx, NPMPackage{
-		RepositoryID: "npm-proxy", Name: "widget", SourceEndpoint: "https://registry.example.test",
+		RepositoryID: "npm-proxy", SourceVersion: repo.Version, Name: "widget", SourceEndpoint: "https://registry.example.test",
 		DistTags: map[string]string{"latest": "1.0.0"},
 		Versions: []NPMVersion{{Version: "1.0.0", Integrity: "sha512-YQ==", Shasum: strings.Repeat("b", 40), UpstreamTarball: "https://registry.example.test/widget-1.0.0.tgz"}},
 	}); err != nil {

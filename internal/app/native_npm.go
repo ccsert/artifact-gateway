@@ -21,6 +21,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/artifacthttp"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 const (
@@ -89,10 +90,11 @@ type npmProxyPackageResolution struct {
 }
 
 type npmProxyPackageError struct {
-	Status      int
-	Message     string
-	Outcome     repository.AuditOutcome
-	Disposition string
+	Authentication bool
+	Status         int
+	Message        string
+	Outcome        repository.AuditOutcome
+	Disposition    string
 }
 
 func (e *npmProxyPackageError) Error() string { return e.Message }
@@ -472,7 +474,13 @@ func (h nativeNPMHandler) resolveProxyPackage(r *http.Request, repo repository.H
 }
 
 func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo repository.HostedRepository, packageName, actor string, target npmAuditTarget) (npmProxyPackageResolution, error) {
+	if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+		return npmProxyPackageResolution{}, &npmProxyPackageError{Authentication: true, Status: http.StatusBadGateway, Message: "npm upstream authentication unavailable", Outcome: repository.AuditUpstreamError, Disposition: "bypass"}
+	}
 	pkg, err := h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
+	if err == nil && pkg.SourceVersion != repo.Version {
+		pkg, err = repository.NPMPackage{}, repository.ErrNotFound
+	}
 	now := time.Now().UTC()
 	if err == nil {
 		if resolved, cacheErr, ok := h.resolveFromNPMProxyCache(repo, pkg, now); ok {
@@ -486,6 +494,9 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 	defer release()
 	r = r.WithContext(lockedCtx)
 	pkg, err = h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
+	if err == nil && pkg.SourceVersion != repo.Version {
+		pkg, err = repository.NPMPackage{}, repository.ErrNotFound
+	}
 	now = time.Now().UTC()
 	if err == nil {
 		if resolved, cacheErr, ok := h.resolveFromNPMProxyCache(repo, pkg, now); ok {
@@ -512,19 +523,25 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 	}
 	response, fetchErr := h.fetchNPMProxy(r.Context(), http.MethodGet, repo, upstreamTarget, upstreamHeaders)
 	if fetchErr != nil {
+		if errors.Is(fetchErr, errNPMUpstreamCircuitOpen) {
+			return npmProxyPackageResolution{}, &npmProxyPackageError{Authentication: true, Status: http.StatusServiceUnavailable, Message: "npm upstream circuit is open", Outcome: repository.AuditUpstreamError, Disposition: "miss"}
+		}
+		if errors.Is(fetchErr, upstreamauth.ErrCredential) {
+			return npmProxyPackageResolution{}, &npmProxyPackageError{Authentication: true, Status: http.StatusBadGateway, Message: "npm upstream authentication unavailable", Outcome: repository.AuditUpstreamError, Disposition: "miss"}
+		}
 		if err == nil && len(pkg.Versions) > 0 && !pkg.Negative {
 			h.recordNPMUpstreamFailureForTarget(r, repo, target, packageName, actor, false)
 			return npmProxyPackageResolution{Package: pkg, Disposition: "stale", Stale: true}, nil
 		}
-		if errors.Is(fetchErr, errNPMUpstreamCircuitOpen) {
-			return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusServiceUnavailable, "npm upstream circuit is open", repository.AuditUpstreamError, "miss")
-		}
 		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, "npm upstream is unavailable", repository.AuditUpstreamError, "miss")
 	}
 	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return npmProxyPackageResolution{}, &npmProxyPackageError{Authentication: true, Status: http.StatusBadGateway, Message: "npm upstream authentication refused", Outcome: repository.AuditUpstreamError, Disposition: "miss"}
+	}
 	if response.StatusCode == http.StatusNotFound {
 		_ = h.store.StoreNPMProxyNegative(r.Context(), repository.NPMPackage{
-			RepositoryID: repo.ID, Name: packageName, SourceEndpoint: repo.Endpoint,
+			RepositoryID: repo.ID, Name: packageName, SourceEndpoint: repo.Endpoint, SourceVersion: repo.Version,
 			NegativeExpiresAt: time.Now().UTC().Add(h.negativeTTL), Negative: true,
 		})
 		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusNotFound, "package not found", repository.AuditNotFound, "miss")
@@ -554,6 +571,7 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 		return npmProxyPackageResolution{}, newNPMProxyPackageError(http.StatusBadGateway, "npm upstream package metadata is invalid", repository.AuditUpstreamError, "miss")
 	}
 	incoming, normalizeErr := npmProxyPackage(repo, packageName, body, response.Header, h.metadataTTL)
+	incoming.SourceVersion = repo.Version
 	if normalizeErr != nil {
 		outcome := repository.AuditUpstreamError
 		if normalizeErr.Error() == "npm upstream tarball URL is not allowed" {
@@ -578,7 +596,7 @@ func (h nativeNPMHandler) resolveProxyPackageWithAudit(r *http.Request, repo rep
 // resolveFromNPMProxyCache returns ok when a fresh packument or negative lookup
 // can answer the request. It is used before and after the per-package lock.
 func (h nativeNPMHandler) resolveFromNPMProxyCache(repo repository.HostedRepository, pkg repository.NPMPackage, now time.Time) (npmProxyPackageResolution, error, bool) {
-	if pkg.SourceEndpoint != repo.Endpoint {
+	if pkg.SourceEndpoint != repo.Endpoint || pkg.SourceVersion != repo.Version {
 		return npmProxyPackageResolution{}, nil, false
 	}
 	if pkg.Negative && now.Before(pkg.NegativeExpiresAt) {
@@ -598,7 +616,10 @@ func (h nativeNPMHandler) resolveFromNPMProxyCache(repo repository.HostedReposit
 }
 
 func (h nativeNPMHandler) fetchNPMProxy(ctx context.Context, method string, repo repository.HostedRepository, target string, headers http.Header) (*http.Response, error) {
-	if h.protection != nil && !h.protection.allowed(ctx, repo.Endpoint) {
+	// A refusal or transport failure from one configuration must not poison a
+	// newly rotated credential or another repository on the same endpoint.
+	protectionKey := repo.ID + ":" + repo.Version + ":" + repo.Endpoint
+	if h.protection != nil && !h.protection.allowed(ctx, protectionKey) {
 		if h.metrics != nil {
 			h.metrics.recordNPMCircuitOpen()
 		}
@@ -612,7 +633,7 @@ func (h nativeNPMHandler) fetchNPMProxy(ctx context.Context, method string, repo
 			err = errors.New("npm upstream returned no response")
 		}
 		if err == nil && !retryableNPMStatus(response.StatusCode) {
-			h.protection.success(ctx, repo.Endpoint)
+			h.protection.success(ctx, protectionKey)
 			return response, nil
 		}
 		if attempt == 0 && response != nil {
@@ -622,7 +643,7 @@ func (h nativeNPMHandler) fetchNPMProxy(ctx context.Context, method string, repo
 			h.metrics.recordNPMRetry()
 		}
 	}
-	h.protection.failure(ctx, repo.Endpoint)
+	h.protection.failure(ctx, protectionKey)
 	return response, err
 }
 
@@ -947,7 +968,20 @@ func (h nativeNPMHandler) proxyTarball(w http.ResponseWriter, r *http.Request, r
 }
 
 func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, packageName, tarballName, actor string, target npmAuditTarget) {
+	if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+		h.recordAuditForTarget(r, repo, target, packageName+"/-/"+tarballName, actor, repository.AuditUpstreamError, http.StatusBadGateway, 0, "bypass")
+		h.writeError(w, http.StatusBadGateway, "npm upstream authentication unavailable")
+		return
+	}
+	// Immutable bytes may be reused only after metadata was authorized under
+	// this exact source configuration. A rotation/clear cannot use an old
+	// tarball entry to bypass a fresh metadata authorization.
+	pkg, pkgErr := h.store.GetNPMPackage(r.Context(), repo.ID, packageName)
+	metadataAuthorized := pkgErr == nil && !pkg.Negative && pkg.SourceEndpoint == repo.Endpoint && pkg.SourceVersion == repo.Version
 	version, err := h.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
+	if !metadataAuthorized {
+		err = repository.ErrNotFound
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		if _, resolveErr := h.resolveProxyPackageWithAudit(r, repo, packageName, actor, target); resolveErr != nil {
 			var responseError *npmProxyPackageError
@@ -1089,9 +1123,14 @@ func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.R
 	version.ObjectKey = objectKey
 	version.Size = spool.Size()
 	version.CachedAt = time.Now().UTC()
+	version.SourceVersion = repo.Version
 	if _, err = h.store.CacheNPMProxyTarball(r.Context(), version); repository.IsQuotaExceeded(err) {
 		h.writeError(w, http.StatusInsufficientStorage, "repository capacity quota exceeded")
 		h.recordAuditForTarget(r, repo, target, packageName+"@"+version.Version, actor, repository.AuditStorageError, http.StatusInsufficientStorage, 0, "miss")
+		return
+	} else if errors.Is(err, repository.ErrVersionConflict) || errors.Is(err, repository.ErrUpstreamChanged) {
+		h.writeError(w, http.StatusServiceUnavailable, "npm source or tarball metadata changed during download")
+		h.recordAuditForTarget(r, repo, target, packageName+"@"+version.Version, actor, repository.AuditUpstreamError, http.StatusServiceUnavailable, 0, "miss")
 		return
 	} else if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "commit npm proxy tarball failed")

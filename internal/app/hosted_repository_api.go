@@ -249,14 +249,6 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 	return "", false
 }
 
-func (h generatedRepositoryAPIAdapter) GetCurrentIdentity(w http.ResponseWriter, r *http.Request) {
-	principal, ok := h.authenticate(w, r)
-	if !ok {
-		return
-	}
-	writeNativeMavenJSON(w, http.StatusOK, currentIdentityResponse(principal))
-}
-
 func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {
 	h.createWithIdempotencyKey(w, r, principal, r.Header.Get("Idempotency-Key"))
 }
@@ -292,7 +284,7 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 		return
 	}
 	if request.UpstreamAuth != nil && !upstreamAuthSupported(request.Format, repoType) {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth is supported for Go, Maven and OCI Proxy repositories only")
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth requires an implemented Proxy repository")
 		return
 	}
 	upstreamAuth, err := resolveUpstreamAuth(request.UpstreamAuth, nil)
@@ -407,7 +399,7 @@ func (h hostedRepositoryAPIHandler) decodeCursor(token string) (string, error) {
 
 func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, id string) {
 	repo, err := h.store.GetHostedRepository(r.Context(), id)
-	if errors.Is(err, repository.ErrNotFound) {
+	if errors.Is(err, repository.ErrNotFound) || err == nil && repo.Format == repository.FormatNuGet {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
 		return
 	}
@@ -492,7 +484,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		if request.UpstreamAuth != nil && !upstreamAuthSupported(repo.Format, repo.Type) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth is supported for Go, Maven and OCI Proxy repositories only")
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth requires an implemented Proxy repository")
 			return
 		}
 		egressProxy, err := resolveEgressProxy(request.EgressProxy, repo.EgressProxy)

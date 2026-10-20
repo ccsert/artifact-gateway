@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 type v2GroupPyPIHandler struct {
@@ -76,6 +77,12 @@ func (h v2GroupPyPIHandler) simpleRoot(w http.ResponseWriter, r *http.Request, r
 		if err != nil {
 			continue
 		}
+		if repo.Type == repository.RepositoryTypeProxy {
+			if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+				h.native.writeError(w, http.StatusBadGateway, "PyPI upstream authentication unavailable")
+				return
+			}
+		}
 		projects, err := h.native.store.ListPyPIProjects(r.Context(), repo.ID, "", 10000, "")
 		if err != nil {
 			continue
@@ -84,6 +91,15 @@ func (h v2GroupPyPIHandler) simpleRoot(w http.ResponseWriter, r *http.Request, r
 			files, listErr := h.native.store.ListPyPIProjectFiles(r.Context(), repo.ID, project.Project)
 			if listErr != nil {
 				continue
+			}
+			if repo.Type == repository.RepositoryTypeProxy {
+				current := files[:0]
+				for _, file := range files {
+					if file.SourceVersion == repo.Version {
+						current = append(current, file)
+					}
+				}
+				files = current
 			}
 			files, _, listErr = h.native.filterQuarantinedPyPIFiles(r.Context(), repo, files)
 			if listErr != nil || len(files) == 0 {
@@ -121,6 +137,11 @@ func (h v2GroupPyPIHandler) simpleProject(w http.ResponseWriter, r *http.Request
 			var resolveErr error
 			files, disposition, resolveErr = h.native.resolveProxyProject(r, repo, project)
 			if resolveErr != nil {
+				if errors.Is(resolveErr, upstreamauth.ErrCredential) || repo.UpstreamAuth != nil && !errors.Is(resolveErr, repository.ErrNotFound) {
+					h.native.recordAuditForTarget(r, repo, target, project, "project", actor, repository.AuditUpstreamError, http.StatusBadGateway, 0, disposition)
+					h.native.writeError(w, http.StatusBadGateway, "PyPI upstream authentication unavailable")
+					return
+				}
 				outcome := repository.AuditUpstreamError
 				status := http.StatusBadGateway
 				if errors.Is(resolveErr, repository.ErrNotFound) {

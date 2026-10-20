@@ -22,7 +22,7 @@ type serviceAccountPageCursor struct {
 	ExpiresAt               int64
 }
 
-func (h generatedRepositoryAPIAdapter) serviceAccountPageBounds(
+func (h identityManagementHandler) serviceAccountPageBounds(
 	w http.ResponseWriter,
 	pageSizeParam *int,
 	pageToken *string,
@@ -50,7 +50,7 @@ func (h generatedRepositoryAPIAdapter) serviceAccountPageBounds(
 	return pageSize, cursor.ID, true
 }
 
-func (h generatedRepositoryAPIAdapter) serviceAccountNextPageToken(endpoint, accountID, id string) *string {
+func (h identityManagementHandler) serviceAccountNextPageToken(endpoint, accountID, id string) *string {
 	token := encodeSignedCursor(h.authenticator.AdminToken, serviceAccountPageCursor{
 		Endpoint: endpoint, AccountID: accountID, ID: id,
 		ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix(),
@@ -58,7 +58,7 @@ func (h generatedRepositoryAPIAdapter) serviceAccountNextPageToken(endpoint, acc
 	return &token
 }
 
-func (h generatedRepositoryAPIAdapter) ListServiceAccounts(w http.ResponseWriter, r *http.Request, params adminopenapi.ListServiceAccountsParams) {
+func (h identityManagementHandler) ListServiceAccounts(w http.ResponseWriter, r *http.Request, params adminopenapi.ListServiceAccountsParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -85,7 +85,7 @@ func (h generatedRepositoryAPIAdapter) ListServiceAccounts(w http.ResponseWriter
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ServiceAccountList{Items: items, NextPageToken: nextPageToken})
 }
 
-func (h generatedRepositoryAPIAdapter) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
+func (h identityManagementHandler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -122,7 +122,7 @@ func (h generatedRepositoryAPIAdapter) CreateServiceAccount(w http.ResponseWrite
 	writeNativeMavenJSON(w, http.StatusCreated, serviceAccountResponse(account))
 }
 
-func (h generatedRepositoryAPIAdapter) UpdateServiceAccount(w http.ResponseWriter, r *http.Request, serviceAccountID openapi_types.UUID, params adminopenapi.UpdateServiceAccountParams) {
+func (h identityManagementHandler) UpdateServiceAccount(w http.ResponseWriter, r *http.Request, serviceAccountID openapi_types.UUID, params adminopenapi.UpdateServiceAccountParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -167,7 +167,7 @@ func (h generatedRepositoryAPIAdapter) UpdateServiceAccount(w http.ResponseWrite
 	writeNativeMavenJSON(w, http.StatusOK, serviceAccountResponse(account))
 }
 
-func (h generatedRepositoryAPIAdapter) ListServiceAccountCredentials(
+func (h identityManagementHandler) ListServiceAccountCredentials(
 	w http.ResponseWriter,
 	r *http.Request,
 	serviceAccountID openapi_types.UUID,
@@ -208,7 +208,7 @@ func (h generatedRepositoryAPIAdapter) ListServiceAccountCredentials(
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) CreateServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountID openapi_types.UUID) {
+func (h identityManagementHandler) CreateServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountID openapi_types.UUID) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -273,7 +273,7 @@ func (h generatedRepositoryAPIAdapter) CreateServiceAccountCredential(w http.Res
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) RevokeServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountID, credentialID openapi_types.UUID) {
+func (h identityManagementHandler) RevokeServiceAccountCredential(w http.ResponseWriter, r *http.Request, serviceAccountID, credentialID openapi_types.UUID) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -290,7 +290,7 @@ func (h generatedRepositoryAPIAdapter) RevokeServiceAccountCredential(w http.Res
 	writeNativeMavenJSON(w, http.StatusOK, serviceAccountCredentialResponse(credential))
 }
 
-func (h generatedRepositoryAPIAdapter) recordServiceAccountAudit(r *http.Request, resource, operation string, status int) {
+func (h identityManagementHandler) recordServiceAccountAudit(r *http.Request, resource, operation string, status int) {
 	if h.audit == nil {
 		return
 	}

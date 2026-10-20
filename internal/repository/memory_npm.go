@@ -36,6 +36,7 @@ func (s *MemoryStore) PublishNPMVersion(_ context.Context, version NPMVersion, d
 	version.CreatedAt = now
 	version.CachedAt = now
 	version.State = "visible"
+	version.SourceVersion = ""
 	version.Manifest = append([]byte(nil), version.Manifest...)
 	s.npmVersions[versionKey] = version
 
@@ -126,6 +127,9 @@ func (s *MemoryStore) LockNPMObject(_ context.Context, objectKey string) (func()
 func (s *MemoryStore) SyncNPMProxyPackage(_ context.Context, incoming NPMPackage) (NPMPackage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return NPMPackage{}, err
+	}
 
 	now := time.Now().UTC()
 	packageKey := npmPackageKey(incoming.RepositoryID, incoming.Name)
@@ -165,6 +169,7 @@ func (s *MemoryStore) SyncNPMProxyPackage(_ context.Context, incoming NPMPackage
 		}
 		version.RepositoryID = incoming.RepositoryID
 		version.PackageName = incoming.Name
+		version.SourceVersion = ""
 		if version.State == "" {
 			version.State = "visible"
 		}
@@ -179,6 +184,7 @@ func (s *MemoryStore) SyncNPMProxyPackage(_ context.Context, incoming NPMPackage
 	}
 	existing.DistTags = cloneStringMap(incoming.DistTags)
 	existing.SourceEndpoint = incoming.SourceEndpoint
+	existing.SourceVersion = incoming.SourceVersion
 	existing.UpstreamETag = incoming.UpstreamETag
 	existing.UpstreamModified = incoming.UpstreamModified
 	existing.MetadataExpiresAt = incoming.MetadataExpiresAt
@@ -192,6 +198,9 @@ func (s *MemoryStore) SyncNPMProxyPackage(_ context.Context, incoming NPMPackage
 func (s *MemoryStore) StoreNPMProxyNegative(_ context.Context, incoming NPMPackage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	key := npmPackageKey(incoming.RepositoryID, incoming.Name)
 	pkg, exists := s.npmPackages[key]
@@ -208,6 +217,7 @@ func (s *MemoryStore) StoreNPMProxyNegative(_ context.Context, incoming NPMPacka
 		pkg = NPMPackage{RepositoryID: incoming.RepositoryID, Name: incoming.Name, CreatedAt: now}
 	}
 	pkg.SourceEndpoint = incoming.SourceEndpoint
+	pkg.SourceVersion = incoming.SourceVersion
 	pkg.MetadataExpiresAt = time.Time{}
 	pkg.NegativeExpiresAt = incoming.NegativeExpiresAt
 	pkg.Negative = true
@@ -219,10 +229,23 @@ func (s *MemoryStore) StoreNPMProxyNegative(_ context.Context, incoming NPMPacka
 func (s *MemoryStore) CacheNPMProxyTarball(_ context.Context, incoming NPMVersion) (NPMVersion, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return NPMVersion{}, err
+	}
+	pkg, found := s.npmPackages[npmPackageKey(incoming.RepositoryID, incoming.PackageName)]
+	if !found {
+		return NPMVersion{}, ErrNotFound
+	}
+	if pkg.Negative || pkg.SourceVersion != incoming.SourceVersion {
+		return NPMVersion{}, ErrVersionConflict
+	}
 	key := npmVersionKey(incoming.RepositoryID, incoming.PackageName, incoming.Version)
 	stored, ok := s.npmVersions[key]
 	if !ok || stored.UpstreamTarball == "" {
 		return NPMVersion{}, ErrNotFound
+	}
+	if !sameNPMProxyTarballMetadata(incoming, stored) {
+		return NPMVersion{}, ErrUpstreamChanged
 	}
 	if stored.ObjectKey != "" {
 		if stored.Digest != incoming.Digest {
@@ -512,6 +535,7 @@ func (s *MemoryStore) SearchNPMPackages(_ context.Context, repositoryID, prefix 
 }
 
 func cloneNPMVersion(version NPMVersion) NPMVersion {
+	version.SourceVersion = ""
 	version.Manifest = append([]byte(nil), version.Manifest...)
 	return version
 }

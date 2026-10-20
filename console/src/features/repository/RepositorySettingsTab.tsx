@@ -92,8 +92,8 @@ export function RepositorySettingsTab({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-5 flex items-start justify-between gap-6 border-b border-line pb-4">
-        <div>
+      <div className="mb-5 flex flex-col items-start gap-4 border-b border-line pb-4 sm:flex-row sm:justify-between sm:gap-6">
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-fg-strong">
             {t("repository.repositorySettings")}
           </h2>
@@ -101,7 +101,7 @@ export function RepositorySettingsTab({
             {t("repository.manageReadAccessAndUpstreamConnectivityForProxy")}
           </p>
         </div>
-        <Space>
+        <Space className="shrink-0">
           <Button onClick={resetForm} disabled={saving}>
             {t("repository.reset")}
           </Button>

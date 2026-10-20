@@ -132,7 +132,11 @@ func TestMemoryCargoGroupPreflightsKnownMemberCoordinates(t *testing.T) {
 		[]GroupMember{{RepositoryID: "first", Position: 0}, {RepositoryID: "second", Position: 1}}, created.Version); !errors.Is(err, ErrCargoGroupConflict) {
 		t.Fatalf("conflicting Hosted member admitted: %v", err)
 	}
-	index := CargoProxyIndex{RepositoryID: "proxy", Name: "demo-crate", Status: 200,
+	proxyRepo, err := store.GetHostedRepository(ctx, "proxy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := CargoProxyIndex{RepositoryID: "proxy", SourceVersion: proxyRepo.Version, Name: "demo-crate", Status: 200,
 		Body:      []byte(`{"name":"demo-crate","vers":"1.0.0","cksum":"` + strings.Repeat("b", 64) + `","yanked":false}` + "\n"),
 		FetchedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour)}
 	if err := store.PutCargoProxyIndex(ctx, index); err != nil {

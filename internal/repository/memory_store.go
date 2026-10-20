@@ -82,6 +82,9 @@ type MemoryStore struct {
 	cargoProxyCrates       map[string]CargoProxyCrate
 	cargoGroupVersions     map[string]CargoGroupVersion
 	cargoObjectLocks       map[string]*sync.Mutex
+	nugetSessions          map[string]NuGetSession
+	nugetPublications      map[string]NuGetPublication
+	nugetPublicationLocks  map[string]chan struct{}
 	aptAssets              map[string]APTAsset
 	aptObjectLocks         map[string]*sync.Mutex
 	aptPublicationSessions map[string]APTPublicationSession

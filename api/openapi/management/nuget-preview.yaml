@@ -1,0 +1,356 @@
+repositories:
+  post:
+    operationId: createNuGetPreviewRepository
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '201':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewRepository
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '409':
+        description: Identity, session or quota conflict
+      '503':
+        description: Preview capability unavailable
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/nuget-preview.yaml#/NuGetPreviewRepositoryCreate
+repository:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: getNuGetPreviewRepository
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewRepository
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '503':
+        description: Preview capability unavailable
+packages:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: listNuGetPreviewPackages
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewPackageList
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '503':
+        description: Preview capability unavailable
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: cursor
+        in: query
+        schema:
+          type: string
+package:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: packageId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    - name: version
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  get:
+    operationId: getNuGetPreviewPackage
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewPackage
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '503':
+        description: Preview capability unavailable
+sessions:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  post:
+    operationId: createNuGetPublicationSession
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '201':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPublicationSession
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '409':
+        description: Identity, session or quota conflict
+      '410':
+        description: Publication session expired; create a new session with a new idempotency key
+      '503':
+        description: Preview capability unavailable
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/nuget-preview.yaml#/NuGetPublicationRequest
+    parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+session:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: getNuGetPublicationSession
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPublicationSession
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '503':
+        description: Preview capability unavailable
+stage:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  put:
+    operationId: stageNuGetPublicationSession
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPublicationSession
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '409':
+        description: Identity, session or quota conflict
+      '410':
+        description: Publication session expired; create a new session with a new idempotency key
+      '413':
+        description: Package archive exceeds the 256 MiB preview bound
+      '503':
+        description: Preview capability unavailable
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+commit:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  post:
+    operationId: commitNuGetPublicationSession
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewPackage
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '409':
+        description: Identity, session or quota conflict
+      '410':
+        description: Publication session expired; create a new session with a new idempotency key
+      '503':
+        description: Preview capability unavailable
+capacity:
+  parameters:
+    - name: repositoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: getNuGetPreviewCapacity
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewCapacity
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '503':
+        description: Preview capability unavailable
+  put:
+    operationId: replaceNuGetPreviewQuota
+    description: Internal NuGet Hosted preview; not a public format admission.
+    responses:
+      '200':
+        description: NuGet Hosted preview response
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewCapacity
+      '400':
+        description: Invalid request
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository permission required
+      '404':
+        description: Preview resource not found
+      '409':
+        description: Identity, session or quota conflict
+      '503':
+        description: Preview capability unavailable
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/nuget-preview.yaml#/NuGetPreviewQuota

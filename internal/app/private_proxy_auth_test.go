@@ -306,11 +306,11 @@ func privateProxyCredentialsContract(t *testing.T, tc privateProxyCase, backend 
 
 func TestPrivateProxyAPIAdmitsOnlyImplementedFormats(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", upstreamAuthTestKey)
-	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatOCI} {
+	for _, format := range []repository.Format{repository.FormatGo, repository.FormatMaven, repository.FormatOCI, repository.FormatNPM, repository.FormatPyPI, repository.FormatCargo, repository.FormatRaw, repository.FormatAPT, repository.FormatConan} {
 		t.Run(string(format), func(t *testing.T) {
 			store := repository.NewMemoryStore()
 			handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: privateProxyAuthenticator()})
-			body := fmt.Sprintf(`{"name":"private-proxy","format":%q,"type":"proxy","endpoint":"https://%s","upstreamAuth":{"scheme":"basic","username":"source-reader","secret":"synthetic-private-secret"}}`, format, redirectOrigin)
+			body := fmt.Sprintf(`{"name":"private-proxy","format":%q,"type":"proxy","endpoint":"https://%s","allowedHosts":["%s"],"upstreamAuth":{"scheme":"basic","username":"source-reader","secret":"synthetic-private-secret"}}`, format, redirectOrigin, redirectOrigin)
 			created := ociBearerManagementRequest(handler, http.MethodPost, "/api/v2/repositories", body, "", "create-private-proxy")
 			if created.Code != http.StatusCreated || strings.Contains(created.Body.String(), "synthetic-private-secret") || !strings.Contains(created.Body.String(), `"credentialsConfigured":true`) {
 				t.Fatalf("create=%d body=%s", created.Code, created.Body.String())

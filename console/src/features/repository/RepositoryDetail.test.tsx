@@ -525,19 +525,19 @@ describe("RepositorySettingsTab upstream authentication", () => {
     );
   });
 
-  it("does not offer credentials for a proxy format without upstream authentication", () => {
-    const pypiProxy = {
+  it("does not offer upstream credentials for a Hosted repository", () => {
+    const pypiHosted = {
       ...goProxy,
       format: "pypi",
-      name: "pypi-proxy",
-      endpoint: "https://pypi.org",
+      type: "hosted",
+      name: "pypi-hosted",
     } as const;
 
     render(
       <TestQueryProvider>
         <PreferencesProvider>
           <RepositorySettingsTab
-            repo={pypiProxy}
+            repo={pypiHosted}
             capabilities={null}
             onUpdated={vi.fn()}
           />

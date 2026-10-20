@@ -11,6 +11,14 @@ their meaning.
 
 ## Unreleased
 
+- Private upstream authentication now covers npm, PyPI, Cargo, APT, Raw and Conan (#432–#434), alongside Go/Maven/OCI. Basic/Bearer credentials stay sealed, Groups resolve the current member binding, cache publication rejects stale source versions, and unknown old cache bindings require a fresh read. Conan Basic performs the native token handshake. Console supports rotation and clearing for every admitted Proxy format. The isolated gate verifies 48 official-client cold/hot Proxy/Group consumptions; see [Proxy egress](docs/proxy-egress-design.md#private-npm-pypi-cargo-apt-raw-and-conan-upstreams).
+
+- NuGet Hosted has an explicit, default-disabled [preview](docs/nuget-hosted-preview.md) with independent management and native routes (#287). Verified nupkg staging and commit, dependency metadata, native reads, quota reservations, response-loss recovery and reference-safe expired-upload collection remain separate from formal format admission. The official .NET SDK gate publishes a three-package dependency chain, restores across Gateway/PostgreSQL/RustFS restart and executes offline; Proxy/Group and full governance remain tracked by #288/#289.
+
+- Large Nexus inventories scan page by page with durable private cursors, page receipts and source-version fences (#435). Restart resumes the last committed page, an independent second observation must match before sealing, and partial scans never expose entries or publish. Source configuration changes serialize with inventory sealing and native publication. See [durable migration batches](docs/nexus-migration-batches.md).
+
+- Identity management uses an independent domain handler with narrow user, key, service-account and OIDC ports (#431). It can be exercised without the aggregate repository store; existing account policy, once-only credentials, authorization and audit behavior remain enforced.
+
 - Binary backup recovery selects fixed `linux/amd64` and `linux/arm64` runtime child digests from the same trusted distroless index (#427). Different platform caches can coexist without replacing a shared index alias; unsupported binary platforms fail before resource creation. Approved release bytes, migration ledgers and OCI software image identities are unchanged.
 
 - Durable Nexus batches now import complete OCI image graphs and Conan 2 historical revisions into native Hosted targets (#206, #425). All-platform OCI index/list bytes, immutable revisions, lease-fenced publication, full target read-back and restart recovery share `native-v1`; old policy inputs are retired. Console mapping and exported protocol URLs support all four migration formats. Fixed official crane/Conan clients run against owned PostgreSQL/RustFS fixtures with source stopped and empty client caches.

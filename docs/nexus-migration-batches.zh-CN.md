@@ -9,7 +9,8 @@ Raw、OCI 与 Conan 2 Hosted 发布。批次统一使用 `native-v1`，不支持
 
 先应用 `000147_nexus_migration_batches.sql` 和
 `000148_nexus_migration_scan_diagnostics.sql`，以及追加的
-`000154_nexus_native_migration_formats.sql`；统一使用标准迁移程序。将
+`000154_nexus_native_migration_formats.sql` 和
+`000155_nexus_migration_scan_checkpoints.sql`；统一使用标准迁移程序。将
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` 配置为真实对象存储池标识；Compose 转发给所有
 继承的 Gateway 角色。不配置时仅禁止迁移写入，其他网关功能和迁移报告仍可读。
 源 HTTPS、凭据加密、精确内部地址 allowlist、DNS 固定及禁止重定向均复用源发现，
@@ -25,8 +26,8 @@ Raw、OCI 与 Conan 2 Hosted 发布。批次统一使用 `native-v1`，不支持
   不同格式存储属于同一池。
 - `POST /migrations/nexus/batches` 固定 `sourceId`、精确 `sourceVersion`、源仓库到
   已有目标仓库 UUID 的显式映射、`policyVersion=native-v1` 和容量证据。
-  后台完整枚举后才原子封存 manifest 与条目。扫描中断、响应非法、超限或分页循环均
-  明确失败，半清单永远不能执行。
+  后台完整枚举后才原子封存 manifest 与条目，重启后继续已提交的分页；响应非法、超限、
+  分页循环或源观察变化均明确失败，半清单永远不能执行。
 - `GET` 集合、`/{batchId}` 和 `/{batchId}/entries` 回读持久状态；集合/条目使用
   `limit`（1–100）与 UUID `cursor` 分页。
 - `POST /{batchId}/pause`、`/resume`、`/retry`、`/cancel` 控制批次。启动与控制均必填
@@ -47,8 +48,10 @@ PostgreSQL 持久保存不可变批次输入、完整 manifest 摘要、每个�
 尝试次数与 checkpoint。单个 worker 持有一个批次租约，不同批次可并行。必须启用 worker 角色和 `migration` kind，格式过滤必须同时允许该
 批次所有格式。争抢使用
 `SKIP LOCKED`、新 token 和递增 epoch，旧/过期持有者不能更新账本。实际原生发布事务
-先取得与恢复/控制相同的事务 advisory fence，锁批次行并校验有效 token、过期时间及取消
-状态，再改变可见引用；该物理事务连接丢失时发布也必然回滚，不再依赖另一条会话连接
+先取得与恢复/控制相同的事务 advisory fence，再依次锁批次行与源配置行，校验源版本、
+有效 token、过期时间及取消状态后才改变可见引用。源行锁保持到实际原生事务提交；
+源更新若先完成则拒绝旧源发布，若发布先提交则更新等待到提交之后。等待源锁后再次
+复查租约是否到期；该物理事务连接丢失时发布也必然回滚，不再依赖另一条会话连接
 持锁。格式对象锁覆盖暂存到发布并与 GC 协调。原生提交后条目 checkpoint 丢失仍通过
 完整读回恢复。
 
@@ -107,10 +110,23 @@ Maven 为生成旁文件缺 SHA-1/MD5 时，执行有界源验证，真实读取
 资产时路径和身份为空；元数据阶段记录选定仓库范围，不回显上游 URL 或凭据。半扫描
 仍没有可执行 manifest 或条目，`totalBytes=null`；后续完整扫描成功才清除旧诊断。
 
-首版保留源发现上限：十个仓库、100 页、10,000 个资产、16 MiB 元数据，每次源操作/
-单文件最长 30 秒。单文件最多 1 GiB，以 size+1 有界读取并完整求摘要；慢文件可能先
-触及时间上限。复制使用创建后立即 unlink 的私有临时文件，恢复按整文件重试，不承诺
-Range/multipart 续传。大清单明确失败，需要后续分页扩展，不能截断后宣称完成。
+迁移库存扫描使用独立分页源读取器，明确限制为十个仓库、10,000 个已记录页、100,000 个资产，
+资产 wire metadata 累计 64 MiB（含第二次观察），每页最多 2 MiB、30 秒。交互式发现预览仍保留较小的
+100 页/10,000 资产预算；两条路径超出预算均明确失败，不截断后宣称完整。
+
+私有 PostgreSQL 检查点将每页及下一 cursor 同事务提交，绑定源版本、选定仓库形状、
+映射和策略。重启或应答丢失后从已确认 cursor 继续；暂停/取消和过期 worker 均不能
+推进。枚举结束后逐页第二次观察，必须与全部已记录页面一致才封存完整 manifest。
+cursor 过期、循环、重复路径、源观察变化和预算不足均明确失败；源漂移需要新建批次。
+这两次观察不代表 Nexus REST API 提供事务快照。封存前即使 `metadataDiscovered`
+已增长，也没有可执行条目，`totalBytes` 仍为 null。
+
+单文件仍最多 1 GiB、30 秒，以 size+1 有界读取并完整求摘要。复制使用创建后立即
+unlink 的私有临时文件，恢复按整文件重试，不承诺 Range/multipart 续传。
+
+`make nexus-inventory-scan-e2e` 使用自有 PostgreSQL/RustFS fixture，验证超过100页/
+10000资产、重启及应答丢失恢复、租约 fence、暂停取消、源绑定和扫描预算拒绝。
+必需用例不允许跳过，自有资源必须清零。
 
 `make integration-test` 包含独立 PG 包，验证真实 PostgreSQL/RustFS 的故障窗口、
 多实例/过期租约、暂停/取消、容量、源变化和原生协议读回。独立的

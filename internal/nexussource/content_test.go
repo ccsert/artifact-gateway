@@ -3,7 +3,9 @@ package nexussource
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -72,17 +74,19 @@ func TestSourceContentUsesExplicitNativeFormatRoutes(t *testing.T) {
 
 func TestSourceContentPinsIdentityBoundsBytesAndValidators(t *testing.T) {
 	for _, test := range []struct {
-		name, path, version, validator, body, etag string
-		status                                     int
-		size                                       int64
-		wantCode                                   string
-		wantBytes                                  int
+		name, path, version, validator, body, etag, contentLength string
+		status                                                    int
+		size                                                      int64
+		wantCode                                                  string
+		wantBytes                                                 int
 	}{
 		{name: "encoded plus", path: "a+build.bin", version: "1", body: "data", etag: `"v1"`, size: 4, wantBytes: 4},
 		{name: "changed source version", path: "a.bin", version: "2", body: "data", size: 4, wantCode: "source_version_changed"},
 		{name: "traversal", path: "../a.bin", version: "1", body: "data", size: 4, wantCode: "invalid_request"},
 		{name: "double escape", path: "%252e%252e/a.bin", version: "1", body: "data", size: 4, wantCode: "invalid_request"},
 		{name: "validator changed", path: "a.bin", version: "1", validator: `etag:"v1"`, body: "data", etag: `"v2"`, size: 4, wantCode: "source_changed"},
+		{name: "content length changed", path: "a.bin", version: "1", body: "bad", contentLength: "3", size: 4, wantCode: "source_changed"},
+		{name: "source precondition changed", path: "a.bin", version: "1", status: 412, size: 4, wantCode: "source_changed"},
 		{name: "source missing", path: "a.bin", version: "1", status: 404, size: 4, wantCode: "source_missing"},
 		{name: "redirect denied", path: "a.bin", version: "1", status: 302, size: 4, wantCode: "source_download_failed"},
 		{name: "unknown length extra byte bounded", path: "a.bin", version: "1", body: strings.Repeat("x", 100), size: 4, wantBytes: 5},
@@ -101,11 +105,14 @@ func TestSourceContentPinsIdentityBoundsBytesAndValidators(t *testing.T) {
 				if test.etag != "" {
 					w.Header().Set("ETag", test.etag)
 				}
+				if test.contentLength != "" {
+					w.Header().Set("Content-Length", test.contentLength)
+				}
 				if test.status != 0 {
 					w.WriteHeader(test.status)
 					return true
 				}
-				w.(http.Flusher).Flush() // Deliberately omit Content-Length.
+				w.(http.Flusher).Flush() // Keep the unknown-length cases chunked.
 				_, _ = io.WriteString(w, test.body)
 				return true
 			})
@@ -166,5 +173,46 @@ func TestSourceContentDelayedHeadersReturnBoundedTimeout(t *testing.T) {
 	})
 	service.options.OperationTimeout = 25 * time.Millisecond
 	_, err := service.OpenAsset(context.Background(), id, "1", "raw-a", AssetRequest{Format: "raw", Path: "slow.bin", Size: 4})
+	requireCode(t, err, "source_timeout")
+}
+
+type responseDeadlineJar struct{ wait func() }
+
+func (*responseDeadlineJar) Cookies(*url.URL) []*http.Cookie { return nil }
+func (j *responseDeadlineJar) SetCookies(*url.URL, []*http.Cookie) {
+	j.wait()
+}
+
+func TestSourceContentResponseAfterDeadlineReturnsBoundedTimeout(t *testing.T) {
+	service, id, _ := fixtureService(t, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path != "/repository/raw-a/late.bin" {
+			return false
+		}
+		http.SetCookie(w, &http.Cookie{Name: "owned-deadline-window", Value: "1"})
+		w.WriteHeader(http.StatusOK)
+		return true
+	})
+	service.options.OperationTimeout = time.Second
+	var operation context.Context
+	lookup := service.options.EgressHooks.LookupIP
+	service.options.EgressHooks.LookupIP = func(ctx context.Context, network, host string) ([]net.IP, error) {
+		operation = ctx
+		return lookup(ctx, network, host)
+	}
+	var crossed atomic.Bool
+	// The standard client calls SetCookies after receiving the real TLS response
+	// but before Do returns. Expire the request in that window without replacing
+	// its transport, DNS pinning, or response.
+	service.options.Client.Jar = &responseDeadlineJar{wait: func() {
+		<-operation.Done()
+		crossed.Store(true)
+	}}
+	_, err := service.OpenAsset(t.Context(), id, "1", "raw-a", AssetRequest{Format: "raw", Path: "late.bin", Size: 4})
+	if !crossed.Load() {
+		t.Fatal("request did not receive its response before the operation deadline")
+	}
+	if operation.Err() != context.DeadlineExceeded {
+		t.Fatalf("operation deadline did not expire: %v", operation.Err())
+	}
 	requireCode(t, err, "source_timeout")
 }

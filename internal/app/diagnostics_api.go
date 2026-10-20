@@ -29,10 +29,7 @@ func (h generatedRepositoryAPIAdapter) GetDiagnostics(w http.ResponseWriter, r *
 	}
 	now := time.Now().UTC()
 	responseNodes := runtimeNodeResponses(nodes, now)
-	workerFormats := make([]adminopenapi.Format, 0, len(h.diagnostics.Runtime.WorkerFormats))
-	for _, format := range h.diagnostics.Runtime.WorkerFormats {
-		workerFormats = append(workerFormats, adminopenapi.Format(format))
-	}
+	workerFormats, previewWorkerFormats := runtimeWorkerFormatProjection(h.diagnostics.Runtime.WorkerFormats)
 	queues := make([]adminopenapi.DiagnosticQueueStat, 0, len(queueStats))
 	for _, stat := range queueStats {
 		item := adminopenapi.DiagnosticQueueStat{
@@ -57,10 +54,11 @@ func (h generatedRepositoryAPIAdapter) GetDiagnostics(w http.ResponseWriter, r *
 			Modified: &h.diagnostics.BuildModified, GoVersion: h.diagnostics.BuildGoVersion,
 		},
 		Runtime: adminopenapi.DiagnosticRuntime{
-			InstanceId:    h.diagnostics.Runtime.InstanceID,
-			Roles:         append([]string{}, h.diagnostics.Runtime.Roles...),
-			WorkerFormats: workerFormats,
-			WorkerKinds:   append([]string{}, h.diagnostics.Runtime.WorkerKinds...),
+			InstanceId:           h.diagnostics.Runtime.InstanceID,
+			Roles:                append([]string{}, h.diagnostics.Runtime.Roles...),
+			WorkerFormats:        workerFormats,
+			PreviewWorkerFormats: previewWorkerFormats,
+			WorkerKinds:          append([]string{}, h.diagnostics.Runtime.WorkerKinds...),
 		},
 		Dependencies:  diagnosticDependencies(r.Context(), h.diagnostics.checkers),
 		Scanner:       &scanner,

@@ -16,6 +16,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/egress"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 // ConanClient is deliberately narrower than a generic HTTP client: client
@@ -49,6 +50,13 @@ func (c UpstreamClient) fetchConan(ctx context.Context, client *http.Client, met
 	}
 	client = tracedHTTPClient(client)
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	authorization, err := conanUpstreamAuthorization(ctx, client, member)
+	if err != nil {
+		return nil, err
+	}
+	if authorization != "" {
+		r.Header.Set("Authorization", authorization)
+	}
 	return client.Do(r)
 }
 
@@ -240,7 +248,14 @@ func (h ConanHandler) serveResolvedConan(w http.ResponseWriter, r *http.Request,
 	}
 	if file != "" && h.Cache != nil {
 		representation := conanRepresentation(r.Header)
-		if err := h.Cache.store(r.Context(), h.Cache.key(group, path, repository.Member{Name: content.member, Endpoint: content.endpoint}, representation), content, group, g.CacheQuotaBytes, 15*time.Minute, group, path, representation); errors.Is(err, ErrCacheQuotaExceeded) {
+		cacheMember := repository.Member{Name: content.member, Endpoint: content.endpoint}
+		for _, member := range g.Members {
+			if member.Name == content.member && member.Endpoint == content.endpoint {
+				cacheMember = member
+				break
+			}
+		}
+		if err := h.Cache.store(r.Context(), h.Cache.key(group, path, cacheMember, representation), content, group, g.CacheQuotaBytes, 15*time.Minute, group, path, representation); errors.Is(err, ErrCacheQuotaExceeded) {
 			if h.Metrics != nil {
 				h.Metrics.cacheQuotaDenied.Add(1)
 				h.Metrics.conanCacheQuotaDenied.Add(1)
@@ -395,7 +410,7 @@ func (h ConanHandler) serveNativeConan(w http.ResponseWriter, r *http.Request, n
 // the cache and audit namespace (the group slot); the member binds the
 // repository so grant evaluation stays on the same target.
 func (h ConanHandler) serveNativeConanProxy(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path, kind, file string, principal Principal) {
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, RepositoryID: repo.ID}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, RepositoryID: repo.ID, RepositoryVersion: repo.Version, UpstreamAuth: repo.UpstreamAuth}
 	g := repository.Group{Name: repo.Name, Enabled: true, Members: []repository.Member{member}}
 	content, status, err := h.resolve(r.Context(), g, path, kind, r.Header, principal)
 	if err != nil {
@@ -645,6 +660,9 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		}
 	}
 	for _, member := range prioritizeHosted(members) {
+		if err := upstreamauth.Validate(member.UpstreamAuth); err != nil {
+			return conanCacheEntry{}, http.StatusBadGateway, upstreamauth.ErrCredential
+		}
 		if actor != "anonymous" {
 			if decision, managed := h.managedConanMemberDecision(ctx, principal, member, path); managed {
 				if !decision.Allowed {
@@ -714,6 +732,9 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		response, err := h.Client.FetchConan(ctx, http.MethodGet, member, path, headers)
 		if err != nil {
 			h.audit(ctx, group.Name, path, member.Name, actor, repository.AuditUpstreamError)
+			if member.UpstreamAuth != nil || errors.Is(err, upstreamauth.ErrCredential) {
+				return conanCacheEntry{}, http.StatusBadGateway, upstreamauth.ErrCredential
+			}
 			hadFailure = true
 			continue
 		}
@@ -723,6 +744,9 @@ func (h ConanHandler) resolve(ctx context.Context, group repository.Group, path,
 		}
 		body, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
 		_ = response.Body.Close()
+		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+			return conanCacheEntry{}, http.StatusBadGateway, upstreamauth.ErrCredential
+		}
 		if readErr != nil || int64(len(body)) > limit || response.StatusCode >= 500 || response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusTooManyRequests {
 			h.audit(withConanAuditStatus(ctx, response.StatusCode), group.Name, path, member.Name, actor, repository.AuditUpstreamError)
 			hadFailure = true

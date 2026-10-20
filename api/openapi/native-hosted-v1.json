@@ -16,6 +16,772 @@
     }
   ],
   "paths": {
+    "/previews/nuget/repositories/{repositoryId}/capacity": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewCapacity",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewCapacity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceNuGetPreviewQuota",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewCapacity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "409": {
+            "description": "Identity, session or quota conflict"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewQuota"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories": {
+      "post": {
+        "operationId": "createNuGetPreviewRepository",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "201": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewRepository"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "409": {
+            "description": "Identity, session or quota conflict"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewRepositoryCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewRepository",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewRepository"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/packages": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listNuGetPreviewPackages",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewPackageList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "packageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewPackage",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewPackage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/publication-sessions": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "createNuGetPublicationSession",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "201": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPublicationSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "409": {
+            "description": "Identity, session or quota conflict"
+          },
+          "410": {
+            "description": "Publication session expired; create a new session with a new idempotency key"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPublicationRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ]
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "sessionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPublicationSession",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPublicationSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "sessionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "stageNuGetPublicationSession",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPublicationSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "409": {
+            "description": "Identity, session or quota conflict"
+          },
+          "410": {
+            "description": "Publication session expired; create a new session with a new idempotency key"
+          },
+          "413": {
+            "description": "Package archive exceeds the 256 MiB preview bound"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentEncoding": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "sessionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "commitNuGetPublicationSession",
+        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "responses": {
+          "200": {
+            "description": "NuGet Hosted preview response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewPackage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository permission required"
+          },
+          "404": {
+            "description": "Preview resource not found"
+          },
+          "409": {
+            "description": "Identity, session or quota conflict"
+          },
+          "410": {
+            "description": "Publication session expired; create a new session with a new idempotency key"
+          },
+          "503": {
+            "description": "Preview capability unavailable"
+          }
+        }
+      }
+    },
+    "/nuget/{repository}/v3/{path}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "repository",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "name": "path",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readNuGetHostedRepresentation",
+        "description": "NuGet V3 index.json, flat container, original nuspec, SemVer2 gzip registrations, search and autocomplete. Hosted preview only.",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "NuGet representation"
+          },
+          "206": {
+            "description": "Byte range of a package archive, original nuspec or SHA-512 sidecar"
+          },
+          "304": {
+            "description": "Package, original nuspec or SHA-512 sidecar matches the conditional request"
+          },
+          "400": {
+            "description": "Invalid search or autocomplete query"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository resource permission or account state prevents this read"
+          },
+          "404": {
+            "description": "Package or version not found"
+          },
+          "412": {
+            "description": "Conditional precondition failed for an original nuspec or SHA-512 sidecar"
+          },
+          "416": {
+            "description": "Requested byte range cannot be satisfied by this package, nuspec or sidecar"
+          },
+          "422": {
+            "description": "Registration, version list or search exceeds the bounded preview metadata inventory"
+          },
+          "500": {
+            "description": "Published package object is unavailable"
+          },
+          "503": {
+            "description": "Preview metadata storage or representation is unavailable"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headNuGetHostedRepresentation",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Same headers as GET without body"
+          },
+          "206": {
+            "description": "Byte range headers for an original nuspec or SHA-512 sidecar"
+          },
+          "304": {
+            "description": "Package, original nuspec or SHA-512 sidecar matches the conditional request"
+          },
+          "400": {
+            "description": "Invalid search or autocomplete query"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository resource permission or account state prevents this read"
+          },
+          "404": {
+            "description": "Package or version not found"
+          },
+          "412": {
+            "description": "Conditional precondition failed for an original nuspec or SHA-512 sidecar"
+          },
+          "416": {
+            "description": "Requested byte range cannot be satisfied by this original nuspec or SHA-512 sidecar"
+          },
+          "422": {
+            "description": "Registration, version list or search exceeds the bounded preview metadata inventory"
+          },
+          "500": {
+            "description": "Published package object is unavailable"
+          },
+          "503": {
+            "description": "Preview metadata storage or representation is unavailable"
+          }
+        }
+      }
+    },
+    "/nuget/{repository}/api/v2/package/": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "repository",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "put": {
+        "operationId": "publishNuGetHostedPackage",
+        "description": "Official PackagePublish/2.0.0 multipart push. X-NuGet-ApiKey is an existing Gateway credential, never an upstream secret. Same-content replay is idempotent; conflicting bytes at canonical ID/version return 409.",
+        "security": [
+          {
+            "nuGetApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "package"
+                ],
+                "properties": {
+                  "package": {
+                    "type": "string",
+                    "contentEncoding": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Complete package committed or identical replay"
+          },
+          "400": {
+            "description": "Malformed package or unsupported dependency metadata"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Write permission required"
+          },
+          "404": {
+            "description": "NuGet Hosted preview repository not found"
+          },
+          "409": {
+            "description": "Canonical version contains different bytes"
+          },
+          "410": {
+            "description": "Publication session expired before the complete package was committed"
+          },
+          "413": {
+            "description": "Package exceeds the configured bound"
+          },
+          "503": {
+            "description": "Preview publication storage is unavailable"
+          }
+        }
+      }
+    },
     "/conan/{repository}/v1/ping": {
       "servers": [
         {
@@ -676,7 +1442,7 @@
       },
       "post": {
         "operationId": "startNexusMigrationBatch",
-        "description": "Administrators only. Atomically persist immutable source version, mappings and policy. A background worker fully enumerates and seals the manifest; interrupted or bounded-out scanning fails and never becomes ready. Idempotency scope is actor and operation; a reused key with a different body conflicts. Capacity evidence is operator supplied and bound to target, pool and freshness; unknown or insufficient evidence prohibits target writes.",
+        "description": "Administrators only. Atomically persist immutable source version, mappings and policy. A background worker scans bounded pages using private durable checkpoints; interruption resumes the last committed cursor. A second paged observation must match before the complete manifest is sealed. Incomplete or bounded-out scans never become ready and cannot publish. Source drift or expired cursors require a new batch; REST enumeration is not a transactional source snapshot. Idempotency scope is actor and operation; a reused key with a different body conflicts. Capacity evidence is operator supplied and bound to target, pool and freshness; unknown or insufficient evidence prohibits target writes.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -6785,6 +7551,205 @@
   },
   "components": {
     "schemas": {
+      "NuGetPreviewRepositoryCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "NuGetPreviewRepository": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "format",
+          "preview",
+          "sourceUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "const": "nuget"
+          },
+          "preview": {
+            "type": "boolean",
+            "const": true
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "NuGetPublicationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packageId",
+          "version",
+          "digest",
+          "size"
+        ],
+        "properties": {
+          "packageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 268435456
+          }
+        }
+      },
+      "NuGetPublicationSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "repositoryId",
+          "packageId",
+          "version",
+          "digest",
+          "size",
+          "state",
+          "createdAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "staged",
+              "committed",
+              "expired"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "committedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NuGetPreviewPackage": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "packageId",
+          "version",
+          "digest",
+          "size",
+          "publishedAt",
+          "packageUrl",
+          "registrationUrl"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "packageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "registrationUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "NuGetPreviewPackageList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NuGetPreviewPackage"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
       "Format": {
         "type": "string",
         "enum": [
@@ -8090,6 +9055,50 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/AuditRecord"
+        }
+      },
+      "NuGetPreviewCapacity": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "usedBytes",
+          "objectCount",
+          "quotaBytes"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "NuGetPreviewQuota": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "quotaBytes"
+        ],
+        "properties": {
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
         }
       },
       "NexusMigrationCapabilities": {
@@ -10650,7 +11659,7 @@
       },
       "UpstreamAuth": {
         "type": "object",
-        "description": "Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.",
+        "description": "Protected upstream credentials for Go, Maven, OCI, npm, PyPI, Cargo, APT, Raw and Conan Proxy repositories. Basic or Bearer authentication targets the bound upstream. Conan exchanges Basic credentials through its users/authenticate endpoint before reading protected metadata or files. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Hosted repositories and unsupported formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.",
         "required": [
           "scheme"
         ],
@@ -10663,7 +11672,7 @@
               "basic",
               "bearer"
             ],
-            "description": "none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`."
+            "description": "none removes any stored credential and reads the upstream anonymously; basic authenticates with an HTTP Basic credential (Conan exchanges it for a source token); bearer sends `Authorization - Bearer <secret>`."
           },
           "username": {
             "type": "string",
@@ -12675,6 +13684,11 @@
       }
     },
     "securitySchemes": {
+      "nuGetApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-NuGet-ApiKey"
+      },
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",

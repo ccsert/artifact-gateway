@@ -247,6 +247,8 @@ func (s *Service) RunOnce(ctx context.Context, formats []string) error {
 		recoveryCancel()
 		if readErr == nil && latest.ScanComplete {
 			state, message = "ready", "worker_interrupted"
+		} else if readErr == nil {
+			state, message = "scanning", "worker_interrupted"
 		}
 	}
 	finishCtx, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -469,7 +471,7 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 		names = append(names, mp.SourceRepository)
 		targets[mp.SourceRepository] = mp.TargetRepositoryID
 	}
-	discovery, err := s.source.Discover(ctx, b.SourceID, nexussource.DiscoveryInput{Repositories: names, MaxPages: 100, MaxAssets: 10000})
+	discovery, err := s.discoverInventory(ctx, b, failure)
 	if err != nil {
 		return nil, "", 0, 0, err
 	}
@@ -501,14 +503,16 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 	for _, a := range discovery.UnsupportedAssets {
 		unsupported(a.Repository, a.Path, a.Reason)
 	}
-	for _, a := range discovery.Assets {
+	for index, a := range discovery.Assets {
 		failure.Stage, failure.SourceRepository, failure.SourcePath, failure.Identity = "manifest_planning", a.Repository, a.Path, ""
-		current, err := s.store.Get(ctx, b.ID)
-		if err != nil {
-			return nil, "", 0, 0, err
-		}
-		if current.CancelRequested || current.PauseRequested {
-			return nil, "", 0, 0, ErrStopped
+		if index%128 == 0 {
+			current, err := s.store.Get(ctx, b.ID)
+			if err != nil {
+				return nil, "", 0, 0, err
+			}
+			if current.CancelRequested || current.PauseRequested {
+				return nil, "", 0, 0, ErrStopped
+			}
 		}
 		if err = s.ValidateEvidence(b.CapacityEvidence); err != nil {
 			return nil, "", 0, 0, err

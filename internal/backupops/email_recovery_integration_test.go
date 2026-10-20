@@ -114,6 +114,11 @@ func seedRecoveryEmail(t *testing.T, ctx context.Context, source *OwnedTarget, e
 			quota = 15
 			policy.CriticalBasisPoints = 9200
 			policy.CriticalForSeconds = 2
+			if source.spec.Release.NativeArchive != nil {
+				// Original runtime startup has no sub-second upper bound. Start
+				// in the warning-only band, then change the real quota below.
+				quota = 16
+			}
 		}
 		if _, err = s.ReplaceRepositoryCapacityQuota(ctx, repoID, quota); err != nil {
 			t.Fatal(err)
@@ -123,11 +128,19 @@ func seedRecoveryEmail(t *testing.T, ctx context.Context, source *OwnedTarget, e
 			t.Fatal(e)
 		}
 		cfg := repository.QuotaAlertMailConfig{Enabled: true, From: "gateway@example.test", ConsoleOrigin: "https://console.example.invalid"}
-		for sample := 0; sample < 2; sample++ {
-			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
+		sampleQuota := func() {
+			t.Helper()
+			if source.spec.Release.NativeArchive != nil {
+				samplePublishedRecoveryQuota(t, ctx, source, s, endpoint, r.ID, cfg)
+				return
+			}
 			if worked, e := s.EvaluateNextRepositoryQuotaAlert(ctx, cfg, time.Hour); e != nil || !worked {
 				t.Fatalf("quota sample: %v %v", worked, e)
 			}
+		}
+		for sample := 0; sample < 2; sample++ {
+			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
+			sampleQuota()
 			if sample == 0 {
 				time.Sleep(1050 * time.Millisecond)
 			}
@@ -151,11 +164,16 @@ func seedRecoveryEmail(t *testing.T, ctx context.Context, source *OwnedTarget, e
 		}
 		f.IDs[label] = events[0].DeliveryID
 		if i == 1 {
-			time.Sleep(1050 * time.Millisecond)
-			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
-			if worked, e := s.EvaluateNextRepositoryQuotaAlert(ctx, cfg, time.Hour); e != nil || !worked {
-				t.Fatal("critical sample failed")
+			if source.spec.Release.NativeArchive != nil {
+				fixtureHTTP(t, ctx, endpoint, "PUT", "/api/v2/repositories/"+repoID+"/capacity", source.spec.AdminToken, []byte(`{"quotaBytes":15}`), 200, "")
+				recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
+				sampleQuota()
+				time.Sleep(time.Duration(policy.CriticalForSeconds)*time.Second + 50*time.Millisecond)
+			} else {
+				time.Sleep(1050 * time.Millisecond)
 			}
+			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
+			sampleQuota()
 			ordered, e := s.ListRepositoryQuotaAlertEvents(ctx, r.ID)
 			if e != nil || len(ordered) != 2 || ordered[0].Snapshot.Sequence != 2 || ordered[0].Snapshot.Scenario != "critical" || ordered[1].Snapshot.Sequence != 1 || ordered[1].Snapshot.Scenario != "warning" || ordered[0].Snapshot.EpisodeID != ordered[1].Snapshot.EpisodeID {
 				t.Fatal("ordered same-episode warning/critical missing")

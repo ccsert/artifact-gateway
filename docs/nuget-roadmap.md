@@ -4,18 +4,22 @@
 
 ## Status and priority
 
-NuGet is a deferred ecosystem candidate and is no longer a first-priority
-roadmap item. Cargo is evaluated ahead of it after APT H3. NuGet remains
-valuable because it is the Microsoft-supported package
+NuGet Hosted publication and native V3 reads now have an opt-in
+[Hosted preview](nuget-hosted-preview.md) under #287. Its official-client gate
+covers push, transitive restore, storage restart and offline execution. Cargo is
+already admitted, so the historical Cargo-first backlog ordering no longer
+applies. NuGet is the Microsoft-supported package
 mechanism for .NET, Visual Studio, and `dotnet` clients, and because its V3
 service index gives a stable discovery boundary for private repositories.
 
 The N1 byte-contract foundation is implemented: Artifact Gateway can validate
 a complete `.nupkg` ZIP, read one bounded root `.nuspec`, reject ambiguous XML
 or archive paths, normalize NuGet versions, and derive a case-insensitive
-canonical identity. NuGet is intentionally absent from the format catalog,
-Console, OpenAPI, and repository creation until the declared protocol
-capabilities below are executable.
+canonical identity. The preview adds independent OpenAPI management and native
+contracts, durable publication sessions, quota reservation and V3 Hosted reads.
+NuGet remains absent from the formal format catalog, Console selector and formal
+repository creation until the #289 governance and admission gates pass. Proxy
+and Group are still future work under #288.
 
 Normative implementation references are Microsoft's
 [NuGet Server API overview](https://learn.microsoft.com/nuget/api/overview),
@@ -92,7 +96,7 @@ the format catalog advertise NuGet as a supported repository type.
 
 ## Delivery order
 
-APT Hosted remains the active format-completion priority and Cargo is the next
-candidate. NuGet N1 through N4 are retained as a technically reviewed backlog,
-but no publication work is scheduled. The existing parser stays covered while
-capability discovery continues to describe only executable behavior.
+Keep the #287 Hosted preview behind its explicit enablement flag, then implement
+Proxy/Group under #288 and lifecycle, Console and public admission under #289. APT Hosted
+admission continues on its own roadmap. The existing parser stays covered;
+capability discovery must not advertise unfinished NuGet repository behavior.

@@ -11,7 +11,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/secrets"
 )
 
-func (h generatedRepositoryAPIAdapter) GetOIDCSettings(w http.ResponseWriter, r *http.Request) {
+func (h identityManagementHandler) GetOIDCSettings(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -27,7 +27,7 @@ func (h generatedRepositoryAPIAdapter) GetOIDCSettings(w http.ResponseWriter, r 
 	writeNativeMavenJSON(w, http.StatusOK, oidcSettingsResponse(settings))
 }
 
-func (h generatedRepositoryAPIAdapter) ReplaceOIDCSettings(w http.ResponseWriter, r *http.Request, params adminopenapi.ReplaceOIDCSettingsParams) {
+func (h identityManagementHandler) ReplaceOIDCSettings(w http.ResponseWriter, r *http.Request, params adminopenapi.ReplaceOIDCSettingsParams) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
 		return
@@ -80,7 +80,7 @@ func (h generatedRepositoryAPIAdapter) ReplaceOIDCSettings(w http.ResponseWriter
 	writeNativeMavenJSON(w, http.StatusOK, oidcSettingsResponse(settings))
 }
 
-func (h generatedRepositoryAPIAdapter) TestOIDCSettings(w http.ResponseWriter, r *http.Request) {
+func (h identityManagementHandler) TestOIDCSettings(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
 		return

@@ -9,6 +9,24 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/nuget/repositories/{repositoryId}/capacity":
+    "$ref": "./management/nuget-preview.yaml#/capacity"
+  "/previews/nuget/repositories":
+    "$ref": "./management/nuget-preview.yaml#/repositories"
+  "/previews/nuget/repositories/{repositoryId}":
+    "$ref": "./management/nuget-preview.yaml#/repository"
+  "/previews/nuget/repositories/{repositoryId}/packages":
+    "$ref": "./management/nuget-preview.yaml#/packages"
+  "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}":
+    "$ref": "./management/nuget-preview.yaml#/package"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions":
+    "$ref": "./management/nuget-preview.yaml#/sessions"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}":
+    "$ref": "./management/nuget-preview.yaml#/session"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package":
+    "$ref": "./management/nuget-preview.yaml#/stage"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit":
+    "$ref": "./management/nuget-preview.yaml#/commit"
   "/migrations/nexus/capabilities":
     "$ref": "./management/nexus-batches.yaml#/capabilities"
   "/migrations/nexus/batches":
@@ -301,12 +319,26 @@ paths:
     "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_commit"
 components:
   schemas:
+    NuGetPreviewRepositoryCreate:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewRepositoryCreate"
+    NuGetPreviewRepository:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewRepository"
+    NuGetPublicationRequest:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPublicationRequest"
+    NuGetPublicationSession:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPublicationSession"
+    NuGetPreviewPackage:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewPackage"
+    NuGetPreviewPackageList:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewPackageList"
     BrowseNode:
       "$ref": "./components/schemas.yaml#/BrowseNode"
     BrowseNodePage:
       "$ref": "./components/schemas.yaml#/BrowseNodePage"
     Format:
       "$ref": "./components/schemas.yaml#/Format"
+    NuGetPreviewWorkerFormat:
+      "$ref": "./components/schemas.yaml#/NuGetPreviewWorkerFormat"
     FormatProfile:
       "$ref": "./components/schemas.yaml#/FormatProfile"
     FormatProfileList:

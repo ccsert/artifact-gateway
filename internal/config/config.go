@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/netip"
@@ -62,6 +63,7 @@ var supportedWorkerKinds = map[string]struct{}{
 }
 
 type Config struct {
+	NuGetPreviewEnabled             bool
 	MigrationSourcePrivateEndpoints map[string][]netip.Prefix
 	MigrationStoragePoolID          string
 	Email                           emailnotification.Config
@@ -231,6 +233,15 @@ func Load() (Config, error) {
 		},
 		OTLPHTTPEndpoint:  strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),
 		OTELSamplingRatio: 1,
+	}
+	if raw := strings.TrimSpace(os.Getenv("GATEWAY_NUGET_PREVIEW_ENABLED")); raw != "" {
+		if raw != "true" && raw != "false" {
+			return Config{}, errors.New("GATEWAY_NUGET_PREVIEW_ENABLED must be true or false")
+		}
+		cfg.NuGetPreviewEnabled = raw == "true"
+	}
+	if cfg.NuGetPreviewEnabled && strings.TrimSpace(os.Getenv("GATEWAY_WORKER_FORMATS")) == "" {
+		cfg.WorkerFormats = append(cfg.WorkerFormats, "nuget")
 	}
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return Config{}, err
@@ -696,6 +707,9 @@ func validateRuntimeConfig(cfg Config) error {
 		return fmt.Errorf("GATEWAY_NODE_ROLES=standalone cannot be combined with other roles")
 	}
 	for _, format := range cfg.WorkerFormats {
+		if format == "nuget" && cfg.NuGetPreviewEnabled {
+			continue
+		}
 		if _, ok := supportedWorkerFormats[format]; !ok {
 			return fmt.Errorf("GATEWAY_WORKER_FORMATS contains unsupported format %q", format)
 		}

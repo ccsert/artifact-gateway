@@ -14,6 +14,7 @@ CREATE TEMP TABLE native_npm_versions(repository_id uuid,size bigint,object_key 
 CREATE TEMP TABLE native_pypi_files(repository_id uuid,size bigint,object_key text,state text);
 CREATE TEMP TABLE native_go_assets(repository_id uuid,size bigint,collected_at timestamptz);
 CREATE TEMP TABLE native_cargo_publications(repository_id uuid,size bigint,collected_at timestamptz);
+CREATE TEMP TABLE native_nuget_publications(repository_id uuid,size bigint);
 CREATE TEMP TABLE native_apt_assets(repository_id uuid,size bigint); CREATE TEMP TABLE native_apt_package_revisions(repository_id uuid,size bigint);
 CREATE TEMP TABLE native_apt_repository_snapshots(id uuid,repository_id uuid,state text);
 CREATE TEMP TABLE native_apt_snapshot_assets(snapshot_id uuid,repository_id uuid,object_key text,size bigint,path text);

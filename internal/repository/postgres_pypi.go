@@ -23,7 +23,7 @@ func scanPyPIFile(row pypiRowScanner, file *PyPIFile) error {
 	err := row.Scan(&file.RepositoryID, &file.Project, &file.Version, &file.Filename, &file.FileType,
 		&file.PythonVersion, &file.RequiresPython, &file.Digest, &file.ObjectKey, &file.Size,
 		&file.Publisher, &file.SourceURL, &file.State, &cachedAt, &deletedAt, &collectedAt, &file.CreatedAt,
-		&file.Yanked, &file.YankReason, &file.YankRevision)
+		&file.Yanked, &file.YankReason, &file.YankRevision, &file.SourceVersion)
 	if cachedAt.Valid {
 		file.CachedAt = cachedAt.Time
 	}
@@ -37,7 +37,7 @@ func scanPyPIFile(row pypiRowScanner, file *PyPIFile) error {
 }
 
 const pypiFileColumns = `repository_id::text,project,version,filename,file_type,python_version,
-requires_python,digest,object_key,size,publisher,source_url,state,cached_at,deleted_at,collected_at,created_at,yanked,yank_reason,yank_revision`
+requires_python,digest,object_key,size,publisher,source_url,state,cached_at,deleted_at,collected_at,created_at,yanked,yank_reason,yank_revision,source_version`
 
 func pypiNullableTime(value time.Time) any {
 	if value.IsZero() {
@@ -170,6 +170,12 @@ func (s *PostgresStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, pr
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if len(files) == 0 {
+		return tx.Commit()
+	}
+	if err := checkProxySourceVersion(ctx, tx, repositoryID, files[0].SourceVersion); err != nil {
+		return err
+	}
 	for _, file := range files {
 		var digest string
 		err = tx.QueryRowContext(ctx, `SELECT digest FROM native_pypi_files WHERE repository_id::text=$1 AND filename=$2 FOR UPDATE`, repositoryID, file.Filename).Scan(&digest)
@@ -177,9 +183,9 @@ func (s *PostgresStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, pr
 		case errors.Is(err, sql.ErrNoRows):
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO native_pypi_files
-				(repository_id,project,version,filename,file_type,python_version,requires_python,digest,publisher,source_url,state,yanked,yank_reason)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'visible',$11,$12)`, repositoryID, project, file.Version,
-				file.Filename, file.FileType, file.PythonVersion, file.RequiresPython, file.Digest, file.Publisher, file.SourceURL, file.Yanked, file.YankReason)
+				(repository_id,project,version,filename,file_type,python_version,requires_python,digest,publisher,source_url,state,yanked,yank_reason,source_version)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'visible',$11,$12,$13)`, repositoryID, project, file.Version,
+				file.Filename, file.FileType, file.PythonVersion, file.RequiresPython, file.Digest, file.Publisher, file.SourceURL, file.Yanked, file.YankReason, file.SourceVersion)
 		case err != nil:
 			return err
 		case digest != file.Digest:
@@ -187,8 +193,8 @@ func (s *PostgresStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, pr
 		default:
 			_, err = tx.ExecContext(ctx, `
 				UPDATE native_pypi_files SET requires_python=$3,publisher=$4,source_url=$5,
-				yank_revision=yank_revision+CASE WHEN yanked<>$6 OR yank_reason<>$7 THEN 1 ELSE 0 END,yanked=$6,yank_reason=$7
-				WHERE repository_id::text=$1 AND filename=$2`, repositoryID, file.Filename, file.RequiresPython, file.Publisher, file.SourceURL, file.Yanked, file.YankReason)
+				yank_revision=yank_revision+CASE WHEN yanked<>$6 OR yank_reason<>$7 THEN 1 ELSE 0 END,yanked=$6,yank_reason=$7,source_version=$8
+				WHERE repository_id::text=$1 AND filename=$2`, repositoryID, file.Filename, file.RequiresPython, file.Publisher, file.SourceURL, file.Yanked, file.YankReason, file.SourceVersion)
 		}
 		if err != nil {
 			return err
@@ -203,6 +209,9 @@ func (s *PostgresStore) CachePyPIProxyFile(ctx context.Context, incoming PyPIFil
 		return PyPIFile{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := checkProxySourceVersion(ctx, tx, incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return PyPIFile{}, err
+	}
 	var stored PyPIFile
 	err = scanPyPIFile(tx.QueryRowContext(ctx, `SELECT `+pypiFileColumns+` FROM native_pypi_files
 		WHERE repository_id::text=$1 AND filename=$2 AND state='visible' FOR UPDATE`, incoming.RepositoryID, incoming.Filename), &stored)
@@ -212,7 +221,7 @@ func (s *PostgresStore) CachePyPIProxyFile(ctx context.Context, incoming PyPIFil
 	if err != nil {
 		return PyPIFile{}, err
 	}
-	if stored.Digest != incoming.Digest || stored.SourceURL != incoming.SourceURL {
+	if stored.Digest != incoming.Digest || stored.SourceURL != incoming.SourceURL || stored.SourceVersion != incoming.SourceVersion {
 		return PyPIFile{}, ErrUpstreamChanged
 	}
 	if stored.ObjectKey != "" {

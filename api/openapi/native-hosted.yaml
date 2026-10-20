@@ -9,6 +9,28 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/nuget/repositories/{repositoryId}/capacity":
+    "$ref": "./management/nuget-preview.yaml#/capacity"
+  "/previews/nuget/repositories":
+    "$ref": "./management/nuget-preview.yaml#/repositories"
+  "/previews/nuget/repositories/{repositoryId}":
+    "$ref": "./management/nuget-preview.yaml#/repository"
+  "/previews/nuget/repositories/{repositoryId}/packages":
+    "$ref": "./management/nuget-preview.yaml#/packages"
+  "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}":
+    "$ref": "./management/nuget-preview.yaml#/package"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions":
+    "$ref": "./management/nuget-preview.yaml#/sessions"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}":
+    "$ref": "./management/nuget-preview.yaml#/session"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package":
+    "$ref": "./management/nuget-preview.yaml#/stage"
+  "/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit":
+    "$ref": "./management/nuget-preview.yaml#/commit"
+  "/nuget/{repository}/v3/{path}":
+    "$ref": "./protocols/nuget.yaml#/nuget_read"
+  "/nuget/{repository}/api/v2/package/":
+    "$ref": "./protocols/nuget.yaml#/nuget_publish"
   "/conan/{repository}/v1/ping":
     "$ref": "./protocols/conan.yaml#/conan_ping"
   "/conan/{repository}/v2/users/authenticate":
@@ -207,6 +229,18 @@ paths:
     "$ref": "./protocols/npm.yaml#/npm_repository_tarball_revision"
 components:
   schemas:
+    NuGetPreviewRepositoryCreate:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewRepositoryCreate"
+    NuGetPreviewRepository:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewRepository"
+    NuGetPublicationRequest:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPublicationRequest"
+    NuGetPublicationSession:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPublicationSession"
+    NuGetPreviewPackage:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewPackage"
+    NuGetPreviewPackageList:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewPackageList"
     Format:
       "$ref": "./components/schemas.yaml#/Format"
     FormatProfile:
@@ -370,6 +404,10 @@ components:
     AuditList:
       "$ref": "./components/responses.yaml#/AuditList"
   securitySchemes:
+    nuGetApiKey:
+      type: apiKey
+      in: header
+      name: X-NuGet-ApiKey
     bearerAuth:
       "$ref": "./components/security-schemes.yaml#/bearerAuth"
     protocolBasicAuth:

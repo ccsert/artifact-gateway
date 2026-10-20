@@ -446,3 +446,23 @@ operator file/OS privileges are two different authorization boundaries.
 - Bilingual registration: `docs/cli-command-map.md` and
   `docs/cli-command-map.zh-CN.md` link both ways and appear in
   `docs/site-map.json`; `make docs-check` covers the pair.
+
+## NuGet Hosted preview (#287)
+
+These explicit preview APIs have no agctl commands. NuGet remains absent from the admitted format catalog and creation selector. Official dotnet clients use the protocol operations. N/A classifies the CLI only and does not claim #288/#289 completion.
+
+| Operation | CLI applicability | Owner | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `GET /previews/nuget/repositories/{repositoryId}/capacity`<br>`getNuGetPreviewCapacity` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/nuget/repositories/{repositoryId}/capacity`<br>`replaceNuGetPreviewQuota` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/repositories`<br>`createNuGetPreviewRepository` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/repositories/{repositoryId}`<br>`getNuGetPreviewRepository` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/repositories/{repositoryId}/packages`<br>`listNuGetPreviewPackages` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}`<br>`getNuGetPreviewPackage` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/repositories/{repositoryId}/publication-sessions`<br>`createNuGetPublicationSession` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}`<br>`getNuGetPublicationSession` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package`<br>`stageNuGetPublicationSession` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit`<br>`commitNuGetPublicationSession` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /nuget/{repository}/v3/{path}`<br>`readNuGetHostedRepresentation` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `HEAD /nuget/{repository}/v3/{path}`<br>`headNuGetHostedRepresentation` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /nuget/{repository}/api/v2/package/`<br>`publishNuGetHostedPackage` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |

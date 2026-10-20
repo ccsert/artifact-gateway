@@ -77,6 +77,10 @@ func (s *Service) OpenAsset(ctx context.Context, id, version, repository string,
 		done()
 		return nil, requestErr
 	}
+	if sourceTimedOut(remote.ctx, nil) {
+		_ = resp.Body.Close()
+		return bad("source_timeout")
+	}
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
 		switch resp.StatusCode {

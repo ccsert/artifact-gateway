@@ -14,6 +14,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 	"github.com/felixge/httpsnoop"
 )
 
@@ -48,8 +49,11 @@ func cargoUpstreamURL(repo repository.HostedRepository, path string) string {
 }
 
 func (h nativeCargoHandler) proxyConfig(r *http.Request, repo repository.HostedRepository) (repository.CargoProxyConfig, error) {
+	if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+		return repository.CargoProxyConfig{}, err
+	}
 	current, err := h.proxy.GetCargoProxyConfig(r.Context(), repo.ID)
-	have := err == nil
+	have := err == nil && current.SourceVersion == repo.Version
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return current, err
 	}
@@ -59,13 +63,16 @@ func (h nativeCargoHandler) proxyConfig(r *http.Request, repo repository.HostedR
 	}
 	response, err := h.upstream.FetchCargo(r.Context(), repo, cargoUpstreamURL(repo, "config.json"), nil)
 	if err != nil {
-		if have {
+		if have && !errors.Is(err, upstreamauth.ErrCredential) {
 			return current, nil
 		}
 		return current, err
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
+		if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+			return current, upstreamauth.ErrCredential
+		}
 		if have {
 			return current, nil
 		}
@@ -82,7 +89,7 @@ func (h nativeCargoHandler) proxyConfig(r *http.Request, repo repository.HostedR
 	if json.Unmarshal(body, &remote) != nil || remote.DL == "" || !cargoTemplateAllowed(repo, remote.DL) || (remote.API != "" && !cargoTemplateAllowed(repo, remote.API)) {
 		return current, errors.New("invalid upstream config")
 	}
-	next := repository.CargoProxyConfig{RepositoryID: repo.ID, DownloadTemplate: remote.DL, SearchAPI: remote.API,
+	next := repository.CargoProxyConfig{RepositoryID: repo.ID, SourceVersion: repo.Version, DownloadTemplate: remote.DL, SearchAPI: remote.API,
 		FetchedAt: now, ExpiresAt: now.Add(cargoConfigTTL)}
 	if err := h.proxy.PutCargoProxyConfig(r.Context(), next); err != nil {
 		return current, err
@@ -99,8 +106,11 @@ func cargoTemplateAllowed(repo repository.HostedRepository, template string) boo
 }
 
 func (h nativeCargoHandler) proxyIndex(r *http.Request, repo repository.HostedRepository, name string) (repository.CargoProxyIndex, error) {
+	if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+		return repository.CargoProxyIndex{}, err
+	}
 	current, err := h.proxy.GetCargoProxyIndex(r.Context(), repo.ID, name)
-	have := err == nil
+	have := err == nil && current.SourceVersion == repo.Version
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return current, err
 	}
@@ -123,7 +133,7 @@ func (h nativeCargoHandler) proxyIndex(r *http.Request, repo repository.HostedRe
 	}
 	response, err := h.upstream.FetchCargo(r.Context(), repo, cargoUpstreamURL(repo, path), headers)
 	if err != nil {
-		if have && current.Status == http.StatusOK {
+		if have && current.Status == http.StatusOK && !errors.Is(err, upstreamauth.ErrCredential) {
 			return current, nil
 		}
 		return current, err
@@ -141,6 +151,9 @@ func (h nativeCargoHandler) proxyIndex(r *http.Request, repo repository.HostedRe
 		return current, nil
 	}
 	status := response.StatusCode
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return current, upstreamauth.ErrCredential
+	}
 	if status != http.StatusOK && status != http.StatusNotFound && status != http.StatusGone && status != http.StatusUnavailableForLegalReasons {
 		if have && current.Status == http.StatusOK {
 			return current, nil
@@ -158,7 +171,7 @@ func (h nativeCargoHandler) proxyIndex(r *http.Request, repo repository.HostedRe
 	if status != http.StatusOK {
 		ttl = cargoNegativeTTL
 	}
-	next := repository.CargoProxyIndex{RepositoryID: repo.ID, Name: name, Body: body, Status: status,
+	next := repository.CargoProxyIndex{RepositoryID: repo.ID, SourceVersion: repo.Version, Name: name, Body: body, Status: status,
 		ETag: response.Header.Get("ETag"), Modified: response.Header.Get("Last-Modified"), FetchedAt: now, ExpiresAt: now.Add(ttl)}
 	if err := h.proxy.PutCargoProxyIndex(r.Context(), next); err != nil {
 		return current, err
@@ -216,6 +229,9 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 		return
 	}
 	crate, err := h.proxy.GetCargoProxyCrate(r.Context(), repo.ID, name, version)
+	if err == nil && crate.SourceVersion != repo.Version {
+		err = repository.ErrNotFound
+	}
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		h.writeError(w, http.StatusServiceUnavailable, "Cargo cache unavailable")
 		return
@@ -249,7 +265,7 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 			h.writeError(w, http.StatusBadGateway, "Cargo upstream archive checksum mismatch")
 			return
 		}
-		crate = repository.CargoProxyCrate{RepositoryID: repo.ID, Name: name, Version: version, Checksum: checksum,
+		crate = repository.CargoProxyCrate{RepositoryID: repo.ID, SourceVersion: repo.Version, Name: name, Version: version, Checksum: checksum,
 			ObjectKey: "native/cargo-proxy/sha256/" + checksum, Size: spool.Size(), CachedAt: time.Now().UTC()}
 		if err := h.objects.PutVerifiedReader(r.Context(), crate.ObjectKey, spool.Reader(), crate.Size, "sha256:"+checksum); err != nil {
 			h.writeError(w, http.StatusServiceUnavailable, "Cargo archive cache unavailable")

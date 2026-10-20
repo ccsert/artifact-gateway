@@ -220,10 +220,10 @@ func TestRepositoryArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) 
 		}
 	}
 	npmVersion := repository.NPMVersion{Version: "1.0.0", UpstreamTarball: "https://registry.example/widget.tgz", TarballName: "widget.tgz", Manifest: []byte(`{"name":"widget","version":"1.0.0"}`)}
-	if _, err := store.SyncNPMProxyPackage(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, Name: "widget", SourceEndpoint: repositories[0].Endpoint, Versions: []repository.NPMVersion{npmVersion}, DistTags: map[string]string{"latest": "1.0.0"}}); err != nil {
+	if _, err := store.SyncNPMProxyPackage(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, SourceVersion: repositories[0].Version, Name: "widget", SourceEndpoint: repositories[0].Endpoint, Versions: []repository.NPMVersion{npmVersion}, DistTags: map[string]string{"latest": "1.0.0"}}); err != nil {
 		t.Fatal(err)
 	}
-	pypiFile := repository.PyPIFile{Version: "1.0", Filename: "widget-1.0.whl", Digest: digest, SourceURL: "https://pypi.example/widget.whl"}
+	pypiFile := repository.PyPIFile{SourceVersion: repositories[1].Version, Version: "1.0", Filename: "widget-1.0.whl", Digest: digest, SourceURL: "https://pypi.example/widget.whl"}
 	if err := store.SyncPyPIProxyFiles(ctx, repositories[1].ID, "widget", []repository.PyPIFile{pypiFile}); err != nil {
 		t.Fatal(err)
 	}
@@ -250,10 +250,16 @@ func TestRepositoryArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) 
 	if count := list(repositories[1].ID); count != 0 {
 		t.Fatalf("uncached PyPI identities=%d", count)
 	}
-	if _, err := store.CacheNPMProxyTarball(ctx, repository.NPMVersion{RepositoryID: repositories[0].ID, PackageName: "widget", Version: "1.0.0", Digest: digest, ObjectKey: "npm/widget", Size: 10}); err != nil {
+	npmCached, err := store.GetNPMVersion(ctx, repositories[0].ID, "widget", "1.0.0")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CachePyPIProxyFile(ctx, repository.PyPIFile{RepositoryID: repositories[1].ID, Filename: pypiFile.Filename, Digest: digest, SourceURL: pypiFile.SourceURL, ObjectKey: "pypi/widget", Size: 20}); err != nil {
+	npmCached.Digest, npmCached.ObjectKey, npmCached.Size = digest, "npm/widget", 10
+	npmCached.SourceVersion = repositories[0].Version
+	if _, err := store.CacheNPMProxyTarball(ctx, npmCached); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CachePyPIProxyFile(ctx, repository.PyPIFile{RepositoryID: repositories[1].ID, SourceVersion: repositories[1].Version, Filename: pypiFile.Filename, Digest: digest, SourceURL: pypiFile.SourceURL, ObjectKey: "pypi/widget", Size: 20}); err != nil {
 		t.Fatal(err)
 	}
 	if count := list(repositories[0].ID); count != 1 {
@@ -262,7 +268,7 @@ func TestRepositoryArtifactIdentitiesExcludeUncachedProxyMetadata(t *testing.T) 
 	if count := list(repositories[1].ID); count != 1 {
 		t.Fatalf("cached PyPI identities=%d", count)
 	}
-	if err := store.StoreNPMProxyNegative(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, Name: "widget", SourceEndpoint: repositories[0].Endpoint, NegativeExpiresAt: time.Now().UTC().Add(time.Hour)}); err != nil {
+	if err := store.StoreNPMProxyNegative(ctx, repository.NPMPackage{RepositoryID: repositories[0].ID, SourceVersion: repositories[0].Version, Name: "widget", SourceEndpoint: repositories[0].Endpoint, NegativeExpiresAt: time.Now().UTC().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	if count := list(repositories[0].ID); count != 0 {

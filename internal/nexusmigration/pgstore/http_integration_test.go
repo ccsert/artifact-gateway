@@ -377,7 +377,7 @@ func TestPostgresMigrationInterruptedScanRetainsAssetDiagnosticWithoutSealing(t 
 		t.Fatal(err)
 	}
 	trace := current.LastScanFailure
-	if current.ScanComplete || current.TotalBytes != nil || current.EntryCount != 0 || len(f.entries(b.ID)) != 0 || trace == nil || trace.SourcePath != "interrupted.bin" || trace.Identity != "interrupted.bin" || trace.Stage != "source_verification_open" {
+	if current.State != "scanning" || current.ScanComplete || current.TotalBytes != nil || current.EntryCount != 0 || len(f.entries(b.ID)) != 0 || trace == nil || trace.SourcePath != "interrupted.bin" || trace.Identity != "interrupted.bin" || trace.Stage != "source_verification_open" {
 		t.Fatalf("interrupted scan lost durable trace or became executable: %+v", current)
 	}
 }

@@ -15,17 +15,19 @@ import (
 // CargoProxyIndex stores the upstream sparse response without rewriting its
 // version rows. Status is 200, 404, 410, or 451; only a 200 has a body.
 type CargoProxyIndex struct {
-	RepositoryID string
-	Name         string
-	Body         []byte
-	Status       int
-	ETag         string
-	Modified     string
-	FetchedAt    time.Time
-	ExpiresAt    time.Time
+	SourceVersion string
+	RepositoryID  string
+	Name          string
+	Body          []byte
+	Status        int
+	ETag          string
+	Modified      string
+	FetchedAt     time.Time
+	ExpiresAt     time.Time
 }
 
 type CargoProxyConfig struct {
+	SourceVersion    string
 	RepositoryID     string
 	DownloadTemplate string
 	SearchAPI        string
@@ -34,13 +36,14 @@ type CargoProxyConfig struct {
 }
 
 type CargoProxyCrate struct {
-	RepositoryID string
-	Name         string
-	Version      string
-	Checksum     string
-	ObjectKey    string
-	Size         int64
-	CachedAt     time.Time
+	SourceVersion string
+	RepositoryID  string
+	Name          string
+	Version       string
+	Checksum      string
+	ObjectKey     string
+	Size          int64
+	CachedAt      time.Time
 }
 
 type CargoProxyStore interface {
@@ -162,7 +165,7 @@ func CargoProxyIndexChecksum(index CargoProxyIndex, version string) (string, err
 }
 
 func validateCargoProxyCrate(crate CargoProxyCrate, index CargoProxyIndex) error {
-	if crate.RepositoryID == "" || crate.ObjectKey != "native/cargo-proxy/sha256/"+crate.Checksum ||
+	if crate.SourceVersion != index.SourceVersion || crate.RepositoryID == "" || crate.ObjectKey != "native/cargo-proxy/sha256/"+crate.Checksum ||
 		crate.Size <= 0 || crate.CachedAt.IsZero() {
 		return ErrInvalidCargoIdentity
 	}

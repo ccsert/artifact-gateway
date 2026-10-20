@@ -158,23 +158,25 @@ func (h generatedRepositoryAPIAdapter) ListRuntimeNodes(w http.ResponseWriter, r
 func runtimeNodeResponses(nodes []repository.RuntimeNode, now time.Time) []adminopenapi.RuntimeNode {
 	items := make([]adminopenapi.RuntimeNode, 0, len(nodes))
 	for _, node := range nodes {
-		formats := make([]adminopenapi.Format, 0, len(node.WorkerFormats))
+		workerFormats := make([]repository.Format, 0, len(node.WorkerFormats))
 		for _, format := range node.WorkerFormats {
-			formats = append(formats, adminopenapi.Format(format))
+			workerFormats = append(workerFormats, repository.Format(format))
 		}
+		formats, previewFormats := runtimeWorkerFormatProjection(workerFormats)
 		status := runtimeNodeStatus(now, node.LastSeenAt)
 		if !node.StoppedAt.IsZero() {
 			status = adminopenapi.RuntimeNodeStatusOffline
 		}
 		item := adminopenapi.RuntimeNode{
-			InstanceId:    node.InstanceID,
-			SessionId:     node.SessionID,
-			Roles:         append([]string{}, node.Roles...),
-			WorkerFormats: formats,
-			WorkerKinds:   append([]string{}, node.WorkerKinds...),
-			StartedAt:     node.StartedAt,
-			LastSeenAt:    node.LastSeenAt,
-			Status:        status,
+			InstanceId:           node.InstanceID,
+			SessionId:            node.SessionID,
+			Roles:                append([]string{}, node.Roles...),
+			WorkerFormats:        formats,
+			PreviewWorkerFormats: previewFormats,
+			WorkerKinds:          append([]string{}, node.WorkerKinds...),
+			StartedAt:            node.StartedAt,
+			LastSeenAt:           node.LastSeenAt,
+			Status:               status,
 		}
 		if node.BuildVersion != "" {
 			version := node.BuildVersion

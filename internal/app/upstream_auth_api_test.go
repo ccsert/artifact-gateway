@@ -132,13 +132,12 @@ func TestRepositoryUpstreamAuthUpdateKeepsClearsAndSwitchesScheme(t *testing.T) 
 	}
 }
 
-func TestRepositoryUpstreamAuthRejectedOutsideImplementedProxyFormats(t *testing.T) {
+func TestRepositoryUpstreamAuthFormatAdmission(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", upstreamAuthTestKey)
 	store := repository.NewMemoryStore()
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
-	// A proxy format without a credential-consuming path must reject the field. Accepting it would
-	// let an operator configure authentication that the fetch path never reads.
+	// Newly implemented Proxy formats admit credentials and still redact secrets.
 	post := func(idempotencyKey, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
 		r.Header.Set("Idempotency-Key", idempotencyKey)
@@ -147,8 +146,8 @@ func TestRepositoryUpstreamAuthRejectedOutsideImplementedProxyFormats(t *testing
 		handler.ServeHTTP(rec, r)
 		return rec
 	}
-	pypi := post("reject-pypi", `{"name":"pypi-proxy","format":"pypi","type":"proxy","endpoint":"https://pypi.org","allowedHosts":["pypi.org"],"upstreamAuth":{"scheme":"bearer","secret":"s3cret"}}`)
-	if pypi.Code != http.StatusBadRequest || !strings.Contains(pypi.Body.String(), "Go, Maven and OCI Proxy") {
+	pypi := post("admit-pypi", `{"name":"pypi-proxy","format":"pypi","type":"proxy","endpoint":"https://pypi.org","allowedHosts":["pypi.org"],"upstreamAuth":{"scheme":"bearer","secret":"s3cret"}}`)
+	if pypi.Code != http.StatusCreated || strings.Contains(pypi.Body.String(), "s3cret") {
 		t.Fatalf("pypi upstreamAuth=%d body=%s", pypi.Code, pypi.Body.String())
 	}
 
@@ -158,7 +157,7 @@ func TestRepositoryUpstreamAuthRejectedOutsideImplementedProxyFormats(t *testing
 		t.Fatalf("hosted upstreamAuth=%d body=%s", hosted.Code, hosted.Body.String())
 	}
 
-	// The same guard applies on update.
+	// The same explicit admission applies on update.
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
 		ID: uuid.NewString(), Name: "npm-proxy", Format: repository.FormatNPM, Type: repository.RepositoryTypeProxy,
 		Endpoint: "https://registry.npmjs.org", AllowedHosts: []string{"registry.npmjs.org"},
@@ -171,8 +170,20 @@ func TestRepositoryUpstreamAuthRejectedOutsideImplementedProxyFormats(t *testing
 	r.Header.Set("If-Match", "1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Go, Maven and OCI Proxy") {
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "s3cret") {
 		t.Fatalf("npm update upstreamAuth=%d body=%s", rec.Code, rec.Body.String())
+	}
+	hostedRepo, err := store.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: "hosted-auth-update", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+hostedRepo.ID, strings.NewReader(`{"upstreamAuth":{"scheme":"bearer","secret":"s3cret"}}`))
+	authorize(r, "admin-secret")
+	r.Header.Set("If-Match", hostedRepo.Version)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, r)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Hosted authentication update=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

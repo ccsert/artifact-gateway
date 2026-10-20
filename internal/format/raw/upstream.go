@@ -12,6 +12,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/egress"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 // Upstream owns Raw URL assembly and outbound policy. Hooks and tracing are
@@ -54,6 +55,9 @@ func (c Upstream) FetchRaw(ctx context.Context, method string, member repository
 	r, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return nil, &rawFetchError{code: "upstream_configuration_invalid", err: fmt.Errorf("create Raw request: %w", err)}
+	}
+	if err := upstreamauth.ApplyOrigin(r, member.Endpoint, member.UpstreamAuth); err != nil {
+		return nil, &rawFetchError{code: "upstream_status_rejected", err: err}
 	}
 	// Raw has one cached file representation. Range and content negotiation are
 	// applied locally after the complete canonical representation is fetched.

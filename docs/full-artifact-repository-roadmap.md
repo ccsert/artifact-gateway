@@ -14,11 +14,14 @@ when it has Hosted, Proxy, and Group behavior; safe publication and retrieval;
 browsing and search; logical deletion and retention; promotion and replication;
 repository-level authorization, quotas, audit, and recovery evidence.
 
-This is a strategic supersession of the read-only gateway boundary. Existing
-protocol and `/api/v1`/`/api/v2` contracts remain compatibility commitments;
-new lifecycle management belongs in a versioned management API and additive
-schema migrations. The preflight and evidence work remains release
-infrastructure, not the primary product goal.
+This supersedes the read-only gateway boundary. Historical management APIs,
+Nexus URL aliases, authentication models and internal interfaces are not
+compatibility requirements. Follow [ADR 0009](adr/0009-native-architecture.md):
+change OpenAPI sources, server and consumers together, with no parallel legacy
+implementation. Native package protocols still follow their standards; byte
+integrity, authorization and durable publication remain required. Schema files
+are append-only. Preflight and evidence support delivery rather than replace
+the product goal.
 
 ## Completion Rules
 
@@ -34,8 +37,8 @@ artifacts and never mutate the source.
 
 1. **Lifecycle foundation.** Establish common repository capability metadata,
    artifact/asset state transitions, durable asynchronous jobs, idempotency,
-   tombstones, and retention predicates. Keep existing Raw/OCI/Maven behavior
-   compatible while moving lifecycle ownership behind narrow modules.
+   tombstones, and retention predicates. Move lifecycle ownership behind narrow
+   modules with executable native-protocol and persistence contracts.
 2. **Complete the current formats.** Close the current gaps: native Conan
    Hosted publication/delete/search; Raw listing, checksums, and resumable
    upload; OCI catalog and referrers; Maven browsing/search and a supported
@@ -43,8 +46,8 @@ artifacts and never mutate the source.
    resolve, delete, retain, and restore.
 3. **Repository experience APIs.** Add versioned management APIs for artifact
    browsing, coordinate search, tombstone inspection, retention execution,
-   and bounded asynchronous-job status. Do not retrofit incompatible behavior
-   onto V1/V2 endpoints.
+   and bounded asynchronous-job status. Management changes may break historical
+   interfaces; update the contract, server, Console and agctl in the same slice.
 4. **Distribution workflows.** Add policy-gated promotion between Hosted
    Repositories, then resumable replication with checkpoints, integrity checks,
    retry policy, and destination authorization.
@@ -62,6 +65,8 @@ artifacts and never mutate the source.
 All six delivery stages are implemented for OCI, Maven, Raw, and Conan. Each
 format has Hosted, Proxy, and Group workflows, a native lifecycle, management
 browse where applicable, promotion, checkpointed replication, and operational
-coverage in the backend completion checklist. The roadmap is retained as the
-architectural sequence; release readiness is now governed by the executable
-gates and evidence record rather than a further implementation slice.
+coverage in the backend completion checklist. This records the initial V1
+architectural sequence, not completion of the broader format backlog. Current
+support and limits are described by the [protocol matrix](protocol-compatibility.md);
+private upstreams, migration execution and new ecosystems continue under their
+own Issues. Executable gates and evidence govern each delivered slice.

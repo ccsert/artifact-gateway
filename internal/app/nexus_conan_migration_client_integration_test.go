@@ -268,7 +268,9 @@ class Fixture(ConanFile):
 	remote.mu.Lock()
 	pages, gets, denied := remote.pages, remote.gets, remote.denied
 	remote.mu.Unlock()
-	if pages != 7 || gets != 14 || denied != 0 {
+	// Seven complete inventory pages are enumerated and then re-observed;
+	// the original fourteen payload reads and all read-only checks stay exact.
+	if pages != 2*7 || gets != 14 || denied != 0 {
 		t.Fatalf("source REST-only complete pagination/read-only boundary pages=%d gets=%d denied=%d", pages, gets, denied)
 	}
 	sourceServer.Close()

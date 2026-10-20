@@ -26,15 +26,17 @@ V1 is done when all of the following are true:
   retention, and restore are covered by black-box protocol tests.
 - **Management:** a versioned API exposes repository capabilities, artifact
   browse/search, tombstone inspection, retention execution, and lifecycle job
-  status without changing existing V1/V2 meanings.
+  status through explicit contracts with synchronized server and consumer changes.
 - **Distribution:** administrators can promote immutable artifacts between
   Hosted Repositories; replication is resumable, integrity checked, authorized,
   observable, and idempotent.
 - **Operations:** repository quotas, capacity, concurrency limits, audits,
   metrics, backup/restore, upgrade/rollback, release preflight, and production
   evidence cover every lifecycle state and background operation.
-- **Compatibility:** existing protocol reads and documented V1/V2 management
-  behavior remain regression-tested through every migration.
+- **Native contracts:** package protocols remain standards compliant and are
+  regression-tested. Historical management APIs, Nexus URLs, authentication
+  models and internal interfaces impose no compatibility requirement
+  ([ADR 0009](adr/0009-native-architecture.md)).
 
 ## Ordered Work Packages
 
@@ -58,9 +60,11 @@ V1 is done when all of the following are true:
 The V1 backend work packages are complete: lifecycle, format behavior,
 management APIs, distribution, and operational controls are tracked as complete
 in the [Backend Completion Checklist](backend-completion-checklist.md). The
-remaining release decision is evidence, not feature scope: execute the full
-[release readiness](release-readiness.md) gate set from a clean checkout and
-record the results before approving a deployment.
+checkpoint covers the initial four-format V1 scope. It does not close the
+broader format, private-upstream or migration backlog. Use the current
+[protocol matrix](protocol-compatibility.md) for executable capabilities and
+limits, and record the [release readiness](release-readiness.md) gates for each
+delivered slice.
 
 ## Constraints
 
@@ -70,9 +74,10 @@ record the results before approving a deployment.
   contract has an owner, migration plan, and black-box client test plan. The
   executable admission checklist is maintained in
   [Artifact Format Extension Guide](format-extension-guide.md).
-- No compatibility break is introduced in `/api/v1`, `/api/v2`, or existing
-  protocol response semantics; incompatible management behavior uses a new
-  versioned surface.
+- Management changes may break historical interfaces. Change OpenAPI sources,
+  server, Console and agctl together, describe the new contract, and remove
+  superseded implementations. Standard package protocol correctness and
+  byte-integrity guarantees still apply.
 
 ## Next Planned Format: APT Hosted
 
@@ -87,18 +92,18 @@ four explicit milestones rather than by widening the format enum prematurely:
 3. trusted signing, key rotation, backup, and operational recovery;
 4. lifecycle, `.deb` scanning, quarantine, promotion, and replication parity.
 
-The format capability API continues to advertise APT as Proxy-only until the
+The format capability API advertises APT Proxy and Group reads until the
 minimum Hosted and production-signing gates are complete. See the
 [APT Hosted Roadmap](apt-hosted-roadmap.md) for the ordered contract and
 acceptance criteria.
 
-## Subsequent Planned Format: Cargo
+## Current Format Expansion
 
-After the APT H3 production-signing milestone, Cargo is the next candidate
-ecosystem. Its first slice now validates official publish frames and bounded
-`.crate` archives and freezes the canonical sparse-index identity/checksum
-contract. Persisted collision conformance remains before C1, and Cargo is still
-not admitted as a public format. See [Cargo repository research](cargo-repository-research.md)
-for Hosted, Proxy, immutable Group ownership, lifecycle, and acceptance gates.
-NuGet's existing bounded parser remains maintained but its repository roadmap
-is deferred rather than a first-priority delivery stream.
+Cargo is now admitted with Hosted, Proxy and Group behavior; the current
+[protocol matrix](protocol-compatibility.md) describes its supported scope and
+limits. The old Cargo-candidate ordering no longer schedules implementation.
+
+NuGet Hosted publication and native V3 reads are active under #287, followed by
+Proxy/Group (#288) and governance/admission (#289). Its existing bounded parser
+is reused; the format remains absent from the public capability catalog until
+those admission gates pass. See the [NuGet roadmap](nuget-roadmap.md).

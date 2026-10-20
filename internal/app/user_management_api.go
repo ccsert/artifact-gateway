@@ -18,7 +18,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func (h generatedRepositoryAPIAdapter) ListApiKeys(w http.ResponseWriter, r *http.Request) {
+func (h identityManagementHandler) ListApiKeys(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -34,7 +34,7 @@ func (h generatedRepositoryAPIAdapter) ListApiKeys(w http.ResponseWriter, r *htt
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.APIKeyList{Items: items})
 }
 
-func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *http.Request) {
+func (h identityManagementHandler) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -92,7 +92,7 @@ func valueOrEmptyRoles(roles *[]adminopenapi.CreateAPIKeyRoles) []adminopenapi.C
 	return *roles
 }
 
-func (h generatedRepositoryAPIAdapter) RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyID uuid.UUID) {
+func (h identityManagementHandler) RevokeApiKey(w http.ResponseWriter, r *http.Request, apiKeyID uuid.UUID) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -185,7 +185,7 @@ func validLocalPassword(value string) bool {
 	return utf8.RuneCountInString(value) >= 8 && len(value) <= maxLocalPasswordBytes
 }
 
-func (h generatedRepositoryAPIAdapter) ListUsers(w http.ResponseWriter, r *http.Request, params adminopenapi.ListUsersParams) {
+func (h identityManagementHandler) ListUsers(w http.ResponseWriter, r *http.Request, params adminopenapi.ListUsersParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -221,7 +221,7 @@ func (h generatedRepositoryAPIAdapter) ListUsers(w http.ResponseWriter, r *http.
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.UserList{Items: items, Total: page.Total, Offset: page.Offset, Limit: page.Limit})
 }
 
-func (h generatedRepositoryAPIAdapter) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (h identityManagementHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -266,7 +266,7 @@ func (h generatedRepositoryAPIAdapter) CreateUser(w http.ResponseWriter, r *http
 	writeNativeMavenJSON(w, http.StatusCreated, userResponse(user))
 }
 
-func (h generatedRepositoryAPIAdapter) GetUser(w http.ResponseWriter, r *http.Request, userID string) {
+func (h identityManagementHandler) GetUser(w http.ResponseWriter, r *http.Request, userID string) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -282,7 +282,7 @@ func (h generatedRepositoryAPIAdapter) GetUser(w http.ResponseWriter, r *http.Re
 	writeNativeMavenJSON(w, http.StatusOK, userResponse(user))
 }
 
-func (h generatedRepositoryAPIAdapter) UpdateUser(w http.ResponseWriter, r *http.Request, userID string, params adminopenapi.UpdateUserParams) {
+func (h identityManagementHandler) UpdateUser(w http.ResponseWriter, r *http.Request, userID string, params adminopenapi.UpdateUserParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -359,7 +359,7 @@ func (h generatedRepositoryAPIAdapter) UpdateUser(w http.ResponseWriter, r *http
 	writeNativeMavenJSON(w, http.StatusOK, userResponse(updated))
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteUser(w http.ResponseWriter, r *http.Request, userID string) {
+func (h identityManagementHandler) DeleteUser(w http.ResponseWriter, r *http.Request, userID string) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -388,7 +388,7 @@ func (h generatedRepositoryAPIAdapter) DeleteUser(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h generatedRepositoryAPIAdapter) ResetUserPassword(w http.ResponseWriter, r *http.Request, userID string, params adminopenapi.ResetUserPasswordParams) {
+func (h identityManagementHandler) ResetUserPassword(w http.ResponseWriter, r *http.Request, userID string, params adminopenapi.ResetUserPasswordParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -434,7 +434,7 @@ func (h generatedRepositoryAPIAdapter) ResetUserPassword(w http.ResponseWriter, 
 	writeNativeMavenJSON(w, http.StatusOK, userResponse(updated))
 }
 
-func (h generatedRepositoryAPIAdapter) RevokeUserSessions(w http.ResponseWriter, r *http.Request, userID string, params adminopenapi.RevokeUserSessionsParams) {
+func (h identityManagementHandler) RevokeUserSessions(w http.ResponseWriter, r *http.Request, userID string, params adminopenapi.RevokeUserSessionsParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -455,7 +455,7 @@ func (h generatedRepositoryAPIAdapter) RevokeUserSessions(w http.ResponseWriter,
 	writeNativeMavenJSON(w, http.StatusOK, userResponse(user))
 }
 
-func (h generatedRepositoryAPIAdapter) ListUserSessions(w http.ResponseWriter, r *http.Request, userID openapi_types.UUID, params adminopenapi.ListUserSessionsParams) {
+func (h identityManagementHandler) ListUserSessions(w http.ResponseWriter, r *http.Request, userID openapi_types.UUID, params adminopenapi.ListUserSessionsParams) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
 		return
@@ -480,7 +480,7 @@ func (h generatedRepositoryAPIAdapter) ListUserSessions(w http.ResponseWriter, r
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.UserSessionList{Items: response})
 }
 
-func (h generatedRepositoryAPIAdapter) RevokeUserSession(w http.ResponseWriter, r *http.Request, userID, sessionID openapi_types.UUID) {
+func (h identityManagementHandler) RevokeUserSession(w http.ResponseWriter, r *http.Request, userID, sessionID openapi_types.UUID) {
 	principal, ok := h.authorize(w, r)
 	if !ok {
 		return
@@ -500,7 +500,7 @@ func (h generatedRepositoryAPIAdapter) RevokeUserSession(w http.ResponseWriter, 
 	writeNativeMavenJSON(w, http.StatusOK, userSessionResponse(session, principal.UserID == session.UserID && principal.SessionID == session.ID))
 }
 
-func (h generatedRepositoryAPIAdapter) ListUserIdentities(w http.ResponseWriter, r *http.Request, userID string) {
+func (h identityManagementHandler) ListUserIdentities(w http.ResponseWriter, r *http.Request, userID string) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -520,7 +520,7 @@ func (h generatedRepositoryAPIAdapter) ListUserIdentities(w http.ResponseWriter,
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.UserIdentityList{Items: items})
 }
 
-func (h generatedRepositoryAPIAdapter) CreateUserIdentity(w http.ResponseWriter, r *http.Request, userID string) {
+func (h identityManagementHandler) CreateUserIdentity(w http.ResponseWriter, r *http.Request, userID string) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -561,7 +561,7 @@ func (h generatedRepositoryAPIAdapter) CreateUserIdentity(w http.ResponseWriter,
 	writeNativeMavenJSON(w, http.StatusCreated, userIdentityResponse(identity))
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteUserIdentity(w http.ResponseWriter, r *http.Request, userID, identityID string) {
+func (h identityManagementHandler) DeleteUserIdentity(w http.ResponseWriter, r *http.Request, userID, identityID string) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -582,7 +582,7 @@ func (h generatedRepositoryAPIAdapter) DeleteUserIdentity(w http.ResponseWriter,
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h generatedRepositoryAPIAdapter) recordUserIdentityAudit(r *http.Request, identity repository.UserIdentity, operation string, status int) {
+func (h identityManagementHandler) recordUserIdentityAudit(r *http.Request, identity repository.UserIdentity, operation string, status int) {
 	if h.audit == nil {
 		return
 	}
@@ -597,7 +597,7 @@ func normalizeOIDCIssuerForAPI(value string) string {
 	return strings.TrimRight(strings.TrimSpace(value), "/")
 }
 
-func (h generatedRepositoryAPIAdapter) recordUserManagementAudit(r *http.Request, user repository.User, operation string, status int) {
+func (h identityManagementHandler) recordUserManagementAudit(r *http.Request, user repository.User, operation string, status int) {
 	if h.audit == nil {
 		return
 	}

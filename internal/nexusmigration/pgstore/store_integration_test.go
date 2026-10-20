@@ -48,6 +48,7 @@ type sourceFixture struct {
 	stream            bool
 	metadataSizes     map[string]int64
 	duplicateMetadata bool
+	pageSize          int
 }
 
 func (f *sourceFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +76,11 @@ func (f *sourceFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		sort.Strings(paths)
 		offset, _ := strconv.Atoi(r.URL.Query().Get("continuationToken"))
-		end := offset + 2
+		pageSize := f.pageSize
+		if pageSize == 0 {
+			pageSize = 2
+		}
+		end := offset + pageSize
 		if end > len(paths) {
 			end = len(paths)
 		}
@@ -202,6 +207,9 @@ func newFixture(t *testing.T, format string, files map[string][]byte) *fixture {
 	ledger := pgstore.New(db)
 	f := &fixture{closeSource: server.Close, t: t, db: db, native: native, objects: objects, ledger: ledger, source: source, sourceID: created.ID, remote: remote, repo: repo, publication: publication, connection: connection}
 	f.service = f.newService(m.Options{})
+	// Interrupted scans are intentionally reclaimable. Keep each source-owned
+	// fixture from donating runnable work to the following global worker test.
+	t.Cleanup(f.cancelOwnedBatches)
 	f.input = m.StartInput{SourceID: created.ID, SourceVersion: created.Version, Mappings: []m.Mapping{{SourceRepository: "source", TargetRepositoryID: repo.ID}}, PolicyVersion: m.PolicyVersion, CapacityEvidence: f.evidence()}
 	return f
 }
@@ -210,6 +218,50 @@ func (f *fixture) evidence() m.CapacityEvidence {
 	now := time.Now().UTC()
 	return m.CapacityEvidence{TargetID: "owned-target", PoolID: "owned-pool", ObservedAt: now.Add(-time.Second), ValidUntil: now.Add(20 * time.Minute), FreeBytes: &free, DownloadBytes: &download, UploadBytes: &zero, BackupBytes: &zero, RestoreBytes: &zero, HeadroomBytes: &zero}
 }
+func (f *fixture) cancelOwnedBatches() {
+	f.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	rows, err := f.db.QueryContext(ctx, `SELECT id::text FROM nexus_migration_batches WHERE source_id::text=$1`, f.sourceID)
+	if err != nil {
+		f.t.Errorf("list owned fixture batches for cleanup: %v", err)
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			f.t.Errorf("read owned fixture cleanup batch: %v", err)
+			return
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	_ = rows.Close()
+	if err != nil {
+		f.t.Errorf("read owned fixture cleanup batches: %v", err)
+		return
+	}
+	// Always use the fixture's original connection: a reopened worker ledger
+	// may already have been closed by its own later-registered cleanup.
+	ledger := pgstore.New(f.db)
+	for _, id := range ids {
+		batch, err := ledger.Get(ctx, id)
+		if err != nil {
+			f.t.Errorf("read owned fixture cleanup batch: %v", err)
+			continue
+		}
+		if batch.State == "completed" || batch.State == "cancelled" {
+			continue
+		}
+		stopped, err := ledger.Control(ctx, id, batch.Version, "owned-fixture-cleanup", uuid.NewString(), "cancel", uuid.NewString(), nil)
+		if err != nil || stopped.State != "cancelled" {
+			f.t.Errorf("cancel owned fixture batch=%s state=%s err=%v", id, stopped.State, err)
+		}
+	}
+}
+
 func (f *fixture) newService(options m.Options) *m.Service {
 	options.TargetID = "owned-target"
 	options.PoolID = "owned-pool"

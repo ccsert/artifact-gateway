@@ -21,6 +21,7 @@ import (
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/uploadspool"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 	"github.com/google/uuid"
 )
 
@@ -531,6 +532,10 @@ func (h *Module) proxyRead(w http.ResponseWriter, r *http.Request, repo reposito
 // then try the next member; denials, upstream errors and served content claim
 // the response and preserve the direct Repository behavior.
 func (h *Module) tryProxyRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal authorization.Principal) bool {
+	if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+		http.Error(w, "upstream credential unavailable", http.StatusBadGateway)
+		return true
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return true
@@ -538,7 +543,7 @@ func (h *Module) tryProxyRead(w http.ResponseWriter, r *http.Request, repo repos
 	if h.proxyClient == nil {
 		return false
 	}
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
+	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, RepositoryID: repo.ID, RepositoryVersion: repo.Version, UpstreamAuth: repo.UpstreamAuth}
 	if validation := rawprotocol.ValidateProxyMember(member); validation != rawprotocol.ProxyMemberAllowed {
 		code := "upstream_policy_rejected"
 		if validation == rawprotocol.ProxyMemberInvalidEndpoint {
@@ -551,7 +556,7 @@ func (h *Module) tryProxyRead(w http.ResponseWriter, r *http.Request, repo repos
 	}
 	key := ""
 	if h.proxyCache != nil {
-		key = h.proxyCache.Key(repo.Name, path, member.Name, member.Endpoint)
+		key = h.proxyCache.Key(upstreamauth.Namespace(repo.Name, member), path, member.Name, member.Endpoint)
 		if content, err := h.proxyCache.Load(r.Context(), key); err == nil {
 			served := rawprotocol.ServeContent(w, r, path, rawprotocol.Content{Digest: content.Digest, ContentType: content.ContentType, Size: content.Size, Source: content})
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, served.Status, "hit", served.Bytes)

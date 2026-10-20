@@ -47,6 +47,15 @@ func (p Postgres) WalkReferences(ctx context.Context, visit func(string) error) 
 	if cargoTables == 4 {
 		query += " UNION " + publishedCargoReferences
 	}
+	// The optional preview has two transactional tables. A partial schema is
+	// an error; never silently omit visible NuGet bytes from the backup check.
+	var nugetTables int
+	if conn.QueryRow(ctx, "SELECT count(*) FROM unnest(ARRAY['native_nuget_publications','native_nuget_publication_sessions']) t(name) WHERE to_regclass('public.'||name) IS NOT NULL").Scan(&nugetTables) != nil || (nugetTables != 0 && nugetTables != 2) {
+		return errors.New("reference schema unsupported")
+	}
+	if nugetTables == 2 {
+		query += " UNION SELECT object_key FROM native_nuget_publications"
+	}
 	query = "SELECT object_key FROM (" + query + ") references_to_bytes WHERE object_key<>'' ORDER BY object_key COLLATE \"C\""
 	rows, err := conn.Query(ctx, query)
 	if err != nil {

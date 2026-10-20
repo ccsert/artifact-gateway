@@ -249,6 +249,9 @@ func (h v2GroupNPMHandler) resolvePackage(r *http.Request, resolver v2GroupResol
 				var responseError *npmProxyPackageError
 				if errors.As(resolveErr, &responseError) {
 					h.native.recordNPMProxyPackageError(r, repo, target, packageName, actor, responseError)
+					if responseError.Authentication || repo.UpstreamAuth != nil && responseError.Status >= http.StatusInternalServerError {
+						return repository.NPMPackage{}, responseError, false, nil, nil
+					}
 					if responseError.Status != http.StatusNotFound && firstError == nil {
 						firstError = responseError
 					}

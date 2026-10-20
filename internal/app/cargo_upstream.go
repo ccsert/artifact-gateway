@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ccsert/artifact-gateway/internal/egress"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 // FetchCargo applies the same endpoint, redirect and egress boundaries to
@@ -28,8 +28,14 @@ func (c UpstreamClient) FetchCargo(ctx context.Context, repo repository.HostedRe
 			req.Header.Set(name, v)
 		}
 	}
-	if err := applyUpstreamAuth(req, repo.UpstreamAuth); err != nil {
-		return nil, errors.New("cargo upstream credential unavailable")
+	if err := upstreamauth.ApplyOrigin(req, repo.Endpoint, repo.UpstreamAuth); err != nil {
+		return nil, upstreamauth.ErrCredential
+	}
+	// All configured endpoints use HTTPS. Keep the existing explicit local
+	// HTTP fixture seam; real upstreams share the bounded per-hop egress engine.
+	if u.Scheme == "https" {
+		member := repository.Member{Type: repository.MemberProxy, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
+		return c.doProxyUpstream(ctx, member, req)
 	}
 	client := c.HTTPClient
 	if client == nil {
@@ -38,23 +44,15 @@ func (c UpstreamClient) FetchCargo(ctx context.Context, repo repository.HostedRe
 		copy := *client
 		client = &copy
 	}
-	if u.Scheme == "https" {
-		client, err = egress.Apply(client, repo.EgressProxy, u.String(), rawEgressHooks())
-		if err != nil {
-			return nil, errors.New("cargo upstream egress unavailable")
-		}
-	}
-	origin := u.Host
-	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+	client.Jar = nil
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if !proxyUpstreamURLAllowed(repo, next.URL) {
 			return errors.New("cargo upstream redirect is not allowed")
 		}
-		if next.URL.Host != origin {
-			next.Header.Del("Authorization")
-		}
+		upstreamauth.StripRedirect(next, via, repo.Endpoint)
 		return nil
 	}
-	response, err := tracedHTTPClient(client).Do(req)
+	response, err := doProxyHTTP(client, req)
 	if err != nil {
 		return nil, errors.New("cargo upstream unavailable")
 	}
