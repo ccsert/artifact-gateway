@@ -389,7 +389,7 @@ the member's current configuration, and source `401`/`403` cannot serve stale
 content or continue anonymously to another member. Error responses and audits
 contain neither the source secret nor the source response body.
 
-Run `make private-upstream-formats-e2e` for the additional formats. Its 66
+Run `make private-upstream-formats-e2e` for the additional formats. Its 68
 mandatory cases include 48 official-client consumptions: six formats, Basic
 and Bearer, Proxy and Group, and cold and hot caches. Fixed npm, pip, Cargo,
 Conan and Debian clients plus curl use owned configuration and caches; Conan's
