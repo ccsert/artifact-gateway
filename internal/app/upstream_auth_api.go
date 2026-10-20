@@ -25,12 +25,12 @@ type upstreamAuthRequest struct {
 }
 
 // upstreamAuthSupported reports whether a format/type pair consumes upstream
-// credentials. Only Go Proxy repositories do today. Rejecting the field
+// credentials. Go, Maven and OCI Proxy repositories consume them. Rejecting the field
 // everywhere else is deliberate: accepting a credential that the fetch path
 // never reads would let an operator configure authentication that silently
 // does nothing.
 func upstreamAuthSupported(format repository.Format, repoType repository.RepositoryType) bool {
-	return format == repository.FormatGo && repoType == repository.RepositoryTypeProxy
+	return repoType == repository.RepositoryTypeProxy && (format == repository.FormatGo || format == repository.FormatMaven || format == repository.FormatOCI)
 }
 
 // resolveUpstreamAuth validates the request shape and encrypts the secret.

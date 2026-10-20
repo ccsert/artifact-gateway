@@ -28,10 +28,19 @@ var ociBearerName = regexp.MustCompile(`^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?
 
 func (c UpstreamClient) fetchOCIWithBearer(ctx context.Context, member repository.Member, repositoryName string, request *http.Request) (*http.Response, error) {
 	if member.OCIBearer == nil {
+		if err := applyUpstreamAuth(request, member.UpstreamAuth); err != nil {
+			return nil, errOCIBearerConfiguration
+		}
 		return c.doProxyUpstream(ctx, member, request)
 	}
 	endpoint, err := url.Parse(member.Endpoint)
 	if member.OCIBearer.Validate() != nil || err != nil || !proxyURLValid(endpoint, false) || request == nil || !proxyURLValid(request.URL, false) || proxyOrigin(request.URL) != proxyOrigin(endpoint) || len(repositoryName) > 255 || !ociBearerName.MatchString(repositoryName) {
+		return nil, errOCIBearerConfiguration
+	}
+	// Check the configured credential even when a scope token is cached. No
+	// source credential is attached to a registry content request.
+	credentialCheck := &http.Request{Header: make(http.Header)}
+	if err := applyUpstreamAuth(credentialCheck, member.UpstreamAuth); err != nil {
 		return nil, errOCIBearerConfiguration
 	}
 	ctx, cancel := context.WithTimeout(ctx, ociSharedWorkTimeout)
@@ -188,6 +197,9 @@ func (c UpstreamClient) exchangeOCIBearer(ctx context.Context, member repository
 		return ociBearerToken{}, errOCIBearerConfiguration
 	}
 	request.Header.Set("Accept", "application/json")
+	if err := applyUpstreamAuth(request, member.UpstreamAuth); err != nil {
+		return ociBearerToken{}, errOCIBearerConfiguration
+	}
 	response, err := c.doProxyUpstream(ctx, member, request)
 	if err != nil {
 		return ociBearerToken{}, safeOCIBearerError(ctx, errOCIBearerExchange, err)

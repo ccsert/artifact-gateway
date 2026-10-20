@@ -66,3 +66,9 @@ admitted schemes, switching to `none` removes the stored credential, the
 credential is applied only to the Go Proxy upstream fetch, and it is stripped on
 cross-host redirects. Every other format and Repository type rejects
 `upstreamAuth` with an explicit `400` rather than ignoring it silently.
+
+Update (2026-10-20): #423/#424 extend the same protected `upstreamAuth` model
+to Maven and OCI Proxy repositories. The earlier Go-only admission statement
+above describes its original delivery. Current supported schemes, bound OCI
+issuer behavior, rotation/clear and credential-bound cache semantics are in
+[Proxy egress and upstream authentication](../proxy-egress-design.md#protected-maven-and-oci-upstreams).

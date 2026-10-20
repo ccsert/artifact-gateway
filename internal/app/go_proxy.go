@@ -9,7 +9,6 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/egress"
 	"github.com/ccsert/artifact-gateway/internal/repository"
-	"github.com/ccsert/artifact-gateway/internal/secrets"
 )
 
 const goProxyUserAgent = "Go-http-client/2.0 Artifact-Gateway/1.0"
@@ -68,31 +67,4 @@ func (c UpstreamClient) FetchGo(ctx context.Context, method string, repo reposit
 		return nil, fmt.Errorf("fetch Go upstream content: %w", err)
 	}
 	return response, nil
-}
-
-// applyUpstreamAuth attaches the repository's configured credential to an
-// upstream request. A repository without upstreamAuth reads anonymously. A
-// stored credential that cannot be decrypted with the configured key is a hard
-// failure: falling back to an anonymous request would turn a key-rotation
-// mistake into silent, hard-to-diagnose 401s from the upstream.
-func applyUpstreamAuth(request *http.Request, auth *repository.UpstreamAuth) error {
-	if auth == nil || auth.Scheme == repository.UpstreamAuthSchemeNone {
-		return nil
-	}
-	secret, err := secrets.Open(upstreamAuthSecretPurpose, auth.Secret)
-	if err != nil {
-		return fmt.Errorf("open upstream credential: %w", err)
-	}
-	if secret == "" {
-		return fmt.Errorf("open upstream credential: stored credential is empty")
-	}
-	switch auth.Scheme {
-	case repository.UpstreamAuthSchemeBasic:
-		request.SetBasicAuth(auth.Username, secret)
-	case repository.UpstreamAuthSchemeBearer:
-		request.Header.Set("Authorization", "Bearer "+secret)
-	default:
-		return fmt.Errorf("open upstream credential: unsupported scheme %q", auth.Scheme)
-	}
-	return nil
 }

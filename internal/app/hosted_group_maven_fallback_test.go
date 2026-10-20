@@ -322,9 +322,9 @@ func TestV2GroupMavenCacheSeparatesAnonymousCandidates(t *testing.T) {
 	}
 }
 
-func TestMavenSingleProxyReadsLegacyUnscopedCache(t *testing.T) {
+func TestMavenSingleProxyRevalidatesUnscopedCache(t *testing.T) {
 	for _, negative := range []bool{false, true} {
-		f := newGroupMavenFixture(t, nil, 500)
+		f := newGroupMavenFixture(t, nil, 200)
 		// Use the direct Repository route and its existing namespace.
 		f.group.Name = f.repos[0].Name
 		key := f.cache.Key(f.group.Name, groupMavenPath)
@@ -338,13 +338,9 @@ func TestMavenSingleProxyReadsLegacyUnscopedCache(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if negative {
-			f.expectGet(404, "")
-		} else {
-			f.expectGet(200, "legacy")
-		}
-		if f.upstreams[0].calls.Load() != 0 {
-			t.Fatal("compatible single-Proxy cache was discarded")
+		f.expectGet(200, f.repos[0].Name)
+		if f.upstreams[0].calls.Load() != 1 {
+			t.Fatal("unscoped cache bypassed current source validation")
 		}
 	}
 }

@@ -205,7 +205,7 @@ The configured endpoint's exact origin, including its port, is allowed. Extra
 `allowedHosts` entries authorize the HTTPS host on port 443; the management API
 continues to accept bare hostnames. An in-process member with an explicit port
 entry is matched exactly, never by hostname alone. A content host permission
-does not establish trust in an OCI token issuer. Anonymous Bearer exchange
+does not establish trust in an OCI token issuer. Bearer exchange
 requires the separate explicit issuer/audience configuration described below.
 
 For direct paths, environment `NO_PROXY`, custom `noProxy`, and SOCKS5 with local
@@ -246,7 +246,7 @@ permissions, native client acceptance and rollout require separate approval.
 
 ## Native OCI Proxy Bearer Configuration
 
-Administrators can opt a native OCI Proxy repository into anonymous upstream
+Administrators can opt a native OCI Proxy repository into bound upstream
 Bearer challenge exchange through `POST /api/v2/repositories` or
 `PATCH /api/v2/repositories/{repositoryId}`:
 
@@ -277,15 +277,15 @@ Migration `000144_oci_bearer_configuration.sql` adds nullable JSONB `oci_bearer`
 to `hosted_repositories`; existing rows remain disabled. Only configuration is
 persisted, never exchanged tokens. The API does not alter `allowedHosts`: a
 cross-origin token realm still needs independent authorization under the
-repository's existing egress policy. Private authenticated registries and
-production identity, network-policy or deployment changes require separate work.
-The generated Console client includes the field; this change adds no Console
-configuration form.
+repository's existing egress policy. The `upstreamAuth` configuration below
+supports private registries and issuers. Production identity, network-policy or
+deployment changes remain separate from isolated acceptance.
 
 The exchange accepts one unambiguous Bearer challenge bound to the configured
 realm/service and the requested repository's `pull` scope. It performs at most
-one anonymous token GET and one content retry. Inbound credentials never enter
-either request; cross-origin redirects remove the exchanged token. Token GETs
+one token GET and one content retry. Without `upstreamAuth` the issuer request
+is anonymous; otherwise only the bound issuer receives that configured
+credential. Inbound Gateway credentials never enter either request; cross-origin redirects remove the exchanged token. Token GETs
 use the same five-hop egress checks as content, including independently approved
 issuer/CDN hosts. Invalid challenges, tokens and repeated 401s return stable
 errors without authentication payloads; cancellation/deadline identity remains
@@ -293,10 +293,62 @@ available to callers.
 
 Runtime caches are process-local, with at most 256 entries and 32 refresh keys
 in flight. Keys bind repository identity, registry, issuer, service, scope and
-egress/host policy. Concurrent callers share a refresh bounded to 30 seconds;
+egress/host policy, current Repository version and encrypted credential identity.
+Concurrent callers share a refresh bounded to 30 seconds;
 cancelling one waiter does not cancel other callers. A rejected cached token is
 invalidated by version. Missing `expires_in` defaults to 60 seconds; positive
 remaining lifetime is cached for at most 300 seconds with a five-second refresh
 margin. Optional RFC3339 `issued_at` must not place issuance more than 30 seconds
 in the future or make the token expired. Challenge/token/JSON response limits
 are 8 KiB/8 KiB/64 KiB. No refresh tokens or durable identities are requested.
+
+## Protected Maven and OCI upstreams
+
+Go, Maven and OCI Proxy repositories accept the native `upstreamAuth` object.
+Hosted repositories and other formats reject this field. An administrator sets
+Basic credentials with `{"scheme":"basic","username":"source-reader","secret":"synthetic-example"}`
+or a static Bearer credential with `{"scheme":"bearer","secret":"synthetic-example"}`.
+The source secret is distinct from Gateway client credentials and egress proxy
+credentials. Management writes seal it with `GATEWAY_SETTINGS_ENCRYPTION_KEY`
+under the `repository-upstream-auth` purpose; reads expose only scheme, username
+and `credentialsConfigured`, never plaintext or ciphertext.
+
+A PATCH that omits `upstreamAuth` preserves it. Omitting `secret` while keeping
+the same scheme preserves the existing secret; changing schemes requires a
+fresh secret. `{"upstreamAuth":{"scheme":"none"}}` removes it. Updates use the
+Repository's `If-Match` version; a stale rotation or clear returns `412`. The
+Console exposes the same protected credential editor for these three formats.
+
+Maven uses the credential for the bound source's metadata, POM, checksum and
+asset requests. OCI without `ociBearer` uses it directly for registry content;
+with `ociBearer`, only the explicitly configured issuer receives the source
+credential, and content requests use the exchanged repository `pull` token.
+Both native Proxy routes and native Groups project the current Repository
+configuration on each request. Every redirect still passes per-hop egress
+checks. Same-origin redirects retain the bound credential; cross-origin
+redirects strip it even when the destination is allowlisted. No client header
+or cookie is used as the upstream credential.
+
+Credential replacement, clearing or Repository configuration changes require
+new credential-bound cache resolution. Maven positive/negative cache scope,
+OCI positive/negative content keys and OCI token keys bind the current
+Repository version and a digest of its encrypted credential record. Existing
+unscoped Maven and prior OCI cache keys are re-fetched; there is no old-key
+fallback. OCI cache hits recheck the current source allowlist and require audit
+success. Source `401`/`403` is a stable `502` upstream failure, not a reason to
+fall through to an anonymous Group member. Invalid encrypted configuration
+fails closed. Source error bodies and secrets never enter native responses or
+audit records.
+
+Run `scripts/private-upstream-auth-e2e.sh` with local Docker, Maven and ORAS.
+The script owns an isolated PostgreSQL/RustFS project and removes it afterward.
+It exercises Basic/Bearer, direct registry/bound issuer, native Proxy/Group,
+positive/negative cold and hot caches, repository/cache connection reconstruction,
+rotation/clear, CAS refusal and non-administrator refusal. The official Maven
+client resolves exact original POM/JAR bytes with fresh target caches; ORAS
+copies all seven original index/manifest/config/layer objects into fresh layouts.
+Only the locally compiled Maven fixture plugin is seeded. Explicit user/global
+settings, an owned registry file and allowlisted subprocess environments prevent
+use of the user's identities or artifact caches. Test hooks map only the owned
+synthetic HTTPS sources while preserving certificate verification. This is
+isolated protocol and persistence acceptance, not a production migration or cutover.

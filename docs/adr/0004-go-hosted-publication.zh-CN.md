@@ -49,3 +49,7 @@ Group fallback。详见[安全准入策略](../security-admission-policy.zh-CN.m
 `bearer` 两种方案，切换为 `none` 即删除已存凭据；凭据只应用于 Go Proxy 的上游抓取，
 并在跨主机重定向时被剥离。其他格式与仓库类型会以明确的 `400` 拒绝 `upstreamAuth`，
 而不是静默忽略。
+
+更新（2026-10-20）：#423/#424 将同一受保护 `upstreamAuth` 模型扩展到 Maven 与 OCI
+Proxy；上文仅 Go 准入的描述是原始交付状态。当前 scheme、OCI issuer 绑定、轮换/清除
+与凭据身份缓存语义详见[Proxy 出站与上游认证](../proxy-egress-design.zh-CN.md#maven-与-oci-受保护上游)。

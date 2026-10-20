@@ -164,7 +164,7 @@ func (h OCIHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 	}
 	if h.Cache != nil {
-		cacheKey = h.Cache.Key(groupName, repositoryName, resource, reference)
+		cacheKey = h.Cache.Key(upstreamCacheNamespace(groupName, members), repositoryName, resource, reference)
 	}
 	if h.Cache != nil && !hasHostedMember {
 		content, cacheErr := h.Cache.Load(request.Context(), cacheKey)
@@ -312,7 +312,7 @@ func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, reposit
 // reuses the Group proxy fetch path: upstream client, read-through cache,
 // digest verification and circuit breaking all come from fetchOCIContent.
 func (h OCIHandler) serveNativeProxy(w http.ResponseWriter, request *http.Request, repo repository.HostedRepository, imageName, resource, reference, actor string) {
-	member := repository.Member{Type: repository.MemberProxy, RepositoryID: repo.ID, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, OCIBearer: repo.OCIBearer}
+	member := repository.Member{Type: repository.MemberProxy, RepositoryID: repo.ID, RepositoryVersion: repo.Version, UpstreamAuth: repo.UpstreamAuth, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, OCIBearer: repo.OCIBearer}
 	h.serveV2GroupProxy(w, request, repo.Name, member, imageName, resource, reference, actor)
 }
 
@@ -325,7 +325,7 @@ func (h OCIHandler) serveV2GroupProxy(w http.ResponseWriter, request *http.Reque
 	members := []repository.Member{member}
 	cacheKey := ""
 	if h.Cache != nil {
-		cacheKey = h.Cache.Key(groupName, imageName, resource, reference)
+		cacheKey = h.Cache.Key(upstreamCacheNamespace(groupName, members), imageName, resource, reference)
 	}
 	var content CachedOCIContent
 	var err error
@@ -333,10 +333,31 @@ func (h OCIHandler) serveV2GroupProxy(w http.ResponseWriter, request *http.Reque
 		workCtx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), ociSharedWorkTimeout)
 		defer cancel()
 		content, err = h.Cache.Do(workCtx, cacheKey, func(fetchCtx context.Context) (CachedOCIContent, error) {
-			if cached, loadErr := h.Cache.Load(fetchCtx, cacheKey); loadErr == nil && cached.Endpoint != "" {
-				h.Resolver.Metrics.ociCacheHit.Add(1)
-				h.Resolver.Metrics.recordCache(imageName, true)
-				return cached, nil
+			cached, loadErr := h.Cache.Load(fetchCtx, cacheKey)
+			if loadErr == nil || errors.Is(loadErr, errOCICacheNegative) {
+				if cached.Endpoint == "" || !h.cacheSourcePresent(cached, members) {
+					h.Cache.Invalidate(fetchCtx, cacheKey)
+				} else if !h.cacheSourceAllowed(cached, members) {
+					h.Resolver.Metrics.ociProxyDenied.Add(1)
+					if auditErr := h.Resolver.RecordOCIFailure(fetchCtx, groupName, imageName, cached.Member, actor, repository.AuditProxyDenied); auditErr != nil {
+						return CachedOCIContent{}, auditErr
+					}
+					return CachedOCIContent{}, &ociFetchError{status: http.StatusForbidden, code: "DENIED", message: "upstream repository is not allowed"}
+				} else {
+					h.Resolver.Metrics.ociCacheHit.Add(1)
+					h.Resolver.Metrics.recordCache(imageName, true)
+					if errors.Is(loadErr, errOCICacheNegative) {
+						h.Resolver.Metrics.ociNegativeHit.Add(1)
+						if auditErr := h.Resolver.RecordOCIFailure(fetchCtx, groupName, imageName, cached.Member, actor, repository.AuditNotFound); auditErr != nil {
+							return CachedOCIContent{}, auditErr
+						}
+						return CachedOCIContent{}, &ociFetchError{status: http.StatusNotFound, code: map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], message: "resource unknown to registry"}
+					}
+					if auditErr := h.Resolver.RecordOCIResolution(fetchCtx, groupName, imageName, cached.Member, actor); auditErr != nil {
+						return CachedOCIContent{}, auditErr
+					}
+					return cached, nil
+				}
 			}
 			fetched, fetchErr := h.fetchOCIContent(fetchCtx, request.Method, members, imageName, resource, reference, request.Header, groupName, actor, cacheKey)
 			if fetchErr != nil {
@@ -465,6 +486,9 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 				h.Cache.RecordUpstreamFailure(ctx, member.Endpoint)
 			}
 			hadUpstreamFailure = true
+			if member.UpstreamAuth != nil {
+				return CachedOCIContent{}, &ociFetchError{status: http.StatusBadGateway, code: "UNKNOWN", message: "upstream registry unavailable"}
+			}
 			continue
 		}
 		if response.StatusCode == http.StatusNotFound {
@@ -485,6 +509,9 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 			}
 			hadUpstreamFailure = true
 			lastUpstreamStatus = response.StatusCode
+			if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+				return CachedOCIContent{}, &ociFetchError{status: http.StatusBadGateway, code: "UNKNOWN", message: "upstream registry authorization failed"}
+			}
 			continue
 		}
 		content, err := verifyOCIResponse(response, reference)
