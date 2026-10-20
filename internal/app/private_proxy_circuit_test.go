@@ -35,23 +35,25 @@ func privateProxyCircuitContract(t *testing.T, backend func(*testing.T) privateP
 				continue
 			}
 			for _, scheme := range []repository.UpstreamAuthScheme{repository.UpstreamAuthSchemeBasic, repository.UpstreamAuthSchemeBearer, repository.UpstreamAuthSchemeNone} {
-				if scheme == repository.UpstreamAuthSchemeNone && !issuer {
-					continue
-				}
-				for _, failure := range []string{"401", "403", "invalid-ciphertext"} {
-					if scheme == repository.UpstreamAuthSchemeNone && failure == "invalid-ciphertext" {
+				for _, cleared := range []bool{false, true} {
+					if cleared && scheme != repository.UpstreamAuthSchemeNone {
 						continue
 					}
-					t.Run(fmt.Sprintf("%s/issuer=%v/%s/%s", format, issuer, scheme, failure), func(t *testing.T) {
-						privateProxyCircuitCase(t, format, issuer, scheme, failure, backend(t))
-					})
+					for _, failure := range []string{"401", "403", "invalid-ciphertext"} {
+						if scheme == repository.UpstreamAuthSchemeNone && failure == "invalid-ciphertext" {
+							continue
+						}
+						t.Run(fmt.Sprintf("%s/issuer=%v/%s/cleared=%v/%s", format, issuer, scheme, cleared, failure), func(t *testing.T) {
+							privateProxyCircuitCase(t, format, issuer, scheme, failure, cleared, backend(t))
+						})
+					}
 				}
 			}
 		}
 	}
 }
 
-func privateProxyCircuitCase(t *testing.T, format repository.Format, issuer bool, scheme repository.UpstreamAuthScheme, failure string, backend privateProxyCircuitBackend) {
+func privateProxyCircuitCase(t *testing.T, format repository.Format, issuer bool, scheme repository.UpstreamAuthScheme, failure string, cleared bool, backend privateProxyCircuitBackend) {
 	t.Helper()
 	const sourceSecret = "synthetic-private-circuit-source-secret"
 	const sourceError = "synthetic-private-circuit-source-error"
@@ -88,6 +90,7 @@ func privateProxyCircuitCase(t *testing.T, format repository.Format, issuer bool
 		http.Error(w, sourceError, status)
 	})
 	var members []repository.GroupMember
+	var primary repository.HostedRepository
 	for i, host := range []string{redirectOrigin, redirectCDN} {
 		repo := repository.HostedRepository{ID: uuid.NewString(), Name: "circuit-source-" + uuid.NewString(), Format: format, Type: repository.RepositoryTypeProxy, Endpoint: "https://" + host, AllowedHosts: []string{host}}
 		if i == 0 {
@@ -103,9 +106,16 @@ func privateProxyCircuitCase(t *testing.T, format repository.Format, issuer bool
 			if issuer {
 				repo.OCIBearer = &repository.OCIBearer{Realm: "https://" + redirectOrigin + "/token", Service: "private-registry"}
 			}
+			if cleared {
+				repo.UpstreamAuth = &repository.UpstreamAuth{Scheme: repository.UpstreamAuthSchemeBearer, Secret: sealedUpstreamSecret(t, sourceSecret)}
+			}
 		}
-		if _, err := backend.store.CreateHostedRepository(t.Context(), repo); err != nil {
+		created, err := backend.store.CreateHostedRepository(t.Context(), repo)
+		if err != nil {
 			t.Fatal(err)
+		}
+		if i == 0 {
+			primary = created
 		}
 		members = append(members, repository.GroupMember{RepositoryID: repo.ID, Position: i})
 	}
@@ -118,6 +128,16 @@ func privateProxyCircuitCase(t *testing.T, format repository.Format, issuer bool
 			Caches: GatewayCaches{Maven: NewMavenCache(backend.cache, time.Hour, time.Hour, time.Hour, time.Hour, []string{redirectOrigin, redirectCDN}).WithCoordinator(backend.coordinator), OCI: NewOCICache(backend.cache, time.Hour, time.Hour, time.Hour, []string{redirectOrigin, redirectCDN}).WithCoordinator(backend.coordinator)}})
 	}
 	handler := newHandler()
+	if cleared {
+		response := ociBearerManagementRequest(handler, http.MethodPatch, "/api/v2/repositories/"+primary.ID, `{"upstreamAuth":{"scheme":"none"}}`, primary.Version, "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("explicit credential clear=%d", response.Code)
+		}
+		stored, err := backend.store.GetHostedRepository(t.Context(), primary.ID)
+		if err != nil || stored.UpstreamAuth != nil || sourceVisits.Load() != 0 {
+			t.Fatal("explicit clear must remove the stored source credential without contacting it")
+		}
+	}
 	path := "/maven/" + group.Name + "/org/example/widget/1.0/widget-1.0.pom"
 	if format == repository.FormatOCI {
 		path = "/v2/" + group.Name + "/demo/manifests/latest"
