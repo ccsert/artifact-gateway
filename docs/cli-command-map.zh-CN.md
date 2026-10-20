@@ -385,3 +385,23 @@ server base）。计划命令省略前导 `agctl`。
 - 双语注册：`docs/cli-command-map.md` 与 `docs/cli-command-map.zh-CN.md` 双向
   互链并注册进 `docs/site-map.json`；`make docs-check` 覆盖该对。
 
+
+## NuGet Hosted 预览（#287）
+
+这些独立预览 API 尚无 agctl 命令；正式格式目录与创建选择器仍不公开 NuGet。协议操作由官方 dotnet 客户端使用。N/A 只描述 CLI，不声明 #288/#289 已完成。
+
+| Operation | CLI applicability | Owner | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `GET /previews/nuget/repositories/{repositoryId}/capacity`<br>`getNuGetPreviewCapacity` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `PUT /previews/nuget/repositories/{repositoryId}/capacity`<br>`replaceNuGetPreviewQuota` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `POST /previews/nuget/repositories`<br>`createNuGetPreviewRepository` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `GET /previews/nuget/repositories/{repositoryId}`<br>`getNuGetPreviewRepository` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `GET /previews/nuget/repositories/{repositoryId}/packages`<br>`listNuGetPreviewPackages` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `GET /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}`<br>`getNuGetPreviewPackage` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `POST /previews/nuget/repositories/{repositoryId}/publication-sessions`<br>`createNuGetPublicationSession` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `GET /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}`<br>`getNuGetPublicationSession` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `PUT /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package`<br>`stageNuGetPublicationSession` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `POST /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit`<br>`commitNuGetPublicationSession` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `GET /nuget/{repository}/v3/{path}`<br>`readNuGetHostedRepresentation` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `HEAD /nuget/{repository}/v3/{path}`<br>`headNuGetHostedRepresentation` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+| `PUT /nuget/{repository}/api/v2/package/`<br>`publishNuGetHostedPackage` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |

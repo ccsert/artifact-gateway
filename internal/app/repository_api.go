@@ -8,9 +8,11 @@ import (
 
 	migrationapi "github.com/ccsert/artifact-gateway/internal/admin/nexusmigration"
 	sourceapi "github.com/ccsert/artifact-gateway/internal/admin/nexussource"
+	nugetapi "github.com/ccsert/artifact-gateway/internal/admin/nuget"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
@@ -65,6 +67,9 @@ func isManagementObjectUpload(r *http.Request) bool {
 	}
 	if r.Method != http.MethodPut {
 		return false
+	}
+	if len(segments) == 9 && segments[0] == "api" && segments[1] == "v2" && segments[2] == "previews" && segments[3] == "nuget" && segments[4] == "repositories" && segments[5] != "" && segments[6] == "publication-sessions" && segments[7] != "" && segments[8] == "package" {
+		return true
 	}
 	if len(segments) == 8 && segments[0] == "api" && segments[1] == "v2" && segments[2] == "repositories" && segments[3] != "" && segments[4] == "apt" && segments[5] == "publication-sessions" && segments[6] != "" && segments[7] == "package" {
 		return true
@@ -250,7 +255,17 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		Audit: store, Anonymous: store, ReadPolicies: store, Quarantine: store, Client: rawClient, Cache: rawCache, Metrics: rawModuleMetrics{metrics}, Scanner: publicationScanner,
 		GroupRuntime: rawModuleGroupRuntime{resolver: v2GroupResolver{groups: store, repos: store, audit: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}, policy: store},
 		LegacyStore:  store, LegacyRuntime: rawRuntime{handler: rawLegacy}, RecordFailure: recordRawFailure})
-	formatModules, err := formatmodule.New(rawModule)
+	modules := []formatmodule.Module{rawModule}
+	var nugetPreview http.Handler
+	if options.NuGetPreviewEnabled {
+		nugetModule, err := nugetformat.New(nugetformat.Options{Store: options.NuGetStore, Repositories: store, Objects: options.NuGetObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		if err != nil {
+			return nil, err
+		}
+		modules = append(modules, nugetModule)
+		nugetPreview = nugetModule.Preview()
+	}
+	formatModules, err := formatmodule.New(modules...)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +343,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	}
 	identityAPI := newIdentityManagementHandler(identityManagementOptions{Scope: scope, Users: store, APIKeys: store, ServiceAccounts: store, OIDC: identityOIDC})
 	legacyAPI := generatedRepositoryAPIAdapter{BatchAdapter: migrationapi.New(dependencies.MigrationService, authenticator, store), Adapter: sourceapi.New(dependencies.SourceService, authenticator, store), managementScope: scope, store: store, sessions: nativeMaven, npmRestore: options.NPMRestore, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, replication: store, oci: store, cargo: store, conan: store, audit: store, maintenance: maintenance, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, quotaAlerts: store, queueStats: store, diagnostics: dependencies, objects: options.Storage, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}
-	adminopenapi.HandlerWithOptions(managementServer{repositoryManagementHandler: repositoriesAPI, artifactManagementHandler: artifactsAPI, accessManagementHandler: accessAPI, identityManagementHandler: identityAPI, pypiYankManagementHandler: pypiYankAPI, generatedRepositoryAPIAdapter: legacyAPI}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(managementServer{Adapter: nugetapi.New(nugetPreview), repositoryManagementHandler: repositoriesAPI, artifactManagementHandler: artifactsAPI, accessManagementHandler: accessAPI, identityManagementHandler: identityAPI, pypiYankManagementHandler: pypiYankAPI, generatedRepositoryAPIAdapter: legacyAPI}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

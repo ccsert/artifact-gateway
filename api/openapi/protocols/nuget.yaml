@@ -1,0 +1,132 @@
+nuget_read:
+  servers:
+    - url: https://gateway.example.com
+  parameters:
+    - name: repository
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    - name: path
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  get:
+    operationId: readNuGetHostedRepresentation
+    description: >-
+      NuGet V3 index.json, flat container, original nuspec, SemVer2 gzip registrations, search and
+      autocomplete. Hosted preview only.
+    security:
+      - protocolBasicAuth: []
+      - protocolBearerAuth: []
+      - {}
+    responses:
+      '200':
+        description: NuGet representation
+      '206':
+        description: Byte range of a package archive, original nuspec or SHA-512 sidecar
+      '304':
+        description: Package, original nuspec or SHA-512 sidecar matches the conditional request
+      '400':
+        description: Invalid search or autocomplete query
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository resource permission or account state prevents this read
+      '404':
+        description: Package or version not found
+      '412':
+        description: Conditional precondition failed for an original nuspec or SHA-512 sidecar
+      '416':
+        description: Requested byte range cannot be satisfied by this package, nuspec or sidecar
+      '422':
+        description: Registration, version list or search exceeds the bounded preview metadata inventory
+      '500':
+        description: Published package object is unavailable
+      '503':
+        description: Preview metadata storage or representation is unavailable
+  head:
+    operationId: headNuGetHostedRepresentation
+    security:
+      - protocolBasicAuth: []
+      - protocolBearerAuth: []
+      - {}
+    responses:
+      '200':
+        description: Same headers as GET without body
+      '206':
+        description: Byte range headers for an original nuspec or SHA-512 sidecar
+      '304':
+        description: Package, original nuspec or SHA-512 sidecar matches the conditional request
+      '400':
+        description: Invalid search or autocomplete query
+      '401':
+        description: Authentication required
+      '403':
+        description: Repository resource permission or account state prevents this read
+      '404':
+        description: Package or version not found
+      '412':
+        description: Conditional precondition failed for an original nuspec or SHA-512 sidecar
+      '416':
+        description: Requested byte range cannot be satisfied by this original nuspec or SHA-512 sidecar
+      '422':
+        description: Registration, version list or search exceeds the bounded preview metadata inventory
+      '500':
+        description: Published package object is unavailable
+      '503':
+        description: Preview metadata storage or representation is unavailable
+nuget_publish:
+  servers:
+    - url: https://gateway.example.com
+  parameters:
+    - name: repository
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  put:
+    operationId: publishNuGetHostedPackage
+    description: >-
+      Official PackagePublish/2.0.0 multipart push. X-NuGet-ApiKey is an existing Gateway
+      credential, never an upstream secret. Same-content replay is idempotent; conflicting bytes at
+      canonical ID/version return 409.
+    security:
+      - nuGetApiKey: []
+      - protocolBasicAuth: []
+      - protocolBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+              - package
+            properties:
+              package:
+                type: string
+                contentEncoding: binary
+    responses:
+      '201':
+        description: Complete package committed or identical replay
+      '400':
+        description: Malformed package or unsupported dependency metadata
+      '401':
+        description: Authentication required
+      '403':
+        description: Write permission required
+      '404':
+        description: NuGet Hosted preview repository not found
+      '409':
+        description: Canonical version contains different bytes
+      '410':
+        description: Publication session expired before the complete package was committed
+      '413':
+        description: Package exceeds the configured bound
+      '503':
+        description: Preview publication storage is unavailable

@@ -20,6 +20,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/consoletheme"
 	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/ccsert/artifact-gateway/internal/evidence"
+	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	migrationpg "github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"
@@ -284,13 +285,22 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	if dependencies.APTSigner != nil {
 		aptPublisher = aptpublication.NewPublisher(store, objectStore, dependencies.APTSigner).WithMetrics(metrics).WithPublicationScanner(app.NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics))
 	}
+	var nugetMaintenance *nugetformat.Maintenance
+	if cfg.NuGetPreviewEnabled {
+		nugetMaintenance, err = nugetformat.NewMaintenance(store, objectStore)
+		if err != nil {
+			slog.Error("configure NuGet preview maintenance", "error", err)
+			return 1
+		}
+	}
 	(backgroundRuntime{
 		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
 		scanner: dependencies.ArtifactScanner, scanResolver: dependencies.ArtifactScanResolver,
-		scannerFormats:  dependencies.ArtifactScannerFormats,
-		workerSessionID: runtimeSessionID,
-		aptPublisher:    aptPublisher,
-		migration:       dependencies.MigrationService,
+		scannerFormats:   dependencies.ArtifactScannerFormats,
+		workerSessionID:  runtimeSessionID,
+		aptPublisher:     aptPublisher,
+		migration:        dependencies.MigrationService,
+		nugetMaintenance: nugetMaintenance,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
@@ -299,7 +309,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 				"detail", "GATEWAY_REPOSITORY_READERS is empty and GATEWAY_LEGACY_READ_DEFAULT=allow, so any authenticated caller may read a legacy repository with no grant",
 				"change", "unset GATEWAY_LEGACY_READ_DEFAULT to deny unmatched readers once every reading actor has a reader pattern or a per-repository grant")
 		}
-		handler, err = app.NewGatewayHandler(app.GatewayOptions{
+		gatewayOptions := app.GatewayOptions{
 			Dependencies:      dependencies,
 			Store:             store,
 			ConanPublications: store,
@@ -331,7 +341,13 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			},
 			Metrics:  metrics,
 			Upstream: app.UpstreamClient{OCIBearerCache: app.NewOCIBearerTokenCache()},
-		})
+		}
+		if cfg.NuGetPreviewEnabled {
+			gatewayOptions.NuGetPreviewEnabled = true
+			gatewayOptions.NuGetStore = store
+			gatewayOptions.NuGetObjects = objectStore
+		}
+		handler, err = app.NewGatewayHandler(gatewayOptions)
 		if err != nil {
 			slog.Error("configure Gateway HTTP handler", "error", err)
 			return 1

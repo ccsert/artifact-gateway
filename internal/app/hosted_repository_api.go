@@ -399,7 +399,7 @@ func (h hostedRepositoryAPIHandler) decodeCursor(token string) (string, error) {
 
 func (h hostedRepositoryAPIHandler) get(w http.ResponseWriter, r *http.Request, id string) {
 	repo, err := h.store.GetHostedRepository(r.Context(), id)
-	if errors.Is(err, repository.ErrNotFound) {
+	if errors.Is(err, repository.ErrNotFound) || err == nil && repo.Format == repository.FormatNuGet {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
 		return
 	}

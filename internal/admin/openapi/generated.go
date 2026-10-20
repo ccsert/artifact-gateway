@@ -2146,6 +2146,75 @@ func (e NexusMigrationStartPolicyVersion) Valid() bool {
 	}
 }
 
+// Defines values for NuGetPreviewRepositoryFormat.
+const (
+	NuGetPreviewRepositoryFormatNuget NuGetPreviewRepositoryFormat = "nuget"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryFormat enum.
+func (e NuGetPreviewRepositoryFormat) Valid() bool {
+	switch e {
+	case NuGetPreviewRepositoryFormatNuget:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewRepositoryPreview.
+const (
+	True NuGetPreviewRepositoryPreview = true
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryPreview enum.
+func (e NuGetPreviewRepositoryPreview) Valid() bool {
+	switch e {
+	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewWorkerFormat.
+const (
+	NuGetPreviewWorkerFormatNuget NuGetPreviewWorkerFormat = "nuget"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewWorkerFormat enum.
+func (e NuGetPreviewWorkerFormat) Valid() bool {
+	switch e {
+	case NuGetPreviewWorkerFormatNuget:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPublicationSessionState.
+const (
+	NuGetPublicationSessionStateCommitted NuGetPublicationSessionState = "committed"
+	NuGetPublicationSessionStateExpired   NuGetPublicationSessionState = "expired"
+	NuGetPublicationSessionStateReserved  NuGetPublicationSessionState = "reserved"
+	NuGetPublicationSessionStateStaged    NuGetPublicationSessionState = "staged"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPublicationSessionState enum.
+func (e NuGetPublicationSessionState) Valid() bool {
+	switch e {
+	case NuGetPublicationSessionStateCommitted:
+		return true
+	case NuGetPublicationSessionStateExpired:
+		return true
+	case NuGetPublicationSessionStateReserved:
+		return true
+	case NuGetPublicationSessionStateStaged:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OIDCRoleMappingMatchGatewayRole.
 const (
 	OIDCRoleMappingMatchGatewayRoleAdmin  OIDCRoleMappingMatchGatewayRole = "admin"
@@ -4838,8 +4907,11 @@ type DiagnosticQueueStatState string
 
 // DiagnosticRuntime defines model for DiagnosticRuntime.
 type DiagnosticRuntime struct {
-	InstanceId string   `json:"instanceId"`
-	Roles      []string `json:"roles"`
+	InstanceId string `json:"instanceId"`
+
+	// PreviewWorkerFormats Separately enabled preview workers; absent when none are configured.
+	PreviewWorkerFormats *[]NuGetPreviewWorkerFormat `json:"previewWorkerFormats,omitempty"`
+	Roles                []string                    `json:"roles"`
 
 	// SessionId Session of the process that answered this diagnostics request.
 	SessionId     *string  `json:"sessionId,omitempty"`
@@ -5697,6 +5769,86 @@ type NexusMigrationStart struct {
 // NexusMigrationStartPolicyVersion defines model for NexusMigrationStart.PolicyVersion.
 type NexusMigrationStartPolicyVersion string
 
+// NuGetPreviewCapacity defines model for NuGetPreviewCapacity.
+type NuGetPreviewCapacity struct {
+	ObjectCount  int64              `json:"objectCount"`
+	QuotaBytes   int64              `json:"quotaBytes"`
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	UsedBytes    int64              `json:"usedBytes"`
+}
+
+// NuGetPreviewPackage defines model for NuGetPreviewPackage.
+type NuGetPreviewPackage struct {
+	Digest          string             `json:"digest"`
+	PackageId       string             `json:"packageId"`
+	PackageUrl      string             `json:"packageUrl"`
+	PublishedAt     time.Time          `json:"publishedAt"`
+	RegistrationUrl string             `json:"registrationUrl"`
+	RepositoryId    openapi_types.UUID `json:"repositoryId"`
+	Size            int64              `json:"size"`
+	Version         string             `json:"version"`
+}
+
+// NuGetPreviewPackageList defines model for NuGetPreviewPackageList.
+type NuGetPreviewPackageList struct {
+	Items      []NuGetPreviewPackage `json:"items"`
+	NextCursor *string               `json:"nextCursor,omitempty"`
+}
+
+// NuGetPreviewQuota defines model for NuGetPreviewQuota.
+type NuGetPreviewQuota struct {
+	QuotaBytes int64 `json:"quotaBytes"`
+}
+
+// NuGetPreviewRepository defines model for NuGetPreviewRepository.
+type NuGetPreviewRepository struct {
+	Format    NuGetPreviewRepositoryFormat  `json:"format"`
+	Id        openapi_types.UUID            `json:"id"`
+	Name      string                        `json:"name"`
+	Preview   NuGetPreviewRepositoryPreview `json:"preview"`
+	SourceUrl string                        `json:"sourceUrl"`
+}
+
+// NuGetPreviewRepositoryFormat defines model for NuGetPreviewRepository.Format.
+type NuGetPreviewRepositoryFormat string
+
+// NuGetPreviewRepositoryPreview defines model for NuGetPreviewRepository.Preview.
+type NuGetPreviewRepositoryPreview bool
+
+// NuGetPreviewRepositoryCreate defines model for NuGetPreviewRepositoryCreate.
+type NuGetPreviewRepositoryCreate struct {
+	AnonymousRead *bool  `json:"anonymousRead,omitempty"`
+	Name          string `json:"name"`
+}
+
+// NuGetPreviewWorkerFormat Opt-in NuGet Hosted upload cleanup; does not admit NuGet to the formal format catalog.
+type NuGetPreviewWorkerFormat string
+
+// NuGetPublicationRequest defines model for NuGetPublicationRequest.
+type NuGetPublicationRequest struct {
+	Digest    string `json:"digest"`
+	PackageId string `json:"packageId"`
+	Size      int64  `json:"size"`
+	Version   string `json:"version"`
+}
+
+// NuGetPublicationSession defines model for NuGetPublicationSession.
+type NuGetPublicationSession struct {
+	CommittedAt  *time.Time                   `json:"committedAt,omitempty"`
+	CreatedAt    time.Time                    `json:"createdAt"`
+	Digest       string                       `json:"digest"`
+	ExpiresAt    time.Time                    `json:"expiresAt"`
+	Id           openapi_types.UUID           `json:"id"`
+	PackageId    string                       `json:"packageId"`
+	RepositoryId openapi_types.UUID           `json:"repositoryId"`
+	Size         int64                        `json:"size"`
+	State        NuGetPublicationSessionState `json:"state"`
+	Version      string                       `json:"version"`
+}
+
+// NuGetPublicationSessionState defines model for NuGetPublicationSession.State.
+type NuGetPublicationSessionState string
+
 // OCIBearer Optional upstream Bearer challenge exchange for OCI Proxy repositories. Without this configuration content requests use the explicit upstreamAuth setting. The realm and service bind the approved issuer and audience. With this configuration upstreamAuth credentials are sent only to the bound issuer; this object contains no credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null. Changing this binding while protected upstream credentials are configured requires a fresh upstreamAuth.secret or upstreamAuth.scheme none in the same request.
 type OCIBearer struct {
 	// Realm Exact complete HTTPS token-service URL. The first exchange contract rejects userinfo, all query parameters, and fragments.
@@ -6515,6 +6667,9 @@ type RuntimeNode struct {
 	InstanceId string    `json:"instanceId"`
 	LastSeenAt time.Time `json:"lastSeenAt"`
 
+	// PreviewWorkerFormats Separately enabled preview workers; absent when none are configured.
+	PreviewWorkerFormats *[]NuGetPreviewWorkerFormat `json:"previewWorkerFormats,omitempty"`
+
 	// Revision Build revision reported by this node; absent for legacy records.
 	Revision  *string           `json:"revision,omitempty"`
 	Roles     []string          `json:"roles"`
@@ -7233,6 +7388,17 @@ type RetryNexusMigrationBatchParams struct {
 	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
+// ListNuGetPreviewPackagesParams defines parameters for ListNuGetPreviewPackages.
+type ListNuGetPreviewPackagesParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateNuGetPublicationSessionParams defines parameters for CreateNuGetPublicationSession.
+type CreateNuGetPublicationSessionParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // ListRepositoriesParams defines parameters for ListRepositories.
 type ListRepositoriesParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -7726,6 +7892,15 @@ type ResumeNexusMigrationBatchJSONRequestBody = NexusMigrationResume
 // RetryNexusMigrationBatchJSONRequestBody defines body for RetryNexusMigrationBatch for application/json ContentType.
 type RetryNexusMigrationBatchJSONRequestBody = NexusMigrationResume
 
+// CreateNuGetPreviewRepositoryJSONRequestBody defines body for CreateNuGetPreviewRepository for application/json ContentType.
+type CreateNuGetPreviewRepositoryJSONRequestBody = NuGetPreviewRepositoryCreate
+
+// ReplaceNuGetPreviewQuotaJSONRequestBody defines body for ReplaceNuGetPreviewQuota for application/json ContentType.
+type ReplaceNuGetPreviewQuotaJSONRequestBody = NuGetPreviewQuota
+
+// CreateNuGetPublicationSessionJSONRequestBody defines body for CreateNuGetPublicationSession for application/json ContentType.
+type CreateNuGetPublicationSessionJSONRequestBody = NuGetPublicationRequest
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
 
@@ -8112,6 +8287,36 @@ type ServerInterface interface {
 	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
 	// (GET /overview-statistics)
 	GetOverviewStatistics(w http.ResponseWriter, r *http.Request)
+
+	// (POST /previews/nuget/repositories)
+	CreateNuGetPreviewRepository(w http.ResponseWriter, r *http.Request)
+
+	// (GET /previews/nuget/repositories/{repositoryId})
+	GetNuGetPreviewRepository(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/capacity)
+	GetNuGetPreviewCapacity(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (PUT /previews/nuget/repositories/{repositoryId}/capacity)
+	ReplaceNuGetPreviewQuota(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/packages)
+	ListNuGetPreviewPackages(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, params ListNuGetPreviewPackagesParams)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version})
+	GetNuGetPreviewPackage(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, packageId string, version string)
+
+	// (POST /previews/nuget/repositories/{repositoryId}/publication-sessions)
+	CreateNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, params CreateNuGetPublicationSessionParams)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId})
+	GetNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, sessionId openapi_types.UUID)
+
+	// (POST /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit)
+	CommitNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, sessionId openapi_types.UUID)
+
+	// (PUT /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package)
+	StageNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, sessionId openapi_types.UUID)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
@@ -11253,6 +11458,356 @@ func (siw *ServerInterfaceWrapper) GetOverviewStatistics(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetOverviewStatistics(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNuGetPreviewRepository operation middleware
+func (siw *ServerInterfaceWrapper) CreateNuGetPreviewRepository(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNuGetPreviewRepository(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNuGetPreviewRepository operation middleware
+func (siw *ServerInterfaceWrapper) GetNuGetPreviewRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNuGetPreviewRepository(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNuGetPreviewCapacity operation middleware
+func (siw *ServerInterfaceWrapper) GetNuGetPreviewCapacity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNuGetPreviewCapacity(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceNuGetPreviewQuota operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceNuGetPreviewQuota(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceNuGetPreviewQuota(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNuGetPreviewPackages operation middleware
+func (siw *ServerInterfaceWrapper) ListNuGetPreviewPackages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNuGetPreviewPackagesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNuGetPreviewPackages(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNuGetPreviewPackage operation middleware
+func (siw *ServerInterfaceWrapper) GetNuGetPreviewPackage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "packageId" -------------
+	var packageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "packageId", r.PathValue("packageId"), &packageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNuGetPreviewPackage(w, r, repositoryId, packageId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNuGetPublicationSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateNuGetPublicationSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateNuGetPublicationSessionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNuGetPublicationSession(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNuGetPublicationSession operation middleware
+func (siw *ServerInterfaceWrapper) GetNuGetPublicationSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNuGetPublicationSession(w, r, repositoryId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommitNuGetPublicationSession operation middleware
+func (siw *ServerInterfaceWrapper) CommitNuGetPublicationSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommitNuGetPublicationSession(w, r, repositoryId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StageNuGetPublicationSession operation middleware
+func (siw *ServerInterfaceWrapper) StageNuGetPublicationSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StageNuGetPublicationSession(w, r, repositoryId, sessionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16786,6 +17341,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/retry", wrapper.RetryNexusMigrationBatch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/capabilities", wrapper.GetNexusMigrationCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/overview-statistics", wrapper.GetOverviewStatistics)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/nuget/repositories", wrapper.CreateNuGetPreviewRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}", wrapper.GetNuGetPreviewRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/capacity", wrapper.GetNuGetPreviewCapacity)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/capacity", wrapper.ReplaceNuGetPreviewQuota)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/packages", wrapper.ListNuGetPreviewPackages)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}", wrapper.GetNuGetPreviewPackage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/publication-sessions", wrapper.CreateNuGetPublicationSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}", wrapper.GetNuGetPublicationSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit", wrapper.CommitNuGetPublicationSession)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package", wrapper.StageNuGetPublicationSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
@@ -23414,6 +23979,700 @@ func (response GetOverviewStatistics403ApplicationProblemPlusJSONResponse) Visit
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type CreateNuGetPreviewRepositoryRequestObject struct {
+	Body *CreateNuGetPreviewRepositoryJSONRequestBody
+}
+
+type CreateNuGetPreviewRepositoryResponseObject interface {
+	VisitCreateNuGetPreviewRepositoryResponse(w http.ResponseWriter) error
+}
+
+type CreateNuGetPreviewRepository201JSONResponse NuGetPreviewRepository
+
+func (response CreateNuGetPreviewRepository201JSONResponse) VisitCreateNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNuGetPreviewRepository400Response struct {
+}
+
+func (response CreateNuGetPreviewRepository400Response) VisitCreateNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateNuGetPreviewRepository401Response struct {
+}
+
+func (response CreateNuGetPreviewRepository401Response) VisitCreateNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateNuGetPreviewRepository403Response struct {
+}
+
+func (response CreateNuGetPreviewRepository403Response) VisitCreateNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type CreateNuGetPreviewRepository409Response struct {
+}
+
+func (response CreateNuGetPreviewRepository409Response) VisitCreateNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type CreateNuGetPreviewRepository503Response struct {
+}
+
+func (response CreateNuGetPreviewRepository503Response) VisitCreateNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetNuGetPreviewRepositoryRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+}
+
+type GetNuGetPreviewRepositoryResponseObject interface {
+	VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error
+}
+
+type GetNuGetPreviewRepository200JSONResponse NuGetPreviewRepository
+
+func (response GetNuGetPreviewRepository200JSONResponse) VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNuGetPreviewRepository400Response struct {
+}
+
+func (response GetNuGetPreviewRepository400Response) VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type GetNuGetPreviewRepository401Response struct {
+}
+
+func (response GetNuGetPreviewRepository401Response) VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetNuGetPreviewRepository403Response struct {
+}
+
+func (response GetNuGetPreviewRepository403Response) VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetNuGetPreviewRepository404Response struct {
+}
+
+func (response GetNuGetPreviewRepository404Response) VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetNuGetPreviewRepository503Response struct {
+}
+
+func (response GetNuGetPreviewRepository503Response) VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetNuGetPreviewCapacityRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+}
+
+type GetNuGetPreviewCapacityResponseObject interface {
+	VisitGetNuGetPreviewCapacityResponse(w http.ResponseWriter) error
+}
+
+type GetNuGetPreviewCapacity200JSONResponse NuGetPreviewCapacity
+
+func (response GetNuGetPreviewCapacity200JSONResponse) VisitGetNuGetPreviewCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNuGetPreviewCapacity400Response struct {
+}
+
+func (response GetNuGetPreviewCapacity400Response) VisitGetNuGetPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type GetNuGetPreviewCapacity401Response struct {
+}
+
+func (response GetNuGetPreviewCapacity401Response) VisitGetNuGetPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetNuGetPreviewCapacity403Response struct {
+}
+
+func (response GetNuGetPreviewCapacity403Response) VisitGetNuGetPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetNuGetPreviewCapacity404Response struct {
+}
+
+func (response GetNuGetPreviewCapacity404Response) VisitGetNuGetPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetNuGetPreviewCapacity503Response struct {
+}
+
+func (response GetNuGetPreviewCapacity503Response) VisitGetNuGetPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type ReplaceNuGetPreviewQuotaRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	Body         *ReplaceNuGetPreviewQuotaJSONRequestBody
+}
+
+type ReplaceNuGetPreviewQuotaResponseObject interface {
+	VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error
+}
+
+type ReplaceNuGetPreviewQuota200JSONResponse NuGetPreviewCapacity
+
+func (response ReplaceNuGetPreviewQuota200JSONResponse) VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceNuGetPreviewQuota400Response struct {
+}
+
+func (response ReplaceNuGetPreviewQuota400Response) VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type ReplaceNuGetPreviewQuota401Response struct {
+}
+
+func (response ReplaceNuGetPreviewQuota401Response) VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type ReplaceNuGetPreviewQuota403Response struct {
+}
+
+func (response ReplaceNuGetPreviewQuota403Response) VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type ReplaceNuGetPreviewQuota404Response struct {
+}
+
+func (response ReplaceNuGetPreviewQuota404Response) VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ReplaceNuGetPreviewQuota409Response struct {
+}
+
+func (response ReplaceNuGetPreviewQuota409Response) VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type ReplaceNuGetPreviewQuota503Response struct {
+}
+
+func (response ReplaceNuGetPreviewQuota503Response) VisitReplaceNuGetPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type ListNuGetPreviewPackagesRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	Params       ListNuGetPreviewPackagesParams
+}
+
+type ListNuGetPreviewPackagesResponseObject interface {
+	VisitListNuGetPreviewPackagesResponse(w http.ResponseWriter) error
+}
+
+type ListNuGetPreviewPackages200JSONResponse NuGetPreviewPackageList
+
+func (response ListNuGetPreviewPackages200JSONResponse) VisitListNuGetPreviewPackagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNuGetPreviewPackages400Response struct {
+}
+
+func (response ListNuGetPreviewPackages400Response) VisitListNuGetPreviewPackagesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type ListNuGetPreviewPackages401Response struct {
+}
+
+func (response ListNuGetPreviewPackages401Response) VisitListNuGetPreviewPackagesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type ListNuGetPreviewPackages403Response struct {
+}
+
+func (response ListNuGetPreviewPackages403Response) VisitListNuGetPreviewPackagesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type ListNuGetPreviewPackages404Response struct {
+}
+
+func (response ListNuGetPreviewPackages404Response) VisitListNuGetPreviewPackagesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ListNuGetPreviewPackages503Response struct {
+}
+
+func (response ListNuGetPreviewPackages503Response) VisitListNuGetPreviewPackagesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetNuGetPreviewPackageRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	PackageId    string             `json:"packageId"`
+	Version      string             `json:"version"`
+}
+
+type GetNuGetPreviewPackageResponseObject interface {
+	VisitGetNuGetPreviewPackageResponse(w http.ResponseWriter) error
+}
+
+type GetNuGetPreviewPackage200JSONResponse NuGetPreviewPackage
+
+func (response GetNuGetPreviewPackage200JSONResponse) VisitGetNuGetPreviewPackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNuGetPreviewPackage400Response struct {
+}
+
+func (response GetNuGetPreviewPackage400Response) VisitGetNuGetPreviewPackageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type GetNuGetPreviewPackage401Response struct {
+}
+
+func (response GetNuGetPreviewPackage401Response) VisitGetNuGetPreviewPackageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetNuGetPreviewPackage403Response struct {
+}
+
+func (response GetNuGetPreviewPackage403Response) VisitGetNuGetPreviewPackageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetNuGetPreviewPackage404Response struct {
+}
+
+func (response GetNuGetPreviewPackage404Response) VisitGetNuGetPreviewPackageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetNuGetPreviewPackage503Response struct {
+}
+
+func (response GetNuGetPreviewPackage503Response) VisitGetNuGetPreviewPackageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type CreateNuGetPublicationSessionRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	Params       CreateNuGetPublicationSessionParams
+	Body         *CreateNuGetPublicationSessionJSONRequestBody
+}
+
+type CreateNuGetPublicationSessionResponseObject interface {
+	VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateNuGetPublicationSession201JSONResponse NuGetPublicationSession
+
+func (response CreateNuGetPublicationSession201JSONResponse) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNuGetPublicationSession400Response struct {
+}
+
+func (response CreateNuGetPublicationSession400Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateNuGetPublicationSession401Response struct {
+}
+
+func (response CreateNuGetPublicationSession401Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateNuGetPublicationSession403Response struct {
+}
+
+func (response CreateNuGetPublicationSession403Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type CreateNuGetPublicationSession404Response struct {
+}
+
+func (response CreateNuGetPublicationSession404Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type CreateNuGetPublicationSession409Response struct {
+}
+
+func (response CreateNuGetPublicationSession409Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type CreateNuGetPublicationSession410Response struct {
+}
+
+func (response CreateNuGetPublicationSession410Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(410)
+	return nil
+}
+
+type CreateNuGetPublicationSession503Response struct {
+}
+
+func (response CreateNuGetPublicationSession503Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetNuGetPublicationSessionRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	SessionId    openapi_types.UUID `json:"sessionId"`
+}
+
+type GetNuGetPublicationSessionResponseObject interface {
+	VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error
+}
+
+type GetNuGetPublicationSession200JSONResponse NuGetPublicationSession
+
+func (response GetNuGetPublicationSession200JSONResponse) VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNuGetPublicationSession400Response struct {
+}
+
+func (response GetNuGetPublicationSession400Response) VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type GetNuGetPublicationSession401Response struct {
+}
+
+func (response GetNuGetPublicationSession401Response) VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetNuGetPublicationSession403Response struct {
+}
+
+func (response GetNuGetPublicationSession403Response) VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetNuGetPublicationSession404Response struct {
+}
+
+func (response GetNuGetPublicationSession404Response) VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetNuGetPublicationSession503Response struct {
+}
+
+func (response GetNuGetPublicationSession503Response) VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type CommitNuGetPublicationSessionRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	SessionId    openapi_types.UUID `json:"sessionId"`
+}
+
+type CommitNuGetPublicationSessionResponseObject interface {
+	VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error
+}
+
+type CommitNuGetPublicationSession200JSONResponse NuGetPreviewPackage
+
+func (response CommitNuGetPublicationSession200JSONResponse) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitNuGetPublicationSession400Response struct {
+}
+
+func (response CommitNuGetPublicationSession400Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CommitNuGetPublicationSession401Response struct {
+}
+
+func (response CommitNuGetPublicationSession401Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CommitNuGetPublicationSession403Response struct {
+}
+
+func (response CommitNuGetPublicationSession403Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type CommitNuGetPublicationSession404Response struct {
+}
+
+func (response CommitNuGetPublicationSession404Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type CommitNuGetPublicationSession409Response struct {
+}
+
+func (response CommitNuGetPublicationSession409Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type CommitNuGetPublicationSession410Response struct {
+}
+
+func (response CommitNuGetPublicationSession410Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(410)
+	return nil
+}
+
+type CommitNuGetPublicationSession503Response struct {
+}
+
+func (response CommitNuGetPublicationSession503Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type StageNuGetPublicationSessionRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	SessionId    openapi_types.UUID `json:"sessionId"`
+	Body         io.Reader
+}
+
+type StageNuGetPublicationSessionResponseObject interface {
+	VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error
+}
+
+type StageNuGetPublicationSession200JSONResponse NuGetPublicationSession
+
+func (response StageNuGetPublicationSession200JSONResponse) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StageNuGetPublicationSession400Response struct {
+}
+
+func (response StageNuGetPublicationSession400Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type StageNuGetPublicationSession401Response struct {
+}
+
+func (response StageNuGetPublicationSession401Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type StageNuGetPublicationSession403Response struct {
+}
+
+func (response StageNuGetPublicationSession403Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type StageNuGetPublicationSession404Response struct {
+}
+
+func (response StageNuGetPublicationSession404Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type StageNuGetPublicationSession409Response struct {
+}
+
+func (response StageNuGetPublicationSession409Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type StageNuGetPublicationSession410Response struct {
+}
+
+func (response StageNuGetPublicationSession410Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(410)
+	return nil
+}
+
+type StageNuGetPublicationSession413Response struct {
+}
+
+func (response StageNuGetPublicationSession413Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(413)
+	return nil
+}
+
+type StageNuGetPublicationSession503Response struct {
+}
+
+func (response StageNuGetPublicationSession503Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
 }
 
 type GetPublishSessionRequestObject struct {
@@ -32728,6 +33987,36 @@ type StrictServerInterface interface {
 	// (GET /overview-statistics)
 	GetOverviewStatistics(ctx context.Context, request GetOverviewStatisticsRequestObject) (GetOverviewStatisticsResponseObject, error)
 
+	// (POST /previews/nuget/repositories)
+	CreateNuGetPreviewRepository(ctx context.Context, request CreateNuGetPreviewRepositoryRequestObject) (CreateNuGetPreviewRepositoryResponseObject, error)
+
+	// (GET /previews/nuget/repositories/{repositoryId})
+	GetNuGetPreviewRepository(ctx context.Context, request GetNuGetPreviewRepositoryRequestObject) (GetNuGetPreviewRepositoryResponseObject, error)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/capacity)
+	GetNuGetPreviewCapacity(ctx context.Context, request GetNuGetPreviewCapacityRequestObject) (GetNuGetPreviewCapacityResponseObject, error)
+
+	// (PUT /previews/nuget/repositories/{repositoryId}/capacity)
+	ReplaceNuGetPreviewQuota(ctx context.Context, request ReplaceNuGetPreviewQuotaRequestObject) (ReplaceNuGetPreviewQuotaResponseObject, error)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/packages)
+	ListNuGetPreviewPackages(ctx context.Context, request ListNuGetPreviewPackagesRequestObject) (ListNuGetPreviewPackagesResponseObject, error)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version})
+	GetNuGetPreviewPackage(ctx context.Context, request GetNuGetPreviewPackageRequestObject) (GetNuGetPreviewPackageResponseObject, error)
+
+	// (POST /previews/nuget/repositories/{repositoryId}/publication-sessions)
+	CreateNuGetPublicationSession(ctx context.Context, request CreateNuGetPublicationSessionRequestObject) (CreateNuGetPublicationSessionResponseObject, error)
+
+	// (GET /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId})
+	GetNuGetPublicationSession(ctx context.Context, request GetNuGetPublicationSessionRequestObject) (GetNuGetPublicationSessionResponseObject, error)
+
+	// (POST /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/commit)
+	CommitNuGetPublicationSession(ctx context.Context, request CommitNuGetPublicationSessionRequestObject) (CommitNuGetPublicationSessionResponseObject, error)
+
+	// (PUT /previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package)
+	StageNuGetPublicationSession(ctx context.Context, request StageNuGetPublicationSessionRequestObject) (StageNuGetPublicationSessionResponseObject, error)
+
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
 
@@ -35242,6 +36531,294 @@ func (sh *strictHandler) GetOverviewStatistics(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOverviewStatisticsResponseObject); ok {
 		if err := validResponse.VisitGetOverviewStatisticsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNuGetPreviewRepository operation middleware
+func (sh *strictHandler) CreateNuGetPreviewRepository(w http.ResponseWriter, r *http.Request) {
+	var request CreateNuGetPreviewRepositoryRequestObject
+
+	var body CreateNuGetPreviewRepositoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNuGetPreviewRepository(ctx, request.(CreateNuGetPreviewRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNuGetPreviewRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNuGetPreviewRepositoryResponseObject); ok {
+		if err := validResponse.VisitCreateNuGetPreviewRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNuGetPreviewRepository operation middleware
+func (sh *strictHandler) GetNuGetPreviewRepository(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID) {
+	var request GetNuGetPreviewRepositoryRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNuGetPreviewRepository(ctx, request.(GetNuGetPreviewRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNuGetPreviewRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNuGetPreviewRepositoryResponseObject); ok {
+		if err := validResponse.VisitGetNuGetPreviewRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNuGetPreviewCapacity operation middleware
+func (sh *strictHandler) GetNuGetPreviewCapacity(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID) {
+	var request GetNuGetPreviewCapacityRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNuGetPreviewCapacity(ctx, request.(GetNuGetPreviewCapacityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNuGetPreviewCapacity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNuGetPreviewCapacityResponseObject); ok {
+		if err := validResponse.VisitGetNuGetPreviewCapacityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceNuGetPreviewQuota operation middleware
+func (sh *strictHandler) ReplaceNuGetPreviewQuota(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID) {
+	var request ReplaceNuGetPreviewQuotaRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body ReplaceNuGetPreviewQuotaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceNuGetPreviewQuota(ctx, request.(ReplaceNuGetPreviewQuotaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceNuGetPreviewQuota")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceNuGetPreviewQuotaResponseObject); ok {
+		if err := validResponse.VisitReplaceNuGetPreviewQuotaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNuGetPreviewPackages operation middleware
+func (sh *strictHandler) ListNuGetPreviewPackages(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, params ListNuGetPreviewPackagesParams) {
+	var request ListNuGetPreviewPackagesRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNuGetPreviewPackages(ctx, request.(ListNuGetPreviewPackagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNuGetPreviewPackages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNuGetPreviewPackagesResponseObject); ok {
+		if err := validResponse.VisitListNuGetPreviewPackagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNuGetPreviewPackage operation middleware
+func (sh *strictHandler) GetNuGetPreviewPackage(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, packageId string, version string) {
+	var request GetNuGetPreviewPackageRequestObject
+
+	request.RepositoryId = repositoryId
+	request.PackageId = packageId
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNuGetPreviewPackage(ctx, request.(GetNuGetPreviewPackageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNuGetPreviewPackage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNuGetPreviewPackageResponseObject); ok {
+		if err := validResponse.VisitGetNuGetPreviewPackageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNuGetPublicationSession operation middleware
+func (sh *strictHandler) CreateNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, params CreateNuGetPublicationSessionParams) {
+	var request CreateNuGetPublicationSessionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body CreateNuGetPublicationSessionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNuGetPublicationSession(ctx, request.(CreateNuGetPublicationSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNuGetPublicationSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNuGetPublicationSessionResponseObject); ok {
+		if err := validResponse.VisitCreateNuGetPublicationSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNuGetPublicationSession operation middleware
+func (sh *strictHandler) GetNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, sessionId openapi_types.UUID) {
+	var request GetNuGetPublicationSessionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNuGetPublicationSession(ctx, request.(GetNuGetPublicationSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNuGetPublicationSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNuGetPublicationSessionResponseObject); ok {
+		if err := validResponse.VisitGetNuGetPublicationSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CommitNuGetPublicationSession operation middleware
+func (sh *strictHandler) CommitNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, sessionId openapi_types.UUID) {
+	var request CommitNuGetPublicationSessionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CommitNuGetPublicationSession(ctx, request.(CommitNuGetPublicationSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CommitNuGetPublicationSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CommitNuGetPublicationSessionResponseObject); ok {
+		if err := validResponse.VisitCommitNuGetPublicationSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StageNuGetPublicationSession operation middleware
+func (sh *strictHandler) StageNuGetPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, sessionId openapi_types.UUID) {
+	var request StageNuGetPublicationSessionRequestObject
+
+	request.RepositoryId = repositoryId
+	request.SessionId = sessionId
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StageNuGetPublicationSession(ctx, request.(StageNuGetPublicationSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StageNuGetPublicationSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StageNuGetPublicationSessionResponseObject); ok {
+		if err := validResponse.VisitStageNuGetPublicationSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -80,6 +80,13 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 				capacity.ObjectCount++
 			}
 		}
+	case FormatNuGet:
+		for _, publication := range s.nugetPublications {
+			if publication.RepositoryID == id {
+				capacity.UsedBytes += publication.Size
+				capacity.ObjectCount++
+			}
+		}
 	case FormatAPT:
 		capacity.UsedBytes, capacity.ObjectCount = s.aptBaseCapacityLocked(id)
 		generated := make(map[string]int64)

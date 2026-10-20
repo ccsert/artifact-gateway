@@ -9,6 +9,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/config"
 	"github.com/ccsert/artifact-gateway/internal/emailnotification"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
@@ -18,17 +19,18 @@ import (
 )
 
 type backgroundRuntime struct {
-	migration       *nexusmigration.Service
-	store           *repository.PostgresStore
-	objects         app.ObjectStore
-	taskQueue       *app.PostgresCacheTaskQueue
-	maintenance     *app.CacheMaintenance
-	metrics         *app.Metrics
-	scanner         scanning.Scanner
-	scanResolver    app.ArtifactScanResolver
-	scannerFormats  []repository.Format
-	workerSessionID string
-	aptPublisher    *aptpublication.Publisher
+	migration        *nexusmigration.Service
+	store            *repository.PostgresStore
+	objects          app.ObjectStore
+	taskQueue        *app.PostgresCacheTaskQueue
+	maintenance      *app.CacheMaintenance
+	metrics          *app.Metrics
+	scanner          scanning.Scanner
+	scanResolver     app.ArtifactScanResolver
+	scannerFormats   []repository.Format
+	workerSessionID  string
+	aptPublisher     *aptpublication.Publisher
+	nugetMaintenance *nugetformat.Maintenance
 }
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
@@ -37,6 +39,11 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 	}
 	if cfg.HasRole(config.NodeRoleWorker) {
 		r.startWorkers(ctx, cfg, app.NativeRepositoryRetention{Store: r.store, Metrics: r.metrics, WorkerFormats: cfg.WorkerFormats})
+		if r.nugetMaintenance != nil && cfg.WorkerEnabled("nuget", "retention") {
+			// This preview only reclaims expired, never-visible uploads. It
+			// does not advertise NuGet lifecycle/retention capability.
+			r.nugetMaintenance.Start(ctx, time.Minute)
+		}
 	}
 	app.BackgroundOperationQueueObserver{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 }

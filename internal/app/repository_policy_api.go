@@ -590,6 +590,9 @@ func (h generatedRepositoryAPIAdapter) ReplaceRetentionPolicy(w http.ResponseWri
 
 func (h generatedRepositoryAPIAdapter) GetRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
+		if rejectNuGetFormalProjection(w, repo) {
+			return
+		}
 		capacity, err := h.capacities.GetRepositoryCapacity(r.Context(), repositoryID.String())
 		if errors.Is(err, repository.ErrNotFound) {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
@@ -629,6 +632,9 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryCapacities(w http.ResponseW
 	proxyCapacities, proxyErr := (proxyCacheBrowseHandler{store: h.store, maintenance: h.maintenance, authenticator: h.authenticator, authorizer: h.authorizer}).proxyCacheCapacities(r.Context(), records)
 	items := make(adminopenapi.RepositoryCapacityList, 0, len(records))
 	for _, record := range records {
+		if record.Capacity.Format == repository.FormatNuGet {
+			continue
+		}
 		if !h.mayAdministerRepository(r, principal, record.Capacity.RepositoryID) {
 			continue
 		}
@@ -665,6 +671,9 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryCapacities(w http.ResponseW
 
 func (h generatedRepositoryAPIAdapter) ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
+		if rejectNuGetFormalProjection(w, repo) {
+			return
+		}
 		var request adminopenapi.RepositoryCapacityQuota
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()

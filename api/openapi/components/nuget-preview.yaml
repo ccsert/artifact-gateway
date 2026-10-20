@@ -1,0 +1,181 @@
+NuGetPreviewRepositoryCreate:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+  properties:
+    name:
+      type: string
+      pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+    anonymousRead:
+      type: boolean
+      default: false
+NuGetPreviewRepository:
+  type: object
+  required:
+    - id
+    - name
+    - format
+    - preview
+    - sourceUrl
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    format:
+      type: string
+      const: nuget
+    preview:
+      type: boolean
+      const: true
+    sourceUrl:
+      type: string
+      format: uri
+NuGetPublicationRequest:
+  type: object
+  additionalProperties: false
+  required:
+    - packageId
+    - version
+    - digest
+    - size
+  properties:
+    packageId:
+      type: string
+      minLength: 1
+      maxLength: 100
+    version:
+      type: string
+      minLength: 1
+      maxLength: 256
+    digest:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    size:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 268435456
+NuGetPublicationSession:
+  type: object
+  required:
+    - id
+    - repositoryId
+    - packageId
+    - version
+    - digest
+    - size
+    - state
+    - createdAt
+    - expiresAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    repositoryId:
+      type: string
+      format: uuid
+    packageId:
+      type: string
+    version:
+      type: string
+    digest:
+      type: string
+    size:
+      type: integer
+      format: int64
+    state:
+      type: string
+      enum:
+        - reserved
+        - staged
+        - committed
+        - expired
+    createdAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+    committedAt:
+      type: string
+      format: date-time
+NuGetPreviewPackage:
+  type: object
+  required:
+    - repositoryId
+    - packageId
+    - version
+    - digest
+    - size
+    - publishedAt
+    - packageUrl
+    - registrationUrl
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    packageId:
+      type: string
+    version:
+      type: string
+    digest:
+      type: string
+    size:
+      type: integer
+      format: int64
+    publishedAt:
+      type: string
+      format: date-time
+    packageUrl:
+      type: string
+      format: uri
+    registrationUrl:
+      type: string
+      format: uri
+NuGetPreviewPackageList:
+  type: object
+  required:
+    - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/NuGetPreviewPackage'
+    nextCursor:
+      type: string
+NuGetPreviewCapacity:
+  type: object
+  required:
+    - repositoryId
+    - usedBytes
+    - objectCount
+    - quotaBytes
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    usedBytes:
+      type: integer
+      format: int64
+      minimum: 0
+    objectCount:
+      type: integer
+      format: int64
+      minimum: 0
+    quotaBytes:
+      type: integer
+      format: int64
+      minimum: 0
+NuGetPreviewQuota:
+  type: object
+  additionalProperties: false
+  required:
+    - quotaBytes
+  properties:
+    quotaBytes:
+      type: integer
+      format: int64
+      minimum: 0

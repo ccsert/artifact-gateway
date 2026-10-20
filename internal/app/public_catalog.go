@@ -44,7 +44,7 @@ func (h publicRepositoryCatalogHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 		for _, repo := range repositories {
-			if repo.State == repository.RepositoryActive && repo.AnonymousRead {
+			if repo.Format != repository.FormatNuGet && repo.State == repository.RepositoryActive && repo.AnonymousRead {
 				items = append(items, publicRepositoryCatalogEntry{ID: repo.ID, Name: repo.Name, Format: repo.Format, Type: string(repo.Type)})
 			}
 		}

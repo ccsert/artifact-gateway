@@ -137,7 +137,10 @@ func validatePackagePath(name string) (string, error) {
 }
 
 func parseNuspec(body []byte) (string, string, error) {
-	decoder := xml.NewDecoder(bytes.NewReader(body))
+	// Official dotnet pack writes a UTF-8 byte-order marker. It is an encoding
+	// marker only at byte zero; preserve the original nuspec in the caller and
+	// keep rejecting extra or misplaced non-whitespace outside the XML root.
+	decoder := xml.NewDecoder(bytes.NewReader(bytes.TrimPrefix(body, []byte{0xef, 0xbb, 0xbf})))
 	decoder.Strict = true
 	var (
 		stack                     []xml.Name
