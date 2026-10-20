@@ -387,6 +387,29 @@ describe("AppLayout", () => {
     );
   });
 
+  it("requires a non-blank token before enabling save", async () => {
+    const user = userEvent.setup();
+    renderLayout("/repositories");
+
+    await openAccountMenu(user);
+    await user.click(
+      await screen.findByRole("menuitem", { name: /已配置 Token/ }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "API 访问令牌" });
+    const input = within(dialog).getByRole("textbox");
+    expect(input).toHaveValue("operator-token");
+
+    await user.clear(input);
+    await user.paste("   ");
+    expect(
+      within(dialog).getByRole("button", { name: /^保\s*存$/ }),
+    ).toBeDisabled();
+    await user.paste("valid-token");
+    expect(
+      within(dialog).getByRole("button", { name: /^保\s*存$/ }),
+    ).toBeEnabled();
+  });
+
   it("discards token edits on cancel and clears credentials only on request", async () => {
     const user = userEvent.setup();
     renderLayout("/repositories");
@@ -400,14 +423,8 @@ describe("AppLayout", () => {
     expect(input).toHaveValue("operator-token");
 
     await user.clear(input);
-    await user.type(input, "   ");
-    expect(
-      within(dialog).getByRole("button", { name: /^保\s*存$/ }),
-    ).toBeDisabled();
-    await user.type(input, "unsaved-token");
-    expect(
-      within(dialog).getByRole("button", { name: /^保\s*存$/ }),
-    ).toBeEnabled();
+    await user.paste("unsaved-token");
+    expect(input).toHaveValue("unsaved-token");
     await user.click(within(dialog).getByRole("button", { name: /^取\s*消$/ }));
     await waitFor(() => expect(dialog).not.toBeVisible());
     expect(auth.setToken).not.toHaveBeenCalled();
