@@ -3,8 +3,13 @@
 package backupops
 
 import (
+	"context"
+	"io"
+	"net"
+	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,10 +50,95 @@ func TestPostgresNuGetPublishedBackupReferences(t *testing.T) {
 		}
 	}
 	seen := map[string]bool{}
-	if err = (Postgres{DSN: dsn}).WalkReferences(t.Context(), func(key string) error { seen[key] = true; return nil }); err != nil {
+	if err = nugetReferenceLoopback(t, dsn).WalkReferences(t.Context(), func(key string) error { seen[key] = true; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if !seen[keys[0]] || seen[keys[1]] {
 		t.Fatalf("visible/staged backup references: %t/%t", seen[keys[0]], seen[keys[1]])
 	}
+}
+
+// Operational backup connections require a literal loopback endpoint. Forward
+// to the exact declared integration database, preserving its role, credentials,
+// database and options when the fixture runs inside the Go test container.
+func nugetReferenceLoopback(t *testing.T, dsn string) Postgres {
+	t.Helper()
+	u, err := url.Parse(dsn)
+	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Hostname() == "" || u.Port() == "" {
+		t.Fatal("NuGet reference fixture requires an explicit TEST_DATABASE_URL")
+	}
+	target := u.Host
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	var workers sync.WaitGroup
+	var mu sync.Mutex
+	connections := map[net.Conn]bool{}
+	closing := false
+	track := func(conn net.Conn) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		if closing {
+			_ = conn.Close()
+			return false
+		}
+		connections[conn] = true
+		return true
+	}
+	forget := func(conn net.Conn) {
+		_ = conn.Close()
+		mu.Lock()
+		delete(connections, conn)
+		mu.Unlock()
+	}
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		for {
+			incoming, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			if !track(incoming) {
+				return
+			}
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				defer forget(incoming)
+				outgoing, err := (&net.Dialer{}).DialContext(ctx, "tcp", target)
+				if err != nil {
+					return
+				}
+				if !track(outgoing) {
+					return
+				}
+				defer forget(outgoing)
+				copied := make(chan struct{})
+				go func() {
+					defer close(copied)
+					_, _ = io.Copy(incoming, outgoing)
+					_ = incoming.Close()
+				}()
+				_, _ = io.Copy(outgoing, incoming)
+				_ = outgoing.Close()
+				<-copied
+			}()
+		}
+	}()
+	t.Cleanup(func() {
+		cancel()
+		_ = listener.Close()
+		mu.Lock()
+		closing = true
+		for conn := range connections {
+			_ = conn.Close()
+		}
+		mu.Unlock()
+		workers.Wait()
+	})
+	u.Host = listener.Addr().String()
+	return Postgres{DSN: u.String()}
 }
