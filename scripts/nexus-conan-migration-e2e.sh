@@ -86,7 +86,7 @@ if not owned.is_dir() or not home.is_dir() or home == owned or not home.is_relat
     raise SystemExit("refuse a Conan home outside the owned fixture directory")
 PY
 python3 -m venv "$workdir/client" >>"$evidence/setup.log" 2>&1
-PIP_CACHE_DIR="$workdir/pip-cache" "$workdir/client/bin/python" -m pip install \
+PIP_CONFIG_FILE=/dev/null "$workdir/client/bin/python" -m pip --isolated install --index-url https://pypi.org/simple --cache-dir "$workdir/pip-cache" \
   --disable-pip-version-check --no-input 'conan==2.21.0' >>"$evidence/setup.log" 2>&1
 export CONAN_BINARY="$workdir/client/bin/conan"
 [[ "$(CONAN_HOME="$CONAN_HOME" "$CONAN_BINARY" --version)" == 'Conan version 2.21.0' ]]

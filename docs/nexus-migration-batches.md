@@ -3,12 +3,15 @@
 [简体中文](nexus-migration-batches.zh-CN.md) · [Documentation index](README.md)
 
 The administrator API connects [read-only source discovery](nexus-source-discovery.md)
-to real Maven release and Raw Hosted publication. It does not execute a production
-cutover, delete artifacts, overwrite conflicts, or migrate Proxy caches, OCI or
-online SNAPSHOT history. The offline SNAPSHOT importer remains independent.
+to native Maven release, Raw, OCI and Conan 2 Hosted publication. Batches use
+`native-v1`; old policy inputs and historical management interfaces are not
+supported. Production cutover, source deletion, conflict overwrites, Proxy caches
+and online SNAPSHOT history are outside this workflow. The offline SNAPSHOT
+importer remains independent.
 
 Apply migrations `000147_nexus_migration_batches.sql` and
-`000148_nexus_migration_scan_diagnostics.sql`. Configure
+`000148_nexus_migration_scan_diagnostics.sql` and the appended
+`000154_nexus_native_migration_formats.sql` through the standard migration runner. Configure
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` with the real object-storage pool identity.
 Compose forwards it to every inherited Gateway role. Without it migration writes
 are disabled; the rest of Gateway and migration reports remain available. Source
@@ -26,7 +29,7 @@ All paths below are relative to `/api/v2`, require an administrator, and return
   assembled object-storage endpoint and bucket; custom assembly must provide a
   matching binding for its actual stores instead of assuming a shared pool.
 - `POST /migrations/nexus/batches` fixes `sourceId`, exact `sourceVersion`,
-  explicit source-to-existing-target UUID mappings, `policyVersion=release-raw-v1`
+  explicit source-to-existing-target UUID mappings, `policyVersion=native-v1`
   and `capacityEvidence`. A background worker completely enumerates the source
   before atomically sealing the manifest and entries. An interrupted, malformed,
   oversized or cyclic scan fails; no partial inventory becomes executable.
@@ -77,6 +80,28 @@ is reported as regenerated. A missing POM, missing required main artifact or unk
 packaging is unsupported. A changed release asset set conflicts with an existing
 GAV. Unaddressable paths and Raw checksum-resource paths are explicitly unsupported.
 
+OCI maps Nexus `docker` inventories explicitly to native OCI. Each tag or digest
+keeps its complete original OCI index/Docker manifest-list, nested manifests,
+configs and layers, all platforms and shared objects. Graphs are bounded to depth
+8 and 1,024 objects, with 16 MiB per manifest and 64 MiB total manifest pre-read; manifest bodies are read and hashed before sealing, then
+revalidated during copying. The entire verified closure and missing tag become
+visible atomically. An existing different tag conflicts; the importer never
+flattens an index or overwrites a tag. Missing children, descriptor size/hash
+mismatches, tag drift and invalid graphs cannot become successful complete
+closures. Foreign layers, subject/referrer graphs and unknown media types are
+explicit unsupported results. There is no platform-subset option.
+
+Conan uses exact revision storage paths, not Browse projections:
+`conans/name/version/user/channel/revisions/RREV/files/file` and, for packages,
+`.../packages/PID/revisions/PREV/files/file`. File reads use the source's `v2/`
+protocol prefix. Every recipe/package revision must pass the same complete
+manifest, expanded-file and identity checks as native Conan publication; source
+archives are preserved byte for byte. Recipes publish before their packages.
+Fresh sessions own fresh stage keys after expiry, and visible metadata, session
+completion and actual-actor audit share the lease-fenced transaction. A quarantined
+or tombstoned revision cannot be counted as a verified skip. Conan 1, SCM revisions,
+optional metadata and non-tgz archives are unsupported.
+
 Existing success is never sufficient evidence. An identical identity must pass
 current source hash/validator checks and complete target identity/size/SHA-256
 readback before it is skipped. Different bytes preserve the target and conflict.
@@ -90,14 +115,14 @@ reported while retaining their target. There is no timestamp-only watermark.
 
 `metadataDiscovered` counts inventory records. Discovery-provided required hashes
 are reused. Missing SHA-256 (or Maven SHA-1/MD5 needed for derived sidecars) triggers
-bounded source verification; its actual reads are durably counted separately as
+bounded source verification; OCI graph manifest pre-reads are always required. Its actual reads are durably counted separately as
 `sourceVerificationBytes`, including incomplete scans. This phase streams hashes
 without target writes or a local download spool.
 
 `transferredBytes` counts copy-stage source body bytes, including retries and
 revalidation of existing identities. `verifiedBytes` counts unique primary target
 bytes with full readback evidence; retries do not inflate it. `visibleIdentities`
-counts committed or readback-confirmed native Raw paths/Maven GAVs separately.
+counts committed or readback-confirmed native Raw paths, Maven GAVs, OCI references and Conan revisions separately.
 `totalBytes` is null until the complete manifest is sealed, then counts unique
 supported primary bytes. Unsupported and source-deleted entries remain explicit
 report rows. These counters do not constitute official-client acceptance.
@@ -134,3 +159,14 @@ in a private temporary directory. Both clients verify the complete expected
 inventory, size and SHA-256 through Gateway alone. This loopback HTTP evidence
 does not prove production TLS or authorize a cutover. Passing either gate is not
 production migration approval.
+
+The additional `make nexus-oci-migration-e2e` gate pins official crane 0.22.1,
+verifies all platforms, amd64 and arm64 from separate empty layouts for OCI index,
+Docker list and nested-index fixtures, and exercises PostgreSQL lease fencing,
+atomic closure publication, acknowledgement recovery and GC races. `make conan-e2e`
+also requires the Conan migration fixtures; `make nexus-conan-migration-e2e` runs
+them independently with pinned Conan 2.21.0, real PostgreSQL/RustFS restarts, two
+historical revisions and target-only installs from new client homes. Each owned
+fixture verifies its cleanup. These are synthetic Nexus REST inventories and
+standard protocol sources; actual deployed Nexus versions, business inventories,
+production trust/capacity and final cutover require their own acceptance evidence.

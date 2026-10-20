@@ -5,9 +5,70 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestSourceContentUsesExplicitNativeFormatRoutes(t *testing.T) {
+	revision := strings.Repeat("a", 32)
+	conanPath := "conans/widget/1.0/_/_/revisions/" + revision + "/files/conanfile.py"
+	for _, tc := range []struct {
+		format, storage, wire string
+	}{
+		{"maven", "org/example/a/1/a-1.jar", "org/example/a/1/a-1.jar"},
+		{"raw", "build+1.bin", "build+1.bin"},
+		{"oci", "v2/team/image/manifests/latest", "v2/team/image/manifests/latest"},
+		{"conan", conanPath, "v2/" + conanPath},
+		{"", "build.bin", ""},
+		{"future", "build.bin", ""},
+		{"conan", "widget/1.0/conanfile.py", ""},
+		{"oci", "v2/team/image/tags/list", ""},
+		{"oci", "/v2/team/image/manifests/latest", ""},
+	} {
+		t.Run(tc.format+"/"+tc.storage, func(t *testing.T) {
+			var requests atomic.Int32
+			service, id, _ := fixtureService(t, func(w http.ResponseWriter, r *http.Request) bool {
+				if !strings.HasPrefix(r.URL.Path, "/repository/raw-a/") {
+					return false
+				}
+				requests.Add(1)
+				if r.URL.Path != "/repository/raw-a/"+tc.wire {
+					t.Errorf("unexpected source route %q", r.URL.Path)
+				}
+				if tc.format == "oci" {
+					for _, mediaType := range []string{"application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json"} {
+						if !strings.Contains(r.Header.Get("Accept"), mediaType) {
+							t.Errorf("all-platform media type %q missing from source request", mediaType)
+						}
+					}
+					w.Header().Set("Content-Type", "application/vnd.oci.image.index.v1+json; charset=utf-8")
+				}
+				_, _ = io.WriteString(w, "data")
+				return true
+			})
+			content, err := service.OpenAsset(t.Context(), id, "1", "raw-a", AssetRequest{Format: tc.format, Path: tc.storage, Size: 4})
+			if tc.wire == "" {
+				requireCode(t, err, "invalid_request")
+				if requests.Load() != 0 {
+					t.Fatal("invalid native route reached the source")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = content.Body.Close() }()
+			body, err := io.ReadAll(content.Body)
+			if err != nil || string(body) != "data" || requests.Load() != 1 {
+				t.Fatalf("source body or request count mismatch: body=%q requests=%d err=%v", body, requests.Load(), err)
+			}
+			if tc.format == "oci" && content.MediaType != "application/vnd.oci.image.index.v1+json" {
+				t.Fatalf("unexpected normalized source media type %q", content.MediaType)
+			}
+		})
+	}
+}
 
 func TestSourceContentPinsIdentityBoundsBytesAndValidators(t *testing.T) {
 	for _, test := range []struct {
@@ -48,7 +109,7 @@ func TestSourceContentPinsIdentityBoundsBytesAndValidators(t *testing.T) {
 				_, _ = io.WriteString(w, test.body)
 				return true
 			})
-			content, err := service.OpenAsset(context.Background(), id, test.version, "raw-a", AssetRequest{Path: test.path, Size: test.size, Validator: test.validator})
+			content, err := service.OpenAsset(context.Background(), id, test.version, "raw-a", AssetRequest{Format: "raw", Path: test.path, Size: test.size, Validator: test.validator})
 			if test.wantCode != "" {
 				requireCode(t, err, test.wantCode)
 				return
@@ -80,7 +141,7 @@ func TestSourceContentSlowBodyHonorsBoundedDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	started := time.Now()
-	content, err := service.OpenAsset(ctx, id, "1", "raw-a", AssetRequest{Path: "slow.bin", Size: 4})
+	content, err := service.OpenAsset(ctx, id, "1", "raw-a", AssetRequest{Format: "raw", Path: "slow.bin", Size: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,6 +165,6 @@ func TestSourceContentDelayedHeadersReturnBoundedTimeout(t *testing.T) {
 		return true
 	})
 	service.options.OperationTimeout = 25 * time.Millisecond
-	_, err := service.OpenAsset(context.Background(), id, "1", "raw-a", AssetRequest{Path: "slow.bin", Size: 4})
+	_, err := service.OpenAsset(context.Background(), id, "1", "raw-a", AssetRequest{Format: "raw", Path: "slow.bin", Size: 4})
 	requireCode(t, err, "source_timeout")
 }

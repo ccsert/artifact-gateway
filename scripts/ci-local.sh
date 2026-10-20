@@ -139,6 +139,8 @@ run_contract() {
   run "v0.5.0 upgrade and snapshot rollback" make upgrade-readiness
   run "integration tests" make integration-test
   run "target-only Nexus migration clients" make nexus-migration-client-e2e
+  run "complete Nexus OCI graph migration" make nexus-oci-migration-e2e
+  run "private Maven and OCI upstream clients" make private-upstream-auth-e2e
   run "agctl CLI E2E (isolated Compose stack)" make cli-e2e
   run "agctl runtime restart and dependency failures" make cli-runtime-e2e
   run "release readiness entrypoints" make release-readiness-check

@@ -12,7 +12,7 @@ export const nexusCapabilities: NexusMigrationCapabilities = {
   poolId: "fixture-physical-pool",
   executionEnabled: true,
   capacityEvidenceSource: "operator-reported",
-  policyVersion: "release-raw-v1",
+  policyVersion: "native-v1",
   maxAttempts: 3,
 };
 export const nexusScanFailure: NexusMigrationScanFailure = {
@@ -55,7 +55,7 @@ export const nexusBatch: NexusMigrationBatch = {
     { sourceRepository: "releases", targetRepositoryId: nexusTargets[0].id },
     { sourceRepository: "raw-source", targetRepositoryId: nexusTargets[1].id },
   ],
-  policyVersion: "release-raw-v1",
+  policyVersion: "native-v1",
   capacityEvidence: {
     targetId: nexusCapabilities.targetId,
     poolId: nexusCapabilities.poolId,

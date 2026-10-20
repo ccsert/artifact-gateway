@@ -485,6 +485,50 @@ describe("real batch read/control states", () => {
     );
     expect(report.mock.results[0].value.inventoryComplete).toBe(false);
   });
+  it.each([
+    ["maven", "/maven/native-releases"],
+    ["raw", "/raw/native-releases/"],
+    ["oci", "/v2/native-releases/"],
+    ["conan", "/conan/native-releases"],
+  ] as const)(
+    "exports a canonical %s URL independent of display commands",
+    async (format, path) => {
+      const report = vi.spyOn(batchModel, "observationReport");
+      vi.stubGlobal(
+        "URL",
+        class extends URL {
+          static createObjectURL() {
+            return "blob:observation";
+          }
+          static revokeObjectURL() {}
+        },
+      );
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+        () => undefined,
+      );
+      vi.mocked(getRepository).mockImplementation(
+        async (options) =>
+          ({
+            data:
+              options.path.repositoryId === nexusTargets[0].id
+                ? { ...nexusTargets[0], format }
+                : nexusTargets[1],
+          }) as never,
+      );
+      show();
+      await screen.findByRole("heading", { name: "迁移验收观察报告" });
+      await userEvent.click(
+        screen.getByRole("button", { name: "导出当前观察报告" }),
+      );
+      await waitFor(() => expect(report).toHaveBeenCalled());
+      expect(report.mock.calls[0][3]).toContainEqual({
+        repositoryId: nexusTargets[0].id,
+        name: nexusTargets[0].name,
+        format,
+        url: `${window.location.origin}${path}`,
+      });
+    },
+  );
   it("exports freshly read checkpoints and refuses to call an unfinished cursor a complete inventory", async () => {
     const report = vi.spyOn(batchModel, "observationReport");
     vi.stubGlobal(

@@ -57,6 +57,8 @@ type NexusMigrationPublication struct {
 	objects          ObjectStores
 	targetID, poolID string
 	scanner          nexusMigrationPublicationScanner
+	oci              NexusFormatMigrationPublication
+	conan            NexusFormatMigrationPublication
 }
 
 var _ nexusmigration.Publication = (*NexusMigrationPublication)(nil)
@@ -92,7 +94,7 @@ func (p *NexusMigrationPublication) target(ctx context.Context, id, format strin
 	}
 	repo, err := p.store.GetHostedRepository(ctx, id)
 	if err != nil || repo.Type != repository.RepositoryTypeHosted || repo.State != repository.RepositoryActive ||
-		(!supportsMigratedPublication(repo.Format) && repo.Format != repository.FormatMaven) || (format != "" && string(repo.Format) != format) {
+		!p.supportsFormat(repo.Format) || (format != "" && string(repo.Format) != format) {
 		return repository.HostedRepository{}, nexusmigration.Failed("target_not_active_hosted")
 	}
 	if objectstore.Validate(p.objects[repo.Format]) != nil {
@@ -203,6 +205,9 @@ func nexusMavenChecksums(asset nexusmigration.Asset) []mavenChecksum {
 // Verify, Publish and the caller's durable entry checkpoint. It carries one
 // PostgreSQL advisory session when a Maven GAV contains many objects.
 func (p *NexusMigrationPublication) Lock(ctx context.Context, entry nexusmigration.Entry) (context.Context, func(), error) {
+	if publication := p.formatPublication(entry.Format); publication != nil {
+		return publication.Lock(ctx, entry)
+	}
 	assets, err := nexusNativeAssets(entry)
 	if err != nil {
 		return ctx, nil, err
@@ -279,6 +284,9 @@ func (p *NexusMigrationPublication) held(ctx context.Context, entry nexusmigrati
 }
 
 func (p *NexusMigrationPublication) Begin(ctx context.Context, entry nexusmigration.Entry) (string, error) {
+	if publication := p.formatPublication(entry.Format); publication != nil {
+		return publication.Begin(ctx, entry)
+	}
 	if _, err := p.held(ctx, entry); err != nil {
 		return "", err
 	}
@@ -348,6 +356,9 @@ func (p *NexusMigrationPublication) session(ctx context.Context, entry nexusmigr
 }
 
 func (p *NexusMigrationPublication) Stage(ctx context.Context, entry nexusmigration.Entry, asset nexusmigration.Asset, input io.ReadSeeker) error {
+	if publication := p.formatPublication(entry.Format); publication != nil {
+		return publication.Stage(ctx, entry, asset, input)
+	}
 	lock, err := p.held(ctx, entry)
 	if err != nil {
 		return err
@@ -455,6 +466,9 @@ func nexusVerifyObject(ctx context.Context, objects objectstore.Store, asset rep
 }
 
 func (p *NexusMigrationPublication) Verify(ctx context.Context, entry nexusmigration.Entry) error {
+	if publication := p.formatPublication(entry.Format); publication != nil {
+		return publication.Verify(ctx, entry)
+	}
 	lock, err := p.held(ctx, entry)
 	if err != nil {
 		return err
@@ -514,6 +528,9 @@ func nexusMavenReleaseClosure(entry nexusmigration.Entry, packaging string) erro
 }
 
 func (p *NexusMigrationPublication) Readback(ctx context.Context, entry nexusmigration.Entry) (nexusmigration.Readback, error) {
+	if publication := p.formatPublication(entry.Format); publication != nil {
+		return publication.Readback(ctx, entry)
+	}
 	assets, err := nexusNativeAssets(entry)
 	if err != nil {
 		return "", err
@@ -616,6 +633,9 @@ func (p *NexusMigrationPublication) nativeAsset(ctx context.Context, format, rep
 }
 
 func (p *NexusMigrationPublication) Publish(ctx context.Context, entry nexusmigration.Entry) error {
+	if publication := p.formatPublication(entry.Format); publication != nil {
+		return publication.Publish(ctx, entry)
+	}
 	lock, err := p.held(ctx, entry)
 	if err != nil {
 		return err
@@ -684,7 +704,8 @@ func (p *NexusMigrationPublication) Capacity(ctx context.Context, batch nexusmig
 			StoragePoolID: evidence.PoolID, FreeBytes: evidence.FreeBytes, Repositories: []capacityplan.RepositoryCapacity{}, Objects: []capacityplan.Presence{}, References: []capacityplan.Membership{}},
 		Peak: capacityplan.PeakBudget{StoragePoolID: p.poolID, DownloadBytes: evidence.DownloadBytes, UploadBytes: evidence.UploadBytes,
 			BackupBytes: evidence.BackupBytes, RestoreBytes: evidence.RestoreBytes, HeadroomBytes: evidence.HeadroomBytes}}
-	seenRepositories, seenObjects, seenReferences := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	seenRepositories, seenObjects := map[string]bool{}, map[string]bool{}
+	seenReferences := map[string]MigrationPublicationAsset{}
 	var downloadPeak int64
 	for _, entry := range entries {
 		switch entry.State {
@@ -697,7 +718,7 @@ func (p *NexusMigrationPublication) Capacity(ctx context.Context, batch nexusmig
 		if _, err := p.target(ctx, entry.TargetRepositoryID, entry.Format); err != nil {
 			return capacityplan.Report{}, err
 		}
-		assets, err := nexusNativeAssets(entry)
+		assets, err := p.capacityAssets(entry)
 		if err != nil {
 			return capacityplan.Report{}, err
 		}
@@ -715,10 +736,27 @@ func (p *NexusMigrationPublication) Capacity(ctx context.Context, batch nexusmig
 			seenRepositories[entry.TargetRepositoryID] = true
 		}
 		for _, asset := range assets {
+			logical := entry.TargetRepositoryID + "\x00" + asset.Path
+			actual, referenceErr := p.capacityAsset(ctx, entry, asset)
+			membership := capacityplan.Membership{RepositoryID: entry.TargetRepositoryID, Key: asset.Path, State: "unknown"}
+			if errors.Is(referenceErr, repository.ErrNotFound) {
+				membership.State = "absent"
+			} else if referenceErr == nil && actual.Path == asset.Path && actual.Digest == asset.Digest && actual.Size == asset.Size && actual.ObjectKey != "" {
+				// Replayed native publications may own a different immutable key.
+				// Account for the key actually referenced by the target.
+				asset.ObjectKey = actual.ObjectKey
+			}
+			if prior, duplicate := seenReferences[logical]; duplicate {
+				if prior != asset {
+					return capacityplan.Report{}, nexusmigration.Failed("capacity_reference_conflict")
+				}
+				continue
+			}
+			seenReferences[logical] = asset
 			size := asset.Size
 			plan.References = append(plan.References, capacityplan.Reference{RepositoryID: entry.TargetRepositoryID, LogicalKey: asset.Path, ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: &size})
 			presence := capacityplan.Presence{Key: asset.ObjectKey, State: "verified", Digest: asset.Digest, Size: &size}
-			verifyErr := nexusVerifyObject(ctx, p.objects[repository.Format(entry.Format)], asset.MavenAsset)
+			verifyErr := nexusVerifyObject(ctx, p.objects[repository.Format(entry.Format)], repository.MavenAsset{RepositoryID: entry.TargetRepositoryID, Path: asset.Path, ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size})
 			if errors.Is(verifyErr, objectstore.ErrNotFound) {
 				presence = capacityplan.Presence{Key: asset.ObjectKey, State: "absent"}
 			} else if verifyErr != nil {
@@ -728,18 +766,10 @@ func (p *NexusMigrationPublication) Capacity(ctx context.Context, batch nexusmig
 				plan.Snapshot.Objects = append(plan.Snapshot.Objects, presence)
 				seenObjects[asset.ObjectKey] = true
 			}
-			logical := entry.TargetRepositoryID + "\x00" + asset.Path
-			if !seenReferences[logical] {
-				actual, err := p.nativeAsset(ctx, entry.Format, entry.TargetRepositoryID, asset.Path)
-				membership := capacityplan.Membership{RepositoryID: entry.TargetRepositoryID, Key: asset.Path, State: "unknown"}
-				if errors.Is(err, repository.ErrNotFound) {
-					membership.State = "absent"
-				} else if err == nil && actual == asset.MavenAsset && presence.State == "verified" {
-					membership.State, membership.Digest, membership.Size = "verified", asset.Digest, &size
-				}
-				plan.Snapshot.References = append(plan.Snapshot.References, membership)
-				seenReferences[logical] = true
+			if referenceErr == nil && actual.Path == asset.Path && actual.Digest == asset.Digest && actual.Size == asset.Size && actual.ObjectKey != "" && presence.State == "verified" {
+				membership.State, membership.Digest, membership.Size = "verified", asset.Digest, &size
 			}
+			plan.Snapshot.References = append(plan.Snapshot.References, membership)
 		}
 	}
 	// The worker downloads one complete primary into its seekable spool. This

@@ -15,7 +15,7 @@ the source and target-name intent to the batch form. Alternatively create a batc
 directly or choose **Rescan and catch up** from an existing batch. Every start
 re-reads the saved source and requires preflight for that connection version.
 
-Select at most ten supported Maven release/Raw Hosted sources and bind each to
+Select at most ten supported Maven release, Raw, OCI or Conan 2 Hosted sources and bind each to
 a real, active Hosted target of the same format. A previewed name is resolved
 only when it already exists in the current repository catalog; it is never
 treated as an invented repository UUID. Create missing targets explicitly in
@@ -81,7 +81,7 @@ scan, unconsumed cursor or incomplete inventory as incomplete. It projects bound
 server facts and never exports source credentials, arbitrary upstream errors or
 download validators.
 
-The report shows current native target endpoints, Maven/Gradle configuration
+The report shows current native target endpoints, format-specific client configuration
 examples, unsupported/conflict counts and residual dependencies. Its **target-only
 cold-client evidence** and **final catch-up after source freeze** stay **unverified**
 because the batch API contains no such acceptance evidence. Backend `completed`

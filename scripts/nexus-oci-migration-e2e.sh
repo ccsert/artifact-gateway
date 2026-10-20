@@ -10,10 +10,14 @@ done
 
 work=$(mktemp -d)
 project="artifact-gateway-oci-migration-$$-$RANDOM"
+evidence="$repo_root/output/nexus-oci-migration-e2e/$project"
+mkdir -p "$evidence"
 compose=(docker compose --env-file /dev/null --project-name "$project" -f compose.integration.yml -f "$work/compose.json")
 started=0
 cleanup() {
   local result=$?
+  local containers="" volumes="" networks=""
+  trap - EXIT
   if [[ "$started" == 1 ]]; then
     if ! "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1; then
       printf 'Owned OCI migration fixture cleanup failed: %s\n' "$project" >&2
@@ -25,6 +29,11 @@ cleanup() {
       else
         remaining=$(docker "$resource" ls -q --filter "label=com.docker.compose.project=$project")
       fi
+      case "$resource" in
+        container) containers="$remaining" ;;
+        volume) volumes="$remaining" ;;
+        network) networks="$remaining" ;;
+      esac
       if [[ -n "$remaining" ]]; then
         printf 'Owned OCI migration %s resources remain: %s\n' "$resource" "$project" >&2
         result=1
@@ -34,8 +43,13 @@ cleanup() {
       printf 'Owned OCI migration resources removed: containers=0 volumes=0 networks=0 project=%s\n' "$project"
     fi
   fi
+  python3 - "$evidence/cleanup.json" "$project" "$result" "$containers" "$volumes" "$networks" <<'PYCLEAN'
+import json, pathlib, sys
+pathlib.Path(sys.argv[1]).write_text(json.dumps({'project': sys.argv[2], 'exitCode': int(sys.argv[3]),
+    'remainingContainers': sys.argv[4].splitlines(), 'remainingVolumes': sys.argv[5].splitlines(),
+    'remainingNetworks': sys.argv[6].splitlines()}, indent=2) + '\n')
+PYCLEAN
   rm -rf "$work"
-  trap - EXIT
   exit "$result"
 }
 trap cleanup EXIT
@@ -81,8 +95,8 @@ started=1
 "${compose[@]}" run --rm --no-deps migrate
 postgres_address=$("${compose[@]}" port postgres 5432)
 rustfs_address=$("${compose[@]}" port rustfs 9000)
-python3 - "$work" "$postgres_address" "$rustfs_address" <<'PY'
-import json, os, pathlib, subprocess, sys
+python3 - "$work" "$postgres_address" "$rustfs_address" "$evidence" <<'PY'
+import hashlib, json, os, pathlib, subprocess, sys
 work = pathlib.Path(sys.argv[1])
 credentials = json.loads((work / 'credentials.json').read_text())
 env = dict(os.environ)
@@ -93,7 +107,8 @@ env.update({
     'TEST_RUSTFS_SECRET_KEY': credentials['secret'],
     'MIGRATION_CRANE_BIN': str(work / 'crane'),
 })
-log = work / 'client.jsonl'
+evidence = pathlib.Path(sys.argv[4])
+log = evidence / 'client.jsonl'
 with log.open('w') as output:
     result = subprocess.run(['go', 'test', '-json', '-count=1', '-tags=integration,ociclient',
         './internal/app', './internal/repository', './internal/nexusmigration/pgstore', '-run', '^Test(PostgresRustFSNexusOCI|PostgresOCIImport|PostgresNexusOCI)',
@@ -128,9 +143,12 @@ for line in log.read_text().splitlines():
         skipped.append(event.get('Test'))
     if event.get('Action') == 'fail':
         failed.append(event.get('Test', event.get('Package')))
-print(json.dumps({'schemaVersion': 1, 'testExitCode': result.returncode, 'requiredPassed': sorted(passed),
+summary = {'schemaVersion': 1, 'testExitCode': result.returncode, 'requiredPassed': sorted(passed),
     'requiredMissing': sorted(required - passed), 'coldLayoutsPassed': sorted(cold),
-    'coldLayoutsMissing': sorted(cold_required - cold), 'skipped': skipped, 'failed': failed}))
+    'coldLayoutsMissing': sorted(cold_required - cold), 'skipped': skipped, 'failed': failed,
+    'logSHA256': hashlib.sha256(log.read_bytes()).hexdigest()}
+(evidence / 'results.json').write_text(json.dumps(summary, indent=2) + '\n')
+print(json.dumps(summary))
 if result.returncode or passed != required or cold != cold_required or skipped or failed:
     raise SystemExit('mandatory OCI migration persistence/client gate failed, missing, or skipped')
 print('Nexus OCI migration official client gate passed: crane v0.22.1; source stopped; fresh PostgreSQL owner and Gateway; independent all/amd64/arm64 empty OCI stores; OCI/Docker/nested original roots and complete byte objects. Loopback HTTP proof, not production cutover.')

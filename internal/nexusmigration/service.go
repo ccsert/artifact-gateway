@@ -201,6 +201,9 @@ func (s *Service) allEntries(ctx context.Context, id string) ([]Entry, error) {
 		}
 		out = append(out, page...)
 		if next == "" {
+			sort.Slice(out, func(i, j int) bool {
+				return out[i].SourceRepository+"\x00"+out[i].Identity < out[j].SourceRepository+"\x00"+out[j].Identity
+			})
 			return out, nil
 		}
 		cursor = next
@@ -477,16 +480,14 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 	formats := map[string]string{}
 	for _, repo := range discovery.Repositories {
 		failure.SourceRepository = repo.Name
-		format := repo.Format
-		if format == "maven2" {
-			format = "maven"
-		}
-		if repo.Status != "supported" || repo.Type != "hosted" {
+		format, supported := nexussource.NativeFormat(repo.Format)
+		if !supported || repo.Status != "supported" || repo.Type != "hosted" {
 			return nil, "", 0, 0, Failed("source_repository_unsupported")
 		}
 		formats[repo.Name] = format
 	}
 	byIdentity := map[string]*Entry{}
+	ociInventory := map[string][]nexussource.Asset{}
 	entries := []Entry{}
 	metadata := int64(len(discovery.Assets) + len(discovery.UnsupportedAssets))
 	if err = s.store.RecordScanProgress(ctx, b.ID, b.LeaseToken, metadata, 0); err != nil {
@@ -513,11 +514,15 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			return nil, "", 0, 0, err
 		}
 		format := formats[a.Repository]
+		if format == "oci" {
+			ociInventory[a.Repository] = append(ociInventory[a.Repository], a)
+			continue
+		}
 		if a.Size > 1<<30 {
 			unsupported(a.Repository, a.Path, "asset_size_unsupported")
 			continue
 		}
-		if isChecksumPath(a.Path) || path.Base(a.Path) == "maven-metadata.xml" && format == "maven" {
+		if (format == "raw" || format == "maven") && (isChecksumPath(a.Path) || path.Base(a.Path) == "maven-metadata.xml" && format == "maven") {
 			reason := "native_checksum_or_metadata_regenerated"
 			if format == "raw" {
 				reason = "raw_checksum_path_unsupported"
@@ -525,7 +530,7 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			unsupported(a.Repository, a.Path, reason)
 			continue
 		}
-		identity := a.Path
+		identity, targetPath := a.Path, a.Path
 		if format == "raw" {
 			segments := strings.Split(a.Path, "/")
 			for i := range segments {
@@ -541,8 +546,16 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 				continue
 			}
 		}
+		if format == "conan" {
+			var identityErr error
+			identity, targetPath, identityErr = ConanAssetIdentity(a.Path)
+			if identityErr != nil {
+				unsupported(a.Repository, a.Path, code(identityErr))
+				continue
+			}
+		}
 		failure.Identity = identity
-		asset := Asset{SourcePath: a.Path, TargetPath: a.Path, Size: a.Size, SHA256: a.Checksum["sha256"], SHA1: a.Checksum["sha1"], MD5: a.Checksum["md5"]}
+		asset := Asset{SourcePath: a.Path, TargetPath: targetPath, Size: a.Size, SHA256: a.Checksum["sha256"], SHA1: a.Checksum["sha1"], MD5: a.Checksum["md5"]}
 		if format == "raw" {
 			asset.TargetPath = identity
 		}
@@ -550,7 +563,7 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			// Missing mandatory hashes trigger a separately counted, read-only source
 			// verification. Complete metadata hashes avoid this extra transfer.
 			failure.Stage = "source_verification_open"
-			content, err := s.source.OpenAsset(ctx, b.SourceID, b.SourceVersion, a.Repository, AssetRequest{Path: a.Path, Size: a.Size})
+			content, err := s.source.OpenAsset(ctx, b.SourceID, b.SourceVersion, a.Repository, AssetRequest{Format: format, Path: a.Path, Size: a.Size})
 			if err != nil {
 				return nil, "", 0, 0, err
 			}
@@ -597,6 +610,16 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 	failure.Stage, failure.SourceRepository, failure.SourcePath, failure.Identity = "manifest_planning", "", "", ""
 	for _, entry := range byIdentity {
 		sort.Slice(entry.Assets, func(i, j int) bool { return entry.Assets[i].TargetPath < entry.Assets[j].TargetPath })
+		if entry.Format == "conan" {
+			if err := ValidateConanEntry(*entry); err != nil {
+				entry.State, entry.LastError = "unsupported", code(err)
+			} else if coordinate, _ := ParseConanIdentity(entry.Identity); coordinate.Kind == "package" {
+				parent := byIdentity[entry.SourceRepository+"\x00"+coordinate.Reference+"#"+coordinate.RecipeRevision]
+				if parent == nil || ValidateConanEntry(*parent) != nil {
+					entry.State, entry.LastError = "unsupported", "conan_parent_recipe_incomplete"
+				}
+			}
+		}
 		if entry.Format == "maven" {
 			parts := strings.Split(entry.Identity, ":")
 			pom := parts[1] + "-" + parts[2] + ".pom"
@@ -610,6 +633,16 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			}
 		}
 		entries = append(entries, *entry)
+	}
+	for _, name := range names {
+		if formats[name] != "oci" {
+			continue
+		}
+		planned, err := s.planOCIEntries(ctx, b, name, targets[name], ociInventory[name], failure)
+		if err != nil {
+			return nil, "", 0, 0, err
+		}
+		entries = append(entries, planned...)
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		a, c := entries[i], entries[j]
@@ -757,7 +790,7 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 	}
 	for i := range e.Assets {
 		asset := &e.Assets[i]
-		content, err := s.source.OpenAsset(ctx, b.SourceID, b.SourceVersion, e.SourceRepository, AssetRequest{Path: asset.SourcePath, Size: asset.Size, Validator: asset.Validator})
+		content, err := s.source.OpenAsset(ctx, b.SourceID, b.SourceVersion, e.SourceRepository, AssetRequest{Format: e.Format, Path: asset.SourcePath, Size: asset.Size, Validator: asset.Validator})
 		if err != nil {
 			return err
 		}

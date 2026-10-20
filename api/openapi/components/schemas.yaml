@@ -644,17 +644,19 @@ EgressProxy:
       readOnly: true
       description: True when encrypted proxy credentials are stored.
 OCIBearer:
-  type: object
-  nullable: true
-  description: Optional anonymous upstream Bearer challenge exchange for OCI
-    Proxy repositories only. Omitted configuration preserves legacy reads and
-    disables token exchange. The realm and service bind the approved issuer and
-    audience; this object never contains credentials or cached tokens. It does
+  type: [object, 'null']
+  description: Optional upstream Bearer challenge exchange for OCI Proxy
+    repositories. Without this configuration content requests use the explicit
+    upstreamAuth setting. The realm and service bind the approved issuer and
+    audience. With this configuration upstreamAuth credentials are sent only
+    to the bound issuer; this object contains no credentials or cached tokens. It does
     not add the realm to allowedHosts or grant network access. A cross-origin
     realm still needs explicit permission under the existing egress policy.
     On update omit the field to preserve it, or send null to clear it. Setting
     an object replaces both fields together. Hosted and other formats reject
-    this property, including null.
+    this property, including null. Changing this binding while protected
+    upstream credentials are configured requires a fresh upstreamAuth.secret
+    or upstreamAuth.scheme none in the same request.
   required:
   - realm
   - service
@@ -674,12 +676,17 @@ OCIBearer:
         whitespace or control characters.
 UpstreamAuth:
   type: object
-  description: Per-Proxy-Repository credential presented to the upstream
-    registry. Supported for Go Proxy repositories only; any other format
-    rejects the field so authentication can never be configured where the
-    fetch path would not use it. `secret` is accepted on write (plaintext over
-    TLS) and stored AES-256-GCM encrypted; responses never return it and carry
-    `credentialsConfigured` instead.
+  description: Protected upstream credentials for Go, Maven and OCI Proxy
+    repositories. Basic or Bearer authentication targets the bound upstream.
+    When OCI ociBearer is configured, these credentials are sent only to its
+    bound issuer and content requests use the exchanged pull token.
+    Cross-origin redirects strip credentials. Rotation or clear invalidates
+    credential-bound content and token caches. Changing the upstream URL or
+    OCI issuer binding requires a fresh secret or scheme none; stored
+    credentials are never implicitly rebound to a new destination. Other formats reject this
+    field. `secret` is accepted on write over TLS and stored AES-256-GCM
+    encrypted; responses never return it and carry `credentialsConfigured`
+    instead.
   required:
   - scheme
   additionalProperties: false
@@ -700,7 +707,8 @@ UpstreamAuth:
       type: string
       writeOnly: true
       description: Upstream password or token. Write-only; stored encrypted.
-        Omit on update to keep the stored secret while the scheme is unchanged.
+        Omit on update to keep the stored secret only while its scheme and
+        upstream destination binding are unchanged.
         Both schemes require a secret, so clear a stored credential by setting
         scheme to none rather than sending an empty secret.
     credentialsConfigured:
@@ -3484,6 +3492,7 @@ Problem:
       - invalid_state
       - not_supported
       - encryption_key_unavailable
+      - upstream_credential_rebind_required
       - invalid_page_token
       - name_exists
       - access_denied

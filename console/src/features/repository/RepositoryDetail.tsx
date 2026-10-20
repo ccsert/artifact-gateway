@@ -351,6 +351,7 @@ export function RepositoryDetailPage() {
             )}
             {activeTab === "settings" && (
               <RepositorySettingsTab
+                key={repo.id}
                 repo={repo}
                 capabilities={caps}
                 onUpdated={load}

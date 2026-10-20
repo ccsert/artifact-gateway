@@ -749,7 +749,7 @@
         "policyVersion": {
           "type": "string",
           "enum": [
-            "release-raw-v1"
+            "native-v1"
           ]
         },
         "capacityEvidence": {
@@ -1002,6 +1002,10 @@
         },
         "verified": {
           "type": "boolean"
+        },
+        "mediaType": {
+          "type": "string",
+          "description": "Verified source OCI manifest media type, frozen with the immutable asset. Omitted for other assets."
         }
       },
       "required": [
@@ -1037,7 +1041,9 @@
           "type": "string",
           "enum": [
             "maven",
-            "raw"
+            "raw",
+            "oci",
+            "conan"
           ]
         },
         "identity": {
@@ -1196,7 +1202,8 @@
             "source_verification_open",
             "source_verification_read",
             "source_verification_digest",
-            "source_version_validation"
+            "source_version_validation",
+            "oci_graph_validation"
           ]
         },
         "sourceRepositories": {

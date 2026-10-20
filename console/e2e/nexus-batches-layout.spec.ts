@@ -176,6 +176,116 @@ for (const theme of ["gateway-dark", "gateway-light"])
       expect(errors.pageErrors).toEqual([]);
       expect(errors.consoleErrors).toEqual([]);
     });
+    test(`all four native formats keep real protocol URLs and mapping geometry at ${width}px ${theme}`, async ({
+      page,
+    }, info) => {
+      const errors = await setup(page, width, theme);
+      const targets = [
+        ...nexusTargets,
+        {
+          ...nexusTargets[0],
+          id: "00000000-0000-4000-8000-000000000012",
+          name: "native-images",
+          format: "oci",
+        },
+        {
+          ...nexusTargets[0],
+          id: "00000000-0000-4000-8000-000000000013",
+          name: "native-cpp",
+          format: "conan",
+        },
+      ];
+      const expanded = {
+        ...nexusBatch,
+        mappings: [
+          ...nexusBatch.mappings,
+          { sourceRepository: "images", targetRepositoryId: targets[2].id },
+          { sourceRepository: "cpp", targetRepositoryId: targets[3].id },
+        ],
+      };
+      await page.route("**/api/v2/repositories**", (route) => {
+        const id = new URL(route.request().url()).pathname.split("/").at(-1);
+        return route.fulfill({
+          json: targets.find((target) => target.id === id) ?? {
+            items: targets,
+            nextPageToken: "",
+          },
+        });
+      });
+      await page.route(
+        `**/api/v2/migration-sources/${migrationSource.id}/preflight`,
+        (route) =>
+          route.fulfill({
+            json: {
+              ...migrationPreflight,
+              repositories: [
+                ...migrationPreflight.repositories,
+                {
+                  ...migrationPreflight.repositories[0],
+                  name: "images",
+                  format: "docker",
+                  versionPolicy: "",
+                },
+                {
+                  ...migrationPreflight.repositories[0],
+                  name: "cpp",
+                  format: "conan",
+                  versionPolicy: "",
+                },
+              ],
+            },
+          }),
+      );
+      await page.route(
+        `**/api/v2/migrations/nexus/batches/${nexusBatch.id}`,
+        (route) => route.fulfill({ json: expanded }),
+      );
+      await page.goto(
+        `/operations?tab=migrations&view=batches&batch=${nexusBatch.id}`,
+      );
+      await expect(
+        page.getByRole("heading", { name: "native-images · oci" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "native-cpp · conan" }),
+      ).toBeVisible();
+      const download = page.waitForEvent("download");
+      await page.getByRole("button", { name: "导出当前观察报告" }).click();
+      const artifact = await download;
+      const stream = await artifact.createReadStream();
+      const chunks = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      const report = JSON.parse(Buffer.concat(chunks).toString());
+      expect(report.endpoints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            format: "oci",
+            url: `${new URL(page.url()).origin}/v2/native-images/`,
+          }),
+          expect.objectContaining({
+            format: "conan",
+            url: `${new URL(page.url()).origin}/conan/native-cpp`,
+          }),
+        ]),
+      );
+      await geometry(page, width);
+      await capture(page, info, "native-format-report");
+      await page
+        .getByRole("button", { name: "重新扫描并追平", exact: true })
+        .click();
+      await page.getByRole("button", { name: "运行预检", exact: true }).click();
+      for (const name of ["releases", "raw-source", "images", "cpp"])
+        await expect(
+          page.getByRole("combobox", { name: `${name} 的目标仓库` }),
+        ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "应用映射并创建批次" }),
+      ).toBeDisabled();
+      await geometry(page, width);
+      await capture(page, info, "native-format-mapping");
+      expect(errors.pageErrors).toEqual([]);
+      expect(errors.consoleErrors).toEqual([]);
+    });
   }
 test("batch initial failures, empty state and unknown scan totals preserve read truth", async ({
   page,

@@ -27,6 +27,7 @@ import {
 } from "./migrationModel";
 import { useMigrationRead } from "./migrationQueries";
 import type { BatchDraft } from "./nexusBatchModel";
+import { migrationTargetFormat } from "./migrationFormats";
 
 export function MigrationRepositoryPlanning({
   source,
@@ -50,30 +51,33 @@ export function MigrationRepositoryPlanning({
       repository.status === "supported" && repository.type === "hosted",
   );
   const busy = discovery.busy || preview.busy;
-  const mappings: MigrationSourceMapping[] = repositories
-    .filter(
-      (repository) =>
-        repository.format === "raw" || repository.format === "maven2",
-    )
-    .filter(
-      (repository) =>
-        repository.type === "hosted" ||
-        repository.type === "proxy" ||
-        repository.type === "group",
-    )
-    .map((repository) => ({
-      sourceRepository: repository.name,
-      targetName: targets[repository.name]?.trim() ?? "",
-      format: repository.format === "maven2" ? "maven" : "raw",
-      type: repository.type as MigrationSourceMapping["type"],
-      ...(repository.type === "group"
-        ? {
-            targetMembers: repository.members
-              .map((member) => targets[member]?.trim() ?? "")
-              .filter(Boolean),
-          }
-        : {}),
-    }));
+  const mappings: MigrationSourceMapping[] = repositories.flatMap(
+    (repository) => {
+      const format = migrationTargetFormat(repository.format);
+      const type = repository.type;
+      if (
+        !format ||
+        (type !== "hosted" && type !== "proxy" && type !== "group")
+      ) {
+        return [];
+      }
+      return [
+        {
+          sourceRepository: repository.name,
+          targetName: targets[repository.name]?.trim() ?? "",
+          format,
+          type,
+          ...(repository.type === "group"
+            ? {
+                targetMembers: repository.members
+                  .map((member) => targets[member]?.trim() ?? "")
+                  .filter(Boolean),
+              }
+            : {}),
+        },
+      ];
+    },
+  );
   const discover = () =>
     discovery.run(async (signal) => {
       const result = await migrationRequest(
@@ -118,7 +122,7 @@ export function MigrationRepositoryPlanning({
               const chosen = selected.includes(repository.name);
               const selectable =
                 repository.status !== "unsupported" &&
-                ["maven2", "raw"].includes(repository.format);
+                migrationTargetFormat(repository.format) !== undefined;
               return (
                 <li className="ag-migration-repository" key={repository.name}>
                   <div>

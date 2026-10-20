@@ -787,6 +787,7 @@ export type Problem = {
     | "invalid_state"
     | "not_supported"
     | "encryption_key_unavailable"
+    | "upstream_credential_rebind_required"
     | "invalid_page_token"
     | "name_exists"
     | "access_denied"
@@ -1247,7 +1248,8 @@ export type NexusMigrationScanFailure = {
     | "source_verification_open"
     | "source_verification_read"
     | "source_verification_digest"
-    | "source_version_validation";
+    | "source_version_validation"
+    | "oci_graph_validation";
   sourceRepositories: Array<string>;
   sourceRepository: string;
   sourcePath: string;
@@ -1305,7 +1307,7 @@ export type NexusMigrationStart = {
   sourceId: string;
   sourceVersion: string;
   mappings: Array<NexusMigrationMapping>;
-  policyVersion: "release-raw-v1";
+  policyVersion: "native-v1";
   capacityEvidence: NexusMigrationCapacityEvidence;
 };
 
@@ -1317,6 +1319,10 @@ export type NexusMigrationAsset = {
   validator: string;
   uploaded: boolean;
   verified: boolean;
+  /**
+   * Verified source OCI manifest media type, frozen with the immutable asset. Omitted for other assets.
+   */
+  mediaType?: string;
 };
 
 export type NexusMigrationEntry = {
@@ -1324,7 +1330,7 @@ export type NexusMigrationEntry = {
   batchId: string;
   sourceRepository: string;
   targetRepositoryId: string;
-  format: "maven" | "raw";
+  format: "maven" | "raw" | "oci" | "conan";
   identity: string;
   state:
     | "pending"
@@ -1454,7 +1460,7 @@ export type MigrationSourceDiscovery = {
 export type MigrationSourceMapping = {
   sourceRepository: string;
   targetName: string;
-  format: "raw" | "maven";
+  format: "raw" | "maven" | "oci" | "conan";
   type: "hosted" | "proxy" | "group";
   targetMembers?: Array<string>;
 };
@@ -2200,7 +2206,7 @@ export type EgressProxy = {
 };
 
 /**
- * Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ * Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
 export type UpstreamAuth = {
   /**
@@ -2218,7 +2224,7 @@ export type UpstreamAuth = {
 };
 
 /**
- * Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+ * Optional upstream Bearer challenge exchange for OCI Proxy repositories. Without this configuration content requests use the explicit upstreamAuth setting. The realm and service bind the approved issuer and audience. With this configuration upstreamAuth credentials are sent only to the bound issuer; this object contains no credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null. Changing this binding while protected upstream credentials are configured requires a fresh upstreamAuth.secret or upstreamAuth.scheme none in the same request.
  */
 export type OciBearer = {
   /**
@@ -2229,7 +2235,7 @@ export type OciBearer = {
    * Exact challenge audience. At most 256 UTF-8 bytes; no whitespace or control characters.
    */
   service: string;
-};
+} | null;
 
 export type RepositoryGrantRecord = {
   repositoryId: string;
@@ -3013,7 +3019,7 @@ export type EgressProxyWritable = {
 };
 
 /**
- * Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ * Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
 export type UpstreamAuthWritable = {
   /**
@@ -3025,7 +3031,7 @@ export type UpstreamAuthWritable = {
    */
   username?: string;
   /**
-   * Upstream password or token. Write-only; stored encrypted. Omit on update to keep the stored secret while the scheme is unchanged. Both schemes require a secret, so clear a stored credential by setting scheme to none rather than sending an empty secret.
+   * Upstream password or token. Write-only; stored encrypted. Omit on update to keep the stored secret only while its scheme and upstream destination binding are unchanged. Both schemes require a secret, so clear a stored credential by setting scheme to none rather than sending an empty secret.
    */
   secret?: string;
 };

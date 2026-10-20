@@ -29,7 +29,7 @@ export const nexusBatchZhCN = {
   "nexusBatch.moreSources": "加载更多源",
   "nexusBatch.mappingSummary": "{source} → {target}",
   "nexusBatch.explicitMapping":
-    "映射将作为批次的不可变输入保存。仅复制选中的 Maven 发布版本和 Raw Hosted 内容；Proxy/Group 仍需单独配置。",
+    "映射将作为批次的不可变输入保存。复制选中的 Maven 发布版本、Raw、OCI 和 Conan 2 Hosted 内容；Proxy/Group 仍需单独配置。",
   "nexusBatch.capabilities": "执行能力与容量证据",
   "nexusBatch.disabled": "当前部署未启用迁移写入",
   "nexusBatch.disabledHint":
@@ -165,12 +165,13 @@ export const nexusBatchZhCN = {
   "nexusBatch.scanRead": "读取源资产校验流",
   "nexusBatch.scanDigest": "核对源资产摘要",
   "nexusBatch.scanVersion": "重新验证源连接版本",
+  "nexusBatch.scanGraph": "验证 OCI 完整依赖图",
   "nexusBatch.scanInterrupted":
     "扫描中断且未封存；可凭新容量证据在原批次完整重扫。",
   "nexusBatch.pageFailure":
     "库存分页不完整或重复；请刷新后重新读取，不会导出为完整库存。",
   "nexusBatch.targetConflict": "目标已有不同身份或字节，保持原目标并报告冲突。",
   "nexusBatch.unsupportedReason":
-    "条目不满足发布/Raw 迁移策略，保留为未支持项，需单独处理。",
+    "条目不满足原生格式的完整迁移要求，保留为未支持项，需单独处理。",
 } as const;
 export type NexusBatchMessageKey = keyof typeof nexusBatchZhCN;

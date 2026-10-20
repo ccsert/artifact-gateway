@@ -106,3 +106,31 @@ func TestOCIPlanningFreezesCompleteAllPlatformClosure(t *testing.T) {
 }
 
 type ociPlanPublication struct{ Publication }
+
+func TestOCIScanEvidenceExpiryRetainsGraphStage(t *testing.T) {
+	f := ocifixture.New(t.Name())
+	zero, free := int64(0), int64(1<<30)
+	now := time.Now()
+	b := Batch{ID: "batch", StartInput: StartInput{SourceID: "source", SourceVersion: "1", CapacityEvidence: CapacityEvidence{TargetID: "target", PoolID: "pool", ObservedAt: now.Add(-time.Second), ValidUntil: now.Add(time.Minute), FreeBytes: &free, DownloadBytes: &free, UploadBytes: &zero, BackupBytes: &zero, RestoreBytes: &zero, HeadroomBytes: &zero}}}
+	store := &ociPlanStore{batch: b}
+	checks := 0
+	service := New(store, ociPlanSource{fixture: f}, ociPlanPublication{}, Options{TargetID: "target", PoolID: "pool", Now: func() time.Time {
+		checks++
+		if checks > 1 {
+			return now.Add(2 * time.Minute)
+		}
+		return now
+	}})
+	inventory := []nexussource.Asset{}
+	for path, body := range f.Bytes {
+		inventory = append(inventory, nexussource.Asset{Repository: "images", Path: path, Size: int64(len(body)), Checksum: map[string]string{"sha256": f.Digests[path]}})
+	}
+	failure := ScanFailure{}
+	_, err := service.planOCIEntries(context.Background(), b, "images", "target-repo", inventory, &failure)
+	if err == nil || err.Error() != "capacity_evidence_expired" {
+		t.Fatalf("unexpected evidence expiry outcome %v, stage=%s", err, failure.Stage)
+	}
+	if failure.Stage != "oci_graph_validation" {
+		t.Fatalf("expiry must retain its last graph-validation position: %q", failure.Stage)
+	}
+}

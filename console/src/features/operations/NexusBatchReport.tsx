@@ -7,6 +7,10 @@ import { usePreferences } from "../../lib/preferences";
 import { publicRepositoryUsage } from "../../lib/publicRepositoryUsage";
 import { batchError, observationReport } from "./nexusBatchModel";
 import { useBatchTargets } from "./nexusBatchQueries";
+import {
+  isMigrationTargetFormat,
+  migrationTargetURL,
+} from "./migrationFormats";
 
 export function NexusBatchReport({
   batch,
@@ -38,7 +42,7 @@ export function NexusBatchReport({
     batch.mappings.map((item) => item.targetRepositoryId),
   );
   const targets = queries.flatMap((query) =>
-    query.data && !query.error && ["maven", "raw"].includes(query.data.format)
+    query.data && !query.error && isMigrationTargetFormat(query.data.format)
       ? [query.data]
       : [],
   );
@@ -55,19 +59,17 @@ export function NexusBatchReport({
       ]);
       for (const query of refreshed) if (query.error) throw query.error;
       const endpoints = refreshed.flatMap((query) =>
-        query.data && ["maven", "raw"].includes(query.data.format)
+        query.data && isMigrationTargetFormat(query.data.format)
           ? [
               {
                 repositoryId: query.data.id,
                 name: query.data.name,
                 format: query.data.format,
-                url: publicRepositoryUsage({
-                  format: query.data.format === "maven" ? "maven" : "raw",
-                  repositoryName: query.data.name,
-                  origin: window.location.origin,
-                  host: window.location.host,
-                  t,
-                })[0].code,
+                url: migrationTargetURL(
+                  query.data.format,
+                  query.data.name,
+                  window.location.origin,
+                ),
               },
             ]
           : [],
@@ -164,7 +166,7 @@ export function NexusBatchReport({
                 {target.name} · {target.format}
               </h3>
               {publicRepositoryUsage({
-                format: target.format === "maven" ? "maven" : "raw",
+                format: target.format,
                 repositoryName: target.name,
                 origin: window.location.origin,
                 host: window.location.host,

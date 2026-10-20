@@ -361,3 +361,5 @@ settings, an owned registry file and allowlisted subprocess environments prevent
 use of the user's identities or artifact caches. Test hooks map only the owned
 synthetic HTTPS sources while preserving certificate verification. This is
 isolated protocol and persistence acceptance, not a production migration or cutover.
+
+Console settings drafts belong to the repository UUID. Cached navigation to another repository rebuilds the form from that repository and drops all plaintext upstream/egress inputs, including OCI issuer edits. Repository version CAS still protects concurrent writes.
