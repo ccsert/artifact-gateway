@@ -52,7 +52,47 @@ func privateClientCommand(t *testing.T, dir string, env []string, binary string,
 }
 
 func privateClientEnvironment(work string) []string {
-	return []string{"PATH=" + os.Getenv("PATH"), "HOME=" + work, "TMPDIR=" + work, "LANG=C", "NO_PROXY=127.0.0.1,localhost,::1", "PIP_CONFIG_FILE=/dev/null"}
+	return []string{"PATH=" + os.Getenv("PATH"), "HOME=" + work, "TMPDIR=" + work, "LANG=C", "NO_PROXY=127.0.0.1,localhost,::1", "PIP_CONFIG_FILE=/dev/null", "RUSTUP_AUTO_INSTALL=0"}
+}
+
+func TestPrivateFormatCargoToolchainIsolation(t *testing.T) {
+	for _, name := range []string{"PRIVATE_FORMATS_CARGO", "PRIVATE_FORMATS_RUSTC"} {
+		if !filepath.IsAbs(os.Getenv(name)) {
+			t.Fatalf("required fixed toolchain input %s must be an absolute binary path", name)
+		}
+	}
+	// A proxy on PATH must never select a default toolchain or install one in
+	// the client's empty HOME. Exercise the same client used by the live gate.
+	path := t.TempDir()
+	for _, name := range []string{"cargo", "rustc"} {
+		binary := filepath.Join(path, name)
+		privateClientFile(t, binary, []byte("#!/bin/sh\nprintf 'ambient toolchain proxy was invoked\\n' >&2\nexit 97\n"))
+		if err := os.Chmod(binary, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", path)
+	assets := privateCargoClientAssets(t)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "/cargo/toolchain/"
+		path := strings.TrimPrefix(r.URL.Path, prefix)
+		if path == "config.json" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"dl":%q,"auth-required":true}`, "http://"+r.Host+prefix+"api/v1/crates")
+			return
+		}
+		if r.Header.Get("Authorization") != "resolver-secret" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		asset, ok := assets["/"+path]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(asset.body)
+	})
+	privateOfficialFormatClient(t, handler, repository.FormatCargo, "toolchain", "toolchain-isolation", assets)
 }
 
 func privateCargoClientAssets(t *testing.T) map[string]redirectCacheAsset {
@@ -122,18 +162,23 @@ func privateAPTClientAssets(t *testing.T) map[string]redirectCacheAsset {
 // source fixture is HTTPS and separately authenticated by the repository's
 // configured credential; clients never receive that source secret.
 func TestPostgresRustFSPrivateFormatOfficialClients(t *testing.T) {
-	for _, name := range []string{"PRIVATE_FORMATS_NPM", "PRIVATE_FORMATS_PYTHON", "CONAN_BINARY", "TEST_PRIVATE_FORMATS_NETWORK", "TEST_PRIVATE_FORMATS_PROJECT", "TEST_PRIVATE_FORMATS_DOCKER_HOST"} {
+	for _, name := range []string{"PRIVATE_FORMATS_NPM", "PRIVATE_FORMATS_PYTHON", "PRIVATE_FORMATS_CARGO", "PRIVATE_FORMATS_RUSTC", "CONAN_BINARY", "TEST_PRIVATE_FORMATS_NETWORK", "TEST_PRIVATE_FORMATS_PROJECT", "TEST_PRIVATE_FORMATS_DOCKER_HOST"} {
 		if os.Getenv(name) == "" {
 			t.Fatalf("required official client fixture input %s is missing", name)
 		}
 	}
-	cargo, err := exec.LookPath("cargo")
-	if err != nil {
-		t.Fatal("Cargo 1.96.0 is required")
+	cargo, rustc := os.Getenv("PRIVATE_FORMATS_CARGO"), os.Getenv("PRIVATE_FORMATS_RUSTC")
+	if !filepath.IsAbs(cargo) || !filepath.IsAbs(rustc) {
+		t.Fatal("explicit fixed Cargo and rustc binary paths are required")
 	}
-	version := privateClientCommand(t, t.TempDir(), privateClientEnvironment(t.TempDir()), cargo, "--version")
+	work := t.TempDir()
+	env := append(privateClientEnvironment(work), "CARGO_HOME="+filepath.Join(work, "cargo-home"), "RUSTC="+rustc)
+	version := privateClientCommand(t, work, env, cargo, "--version")
 	if !bytes.HasPrefix(version, []byte("cargo 1.96.0 ")) {
 		t.Fatalf("unexpected official Cargo version %s", version)
+	}
+	if version := privateClientCommand(t, work, env, rustc, "--version"); !bytes.HasPrefix(version, []byte("rustc 1.96.0 ")) {
+		t.Fatalf("unexpected official rustc version %s", version)
 	}
 	for _, format := range []repository.Format{repository.FormatNPM, repository.FormatPyPI, repository.FormatCargo, repository.FormatRaw, repository.FormatConan, repository.FormatAPT} {
 		for _, scheme := range []repository.UpstreamAuthScheme{repository.UpstreamAuthSchemeBasic, repository.UpstreamAuthSchemeBearer} {
@@ -200,8 +245,8 @@ func privateOfficialFormatClient(t *testing.T, handler http.Handler, format repo
 		privateClientFile(t, filepath.Join(work, "cargo-home/config.toml"), []byte("[registries.private]\nindex=\"sparse+"+registry+"\"\ncredential-provider=\"cargo:token\"\n"))
 		privateClientFile(t, filepath.Join(work, "Cargo.toml"), []byte("[package]\nname=\"private-consumer\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\ndemo={ version=\"=1.0.0\", registry=\"private\" }\n"))
 		privateClientFile(t, filepath.Join(work, "src/lib.rs"), []byte("pub fn value() -> u8 { demo::value() }\n"))
-		env = append(env, "CARGO_HOME="+filepath.Join(work, "cargo-home"), "CARGO_TARGET_DIR="+filepath.Join(work, "target"), "CARGO_REGISTRIES_PRIVATE_TOKEN=resolver-secret")
-		privateClientCommand(t, work, env, "cargo", "fetch")
+		env = append(env, "CARGO_HOME="+filepath.Join(work, "cargo-home"), "CARGO_TARGET_DIR="+filepath.Join(work, "target"), "CARGO_REGISTRIES_PRIVATE_TOKEN=resolver-secret", "RUSTC="+os.Getenv("PRIVATE_FORMATS_RUSTC"))
+		privateClientCommand(t, work, env, os.Getenv("PRIVATE_FORMATS_CARGO"), "fetch")
 		archives, err := filepath.Glob(filepath.Join(work, "cargo-home/registry/cache/*/demo-1.0.0.crate"))
 		if err != nil || len(archives) != 1 {
 			t.Fatalf("Cargo did not retrieve one complete crate: %v", err)
@@ -234,7 +279,7 @@ func privateOfficialFormatClient(t *testing.T, handler http.Handler, format repo
 	case repository.FormatAPT:
 		privateAPTOfficialClient(t, work, registry, env, assets)
 	}
-	t.Logf("official %s %s: fresh client cache, complete source bytes verified through authenticated Gateway", format, round)
+	t.Logf("official %s %s: fresh client cache, complete source bytes verified through authenticated endpoint", format, round)
 }
 
 func privateAPTOfficialClient(t *testing.T, work, registry string, env []string, assets map[string]redirectCacheAsset) {

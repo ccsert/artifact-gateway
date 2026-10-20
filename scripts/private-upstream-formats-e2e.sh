@@ -73,6 +73,48 @@ record = {'head':subprocess.check_output(['git','rev-parse','HEAD']).decode().st
           'fileSHA256':{name:hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() for name in sorted(files) if pathlib.Path(name).is_file()}}
 pathlib.Path(sys.argv[1]).write_text(json.dumps(record,indent=2)+'\n')
 PYSOURCE
+# Resolve only already-installed fixed-version binaries. A rustup proxy loses
+# its default toolchain under the client's owned HOME and must never install one.
+python3 - "$workdir" "$evidence/cargo-toolchain.json" <<'PYCARGO'
+import hashlib, json, os, pathlib, shutil, subprocess, sys
+work, destination = map(pathlib.Path, sys.argv[1:])
+home, cache = work/'cargo-bootstrap-home', work/'cargo-bootstrap-cache'
+home.mkdir(mode=0o700)
+cache.mkdir(mode=0o700)
+environment = {'PATH':os.defpath, 'HOME':str(home), 'CARGO_HOME':str(cache),
+               'TMPDIR':str(work), 'RUSTUP_AUTO_INSTALL':'0'}
+installed = pathlib.Path(os.environ.get('RUSTUP_HOME', str(pathlib.Path.home()/'.rustup')))/'toolchains'
+selected = None
+for directory in sorted(installed.glob('*/bin')):
+    tools = {}
+    for name in ('cargo', 'rustc'):
+        binary = directory/name
+        if not binary.is_file() or not os.access(binary, os.X_OK) or binary.resolve().parent != directory.resolve():
+            break
+        try:
+            result = subprocess.run([str(binary.resolve()), '--version'], cwd=work, env=environment,
+                                    capture_output=True, text=True, timeout=15)
+        except (OSError, subprocess.TimeoutExpired):
+            break
+        if result.returncode or not result.stdout.startswith(name+' 1.96.0 '):
+            break
+        tools[name] = {'path':str(binary.resolve()), 'version':result.stdout.strip(),
+                       'sha256':hashlib.sha256(binary.read_bytes()).hexdigest()}
+    if len(tools) == 2:
+        selected = tools
+        break
+if selected is None:
+    raise SystemExit('Private upstream acceptance requires already-installed cargo and rustc 1.96.0; no toolchain was installed')
+ambient = shutil.which('cargo')
+selected['selection'] = 'read-only installed binaries; no rustup invocation or default toolchain'
+selected['ambientCargo'] = {'path':ambient, 'resolved':str(pathlib.Path(ambient).resolve()) if ambient else None, 'used':False}
+destination.write_text(json.dumps(selected, indent=2)+'\n')
+for name in ('cargo', 'rustc'):
+    (work/(name+'-path')).write_text(selected[name]['path'])
+PYCARGO
+export PRIVATE_FORMATS_CARGO="$(cat "$workdir/cargo-path")"
+export PRIVATE_FORMATS_RUSTC="$(cat "$workdir/rustc-path")"
+export CARGO_HOME="$workdir/cargo-bootstrap-cache"
 # Install only the fixture's fixed official clients, using public registries
 # and private configuration/cache directories. No machine-wide install occurs.
 python3 -m venv "$workdir/client"
@@ -80,10 +122,11 @@ PIP_CONFIG_FILE=/dev/null "$workdir/client/bin/python" -m pip --isolated install
 export PRIVATE_FORMATS_PYTHON="$workdir/client/bin/python"
 export CONAN_BINARY="$workdir/client/bin/conan"
 [[ "$("$CONAN_BINARY" --version)" == 'Conan version 2.21.0' ]]
-[[ $(cargo --version) == cargo\ 1.96.0\ * ]] || { printf 'Official Cargo 1.96.0 is required.\n' >&2; exit 1; }
+[[ $("$PRIVATE_FORMATS_CARGO" --version) == cargo\ 1.96.0\ * ]] || { printf 'Official Cargo 1.96.0 is required.\n' >&2; exit 1; }
 "$PRIVATE_FORMATS_PYTHON" -m pip --version
 "$CONAN_BINARY" --version
-cargo --version
+"$PRIVATE_FORMATS_CARGO" --version
+"$PRIVATE_FORMATS_RUSTC" --version
 curl --version | head -1
 curl --disable --proto '=https' --tlsv1.2 --fail --silent --show-error --location --connect-timeout 15 --max-time 120 --retry 2 https://registry.npmjs.org/npm/-/npm-11.6.2.tgz --output "$workdir/npm.tgz"
 python3 - "$workdir/npm.tgz" <<'PYNPM'
@@ -106,12 +149,15 @@ python3 - "$evidence/clients.json" "$workdir/npm.tgz" <<'PYCLIENT'
 import hashlib,json,os,pathlib,subprocess,sys
 commands = {'npm':[os.environ['PRIVATE_FORMATS_NPM'],'--version'],
             'pip':[os.environ['PRIVATE_FORMATS_PYTHON'],'-m','pip','--version'],
-            'cargo':['cargo','--version'],'conan':[os.environ['CONAN_BINARY'],'--version'],
+            'cargo':[os.environ['PRIVATE_FORMATS_CARGO'],'--version'],
+            'rustc':[os.environ['PRIVATE_FORMATS_RUSTC'],'--version'],
+            'conan':[os.environ['CONAN_BINARY'],'--version'],
             'curl':['curl','--version']}
 versions = {name:subprocess.check_output(command,text=True).splitlines()[0] for name,command in commands.items()}
 record = {'versions':versions, 'npmArchiveSHA512':hashlib.sha512(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest(),
           'aptImage':'debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241',
           'pythonPackagesSHA256':hashlib.sha256((pathlib.Path(sys.argv[1]).parent/'python-packages.txt').read_bytes()).hexdigest()}
+record['cargoToolchain'] = json.loads((pathlib.Path(sys.argv[1]).parent/'cargo-toolchain.json').read_text())
 home = pathlib.Path(os.environ['CONAN_HOME'])
 if home.is_symlink() or home.resolve().parent != pathlib.Path(sys.argv[2]).resolve().parent or home.stat().st_uid != os.getuid():
     raise SystemExit('Conan version probes escaped the owned bootstrap home')
@@ -140,7 +186,7 @@ python3 - "$evidence/results.jsonl" "$evidence/results.json" <<'PYRESULT'
 import hashlib, json, pathlib, sys
 path, destination = map(pathlib.Path, sys.argv[1:])
 events = [json.loads(line) for line in path.read_text().splitlines()]
-required = {'TestPostgresRustFSPrivateFormatCredentials', 'TestPostgresRustFSPrivateFormatOfficialClients', 'TestPrivateRawProxyCredentials', 'TestPrivateConanProxyCredentials', 'TestPrivateNativeFormatCredentials', 'TestPrivateFormatRedirectCredentialBoundary', 'TestPrivateRawConanRejectRedirectWithoutCredentialLeak', 'TestPrivateFormatSourceFailureDoesNotFallThrough'}
+required = {'TestPostgresRustFSPrivateFormatCredentials', 'TestPostgresRustFSPrivateFormatOfficialClients', 'TestPrivateRawProxyCredentials', 'TestPrivateConanProxyCredentials', 'TestPrivateNativeFormatCredentials', 'TestPrivateFormatRedirectCredentialBoundary', 'TestPrivateRawConanRejectRedirectWithoutCredentialLeak', 'TestPrivateFormatSourceFailureDoesNotFallThrough', 'TestPrivateFormatCargoToolchainIsolation'}
 required |= {'TestPostgresAPTEmptyAssetPage','TestPostgresAPTMetadataIsMutableAndPoolIsImmutable',
              'TestPostgresAPTCapacityAndSearchProjectionIncludeZeroByteMetadata',
              'TestPostgresCargoProxyCacheAcrossConnections','TestPostgresCargoGroupPreflightsKnownHostedCoordinates',
