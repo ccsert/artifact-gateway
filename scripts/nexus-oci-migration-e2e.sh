@@ -30,6 +30,9 @@ cleanup() {
         result=1
       fi
     done
+    if [[ "$result" == 0 ]]; then
+      printf 'Owned OCI migration resources removed: containers=0 volumes=0 networks=0 project=%s\n' "$project"
+    fi
   fi
   rm -rf "$work"
   trap - EXIT
@@ -105,7 +108,10 @@ required = {
     'TestPostgresNexusOCIMigrationUploadCrashAndSourceUnauthorized',
     'TestPostgresNexusOCIMigrationTargetOnlyCraneClient',
 }
-passed, skipped, failed = set(), [], []
+passed, skipped, failed, cold = set(), [], [], set()
+cold_required = {'TestPostgresNexusOCIMigrationTargetOnlyCraneClient/' + variant + '/' + platform
+    for variant in ['oci-index', 'docker-list', 'nested-oci-index']
+    for platform in ['all', 'linux/amd64', 'linux/arm64']}
 for line in log.read_text().splitlines():
     try:
         event = json.loads(line)
@@ -116,11 +122,16 @@ for line in log.read_text().splitlines():
         print(event['Output'], end='')
     if event.get('Action') == 'pass' and event.get('Test') in required:
         passed.add(event['Test'])
+    if event.get('Action') == 'pass' and event.get('Test') in cold_required:
+        cold.add(event['Test'])
     if event.get('Action') == 'skip':
         skipped.append(event.get('Test'))
     if event.get('Action') == 'fail':
         failed.append(event.get('Test', event.get('Package')))
-if result.returncode or passed != required or skipped or failed:
-    raise SystemExit('mandatory official OCI migration client test failed, missing, or skipped')
+print(json.dumps({'schemaVersion': 1, 'testExitCode': result.returncode, 'requiredPassed': sorted(passed),
+    'requiredMissing': sorted(required - passed), 'coldLayoutsPassed': sorted(cold),
+    'coldLayoutsMissing': sorted(cold_required - cold), 'skipped': skipped, 'failed': failed}))
+if result.returncode or passed != required or cold != cold_required or skipped or failed:
+    raise SystemExit('mandatory OCI migration persistence/client gate failed, missing, or skipped')
 print('Nexus OCI migration official client gate passed: crane v0.22.1; source stopped; fresh PostgreSQL owner and Gateway; independent all/amd64/arm64 empty OCI stores; OCI/Docker/nested original roots and complete byte objects. Loopback HTTP proof, not production cutover.')
 PY

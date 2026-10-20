@@ -77,7 +77,7 @@ func exerciseNexusOCIExistingObjectKeys(t *testing.T, store nexusOCIContractStor
 		digest := "sha256:" + asset.SHA256
 		if strings.HasPrefix(asset.TargetPath, "blobs/") {
 			key := "native/oci/blobs/sha256/" + asset.SHA256
-			upload, err := store.CreateOCIUpload(ctx, repository.OCIUpload{ID: uuid.NewString(), RepositoryID: repo.ID, Name: f.Name, State: "open", ExpiresAt: time.Now().Add(time.Hour)})
+			upload, err := store.CreateOCIUpload(ctx, repository.OCIUpload{ID: uuid.NewString(), RepositoryID: repo.ID, Name: f.Name, ObjectKey: "native/oci/uploads/" + uuid.NewString(), State: "open", ExpiresAt: time.Now().Add(time.Hour)})
 			if err != nil {
 				t.Fatal(err)
 			}
