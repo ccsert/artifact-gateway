@@ -5,7 +5,7 @@ import { usePreferences } from "../../lib/preferences";
 
 import type { ProxySettingsDraft } from "./useProxySettingsDraft";
 
-/** Credentials sent only to the upstream host (Go module proxies). */
+/** Write-only credentials for the bound upstream or OCI token issuer. */
 export function UpstreamAuthFields({
   repo,
   draft,
@@ -23,12 +23,20 @@ export function UpstreamAuthFields({
     setUpstreamSecret,
   } = draft;
   return (
-    <div className="rounded-lg border border-line bg-surface-translucent px-4 py-3">
+    <div
+      role="group"
+      aria-label={t("repository.upstreamAuthentication")}
+      className="rounded-lg border border-line bg-surface-translucent px-4 py-3"
+    >
       <div className="text-sm font-medium text-fg">
         {t("repository.upstreamAuthentication")}
       </div>
       <div className="mt-1 text-xs leading-5 text-fg-tertiary">
-        {t("repository.attachACredentialToUpstreamFetchesWhenThe")}
+        {t(
+          repo.format === "oci" && draft.ociBearerEnabled
+            ? "repository.upstreamCredentialToBoundIssuer"
+            : "repository.attachACredentialToUpstreamFetchesWhenThe",
+        )}
       </div>
       <Radio.Group
         className="mt-3 flex flex-col gap-2"
@@ -83,8 +91,10 @@ export function UpstreamAuthFields({
             >
               <Input.Password
                 className="w-64"
+                autoComplete="new-password"
                 placeholder={
-                  repo.upstreamAuth?.credentialsConfigured
+                  repo.upstreamAuth?.credentialsConfigured &&
+                  repo.upstreamAuth.scheme === upstreamScheme
                     ? t("repository.configuredEnterAValueToReplaceIt")
                     : t("repository.notConfigured")
                 }

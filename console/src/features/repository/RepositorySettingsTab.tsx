@@ -39,33 +39,53 @@ export function RepositorySettingsTab({
     setNotice("");
   };
 
+  const setSubmissionError = (nextError: unknown) => {
+    if (
+      typeof nextError === "object" &&
+      nextError !== null &&
+      "code" in nextError &&
+      nextError.code === "upstream_credential_rebind_required"
+    ) {
+      setError({
+        ...nextError,
+        message: t("repository.upstreamCredentialRebindRequired"),
+      });
+      return;
+    }
+    setError(nextError);
+  };
+
   const submit = async () => {
     setSaving(true);
     setError(null);
     setNotice("");
     try {
+      const body = {
+        anonymousRead,
+        ...(repo.type === "hosted" && descriptor?.strictPublicationSetting
+          ? { mavenStrictPublication }
+          : {}),
+        ...(repo.type === "proxy"
+          ? proxyDraft.body(Boolean(descriptor?.upstreamAuthentication))
+          : {}),
+      };
+      // Plaintext exists only in this write request, never in refreshed data.
+      proxyDraft.clearSecrets();
       const { error: err } = await updateRepository({
         path: { repositoryId: repo.id },
         headers: { "If-Match": repo.version },
-        body: {
-          anonymousRead,
-          ...(repo.type === "hosted" && descriptor?.strictPublicationSetting
-            ? { mavenStrictPublication }
-            : {}),
-          ...(repo.type === "proxy"
-            ? proxyDraft.body(Boolean(descriptor?.upstreamAuthentication))
-            : {}),
-        },
+        body,
       });
       if (err) {
-        setError(err);
+        setSubmissionError(err);
         return;
       }
       setNotice(t("repository.repositorySettingsSaved"));
       onUpdated();
     } catch (nextError) {
-      setError(nextError);
+      setSubmissionError(nextError);
     } finally {
+      proxyDraft.clearSecrets();
       setSaving(false);
     }
   };
