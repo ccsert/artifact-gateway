@@ -47,7 +47,7 @@ func TestPostgresNPMMetadataUpgradePreservesPublication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var upgrade string
+	var upgrades []struct{ name, sql string }
 	for _, file := range files {
 		if file.IsDir() || !strings.HasSuffix(file.Name(), ".sql") {
 			continue
@@ -57,15 +57,15 @@ func TestPostgresNPMMetadataUpgradePreservesPublication(t *testing.T) {
 			t.Fatal(readErr)
 		}
 		up := strings.Split(string(data), "-- +goose Down")[0]
-		if strings.HasPrefix(file.Name(), "000149_") {
-			upgrade = up
-			break
+		if strings.HasPrefix(file.Name(), "000149_") || len(upgrades) != 0 {
+			upgrades = append(upgrades, struct{ name, sql string }{file.Name(), up})
+			continue
 		}
 		if _, err = legacy.db.ExecContext(ctx, up); err != nil {
 			t.Fatalf("pre-governance schema %s: %v", file.Name(), err)
 		}
 	}
-	if upgrade == "" {
+	if len(upgrades) == 0 {
 		t.Fatal("npm metadata migration is missing")
 	}
 	repo, err := legacy.CreateHostedRepository(ctx, HostedRepository{ID: uuid.NewString(), Name: "legacy-npm", Format: FormatNPM})
@@ -87,8 +87,21 @@ func TestPostgresNPMMetadataUpgradePreservesPublication(t *testing.T) {
 	if err = legacy.db.QueryRowContext(ctx, `SELECT manifest::text FROM native_npm_versions WHERE repository_id=$1`, repo.ID).Scan(&manifest); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = legacy.db.ExecContext(ctx, upgrade); err != nil {
+	var hasSourceVersion bool
+	if err = legacy.db.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema='public' AND table_name='native_npm_packages' AND column_name='source_version'
+	)`).Scan(&hasSourceVersion); err != nil {
 		t.Fatal(err)
+	}
+	if hasSourceVersion {
+		t.Fatal("pre-governance fixture already contains the modern proxy cache binding")
+	}
+	for _, upgrade := range upgrades {
+		if _, err = legacy.db.ExecContext(ctx, upgrade.sql); err != nil {
+			t.Fatalf("append-only upgrade %s: %v", upgrade.name, err)
+		}
+		t.Logf("applied real upgrade %s", upgrade.name)
 	}
 	upgraded, err := NewPostgresStore(address.String())
 	if err != nil {
