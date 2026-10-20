@@ -4,7 +4,7 @@
 
 ## 状态与优先级
 
-NuGet 是延期的生态候选，APT H3 之后优先评估 Cargo。NuGet 仍有价值：它是 Microsoft 支持的 .NET、Visual Studio 和 `dotnet` 包机制，V3 service index 也为私有仓库提供稳定发现边界。
+NuGet Hosted 发布与原生 V3 读取已通过 #287 开始实施。Cargo 已公开接纳，历史上先评估 Cargo 的 backlog 顺序不再适用。NuGet 是 Microsoft 支持的 .NET、Visual Studio 和 `dotnet` 包机制，V3 service index 也为私有仓库提供稳定发现边界。
 
 N1 字节契约已实现：Gateway 能验证完整 `.nupkg` ZIP，读取根目录一个有界 `.nuspec`，拒绝歧义 XML 或归档路径，规范化 NuGet 版本，并派生大小写不敏感的规范身份。
 
@@ -56,4 +56,4 @@ N1 字节契约已实现：Gateway 能验证完整 `.nupkg` ZIP，读取根目�
 
 ## 交付顺序
 
-APT Hosted 仍是当前格式完成优先级，Cargo 是下一候选。NuGet N1-N4 作为已评审 backlog 保留，不安排发布实现；现有解析器继续测试，能力发现只描述真实可执行行为。
+复用 N1，通过 #287 实现 Hosted 发布与读取，再由 #288 实现 Proxy/Group、#289 实现生命周期、Console 与公开准入。APT Hosted 准入继续按独立路线图推进。现有解析器持续测试，能力发现不得提前宣称未完成的 NuGet 仓库行为。

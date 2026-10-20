@@ -4,6 +4,10 @@
 
 Status: accepted
 
+The historical compatibility clause below is superseded by
+[ADR 0009](0009-native-architecture.md). It does not constrain current
+management APIs, URL aliases, authentication models or internal interfaces.
+
 Artifact Gateway will evolve from a primarily read-through gateway into a full
 artifact repository for every supported format. Completeness means Hosted,
 Proxy, and Group lifecycle; publication, immutable visibility, browsing/search,

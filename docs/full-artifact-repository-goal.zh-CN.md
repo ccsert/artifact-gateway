@@ -12,10 +12,10 @@
 
 - **生命周期：** staged、visible、tombstoned 在各格式间一致；发布原子化；物理回收延迟执行、重查引用并通过持久任务完成。
 - **格式一致性：** OCI、Maven、Raw、Conan 均支持 Hosted、Proxy、Group；原生发布、解析、浏览搜索、逻辑删除、保留和恢复由黑盒协议测试覆盖。
-- **管理：** 版本化 API 暴露仓库能力、制品浏览搜索、墓碑检查、保留执行和任务状态，且不改变现有 V1/V2 语义。
+- **管理：** 版本化 API 通过明确契约暴露仓库能力、制品浏览搜索、墓碑检查、保留执行和任务状态，服务端与消费方同步修改。
 - **分发：** 管理员可在 Hosted Repository 间晋级不可变 Artifact；复制可恢复、有完整性校验、授权、可观测且幂等。
 - **运维：** Repository 配额、容量、并发限制、审计、指标、备份恢复、升级回滚、发布预检和生产证据覆盖所有生命周期与后台操作。
-- **兼容：** 每次迁移都回归现有协议读取与已记录的 V1/V2 管理行为。
+- **原生契约：** 原生包协议遵循标准并接受回归验证；历史管理 API、Nexus URL、认证模型和内部接口均不再作为兼容要求，见 [ADR 0009](adr/0009-native-architecture.zh-CN.md)。
 
 ## 有序工作包
 
@@ -27,14 +27,14 @@
 
 ## 当前检查点
 
-V1 后端工作包已完成，生命周期、格式行为、管理 API、分发和运维控制均记录在[后端完成清单](backend-completion-checklist.zh-CN.md)。剩余发布判断属于证据而非功能范围：从干净 checkout 执行[发布就绪](release-readiness.zh-CN.md)全部门禁并记录结果后，才能批准部署。
+初始四格式 V1 后端工作包已完成，生命周期、格式行为、管理 API、分发和运维控制均记录在[后端完成清单](backend-completion-checklist.zh-CN.md)。此检查点不关闭更广的格式、私有上游和迁移 backlog；当前可执行能力与限制以[协议矩阵](protocol-compatibility.zh-CN.md)为准，每个交付切片分别记录[发布就绪](release-readiness.zh-CN.md)门禁结果。
 
 ## 约束
 
 - 不用通用上传抽象替代协议原生发布流程。
 - 任何物理删除都不得绕过 Tombstone、宽限期和引用检查。
 - 新生态必须先有生命周期与协议契约负责人、迁移计划和黑盒客户端测试计划；执行清单见[格式扩展指南](format-extension-guide.zh-CN.md)。
-- 不破坏 `/api/v1`、`/api/v2` 或已有协议响应语义；不兼容的管理行为必须进入新的版本化接口。
+- 允许破坏历史管理接口；同步修改 OpenAPI 源、服务端、Console 和 agctl，说明新契约并删除旧实现。标准包协议正确性与字节完整性仍必须保证。
 
 ## 下一计划格式：APT Hosted
 
@@ -45,10 +45,10 @@ APT Proxy 和有序 Group 已按当前只读范围通过准入。APT Hosted 分�
 3. 可信签名、密钥轮换、备份和运维恢复；
 4. 生命周期、`.deb` 扫描、隔离、晋级与复制一致性。
 
-在最低 Hosted 和生产签名门禁完成前，能力 API 仍只将 APT 标记为 Proxy。详见 [APT Hosted 路线图](apt-hosted-roadmap.zh-CN.md)。
+在最低 Hosted 和生产签名门禁完成前，能力 API 公开 APT Proxy 和 Group 读取。详见 [APT Hosted 路线图](apt-hosted-roadmap.zh-CN.md)。
 
-## 后续计划格式：Cargo
+## 当前格式扩展
 
-APT H3 生产签名里程碑之后，Cargo 是下一个候选生态。第一阶段已验证官方发布 frame 与有界 `.crate`，并冻结稀疏索引身份及校验和契约；C1 前仍需完成持久碰撞一致性，因此尚未公开接纳。
+Cargo 已公开支持 Hosted、Proxy 和 Group，当前范围与限制见[协议矩阵](protocol-compatibility.zh-CN.md)；旧的 Cargo 候选顺序不再作为实施安排。
 
-详见 [Cargo 仓库研究](cargo-repository-research.zh-CN.md)。NuGet 的有界解析器继续维护，但路线图保持延期，不作为第一优先级。
+NuGet Hosted 发布及原生 V3 读取已通过 #287 开始实施，随后由 #288 接 Proxy/Group、#289 接治理与公开准入。复用既有有界解析器；准入门禁完成前仍不进入正式能力目录。详见 [NuGet 路线图](nuget-roadmap.zh-CN.md)。
