@@ -56,6 +56,7 @@ func (s *Service) planOCIEntries(ctx context.Context, b Batch, sourceRepo, targe
 		}
 	}
 	cache := map[string]ociReadManifest{}
+	var manifestBytes int64
 	used := map[string]bool{}
 	for _, root := range items {
 		if root.path.Kind != "manifests" {
@@ -95,6 +96,9 @@ func (s *Service) planOCIEntries(ctx context.Context, b Batch, sourceRepo, targe
 			}
 			read, ok := cache[item.asset.Path]
 			if !ok {
+				if item.asset.Size > ocigraph.MaxManifestBytes || item.asset.Size > ocigraph.MaxInventoryManifestBytes-manifestBytes {
+					return ocigraph.ErrLimit
+				}
 				failure.Stage = "source_verification_open"
 				content, err := s.source.OpenAsset(ctx, b.SourceID, b.SourceVersion, sourceRepo, AssetRequest{Format: "oci", Path: item.asset.Path, Size: item.asset.Size, Validator: digest})
 				if err != nil {
@@ -113,6 +117,7 @@ func (s *Service) planOCIEntries(ctx context.Context, b Batch, sourceRepo, targe
 				if closeErr != nil || written != item.asset.Size || ocigraph.Digest(body.Bytes()) != digest {
 					return Failed("source_changed")
 				}
+				manifestBytes += written
 				failure.Stage = "oci_graph_validation"
 				document, err := ocigraph.Decode(body.Bytes(), content.MediaType)
 				if err != nil {

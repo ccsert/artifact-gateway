@@ -101,6 +101,11 @@ func TestPostgresRustFSNexusOCICompletePublication(t *testing.T) {
 	exerciseNexusOCICompletePublication(t, store, objects)
 }
 
+func TestPostgresRustFSNexusOCIReusesCurrentNativeObjectKeys(t *testing.T) {
+	store, objects := newNexusOCIIntegrationFixture(t)
+	exerciseNexusOCIExistingObjectKeys(t, store, objects)
+}
+
 func TestPostgresRustFSNexusOCIGarbageCollectionAndImportSerialize(t *testing.T) {
 	for _, mode := range []string{"collector_wins", "publication_wins", "published_stage_failure"} {
 		t.Run(mode, func(t *testing.T) {

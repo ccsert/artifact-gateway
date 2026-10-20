@@ -44,34 +44,34 @@ func validateOCIImport(c OCIImportClosure) error {
 		return ErrDisabled
 	}
 	objects := make([]ocigraph.Object, 0, len(c.Manifests)+len(c.Blobs))
+	descriptorTypes := map[string]string{}
 	for _, m := range c.Manifests {
-		key := "native/oci/manifests/" + c.RepositoryID + "/" + url.PathEscape(c.Name) + "/" + strings.TrimPrefix(m.Digest, "sha256:")
-		if m.RepositoryID != c.RepositoryID || m.Name != c.Name || m.ObjectKey != key || m.SubjectDigest != "" || m.ArtifactType != "" {
+		if m.RepositoryID != c.RepositoryID || m.Name != c.Name || !strings.HasPrefix(m.ObjectKey, "native/oci/manifests/"+c.RepositoryID+"/") || m.SubjectDigest != "" || m.ArtifactType != "" {
 			return ErrDisabled
 		}
 		objects = append(objects, ocigraph.Object{Digest: m.Digest, Size: m.Size, MediaType: m.MediaType, Document: &m.Document})
+		for _, descriptor := range m.Document.Dependencies() {
+			if previous := descriptorTypes[descriptor.Digest]; previous != "" && previous != descriptor.MediaType {
+				return ErrDisabled
+			}
+			descriptorTypes[descriptor.Digest] = descriptor.MediaType
+		}
 	}
 	for _, b := range c.Blobs {
 		if b.ObjectKey != "native/oci/blobs/sha256/"+strings.TrimPrefix(b.Digest, "sha256:") {
 			return ErrDisabled
 		}
-		mediaType := ""
-		for _, m := range c.Manifests {
-			for _, d := range m.Document.Dependencies() {
-				if d.Digest == b.Digest {
-					if mediaType != "" && mediaType != d.MediaType {
-						return ErrDisabled
-					}
-					mediaType = d.MediaType
-				}
-			}
-		}
+		mediaType := descriptorTypes[b.Digest]
 		objects = append(objects, ocigraph.Object{Digest: b.Digest, Size: b.Size, MediaType: mediaType})
 	}
 	if ocigraph.Validate(c.RootDigest, objects) != nil {
 		return ErrDisabled
 	}
 	return nil
+}
+
+func canonicalOCIImportManifestKey(c OCIImportClosure, digest string) string {
+	return "native/oci/manifests/" + c.RepositoryID + "/" + url.PathEscape(c.Name) + "/" + strings.TrimPrefix(digest, "sha256:")
 }
 
 func ociImportAudit(c OCIImportClosure, repoName string) AuditRecord {

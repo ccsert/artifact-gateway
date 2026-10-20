@@ -97,6 +97,7 @@ with log.open('w') as output:
         '-timeout', '180s'], env=env, stdout=output, stderr=subprocess.STDOUT)
 required = {
     'TestPostgresRustFSNexusOCICompletePublication',
+    'TestPostgresRustFSNexusOCIReusesCurrentNativeObjectKeys',
     'TestPostgresRustFSNexusOCIGarbageCollectionAndImportSerialize',
     'TestPostgresRustFSNexusOCIPublicationFenceAuditAndRestart',
     'TestPostgresOCIImportClosureLocksShareOneConnection',

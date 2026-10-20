@@ -29,6 +29,12 @@ type NexusOCIMigrationStore interface {
 type NexusOCIMigrationPublication struct {
 	store   NexusOCIMigrationStore
 	objects objectstore.Store
+	scanner nexusMigrationPublicationScanner
+}
+
+func (p *NexusOCIMigrationPublication) WithPublicationScanner(scanner nexusMigrationPublicationScanner) *NexusOCIMigrationPublication {
+	p.scanner = scanner
+	return p
 }
 
 var _ NexusFormatMigrationPublication = (*NexusOCIMigrationPublication)(nil)
@@ -105,6 +111,7 @@ type nexusOCILock struct {
 	active      atomic.Bool
 	verified    atomic.Bool
 	closure     repository.OCIImportClosure
+	assets      map[string]MigrationPublicationAsset
 }
 
 func ociEntryFingerprint(entry nexusmigration.Entry) string {
@@ -156,11 +163,33 @@ func (p *NexusOCIMigrationPublication) Lock(ctx context.Context, entry nexusmigr
 	if err != nil {
 		return ctx, nil, err
 	}
+	planned, err := p.NativeAssets(entry)
+	if err != nil {
+		return ctx, nil, err
+	}
+	effective := make(map[string]MigrationPublicationAsset, len(planned))
+	for _, asset := range planned {
+		current, readErr := p.NativeAsset(ctx, entry, asset)
+		if readErr == nil {
+			if current.Digest != asset.Digest || current.Size != asset.Size {
+				return ctx, nil, nexusmigration.Failed("target_conflict")
+			}
+			asset = current
+		} else if !errors.Is(readErr, repository.ErrNotFound) {
+			return ctx, nil, nexusmigration.Failed("target_readback_failed")
+		}
+		effective[asset.Path] = asset
+		for i := range closure.Manifests {
+			if closure.Name+"/manifests/"+closure.Manifests[i].Digest == asset.Path {
+				closure.Manifests[i].ObjectKey = asset.ObjectKey
+			}
+		}
+	}
 	ctx, release, err := p.store.LockOCIImport(ctx, closure)
 	if err != nil {
 		return ctx, nil, nexusmigration.Failed("target_coordination_failed")
 	}
-	lock := &nexusOCILock{owner: p, fingerprint: ociEntryFingerprint(entry), closure: closure}
+	lock := &nexusOCILock{owner: p, fingerprint: ociEntryFingerprint(entry), closure: closure, assets: effective}
 	lock.active.Store(true)
 	return context.WithValue(ctx, nexusOCILockKey{}, lock), func() {
 		if lock.active.Swap(false) {
@@ -210,6 +239,20 @@ func (p *NexusOCIMigrationPublication) Stage(ctx context.Context, entry nexusmig
 	}
 	if err = nexusVerifyInput(ctx, input, asset); err != nil {
 		return err
+	}
+	effective := lock.assets[planned.Path]
+	current, readErr := p.NativeAsset(ctx, entry, *planned)
+	if readErr == nil {
+		if current != effective {
+			return nexusmigration.Failed("target_conflict")
+		}
+		if _, err = p.readBytes(ctx, current, false); err != nil {
+			return nexusmigration.Failed("target_bytes_mismatch")
+		}
+		return nil
+	}
+	if !errors.Is(readErr, repository.ErrNotFound) || effective != *planned {
+		return nexusmigration.Failed("target_conflict")
 	}
 	if err = p.store.StageOCIImportObject(ctx, repository.OCIObjectIntent{RepositoryID: entry.TargetRepositoryID, ObjectKey: planned.ObjectKey, Digest: planned.Digest, Size: planned.Size}); err != nil {
 		return nexusmigration.Failed("native_stage_failed")
@@ -265,6 +308,15 @@ func (p *NexusOCIMigrationPublication) Verify(ctx context.Context, entry nexusmi
 		return err
 	}
 	for _, asset := range assets {
+		asset = lock.assets[asset.Path]
+		if current, readErr := p.NativeAsset(ctx, entry, asset); readErr == nil && current != asset || readErr != nil && !errors.Is(readErr, repository.ErrNotFound) {
+			return nexusmigration.Failed("target_conflict")
+		}
+		for i := range closure.Manifests {
+			if closure.Name+"/manifests/"+closure.Manifests[i].Digest == asset.Path {
+				closure.Manifests[i].ObjectKey = asset.ObjectKey
+			}
+		}
 		isManifest := !strings.HasPrefix(asset.Path, "blobs/")
 		body, err := p.readBytes(ctx, asset, isManifest)
 		if err != nil {
@@ -395,6 +447,9 @@ func (p *NexusOCIMigrationPublication) Publish(ctx context.Context, entry nexusm
 	}
 	if err != nil {
 		return nexusmigration.Failed("native_publish_failed")
+	}
+	if !nilDependency(p.scanner) {
+		_ = p.scanner.ScheduleRepository(ctx, entry.TargetRepositoryID, repository.FormatOCI, lock.closure.Name, lock.closure.RootDigest, entry.Actor)
 	}
 	return nil
 }

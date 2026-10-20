@@ -37,12 +37,6 @@ func (s *MemoryStore) LockOCIImport(ctx context.Context, c OCIImportClosure) (co
 		acquire func() (func(), error)
 	}
 	locks := make([]lock, 0, len(c.Manifests)+len(c.objects()))
-	for _, m := range c.Manifests {
-		manifest := m
-		locks = append(locks, lock{artifactScanLockKey(c.RepositoryID, FormatOCI, c.Name, m.Digest), func() (func(), error) {
-			return s.LockArtifactScanIdentity(ctx, c.RepositoryID, FormatOCI, c.Name, manifest.Digest)
-		}})
-	}
 	for _, object := range c.objects() {
 		key := object.ObjectKey
 		locks = append(locks, lock{"native-oci-object:" + key, func() (func(), error) { return s.LockOCIObject(ctx, key) }})
@@ -84,6 +78,21 @@ func (s *MemoryStore) PublishOCIImportClosure(ctx context.Context, c OCIImportCl
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	manifests := append([]OCIImportManifest(nil), c.Manifests...)
+	sort.Slice(manifests, func(i, j int) bool { return manifests[i].Digest < manifests[j].Digest })
+	releases := []func(){}
+	defer func() {
+		for i := len(releases) - 1; i >= 0; i-- {
+			releases[i]()
+		}
+	}()
+	for _, m := range manifests {
+		release, err := s.LockArtifactScanIdentity(ctx, c.RepositoryID, FormatOCI, c.Name, m.Digest)
+		if err != nil {
+			return err
+		}
+		releases = append(releases, release)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	repo, ok := s.hostedRepositories[c.RepositoryID]
@@ -113,6 +122,9 @@ func (s *MemoryStore) PublishOCIImportClosure(ctx context.Context, c OCIImportCl
 				return ErrNameExists
 			}
 		} else {
+			if m.ObjectKey != canonicalOCIImportManifestKey(c, m.Digest) {
+				return ErrDisabled
+			}
 			if m.Size > math.MaxInt64-additional {
 				return ErrQuotaExceeded
 			}

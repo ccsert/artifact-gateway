@@ -23,9 +23,6 @@ WHERE native_oci_object_intents.digest=EXCLUDED.digest AND native_oci_object_int
 
 func (s *PostgresStore) LockOCIImport(ctx context.Context, c OCIImportClosure) (context.Context, func(), error) {
 	keys := make([]string, 0, len(c.Manifests)+len(c.objects()))
-	for _, m := range c.Manifests {
-		keys = append(keys, artifactScanLockKey(c.RepositoryID, FormatOCI, c.Name, m.Digest))
-	}
 	for _, o := range c.objects() {
 		keys = append(keys, "native-oci-object:"+o.ObjectKey)
 	}
@@ -36,6 +33,15 @@ func (s *PostgresStore) PublishOCIImportClosure(ctx context.Context, c OCIImport
 	if err := validateOCIImport(c); err != nil {
 		return err
 	}
+	keys := make([]string, 0, len(c.Manifests))
+	for _, m := range c.Manifests {
+		keys = append(keys, artifactScanLockKey(c.RepositoryID, FormatOCI, c.Name, m.Digest))
+	}
+	ctx, release, err := s.lockPostgresAdvisoryKeys(ctx, keys)
+	if err != nil {
+		return err
+	}
+	defer release()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -79,6 +85,9 @@ func (s *PostgresStore) PublishOCIImportClosure(ctx context.Context, c OCIImport
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
+		}
+		if m.ObjectKey != canonicalOCIImportManifestKey(c, m.Digest) {
+			return ErrDisabled
 		}
 		if err = checkOCIImportIntent(ctx, tx, m.ObjectKey, m.Digest, m.Size); err != nil {
 			return err

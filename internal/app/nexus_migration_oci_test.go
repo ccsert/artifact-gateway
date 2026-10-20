@@ -60,6 +60,75 @@ func TestNexusOCICompletePublicationAndNativeReadback(t *testing.T) {
 	exerciseNexusOCICompletePublication(t, store, objects)
 }
 
+func TestNexusOCIReusesCurrentNativeObjectKeys(t *testing.T) {
+	exerciseNexusOCIExistingObjectKeys(t, repository.NewMemoryStore(), objectstore.NewMemoryStore())
+}
+
+func exerciseNexusOCIExistingObjectKeys(t *testing.T, store nexusOCIContractStore, objects objectstore.Store) {
+	t.Helper()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-existing-" + uuid.NewString()[:8], Format: repository.FormatOCI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := ocifixture.New(t.Name() + uuid.NewString())
+	entry := nexusOCIInventory(repo, f)
+	for _, asset := range entry.Assets {
+		digest := "sha256:" + asset.SHA256
+		if strings.HasPrefix(asset.TargetPath, "blobs/") {
+			key := "native/oci/blobs/sha256/" + asset.SHA256
+			upload, err := store.CreateOCIUpload(ctx, repository.OCIUpload{ID: uuid.NewString(), RepositoryID: repo.ID, Name: f.Name, State: "open", ExpiresAt: time.Now().Add(time.Hour)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = objects.PutVerifiedReader(ctx, key, bytes.NewReader(f.Bytes[asset.SourcePath]), asset.Size, digest); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = store.CompleteOCIUpload(ctx, upload.ID, repository.OCIBlob{Digest: digest, ObjectKey: key, Size: asset.Size}); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		// This is the key produced by today's native OCI promotion worker.
+		key := "native/oci/manifests/" + repo.ID + "/" + f.Name + "/" + asset.SHA256
+		if err = objects.PutVerifiedReader(ctx, key, bytes.NewReader(f.Bytes[asset.SourcePath]), asset.Size, digest); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = store.PutOCIManifest(ctx, repository.OCIManifest{RepositoryID: repo.ID, Name: f.Name, Digest: digest, ObjectKey: key, MediaType: asset.MediaType, Size: asset.Size}, digest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := NewNexusOCIMigrationPublication(store, objects)
+	locked, release, err := p.Lock(ctx, entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	nexusOCIStage(t, locked, p, entry, f)
+	if err = p.Verify(locked, entry); err != nil {
+		t.Fatal(err)
+	}
+	if err = p.Publish(locked, entry); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := p.Readback(ctx, entry); err != nil || state != nexusmigration.Identical {
+		t.Fatalf("existing-key complete readback=%s %v", state, err)
+	}
+	keys, err := objects.List(ctx, "")
+	if err != nil || len(keys) != 6 {
+		t.Fatalf("reused native objects created unbudgeted duplicates: keys=%v err=%v", keys, err)
+	}
+	for _, asset := range entry.Assets {
+		if strings.HasPrefix(asset.TargetPath, "blobs/") {
+			continue
+		}
+		manifest, err := store.GetOCIManifest(ctx, repo.ID, f.Name, "sha256:"+asset.SHA256)
+		if err != nil || manifest.ObjectKey != "native/oci/manifests/"+repo.ID+"/"+f.Name+"/"+asset.SHA256 {
+			t.Fatalf("current native pointer changed: %+v %v", manifest, err)
+		}
+	}
+}
+
 func exerciseNexusOCICompletePublication(t *testing.T, store nexusOCIContractStore, objects objectstore.Store) {
 	t.Helper()
 	ctx := context.Background()
@@ -69,7 +138,15 @@ func exerciseNexusOCICompletePublication(t *testing.T, store nexusOCIContractSto
 	}
 	f := ocifixture.New(t.Name() + uuid.NewString())
 	e := nexusOCIInventory(repo, f)
-	p := NewNexusOCIMigrationPublication(store, objects)
+	policy, err := store.GetRepositorySecurityPolicy(ctx, repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy.AutoScanOnPublish = true
+	if _, err = store.ReplaceRepositorySecurityPolicy(ctx, repo.ID, policy, policy.Version); err != nil {
+		t.Fatal(err)
+	}
+	p := NewNexusOCIMigrationPublication(store, objects).WithPublicationScanner(NewPublicationScanScheduler(store, true, []repository.Format{repository.FormatOCI}, nil))
 	locked, release, err := p.Lock(ctx, e)
 	if err != nil {
 		t.Fatal(err)
@@ -111,6 +188,23 @@ func exerciseNexusOCICompletePublication(t *testing.T, store nexusOCIContractSto
 	}
 	if err = p.Publish(locked, e); err != nil {
 		t.Fatalf("idempotent commit replay=%v", err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scans := 0
+	for _, job := range jobs {
+		if job.Kind == repository.LifecycleJobScan {
+			scans++
+			var payload repository.ArtifactScanPayload
+			if json.Unmarshal(job.Payload, &payload) != nil || payload.Format != repository.FormatOCI || payload.Coordinate != f.Name || payload.Digest != f.Root {
+				t.Fatalf("wrong migration scan identity: %s", job.Payload)
+			}
+		}
+	}
+	if scans != 1 {
+		t.Fatalf("OCI migration scan jobs=%d want1", scans)
 	}
 	for _, asset := range e.Assets {
 		if !strings.HasPrefix(asset.TargetPath, "blobs/") {

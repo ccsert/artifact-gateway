@@ -173,5 +173,8 @@ func exerciseNexusOCIMigrationCraneClient(t *testing.T, producer ocifixture.Fixt
 			t.Fatalf("official client did not request migrated asset %s", path)
 		}
 	}
+	if t.Failed() {
+		return
+	}
 	t.Logf("official crane v0.22.1: source stopped, fresh SQL store/Gateway, target-only independent all/amd64/arm64 cold OCI layouts; complete source-object bytes and original root %s preserved; sealed migration manifest %s", producer.Root, batch.ManifestSHA256)
 }

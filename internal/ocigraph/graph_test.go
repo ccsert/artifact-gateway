@@ -3,6 +3,7 @@ package ocigraph
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -77,6 +78,12 @@ func TestDecodeRejectsUnsupportedImageSemantics(t *testing.T) {
 		{"subject", func(d *Document) { d.Subject = json.RawMessage(`{"digest":"sha256:abcd"}`) }, ErrUnsupported},
 		{"missing size", func(d *Document) { copy := *d.Config; copy.Size = nil; d.Config = &copy }, ErrInvalid},
 		{"schema one", func(d *Document) { d.SchemaVersion = 1 }, ErrInvalid},
+		{"excess descriptors", func(d *Document) {
+			d.Layers = make([]Descriptor, MaxObjects)
+			for i := range d.Layers {
+				d.Layers[i] = descriptor("application/vnd.oci.image.layer.v1.tar+gzip", config.Digest, 2)
+			}
+		}, ErrLimit},
 		{"unknown media", func(d *Document) { d.MediaType = "application/unknown" }, ErrUnsupported},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -90,5 +97,24 @@ func TestDecodeRejectsUnsupportedImageSemantics(t *testing.T) {
 	}
 	if _, err := Decode(body, DockerManifest); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("body/header media mismatch: %v", err)
+	}
+}
+
+func TestCompleteGraphRejectsExcessNesting(t *testing.T) {
+	identity := func(n int) string { return fmt.Sprintf("sha256:%064x", n) }
+	objects := []Object{}
+	for i := 1; i <= MaxDepth+1; i++ {
+		document := Document{SchemaVersion: 2, MediaType: OCIIndex, Manifests: []Descriptor{descriptor(OCIIndex, identity(i+1), 1)}}
+		objects = append(objects, Object{Digest: identity(i), Size: 1, MediaType: OCIIndex, Document: &document})
+	}
+	image := Document{SchemaVersion: 2, MediaType: OCIManifest, Config: func() *Descriptor {
+		d := descriptor("application/vnd.oci.image.config.v1+json", identity(100), 1)
+		return &d
+	}(), Layers: []Descriptor{}}
+	last := &objects[len(objects)-1]
+	last.Document.Manifests[0].MediaType = OCIManifest
+	objects = append(objects, Object{Digest: identity(MaxDepth + 2), Size: 1, MediaType: OCIManifest, Document: &image}, Object{Digest: identity(100), Size: 1, MediaType: "application/vnd.oci.image.config.v1+json"})
+	if err := Validate(identity(1), objects); !errors.Is(err, ErrLimit) {
+		t.Fatalf("deep graph=%v", err)
 	}
 }

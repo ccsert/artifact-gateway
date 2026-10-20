@@ -11,13 +11,14 @@ import (
 )
 
 const (
-	OCIManifest      = "application/vnd.oci.image.manifest.v1+json"
-	OCIIndex         = "application/vnd.oci.image.index.v1+json"
-	DockerManifest   = "application/vnd.docker.distribution.manifest.v2+json"
-	DockerList       = "application/vnd.docker.distribution.manifest.list.v2+json"
-	MaxDepth         = 8
-	MaxObjects       = 1024
-	MaxManifestBytes = 16 << 20
+	OCIManifest               = "application/vnd.oci.image.manifest.v1+json"
+	OCIIndex                  = "application/vnd.oci.image.index.v1+json"
+	DockerManifest            = "application/vnd.docker.distribution.manifest.v2+json"
+	DockerList                = "application/vnd.docker.distribution.manifest.list.v2+json"
+	MaxDepth                  = 8
+	MaxObjects                = 1024
+	MaxManifestBytes          = 16 << 20
+	MaxInventoryManifestBytes = 64 << 20
 )
 
 var ErrUnsupported = errors.New("oci_graph_unsupported")
@@ -87,6 +88,9 @@ func Decode(body []byte, mediaType string) (Document, error) {
 	}
 	if document.ArtifactType != "" || len(document.Subject) > 0 && string(document.Subject) != "null" {
 		return document, ErrUnsupported
+	}
+	if len(document.Dependencies()) > MaxObjects {
+		return document, ErrLimit
 	}
 	if IsIndex(mediaType) {
 		if document.Config != nil || len(document.Layers) != 0 || len(document.Manifests) == 0 {

@@ -70,9 +70,14 @@ func build(seed, imageType, indexType string, nested bool) Fixture {
 	}
 	root, _ := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": indexType, "manifests": children})
 	if nested {
-		inner := ocigraph.Digest(root)
-		f.add("v2/"+f.Name+"/manifests/"+inner, root, indexType)
-		root, _ = json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": indexType, "manifests": []map[string]any{{"mediaType": indexType, "digest": inner, "size": len(root)}}})
+		nestedChildren := []map[string]any{}
+		for _, child := range children {
+			innerBytes, _ := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": indexType, "manifests": []map[string]any{child}})
+			inner := ocigraph.Digest(innerBytes)
+			f.add("v2/"+f.Name+"/manifests/"+inner, innerBytes, indexType)
+			nestedChildren = append(nestedChildren, map[string]any{"mediaType": indexType, "digest": inner, "size": len(innerBytes), "platform": child["platform"]})
+		}
+		root, _ = json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": indexType, "manifests": nestedChildren})
 	}
 	f.Root = ocigraph.Digest(root)
 	f.add("v2/"+f.Name+"/manifests/"+f.Reference, root, indexType)
