@@ -389,11 +389,14 @@ the member's current configuration, and source `401`/`403` cannot serve stale
 content or continue anonymously to another member. Error responses and audits
 contain neither the source secret nor the source response body.
 
-Run `make private-upstream-formats-e2e` for the additional formats. Its 63
+Run `make private-upstream-formats-e2e` for the additional formats. Its 64
 mandatory cases include 48 official-client consumptions: six formats, Basic
 and Bearer, Proxy and Group, and cold and hot caches. Fixed npm, pip, Cargo,
 Conan and Debian clients plus curl use owned configuration and caches; Conan's
-bootstrap version probes also use an owned `CONAN_HOME`. The gate creates and
+bootstrap version probes also use an owned `CONAN_HOME`. Cargo and rustc are
+selected as an installed 1.96.0 pair and invoked by absolute path with owned
+client homes; missing binaries fail without automatic toolchain installation.
+The gate creates and
 cleans its own PostgreSQL/RustFS project, tests rotation/clearing, stale CAS,
 source failure, redirect isolation and late cache publication, and retains
 machine-readable results and zero-owned-resource cleanup records. It requires
