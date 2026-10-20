@@ -74,7 +74,7 @@ sdk_image="mcr.microsoft.com/dotnet/sdk@$child"
 curl --disable --fail --silent --show-error --proto '=https' --tlsv1.2 \
   --connect-timeout 15 --max-time 90 --retry 2 \
   -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' \
-  https://mcr.microsoft.com/v2/dotnet/sdk/manifests/10.0.100 \
+  https://mcr.microsoft.com/v2/dotnet/sdk/manifests/sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 \
   -o "$evidence/dotnet-index.json"
 python3 - "$work" "$evidence" "$platform" "$child" <<'PY'
 import hashlib,json,pathlib,secrets,socket,subprocess,sys
