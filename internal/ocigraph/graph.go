@@ -159,6 +159,15 @@ func Validate(root string, objects []Object) error {
 		if _, found := byDigest[object.Digest]; found {
 			return ErrInvalid
 		}
+		if object.Document != nil {
+			encoded, err := json.Marshal(object.Document)
+			if err != nil {
+				return ErrInvalid
+			}
+			if _, err = Decode(encoded, object.MediaType); err != nil {
+				return err
+			}
+		}
 		byDigest[object.Digest] = object
 	}
 	visited, active := map[string]bool{}, map[string]bool{}

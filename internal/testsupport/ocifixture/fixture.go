@@ -20,7 +20,21 @@ type Fixture struct {
 	Digests               map[string]string
 }
 
-func New(seed string) Fixture {
+func New(seed string) Fixture { return build(seed, ocigraph.OCIManifest, ocigraph.OCIIndex, false) }
+
+func NewDocker(seed string) Fixture {
+	return build(seed, ocigraph.DockerManifest, ocigraph.DockerList, false)
+}
+
+func NewNested(seed string) Fixture {
+	return build(seed, ocigraph.OCIManifest, ocigraph.OCIIndex, true)
+}
+
+func build(seed, imageType, indexType string, nested bool) Fixture {
+	configType, layerType := "application/vnd.oci.image.config.v1+json", "application/vnd.oci.image.layer.v1.tar+gzip"
+	if imageType == ocigraph.DockerManifest {
+		configType, layerType = "application/vnd.docker.container.image.v1+json", "application/vnd.docker.image.rootfs.diff.tar.gzip"
+	}
 	f := Fixture{Name: "team/widget", Reference: "release", Bytes: map[string][]byte{}, MediaTypes: map[string]string{}, Digests: map[string]string{}}
 	var layer bytes.Buffer
 	tarWriter := tar.NewWriter(&layer)
@@ -43,20 +57,25 @@ func New(seed string) Fixture {
 		panic(err)
 	}
 	layerDigest := ocigraph.Digest(compressed.Bytes())
-	f.add("v2/-/blobs/"+layerDigest, compressed.Bytes(), "application/vnd.oci.image.layer.v1.tar+gzip")
+	f.add("v2/-/blobs/"+layerDigest, compressed.Bytes(), layerType)
 	children := []map[string]any{}
 	for _, arch := range []string{"amd64", "arm64"} {
 		config := []byte(fmt.Sprintf(`{"architecture":%q,"os":"linux","rootfs":{"type":"layers","diff_ids":[%q]},"config":{"Labels":{"fixture":%q}}}`, arch, ocigraph.Digest(layer.Bytes()), seed))
 		configDigest := ocigraph.Digest(config)
-		f.add("v2/-/blobs/"+configDigest, config, "application/vnd.oci.image.config.v1+json")
-		manifest, _ := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": ocigraph.OCIManifest, "config": map[string]any{"mediaType": "application/vnd.oci.image.config.v1+json", "digest": configDigest, "size": len(config)}, "layers": []map[string]any{{"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip", "digest": layerDigest, "size": compressed.Len()}}})
+		f.add("v2/-/blobs/"+configDigest, config, configType)
+		manifest, _ := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": imageType, "config": map[string]any{"mediaType": configType, "digest": configDigest, "size": len(config)}, "layers": []map[string]any{{"mediaType": layerType, "digest": layerDigest, "size": compressed.Len()}}})
 		manifestDigest := ocigraph.Digest(manifest)
-		f.add("v2/"+f.Name+"/manifests/"+manifestDigest, manifest, ocigraph.OCIManifest)
-		children = append(children, map[string]any{"mediaType": ocigraph.OCIManifest, "digest": manifestDigest, "size": len(manifest), "platform": map[string]string{"architecture": arch, "os": "linux"}})
+		f.add("v2/"+f.Name+"/manifests/"+manifestDigest, manifest, imageType)
+		children = append(children, map[string]any{"mediaType": imageType, "digest": manifestDigest, "size": len(manifest), "platform": map[string]string{"architecture": arch, "os": "linux"}})
 	}
-	root, _ := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": ocigraph.OCIIndex, "manifests": children})
+	root, _ := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": indexType, "manifests": children})
+	if nested {
+		inner := ocigraph.Digest(root)
+		f.add("v2/"+f.Name+"/manifests/"+inner, root, indexType)
+		root, _ = json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": indexType, "manifests": []map[string]any{{"mediaType": indexType, "digest": inner, "size": len(root)}}})
+	}
 	f.Root = ocigraph.Digest(root)
-	f.add("v2/"+f.Name+"/manifests/"+f.Reference, root, ocigraph.OCIIndex)
+	f.add("v2/"+f.Name+"/manifests/"+f.Reference, root, indexType)
 	return f
 }
 
