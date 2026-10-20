@@ -37,6 +37,7 @@ type conanMigrationSourceFixture struct {
 	mu                  sync.Mutex
 	files               map[string][]byte
 	pages, gets, denied int
+	change              func(string, []byte) []byte
 }
 
 func (f *conanMigrationSourceFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +71,7 @@ func (f *conanMigrationSourceFixture) ServeHTTP(w http.ResponseWriter, r *http.R
 			body := f.files[path]
 			items = append(items, map[string]any{"repository": "source", "format": "conan", "path": path, "fileSize": len(body),
 				"checksum":    map[string]string{"sha256": fmt.Sprintf("%x", sha256.Sum256(body))},
-				"downloadUrl": "https://source.example/repository/source/v2/" + path})
+				"downloadUrl": "https://example.com/repository/source/v2/" + path})
 		}
 		var next any
 		if end < len(paths) {
@@ -92,6 +93,9 @@ func (f *conanMigrationSourceFixture) ServeHTTP(w http.ResponseWriter, r *http.R
 		}
 		f.gets++
 		w.Header().Set("ETag", fmt.Sprintf(`"%x"`, sha256.Sum256(body)))
+		if f.change != nil {
+			body = f.change(path, body)
+		}
 		_, _ = w.Write(body)
 	}
 }
@@ -110,7 +114,7 @@ func conanMigrationSource(t *testing.T, f nexusConanPGFixture, files map[string]
 		return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
 	}
 	source := nexussource.New(sourcepg.New(f.db), f.store, nexussource.Options{Client: server.Client(), EgressHooks: &hooks})
-	created, err := source.Create(context.Background(), nexussource.Input{Name: "owned-conan-source", BaseURL: "https://source.example"})
+	created, err := source.Create(context.Background(), nexussource.Input{Name: "owned-conan-source", BaseURL: "https://example.com"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,11 +265,15 @@ class Fixture(ConanFile):
 			}
 		}
 	}
-	if remote.pages != 7 || remote.gets != 14 || remote.denied != 0 {
-		t.Fatalf("source REST-only complete pagination/read-only boundary pages=%d gets=%d denied=%d", remote.pages, remote.gets, remote.denied)
+	remote.mu.Lock()
+	pages, gets, denied := remote.pages, remote.gets, remote.denied
+	remote.mu.Unlock()
+	if pages != 7 || gets != 14 || denied != 0 {
+		t.Fatalf("source REST-only complete pagination/read-only boundary pages=%d gets=%d denied=%d", pages, gets, denied)
 	}
 	sourceServer.Close()
 	_ = f.store.Close()
+	restartNexusConanOwnedServices(t, ctx)
 	f.store, err = repository.NewPostgresStore(f.databaseURL)
 	if err != nil {
 		t.Fatal(err)
@@ -287,4 +295,36 @@ class Fixture(ConanFile):
 		}
 	}
 	t.Logf("official Conan 2.21.0; source stopped; two historical RREV/PREV trees and 14 original assets migrated; target-only new homes installed both exact revisions; manifest=%s", batch.ManifestSHA256)
+}
+
+func restartNexusConanOwnedServices(t *testing.T, ctx context.Context) {
+	t.Helper()
+	project, file := os.Getenv("TEST_CONAN_COMPOSE_PROJECT"), os.Getenv("TEST_CONAN_COMPOSE_FILE")
+	override := os.Getenv("TEST_CONAN_COMPOSE_OVERRIDE")
+	if project == "" && os.Getenv("CONAN_MIGRATION_REQUIRED") != "1" {
+		return
+	}
+	if !strings.HasPrefix(project, "artifact-gateway-conan-") || !filepath.IsAbs(file) || filepath.Base(file) != "compose.integration.yml" ||
+		!filepath.IsAbs(override) || filepath.Base(override) != "compose.conan.yml" {
+		t.Fatal("refuse to restart an unowned Conan migration fixture")
+	}
+	before := map[string]string{}
+	for _, service := range []string{"postgres", "rustfs"} {
+		before[service] = conanOwnedServiceState(t, project, file, override, service)
+	}
+	for _, args := range [][]string{{"restart", "postgres", "rustfs"}, {"up", "-d", "--wait", "--wait-timeout", "45", "postgres", "rustfs"}, {"run", "--rm", "--no-deps", "rustfs-ready"}} {
+		command := exec.CommandContext(ctx, "docker", append([]string{"compose", "--env-file", "/dev/null", "--project-name", project, "-f", file, "-f", override}, args...)...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("restart only owned Conan migration services: %v\n%s", err, output)
+		}
+	}
+	for _, service := range []string{"postgres", "rustfs"} {
+		after := conanOwnedServiceState(t, project, file, override, service)
+		old, current := strings.Fields(before[service]), strings.Fields(after)
+		if len(old) != 2 || len(current) != 2 || old[0] != current[0] || old[1] == current[1] {
+			t.Fatalf("owned %s process did not restart in place: before=%q after=%q", service, before[service], after)
+		}
+		t.Logf("owned %s restart confirmed: container=%s StartedAt=%s -> %s", service, current[0], old[1], current[1])
+	}
 }

@@ -24,6 +24,7 @@ type NexusConanMigrationStore interface {
 	StageConanObject(context.Context, repository.ConanObjectIntent) error
 	GetConanRecipeRevision(context.Context, string, string, string) (repository.ConanRecipeRevision, error)
 	GetConanPackageRevision(context.Context, string, string, string, string, string) (repository.ConanPackageRevision, error)
+	GetArtifactQuarantine(context.Context, string, repository.Format, string, string) (repository.ArtifactQuarantine, error)
 	ListConanRecipeAssets(context.Context, string, string, string) ([]repository.ConanAsset, error)
 	ListConanPackageAssets(context.Context, string, string, string, string, string) ([]repository.ConanAsset, error)
 }
@@ -275,6 +276,13 @@ func (p *NexusConanMigrationPublication) revision(ctx context.Context, entry nex
 	recipe, err := p.store.GetConanRecipeRevision(ctx, entry.TargetRepositoryID, c.Reference, c.RecipeRevision)
 	if err != nil {
 		return "", "", err
+	}
+	quarantine, quarantineErr := p.store.GetArtifactQuarantine(ctx, entry.TargetRepositoryID, repository.FormatConan, c.Reference+"#"+c.RecipeRevision, recipe.Digest)
+	if quarantineErr != nil && !errors.Is(quarantineErr, repository.ErrNotFound) {
+		return "", "", quarantineErr
+	}
+	if quarantineErr == nil && quarantine.State == repository.ArtifactQuarantineStateQuarantined {
+		return recipe.Digest, "quarantined", nil
 	}
 	if c.Kind == "recipe" || recipe.State != "visible" {
 		return recipe.Digest, recipe.State, nil

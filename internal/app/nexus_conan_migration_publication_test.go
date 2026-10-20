@@ -278,3 +278,37 @@ func TestNexusConanMigrationMissingExplicitPorts(t *testing.T) {
 		}
 	}
 }
+
+func TestNexusConanMigrationReadbackRespectsRecipeQuarantineClosure(t *testing.T) {
+	f := newNexusConanMigrationFixture(t)
+	for i := range f.entries {
+		entry := &f.entries[i]
+		ctx, release, err := f.publication.Lock(context.Background(), *entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stageNexusConan(t, ctx, f.publication, entry, f.bodies)
+		if err = f.publication.Verify(ctx, *entry); err != nil {
+			t.Fatal(err)
+		}
+		if err = f.publication.Publish(ctx, *entry); err != nil {
+			t.Fatal(err)
+		}
+		release()
+	}
+	c, _ := nexusmigration.ParseConanIdentity(f.entries[0].Identity)
+	recipe, err := f.store.GetConanRecipeRevision(context.Background(), f.repo.ID, c.Reference, c.RecipeRevision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision := repository.ArtifactQuarantine{RepositoryID: f.repo.ID, Format: repository.FormatConan, Coordinate: f.entries[0].Identity,
+		Digest: recipe.Digest, State: repository.ArtifactQuarantineStateQuarantined, Reason: "migration gate fixture", UpdatedBy: "security-admin"}
+	if _, err = f.store.ReplaceArtifactQuarantine(context.Background(), decision, "0"); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range f.entries {
+		if state, err := f.publication.Readback(context.Background(), entry); err != nil || state != nexusmigration.Conflict {
+			t.Fatalf("recipe quarantine closure was counted as a successful migration skip: identity=%s state=%s err=%v", entry.Identity, state, err)
+		}
+	}
+}
