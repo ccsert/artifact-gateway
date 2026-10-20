@@ -187,6 +187,9 @@ func (s *PostgresStore) CommitConanPublicationSession(ctx context.Context, id st
 		return ConanPublishSession{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = checkNativePublicationGuard(ctx, tx); err != nil {
+		return ConanPublishSession{}, false, err
+	}
 	if err = lockConanRepositoriesTx(ctx, tx, identity.RepositoryID); err != nil {
 		return ConanPublishSession{}, false, err
 	}
