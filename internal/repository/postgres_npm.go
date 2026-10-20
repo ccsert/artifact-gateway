@@ -330,6 +330,27 @@ func (s *PostgresStore) CacheNPMProxyTarball(ctx context.Context, incoming NPMVe
 		return NPMVersion{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := checkProxySourceVersion(ctx, tx, incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return NPMVersion{}, err
+	}
+	// Use the same repo -> package -> version lock order as metadata sync.
+	lockKey := "native-npm-proxy-package:" + incoming.RepositoryID + ":" + incoming.PackageName
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return NPMVersion{}, err
+	}
+	var currentSource string
+	var negative bool
+	err = tx.QueryRowContext(ctx, `SELECT source_version,negative FROM native_npm_packages
+		WHERE repository_id::text=$1 AND name=$2 FOR UPDATE`, incoming.RepositoryID, incoming.PackageName).Scan(&currentSource, &negative)
+	if errors.Is(err, sql.ErrNoRows) {
+		return NPMVersion{}, ErrNotFound
+	}
+	if err != nil {
+		return NPMVersion{}, err
+	}
+	if negative || currentSource != incoming.SourceVersion {
+		return NPMVersion{}, ErrVersionConflict
+	}
 	var stored NPMVersion
 	err = scanNPMVersion(tx.QueryRowContext(ctx, `
 		SELECT repository_id::text,package_name,version,digest,integrity,shasum,
@@ -342,6 +363,12 @@ func (s *PostgresStore) CacheNPMProxyTarball(ctx context.Context, incoming NPMVe
 	}
 	if err != nil {
 		return NPMVersion{}, err
+	}
+	if stored.UpstreamTarball == "" {
+		return NPMVersion{}, ErrNotFound
+	}
+	if !sameNPMProxyTarballMetadata(incoming, stored) {
+		return NPMVersion{}, ErrUpstreamChanged
 	}
 	if stored.ObjectKey != "" {
 		if stored.Digest != incoming.Digest {

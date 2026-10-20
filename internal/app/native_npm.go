@@ -1123,9 +1123,14 @@ func (h nativeNPMHandler) proxyTarballWithAudit(w http.ResponseWriter, r *http.R
 	version.ObjectKey = objectKey
 	version.Size = spool.Size()
 	version.CachedAt = time.Now().UTC()
+	version.SourceVersion = repo.Version
 	if _, err = h.store.CacheNPMProxyTarball(r.Context(), version); repository.IsQuotaExceeded(err) {
 		h.writeError(w, http.StatusInsufficientStorage, "repository capacity quota exceeded")
 		h.recordAuditForTarget(r, repo, target, packageName+"@"+version.Version, actor, repository.AuditStorageError, http.StatusInsufficientStorage, 0, "miss")
+		return
+	} else if errors.Is(err, repository.ErrVersionConflict) || errors.Is(err, repository.ErrUpstreamChanged) {
+		h.writeError(w, http.StatusServiceUnavailable, "npm source or tarball metadata changed during download")
+		h.recordAuditForTarget(r, repo, target, packageName+"@"+version.Version, actor, repository.AuditUpstreamError, http.StatusServiceUnavailable, 0, "miss")
 		return
 	} else if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "commit npm proxy tarball failed")

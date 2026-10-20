@@ -39,3 +39,10 @@ func (s *MemoryStore) checkProxySourceVersionLocked(repositoryID, version string
 	}
 	return nil
 }
+
+// A packument can change before a tarball is cached, even without a repository
+// configuration change. Bytes verified against the old tuple cannot fill it.
+func sameNPMProxyTarballMetadata(left, right NPMVersion) bool {
+	return left.Integrity == right.Integrity && left.Shasum == right.Shasum &&
+		left.UpstreamTarball == right.UpstreamTarball && left.TarballName == right.TarballName
+}

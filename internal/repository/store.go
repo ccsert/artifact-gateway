@@ -412,6 +412,8 @@ type NativeNPMStore interface {
 	DeleteNPMDistTag(context.Context, NPMDistTagMutation) (NPMDistTagChange, error)
 	SyncNPMProxyPackage(context.Context, NPMPackage) (NPMPackage, error)
 	StoreNPMProxyNegative(context.Context, NPMPackage) error
+	// CacheNPMProxyTarball commits only under the source version and complete
+	// tarball metadata captured before fetching and verifying the object.
 	CacheNPMProxyTarball(context.Context, NPMVersion) (NPMVersion, error)
 	LockNPMProxy(context.Context, string) (func(), error)
 	LockNPMObject(context.Context, string) (func(), error)

@@ -52,8 +52,43 @@ func privateCacheVersionWitness(t *testing.T, format repository.Format, store Ga
 			writeErr = cache.StoreNPMProxyNegative(ctx, old)
 			after, _ = cache.GetNPMPackage(ctx, repo.ID, old.Name)
 			unchanged(before, after, writeErr)
+			oldTarball := old.Versions[0]
+			oldTarball.SourceVersion = old.SourceVersion
+			_, writeErr = cache.CacheNPMProxyTarball(ctx, oldTarball)
+			after, _ = cache.GetNPMPackage(ctx, repo.ID, old.Name)
+			unchanged(before, after, writeErr)
+			// An identical digest on an already-cached row still requires the
+			// exact metadata snapshot that authorized its original download.
+			for _, field := range []string{"integrity", "shasum", "tarball-url", "tarball-name"} {
+				stale := before.Versions[0]
+				stale.SourceVersion = current.Version
+				switch field {
+				case "integrity":
+					stale.Integrity += "stale"
+				case "shasum":
+					stale.Shasum += "stale"
+				case "tarball-url":
+					stale.UpstreamTarball += "?stale"
+				case "tarball-name":
+					stale.TarballName += ".stale"
+				}
+				_, writeErr = cache.CacheNPMProxyTarball(ctx, stale)
+				if !errors.Is(writeErr, repository.ErrUpstreamChanged) {
+					t.Fatalf("stale cached tarball %s metadata accepted: %v", field, writeErr)
+				}
+				after, _ = cache.GetNPMPackage(ctx, repo.ID, old.Name)
+				left, _ := json.Marshal(before)
+				right, _ := json.Marshal(after)
+				if string(left) != string(right) {
+					t.Fatal("stale cached tarball metadata changed the current package")
+				}
+			}
 			old.SourceVersion = ""
 			_, writeErr = cache.SyncNPMProxyPackage(ctx, old)
+			after, _ = cache.GetNPMPackage(ctx, repo.ID, old.Name)
+			unchanged(before, after, writeErr)
+			oldTarball.SourceVersion = ""
+			_, writeErr = cache.CacheNPMProxyTarball(ctx, oldTarball)
 			after, _ = cache.GetNPMPackage(ctx, repo.ID, old.Name)
 			unchanged(before, after, writeErr)
 		}

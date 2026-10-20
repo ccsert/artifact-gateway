@@ -384,6 +384,10 @@ type NPMPackage struct {
 // protocol-native version document; dist URLs and integrity fields are
 // overwritten from trusted server metadata when the packument is served.
 type NPMVersion struct {
+	// SourceVersion is required only as CacheNPMProxyTarball input. The caller
+	// supplies the repository version captured before fetching; adapters never
+	// infer it or persist/restore it as publication provenance.
+	SourceVersion   string `json:"-"`
 	RepositoryID    string
 	PackageName     string
 	Version         string
