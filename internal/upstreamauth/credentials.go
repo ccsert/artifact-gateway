@@ -48,7 +48,28 @@ func Apply(request *http.Request, auth *repository.UpstreamAuth) error {
 }
 
 func SameOrigin(left, right *url.URL) bool {
-	return left != nil && right != nil && strings.EqualFold(left.Scheme, right.Scheme) && strings.EqualFold(left.Host, right.Host)
+	return left != nil && right != nil && strings.EqualFold(left.Scheme, right.Scheme) &&
+		strings.EqualFold(left.Hostname(), right.Hostname()) && originPort(left) == originPort(right)
+}
+
+// RFC 9110 section 4.3.1 compares origins using the numeric port, including
+// the scheme's default when omitted. URL validity is enforced by callers.
+func originPort(target *url.URL) string {
+	port := target.Port()
+	if port == "" {
+		switch strings.ToLower(target.Scheme) {
+		case "https":
+			return "443"
+		case "http":
+			return "80"
+		default:
+			return ""
+		}
+	}
+	if port = strings.TrimLeft(port, "0"); port == "" {
+		return "0"
+	}
+	return port
 }
 
 // ApplyOrigin never sends a repository credential to an allowed asset CDN.
