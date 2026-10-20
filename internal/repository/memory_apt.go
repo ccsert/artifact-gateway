@@ -25,6 +25,9 @@ func (s *MemoryStore) GetAPTAsset(_ context.Context, repositoryID, path string) 
 func (s *MemoryStore) CacheAPTAsset(_ context.Context, incoming APTAsset) (APTAsset, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return APTAsset{}, err
+	}
 	key := aptAssetKey(incoming.RepositoryID, incoming.Path)
 	if existing, ok := s.aptAssets[key]; ok {
 		same := existing.Digest == incoming.Digest && existing.ObjectKey == incoming.ObjectKey && existing.Size == incoming.Size && existing.SourceURL == incoming.SourceURL

@@ -173,15 +173,15 @@ func TestAPTArtifactSearchReturnsEmptyAndCachedAssetPages(t *testing.T) {
 	createdAt := time.Date(2026, time.August, 11, 4, 30, 0, 0, time.UTC)
 	digest := "sha256:" + strings.Repeat("a", 64)
 	asset, err := store.CacheAPTAsset(context.Background(), repository.APTAsset{
-		RepositoryID: repo.ID,
-		Path:         "pool/main/h/hello/hello_2.10_amd64.deb",
-		Digest:       digest,
-		ObjectKey:    "apt/hello",
-		Size:         1234,
-		ContentType:  "application/vnd.debian.binary-package",
-		SourceURL:    "https://deb.example.test/debian/pool/main/h/hello/hello_2.10_amd64.deb",
-		CachedAt:     createdAt,
-		CreatedAt:    createdAt,
+		RepositoryID: repo.ID, SourceVersion: repo.Version,
+		Path:        "pool/main/h/hello/hello_2.10_amd64.deb",
+		Digest:      digest,
+		ObjectKey:   "apt/hello",
+		Size:        1234,
+		ContentType: "application/vnd.debian.binary-package",
+		SourceURL:   "https://deb.example.test/debian/pool/main/h/hello/hello_2.10_amd64.deb",
+		CachedAt:    createdAt,
+		CreatedAt:   createdAt,
 	})
 	if err != nil {
 		t.Fatal(err)

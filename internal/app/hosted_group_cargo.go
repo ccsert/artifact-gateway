@@ -14,6 +14,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 	"github.com/felixge/httpsnoop"
 	"golang.org/x/mod/semver"
 )
@@ -219,6 +220,10 @@ func (h v2GroupCargoHandler) reconcileIndex(r *http.Request, resolver v2GroupRes
 }
 
 func (h v2GroupCargoHandler) writeResolutionError(w http.ResponseWriter, _ *http.Request, err error) {
+	if errors.Is(err, upstreamauth.ErrCredential) {
+		h.native.writeError(w, http.StatusBadGateway, "Cargo upstream authentication unavailable")
+		return
+	}
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		h.native.writeError(w, http.StatusNotFound, "Cargo crate not found")

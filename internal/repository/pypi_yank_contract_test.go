@@ -10,6 +10,7 @@ import (
 )
 
 type pypiYankContractStore interface {
+	HostedRepositoryStore
 	NativePyPIStore
 	PyPIYankStore
 	ListAudits(context.Context, AuditQuery) ([]AuditRecord, error)
@@ -102,8 +103,12 @@ func runPyPIYankContract(t *testing.T, factory func(*testing.T) (pypiYankContrac
 		}
 	})
 	t.Run("proxy_revalidation_preserves_cached_bytes_and_updates_selection", func(t *testing.T) {
-		store, repo := factory(t)
-		file := PyPIFile{RepositoryID: repo.ID, Project: "widget", Version: "2.0", Filename: "widget-2.0.tar.gz", Digest: "sha256:" + strings.Repeat("b", 64), SourceURL: "https://upstream.example/widget-2.0.tar.gz", Yanked: true, YankReason: "upstream reason"}
+		store, _ := factory(t)
+		repo, err := store.CreateHostedRepository(t.Context(), HostedRepository{ID: uuid.NewString(), Name: "proxy-yank-" + uuid.NewString(), Format: FormatPyPI, Type: RepositoryTypeProxy, Endpoint: "https://upstream.example"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		file := PyPIFile{RepositoryID: repo.ID, SourceVersion: repo.Version, Project: "widget", Version: "2.0", Filename: "widget-2.0.tar.gz", Digest: "sha256:" + strings.Repeat("b", 64), SourceURL: "https://upstream.example/widget-2.0.tar.gz", Yanked: true, YankReason: "upstream reason"}
 		if err := store.SyncPyPIProxyFiles(t.Context(), repo.ID, "widget", []PyPIFile{file}); err != nil {
 			t.Fatal(err)
 		}
@@ -125,10 +130,14 @@ func runPyPIYankContract(t *testing.T, factory func(*testing.T) (pypiYankContrac
 		}
 	})
 	t.Run("failed_revalidation_never_partially_unyanks", func(t *testing.T) {
-		store, repo := factory(t)
+		store, _ := factory(t)
+		repo, err := store.CreateHostedRepository(t.Context(), HostedRepository{ID: uuid.NewString(), Name: "proxy-yank-" + uuid.NewString(), Format: FormatPyPI, Type: RepositoryTypeProxy, Endpoint: "https://upstream.example"})
+		if err != nil {
+			t.Fatal(err)
+		}
 		files := []PyPIFile{
-			{RepositoryID: repo.ID, Project: "widget", Version: "3.0", Filename: "widget-3.0.tar.gz", Digest: "sha256:" + strings.Repeat("a", 64), SourceURL: "https://upstream.example/sdist", Yanked: true, YankReason: "keep warning"},
-			{RepositoryID: repo.ID, Project: "widget", Version: "3.0", Filename: "widget-3.0-py3-none-any.whl", Digest: "sha256:" + strings.Repeat("b", 64), SourceURL: "https://upstream.example/wheel", Yanked: true, YankReason: "keep warning"},
+			{RepositoryID: repo.ID, SourceVersion: repo.Version, Project: "widget", Version: "3.0", Filename: "widget-3.0.tar.gz", Digest: "sha256:" + strings.Repeat("a", 64), SourceURL: "https://upstream.example/sdist", Yanked: true, YankReason: "keep warning"},
+			{RepositoryID: repo.ID, SourceVersion: repo.Version, Project: "widget", Version: "3.0", Filename: "widget-3.0-py3-none-any.whl", Digest: "sha256:" + strings.Repeat("b", 64), SourceURL: "https://upstream.example/wheel", Yanked: true, YankReason: "keep warning"},
 		}
 		if err := store.SyncPyPIProxyFiles(t.Context(), repo.ID, "widget", files); err != nil {
 			t.Fatal(err)

@@ -360,11 +360,13 @@ type RawUpload struct {
 // NPMPackage is the registry packument identity projected from immutable
 // versions and mutable distribution tags.
 type NPMPackage struct {
-	RepositoryID string
-	Name         string
-	Revision     int64
-	DistTags     map[string]string
-	Versions     []NPMVersion
+	// SourceVersion binds Proxy cache authorization to one repository configuration.
+	SourceVersion string
+	RepositoryID  string
+	Name          string
+	Revision      int64
+	DistTags      map[string]string
+	Versions      []NPMVersion
 	// TombstonedVersions are authority barriers for Group resolution. They
 	// never appear in a registry response or permit a tarball read.
 	TombstonedVersions []NPMVersion
@@ -448,6 +450,8 @@ type NPMObject struct {
 // PyPIFile is one immutable wheel or source distribution exposed through the
 // PEP 503 Simple Repository API.
 type PyPIFile struct {
+	// SourceVersion binds Proxy cache authorization to one repository configuration.
+	SourceVersion  string
 	RepositoryID   string
 	Project        string
 	Version        string
@@ -537,6 +541,8 @@ type GoModulePublication struct {
 // repository. The path is the protocol identity (for example
 // dists/bookworm/InRelease or pool/main/h/hello/hello_2.10_amd64.deb).
 type APTAsset struct {
+	// SourceVersion binds Proxy cache authorization to one repository configuration.
+	SourceVersion    string
 	RepositoryID     string
 	Path             string
 	Digest           string

@@ -2,13 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"time"
 
-	"github.com/ccsert/artifact-gateway/internal/egress"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 const pypiProxyUserAgent = "pip/26 Artifact-Gateway/1.0"
@@ -28,6 +29,15 @@ func (c UpstreamClient) FetchPyPI(ctx context.Context, method string, repo repos
 	}
 	request.Header.Set("User-Agent", pypiProxyUserAgent)
 	request.Header.Set("Accept", "text/html, application/vnd.pypi.simple.v1+json")
+	if err := upstreamauth.ApplyOrigin(request, repo.Endpoint, repo.UpstreamAuth); err != nil {
+		return nil, err
+	}
+	// All configured endpoints use HTTPS. Keep the existing explicit local
+	// HTTP fixture seam; real upstreams share the bounded per-hop egress engine.
+	if targetURL.Scheme == "https" {
+		member := repository.Member{Type: repository.MemberProxy, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
+		return c.doProxyUpstream(ctx, member, request)
+	}
 	client := c.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
@@ -35,21 +45,17 @@ func (c UpstreamClient) FetchPyPI(ctx context.Context, method string, repo repos
 		copy := *client
 		client = &copy
 	}
-	if targetURL.Scheme == "https" {
-		client, err = egress.Apply(client, repo.EgressProxy, targetURL.String(), rawEgressHooks())
-		if err != nil {
-			return nil, err
-		}
-	}
-	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+	client.Jar = nil
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if !proxyUpstreamURLAllowed(repo, next.URL) {
-			return fmt.Errorf("PyPI upstream redirect is not allowed")
+			return errors.New("PyPI upstream redirect is not allowed")
 		}
+		upstreamauth.StripRedirect(next, via, repo.Endpoint)
 		return nil
 	}
-	response, err := tracedHTTPClient(client).Do(request)
+	response, err := doProxyHTTP(client, request)
 	if err != nil {
-		return nil, fmt.Errorf("fetch PyPI upstream content: %w", err)
+		return nil, errors.New("PyPI upstream unavailable")
 	}
 	return response, nil
 }

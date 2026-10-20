@@ -14,6 +14,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 func TestV2GroupRawProxyFallbackOverTLS(t *testing.T) {
@@ -116,7 +117,8 @@ func TestV2GroupRawContinuesAfterProxyMiss(t *testing.T) {
 				if !reflect.DeepEqual(client.Calls(), want) {
 					t.Fatalf("calls=%v want=%v", client.Calls(), want)
 				}
-				key := cache.Key(first.Name, "release.txt", first.Name, first.Endpoint)
+				namespace := upstreamauth.Namespace(first.Name, repository.Member{RepositoryID: first.ID, RepositoryVersion: first.Version, UpstreamAuth: first.UpstreamAuth})
+				key := cache.Key(namespace, "release.txt", first.Name, first.Endpoint)
 				if _, err := cache.Load(context.Background(), key); err != errRawCacheNegative {
 					t.Fatalf("first member negative cache=%v", err)
 				}

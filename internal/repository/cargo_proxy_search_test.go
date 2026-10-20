@@ -24,7 +24,7 @@ func TestCargoProxyBrowseProjectsVerifiedCachedIndexes(t *testing.T) {
 		if status == 200 {
 			body = []byte(`{"name":"` + name + `","vers":"` + version + `","cksum":"` + strings.Repeat("a", 64) + `","yanked":false}` + "\n")
 		}
-		if err := store.PutCargoProxyIndex(ctx, CargoProxyIndex{RepositoryID: repo.ID, Name: name, Status: status, Body: body, FetchedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+		if err := store.PutCargoProxyIndex(ctx, CargoProxyIndex{RepositoryID: repo.ID, SourceVersion: repo.Version, Name: name, Status: status, Body: body, FetchedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
 			t.Fatal(err)
 		}
 	}

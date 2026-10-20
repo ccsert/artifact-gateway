@@ -42,7 +42,7 @@ func TestPostgresCargoProxyCacheAcrossConnections(t *testing.T) {
 		_ = second.Close()
 	})
 	now := time.Now().UTC()
-	config := CargoProxyConfig{RepositoryID: repo.ID, DownloadTemplate: "https://static.crates.io/crates", FetchedAt: now, ExpiresAt: now.Add(time.Hour)}
+	config := CargoProxyConfig{RepositoryID: repo.ID, SourceVersion: repo.Version, DownloadTemplate: "https://static.crates.io/crates", FetchedAt: now, ExpiresAt: now.Add(time.Hour)}
 	if err := first.PutCargoProxyConfig(ctx, config); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestPostgresCargoProxyCacheAcrossConnections(t *testing.T) {
 	}
 	checksum := strings.Repeat("a", 64)
 	row := `{"name":"demo","vers":"1.0.0","cksum":"` + checksum + `","yanked":false}` + "\n"
-	index := CargoProxyIndex{RepositoryID: repo.ID, Name: "demo", Body: []byte(row), Status: 200, FetchedAt: now, ExpiresAt: now.Add(time.Hour)}
+	index := CargoProxyIndex{RepositoryID: repo.ID, SourceVersion: repo.Version, Name: "demo", Body: []byte(row), Status: 200, FetchedAt: now, ExpiresAt: now.Add(time.Hour)}
 	if err := first.PutCargoProxyIndex(ctx, index); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestPostgresCargoProxyCacheAcrossConnections(t *testing.T) {
 	if listed, err := second.SearchCargoProxyCrates(ctx, repo.ID, "dem", 10, ""); err != nil || len(listed) != 1 || listed[0].Name != "demo" || listed[0].MaxVersion != "1.0.0" {
 		t.Fatalf("cross-connection proxy browse=%+v err=%v", listed, err)
 	}
-	crate := CargoProxyCrate{RepositoryID: repo.ID, Name: "demo", Version: "1.0.0", Checksum: checksum,
+	crate := CargoProxyCrate{RepositoryID: repo.ID, SourceVersion: repo.Version, Name: "demo", Version: "1.0.0", Checksum: checksum,
 		ObjectKey: "native/cargo-proxy/sha256/" + checksum, Size: 23, CachedAt: now}
 	if err := first.PutCargoProxyCrate(ctx, crate); err != nil {
 		t.Fatal(err)

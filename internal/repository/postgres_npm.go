@@ -195,6 +195,9 @@ func (s *PostgresStore) SyncNPMProxyPackage(ctx context.Context, incoming NPMPac
 		return NPMPackage{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := checkProxySourceVersion(ctx, tx, incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return NPMPackage{}, err
+	}
 	lockKey := "native-npm-proxy-package:" + incoming.RepositoryID + ":" + incoming.Name
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
 		return NPMPackage{}, err
@@ -272,9 +275,9 @@ func (s *PostgresStore) SyncNPMProxyPackage(ctx context.Context, incoming NPMPac
 	if _, err = tx.ExecContext(ctx, `
 		UPDATE native_npm_packages
 		SET dist_tags=$3::jsonb,source_endpoint=$4,upstream_etag=$5,upstream_modified=$6,
-		    metadata_expires_at=$7,negative_expires_at=NULL,negative=false,updated_at=now(),revision=revision+1
+		    metadata_expires_at=$7,source_version=$8,negative_expires_at=NULL,negative=false,updated_at=now(),revision=revision+1
 		WHERE repository_id::text=$1 AND name=$2`, incoming.RepositoryID, incoming.Name, tagsJSON,
-		incoming.SourceEndpoint, incoming.UpstreamETag, incoming.UpstreamModified, incoming.MetadataExpiresAt); err != nil {
+		incoming.SourceEndpoint, incoming.UpstreamETag, incoming.UpstreamModified, incoming.MetadataExpiresAt, incoming.SourceVersion); err != nil {
 		return NPMPackage{}, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -289,6 +292,9 @@ func (s *PostgresStore) StoreNPMProxyNegative(ctx context.Context, incoming NPMP
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := checkProxySourceVersion(ctx, tx, incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return err
+	}
 	lockKey := "native-npm-proxy-package:" + incoming.RepositoryID + ":" + incoming.Name
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
 		return err
@@ -304,13 +310,13 @@ func (s *PostgresStore) StoreNPMProxyNegative(ctx context.Context, incoming NPMP
 	if errors.Is(err, sql.ErrNoRows) {
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO native_npm_packages
-			(repository_id,name,dist_tags,source_endpoint,negative_expires_at,negative)
-			VALUES ($1,$2,'{}'::jsonb,$3,$4,true)`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint, incoming.NegativeExpiresAt)
+			(repository_id,name,dist_tags,source_endpoint,negative_expires_at,negative,source_version)
+			VALUES ($1,$2,'{}'::jsonb,$3,$4,true,$5)`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint, incoming.NegativeExpiresAt, incoming.SourceVersion)
 	} else if err == nil {
 		_, err = tx.ExecContext(ctx, `
 			UPDATE native_npm_packages
-			SET source_endpoint=$3,metadata_expires_at=NULL,negative_expires_at=$4,negative=true,updated_at=now(),revision=revision+1
-			WHERE repository_id::text=$1 AND name=$2`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint, incoming.NegativeExpiresAt)
+			SET source_endpoint=$3,metadata_expires_at=NULL,negative_expires_at=$4,source_version=$5,negative=true,updated_at=now(),revision=revision+1
+			WHERE repository_id::text=$1 AND name=$2`, incoming.RepositoryID, incoming.Name, incoming.SourceEndpoint, incoming.NegativeExpiresAt, incoming.SourceVersion)
 	}
 	if err != nil {
 		return err
@@ -382,10 +388,10 @@ func readNPMPackage(ctx context.Context, tx *sql.Tx, repositoryID, name string) 
 	var metadataExpiresAt, negativeExpiresAt sql.NullTime
 	err := tx.QueryRowContext(ctx, `
 		SELECT repository_id::text,name,dist_tags,source_endpoint,upstream_etag,upstream_modified,
-		       metadata_expires_at,negative_expires_at,negative,created_at,updated_at,revision
+		       metadata_expires_at,negative_expires_at,negative,created_at,updated_at,revision,source_version
 		FROM native_npm_packages WHERE repository_id::text=$1 AND name=$2`, repositoryID, name).
 		Scan(&pkg.RepositoryID, &pkg.Name, &tags, &pkg.SourceEndpoint, &pkg.UpstreamETag, &pkg.UpstreamModified,
-			&metadataExpiresAt, &negativeExpiresAt, &pkg.Negative, &pkg.CreatedAt, &pkg.UpdatedAt, &pkg.Revision)
+			&metadataExpiresAt, &negativeExpiresAt, &pkg.Negative, &pkg.CreatedAt, &pkg.UpdatedAt, &pkg.Revision, &pkg.SourceVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return NPMPackage{}, ErrNotFound
 	}

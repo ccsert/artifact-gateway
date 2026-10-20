@@ -133,6 +133,12 @@ func (s *MemoryStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, proj
 	defer releaseDistribution()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(files) == 0 {
+		return nil
+	}
+	if err := s.checkProxySourceVersionLocked(repositoryID, files[0].SourceVersion); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	// Validate the entire revalidation before changing any cached metadata.
 	for _, file := range files {
@@ -174,12 +180,15 @@ func (s *MemoryStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, proj
 func (s *MemoryStore) CachePyPIProxyFile(_ context.Context, incoming PyPIFile) (PyPIFile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(incoming.RepositoryID, incoming.SourceVersion); err != nil {
+		return PyPIFile{}, err
+	}
 	key := pypiFileKey(incoming.RepositoryID, incoming.Filename)
 	file, ok := s.pypiFiles[key]
 	if !ok || file.State != "visible" {
 		return PyPIFile{}, ErrNotFound
 	}
-	if file.Digest != incoming.Digest || file.SourceURL != incoming.SourceURL {
+	if file.Digest != incoming.Digest || file.SourceURL != incoming.SourceURL || file.SourceVersion != incoming.SourceVersion {
 		return PyPIFile{}, ErrUpstreamChanged
 	}
 	if file.ObjectKey != "" {

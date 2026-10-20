@@ -284,7 +284,7 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 		return
 	}
 	if request.UpstreamAuth != nil && !upstreamAuthSupported(request.Format, repoType) {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth is supported for Go, Maven and OCI Proxy repositories only")
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth requires an implemented Proxy repository")
 		return
 	}
 	upstreamAuth, err := resolveUpstreamAuth(request.UpstreamAuth, nil)
@@ -484,7 +484,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		if request.UpstreamAuth != nil && !upstreamAuthSupported(repo.Format, repo.Type) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth is supported for Go, Maven and OCI Proxy repositories only")
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "upstreamAuth requires an implemented Proxy repository")
 			return
 		}
 		egressProxy, err := resolveEgressProxy(request.EgressProxy, repo.EgressProxy)

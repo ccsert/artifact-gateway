@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 	xhtml "golang.org/x/net/html"
 )
 
@@ -421,6 +422,12 @@ func readPyPITarMetadata(data []byte) ([]byte, error) {
 }
 
 func (h nativePyPIHandler) simpleRoot(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, actor string) {
+	if repo.Type == repository.RepositoryTypeProxy {
+		if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+			h.writeError(w, http.StatusBadGateway, "PyPI upstream authentication unavailable")
+			return
+		}
+	}
 	projects, err := h.store.ListPyPIProjects(r.Context(), repo.ID, "", 10000, "")
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "list projects failed")
@@ -436,6 +443,15 @@ func (h nativePyPIHandler) simpleRoot(w http.ResponseWriter, r *http.Request, re
 			}
 			h.writeError(w, http.StatusInternalServerError, "list projects failed")
 			return
+		}
+		if repo.Type == repository.RepositoryTypeProxy {
+			current := files[:0]
+			for _, file := range files {
+				if file.SourceVersion == repo.Version {
+					current = append(current, file)
+				}
+			}
+			files = current
 		}
 		files, _, listErr = h.filterQuarantinedPyPIFiles(r.Context(), repo, files)
 		if listErr != nil {
@@ -544,11 +560,27 @@ func (h nativePyPIHandler) download(w http.ResponseWriter, r *http.Request, repo
 }
 
 func (h nativePyPIHandler) downloadForTarget(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, filename, actor string, target pypiAuditTarget) {
+	if repo.Type == repository.RepositoryTypeProxy {
+		if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+			h.writeError(w, http.StatusBadGateway, "PyPI upstream authentication unavailable")
+			return
+		}
+	}
 	disposition := "bypass"
 	if repo.Type == repository.RepositoryTypeProxy {
 		disposition = "hit"
 	}
 	file, err := h.store.GetPyPIFile(r.Context(), repo.ID, filename)
+	if err == nil && repo.Type == repository.RepositoryTypeProxy && file.SourceVersion != repo.Version {
+		if _, _, resolveErr := h.resolveProxyProject(r, repo, file.Project); resolveErr != nil {
+			h.writeError(w, http.StatusBadGateway, "PyPI upstream authorization unavailable")
+			return
+		}
+		file, err = h.store.GetPyPIFile(r.Context(), repo.ID, filename)
+		if err == nil && file.SourceVersion != repo.Version {
+			err = repository.ErrNotFound
+		}
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		http.NotFound(w, r)
 		h.recordAuditForTarget(r, repo, target, filename, "distribution", actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
@@ -666,7 +698,17 @@ func (h nativePyPIHandler) pypiVersionReadBlocked(ctx context.Context, repo repo
 }
 
 func (h nativePyPIHandler) resolveProxyProject(r *http.Request, repo repository.HostedRepository, project string) ([]repository.PyPIFile, string, error) {
+	if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+		return nil, "bypass", err
+	}
 	cached, cacheErr := h.store.ListPyPIProjectFiles(r.Context(), repo.ID, project)
+	verified := cached[:0]
+	for _, file := range cached {
+		if file.SourceVersion == repo.Version {
+			verified = append(verified, file)
+		}
+	}
+	cached = verified
 	disposition := "miss"
 	if cacheErr == nil && len(cached) > 0 {
 		disposition = "hit"
@@ -674,12 +716,15 @@ func (h nativePyPIHandler) resolveProxyProject(r *http.Request, repo repository.
 	target := pyPIProjectURL(repo.Endpoint, project)
 	response, err := h.proxy.FetchPyPI(r.Context(), http.MethodGet, repo, target, r.Header)
 	if err != nil {
-		if cacheErr == nil && len(cached) > 0 {
+		if cacheErr == nil && len(cached) > 0 && !errors.Is(err, upstreamauth.ErrCredential) {
 			return cached, "stale", nil
 		}
 		return nil, disposition, err
 	}
 	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return nil, disposition, upstreamauth.ErrCredential
+	}
 	if response.StatusCode == http.StatusNotFound {
 		if cacheErr == nil && len(cached) > 0 {
 			return cached, "stale", nil
@@ -701,6 +746,7 @@ func (h nativePyPIHandler) resolveProxyProject(r *http.Request, repo repository.
 	}
 	allowed := files[:0]
 	for _, file := range files {
+		file.SourceVersion = repo.Version
 		target, parseErr := url.Parse(file.SourceURL)
 		if parseErr == nil && proxyUpstreamURLAllowed(repo, target) {
 			allowed = append(allowed, file)
@@ -714,7 +760,13 @@ func (h nativePyPIHandler) resolveProxyProject(r *http.Request, repo repository.
 		return nil, disposition, err
 	}
 	stored, err := h.store.ListPyPIProjectFiles(r.Context(), repo.ID, project)
-	return stored, disposition, err
+	current := stored[:0]
+	for _, file := range stored {
+		if file.SourceVersion == repo.Version {
+			current = append(current, file)
+		}
+	}
+	return current, disposition, err
 }
 
 func pyPIProjectURL(endpoint, project string) string {

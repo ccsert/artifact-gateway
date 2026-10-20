@@ -15,6 +15,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/cache"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 const defaultMaxObjectBytes = int64(1 << 30)
@@ -74,7 +75,7 @@ func (c *Cache) Key(group, path string, member repository.Member, representation
 	if len(representation) > 0 {
 		v = representation[0]
 	}
-	sum := sha256.Sum256([]byte(group + "\x00" + path + "\x00" + member.Name + "\x00" + member.Endpoint + "\x00" + v))
+	sum := sha256.Sum256([]byte(upstreamauth.Namespace(group, member) + "\x00" + path + "\x00" + member.Name + "\x00" + member.Endpoint + "\x00" + v))
 	return "conan/index/" + hex.EncodeToString(sum[:]) + ".json"
 }
 func (c *Cache) Load(ctx context.Context, key string) (Content, bool) {

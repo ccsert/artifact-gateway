@@ -42,7 +42,7 @@ func TestPostgresAPTEmptyAssetPage(t *testing.T) {
 func TestPostgresAPTMetadataIsMutableAndPoolIsImmutable(t *testing.T) {
 	ctx, store, repo := newPostgresAPTFixture(t)
 	var err error
-	metadata := APTAsset{RepositoryID: repo.ID, Path: "dists/stable/InRelease", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/release-a", Size: 10, ContentType: "text/plain", SourceURL: "https://deb.example.test/dists/stable/InRelease", UpstreamETag: `"a"`}
+	metadata := APTAsset{RepositoryID: repo.ID, SourceVersion: repo.Version, Path: "dists/stable/InRelease", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/release-a", Size: 10, ContentType: "text/plain", SourceURL: "https://deb.example.test/dists/stable/InRelease", UpstreamETag: `"a"`}
 	if _, err = store.CacheAPTAsset(ctx, metadata); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestPostgresAPTMetadataIsMutableAndPoolIsImmutable(t *testing.T) {
 	if _, err = store.CacheAPTAsset(ctx, metadata); err != nil {
 		t.Fatal(err)
 	}
-	pool := APTAsset{RepositoryID: repo.ID, Path: "pool/main/h/hello/hello_1.0_amd64.deb", Digest: "sha256:" + strings.Repeat("c", 64), ObjectKey: "apt/hello-c", Size: 20, ContentType: "application/vnd.debian.binary-package", SourceURL: "https://deb.example.test/pool/main/h/hello/hello_1.0_amd64.deb"}
+	pool := APTAsset{RepositoryID: repo.ID, SourceVersion: repo.Version, Path: "pool/main/h/hello/hello_1.0_amd64.deb", Digest: "sha256:" + strings.Repeat("c", 64), ObjectKey: "apt/hello-c", Size: 20, ContentType: "application/vnd.debian.binary-package", SourceURL: "https://deb.example.test/pool/main/h/hello/hello_1.0_amd64.deb"}
 	if _, err = store.CacheAPTAsset(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
@@ -62,11 +62,11 @@ func TestPostgresAPTMetadataIsMutableAndPoolIsImmutable(t *testing.T) {
 
 func TestPostgresAPTCapacityAndSearchProjectionIncludeZeroByteMetadata(t *testing.T) {
 	ctx, store, repo := newPostgresAPTFixture(t)
-	metadata := APTAsset{RepositoryID: repo.ID, Path: "dists/stable/Packages", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/empty", Size: 0, ContentType: "text/plain", SourceURL: "https://deb.example.test/dists/stable/Packages"}
+	metadata := APTAsset{RepositoryID: repo.ID, SourceVersion: repo.Version, Path: "dists/stable/Packages", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/empty", Size: 0, ContentType: "text/plain", SourceURL: "https://deb.example.test/dists/stable/Packages"}
 	if _, err := store.CacheAPTAsset(ctx, metadata); err != nil {
 		t.Fatal(err)
 	}
-	pool := APTAsset{RepositoryID: repo.ID, Path: "pool/main/h/hello/hello_1.0_amd64.deb", Digest: "sha256:" + strings.Repeat("c", 64), ObjectKey: "apt/hello-c", Size: 20, ContentType: "application/vnd.debian.binary-package", SourceURL: "https://deb.example.test/pool/main/h/hello/hello_1.0_amd64.deb"}
+	pool := APTAsset{RepositoryID: repo.ID, SourceVersion: repo.Version, Path: "pool/main/h/hello/hello_1.0_amd64.deb", Digest: "sha256:" + strings.Repeat("c", 64), ObjectKey: "apt/hello-c", Size: 20, ContentType: "application/vnd.debian.binary-package", SourceURL: "https://deb.example.test/pool/main/h/hello/hello_1.0_amd64.deb"}
 	if _, err := store.CacheAPTAsset(ctx, pool); err != nil {
 		t.Fatal(err)
 	}

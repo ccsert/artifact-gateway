@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ccsert/artifact-gateway/internal/egress"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/upstreamauth"
 )
 
 const aptProxyUserAgent = "apt/2 Artifact-Gateway/1.0"
@@ -43,6 +43,15 @@ func (c UpstreamClient) FetchAPT(ctx context.Context, method string, repo reposi
 			request.Header.Set(name, value)
 		}
 	}
+	if err := upstreamauth.ApplyOrigin(request, repo.Endpoint, repo.UpstreamAuth); err != nil {
+		return nil, err
+	}
+	// All configured endpoints use HTTPS. Keep the existing explicit local
+	// HTTP fixture seam; real upstreams share the bounded per-hop egress engine.
+	if targetURL.Scheme == "https" {
+		member := repository.Member{Type: repository.MemberProxy, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
+		return c.doProxyUpstream(ctx, member, request)
+	}
 	client := c.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 90 * time.Second}
@@ -50,21 +59,17 @@ func (c UpstreamClient) FetchAPT(ctx context.Context, method string, repo reposi
 		copy := *client
 		client = &copy
 	}
-	if targetURL.Scheme == "https" {
-		client, err = egress.Apply(client, repo.EgressProxy, targetURL.String(), rawEgressHooks())
-		if err != nil {
-			return nil, err
-		}
-	}
-	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+	client.Jar = nil
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if !proxyUpstreamURLAllowed(repo, next.URL) {
-			return fmt.Errorf("APT upstream redirect is not allowed")
+			return errors.New("APT upstream redirect is not allowed")
 		}
+		upstreamauth.StripRedirect(next, via, repo.Endpoint)
 		return nil
 	}
-	response, err := tracedHTTPClient(client).Do(request)
+	response, err := doProxyHTTP(client, request)
 	if err != nil {
-		return nil, fmt.Errorf("fetch APT upstream content: %w", err)
+		return nil, errors.New("APT upstream unavailable")
 	}
 	return response, nil
 }
@@ -256,6 +261,9 @@ func (h nativeAPTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h nativeAPTHandler) loadAsset(r *http.Request, repo repository.HostedRepository, path string) (repository.APTAsset, string, error) {
+	if err := upstreamauth.Validate(repo.UpstreamAuth); err != nil {
+		return repository.APTAsset{}, "bypass", err
+	}
 	if repo.Type == repository.RepositoryTypeHosted {
 		if h.publications == nil {
 			return repository.APTAsset{}, "hosted", errors.New("APT Hosted publication store is unavailable")
@@ -270,6 +278,9 @@ func (h nativeAPTHandler) loadAsset(r *http.Request, repo repository.HostedRepos
 		}, "hosted", nil
 	}
 	asset, err := h.store.GetAPTAsset(r.Context(), repo.ID, path)
+	if err == nil && asset.SourceVersion != repo.Version {
+		asset, err = repository.APTAsset{}, repository.ErrNotFound
+	}
 	if err == nil {
 		if !repository.APTAssetMutable(path) {
 			return asset, "hit", nil
@@ -277,17 +288,25 @@ func (h nativeAPTHandler) loadAsset(r *http.Request, repo repository.HostedRepos
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return repository.APTAsset{}, "miss", err
 	}
-	unlock, lockErr := h.store.LockAPTObject(r.Context(), repo.ID+"\x00"+path)
+	// PostgreSQL advisory-lock keys are text; a NUL separator would reject
+	// every native Proxy fetch before it reaches the authenticated source.
+	unlock, lockErr := h.store.LockAPTObject(r.Context(), repo.ID+":"+path)
 	if lockErr != nil {
 		return repository.APTAsset{}, "miss", lockErr
 	}
 	defer unlock()
+	// Keep the old physical key solely for safe replacement/cleanup. It must
+	// never supply validators, bytes or stale fallback for a new configuration.
+	var previousObjectKey string
 	if current, getErr := h.store.GetAPTAsset(r.Context(), repo.ID, path); getErr == nil {
-		asset = current
-		if !repository.APTAssetMutable(path) {
-			return asset, "hit", nil
+		previousObjectKey = current.ObjectKey
+		if current.SourceVersion == repo.Version {
+			asset = current
+			if !repository.APTAssetMutable(path) {
+				return asset, "hit", nil
+			}
 		}
-	} else if !errors.Is(getErr, repository.ErrNotFound) {
+	} else if getErr != nil && !errors.Is(getErr, repository.ErrNotFound) {
 		return repository.APTAsset{}, "miss", getErr
 	}
 	target, err := aptUpstreamTarget(repo.Endpoint, path)
@@ -303,12 +322,15 @@ func (h nativeAPTHandler) loadAsset(r *http.Request, repo repository.HostedRepos
 	}
 	response, err := h.proxy.FetchAPT(r.Context(), http.MethodGet, repo, target, upstreamHeaders)
 	if err != nil {
-		if asset.ObjectKey != "" {
+		if asset.ObjectKey != "" && !errors.Is(err, upstreamauth.ErrCredential) {
 			return asset, "stale", nil
 		}
 		return repository.APTAsset{}, "miss", err
 	}
 	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return repository.APTAsset{}, "bypass", upstreamauth.ErrCredential
+	}
 	if response.StatusCode == http.StatusNotModified && asset.ObjectKey != "" {
 		return asset, "revalidated", nil
 	}
@@ -341,8 +363,7 @@ func (h nativeAPTHandler) loadAsset(r *http.Request, repo repository.HostedRepos
 			return repository.APTAsset{}, "miss", err
 		}
 	}
-	updated := repository.APTAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: objectKey, Size: spool.Size(), ContentType: aptContentType(path, response.Header.Get("Content-Type")), SourceURL: target, UpstreamETag: response.Header.Get("ETag"), UpstreamModified: response.Header.Get("Last-Modified")}
-	previousObjectKey := asset.ObjectKey
+	updated := repository.APTAsset{RepositoryID: repo.ID, SourceVersion: repo.Version, Path: path, Digest: digest, ObjectKey: objectKey, Size: spool.Size(), ContentType: aptContentType(path, response.Header.Get("Content-Type")), SourceURL: target, UpstreamETag: response.Header.Get("ETag"), UpstreamModified: response.Header.Get("Last-Modified")}
 	asset, err = h.store.CacheAPTAsset(r.Context(), updated)
 	if err != nil {
 		if updated.ObjectKey != previousObjectKey {

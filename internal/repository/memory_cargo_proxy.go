@@ -45,6 +45,9 @@ func (s *MemoryStore) PutCargoProxyConfig(ctx context.Context, value CargoProxyC
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(value.RepositoryID, value.SourceVersion); err != nil {
+		return err
+	}
 	repo, ok := s.hostedRepositories[value.RepositoryID]
 	if !ok || repo.Format != FormatCargo || repo.Type != RepositoryTypeProxy || repo.State != RepositoryActive {
 		return ErrNotFound
@@ -84,6 +87,9 @@ func (s *MemoryStore) PutCargoProxyIndex(ctx context.Context, value CargoProxyIn
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(value.RepositoryID, value.SourceVersion); err != nil {
+		return err
+	}
 	repo, ok := s.hostedRepositories[value.RepositoryID]
 	if !ok || repo.Format != FormatCargo || repo.Type != RepositoryTypeProxy || repo.State != RepositoryActive {
 		return ErrNotFound
@@ -148,6 +154,9 @@ func (s *MemoryStore) PutCargoProxyCrate(ctx context.Context, value CargoProxyCr
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkProxySourceVersionLocked(value.RepositoryID, value.SourceVersion); err != nil {
+		return err
+	}
 	repo, ok := s.hostedRepositories[value.RepositoryID]
 	if !ok || repo.Format != FormatCargo || repo.Type != RepositoryTypeProxy || repo.State != RepositoryActive {
 		return ErrNotFound

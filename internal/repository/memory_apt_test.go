@@ -17,11 +17,11 @@ func TestMemoryAPTStoreReturnsAnEmptyAssetPage(t *testing.T) {
 func TestMemoryAPTStoreUpdatesMutableMetadata(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	_, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "apt", Name: "apt", Format: FormatAPT, Type: RepositoryTypeProxy})
+	repo, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "apt", Name: "apt", Format: FormatAPT, Type: RepositoryTypeProxy})
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadata := APTAsset{RepositoryID: "apt", Path: "dists/stable/InRelease", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/release-a", Size: 10, SourceURL: "https://example.test/dists/stable/InRelease", UpstreamETag: `"a"`}
+	metadata := APTAsset{RepositoryID: "apt", SourceVersion: repo.Version, Path: "dists/stable/InRelease", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/release-a", Size: 10, SourceURL: "https://example.test/dists/stable/InRelease", UpstreamETag: `"a"`}
 	if _, err = store.CacheAPTAsset(ctx, metadata); err != nil {
 		t.Fatal(err)
 	}
@@ -35,8 +35,12 @@ func TestMemoryAPTStoreUpdatesMutableMetadata(t *testing.T) {
 func TestMemoryAPTStoreProtectsPoolAndByHashAssets(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "apt", Name: "apt", Format: FormatAPT, Type: RepositoryTypeProxy})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, path := range []string{"pool/main/h/hello/hello_1.0_amd64.deb", "dists/stable/main/binary-amd64/by-hash/SHA256/release"} {
-		asset := APTAsset{RepositoryID: "apt", Path: path, Digest: "sha256:" + strings.Repeat("c", 64), ObjectKey: "apt/object-" + path, Size: 20, SourceURL: "https://example.test/" + path}
+		asset := APTAsset{RepositoryID: "apt", SourceVersion: repo.Version, Path: path, Digest: "sha256:" + strings.Repeat("c", 64), ObjectKey: "apt/object-" + path, Size: 20, SourceURL: "https://example.test/" + path}
 		if _, err := store.CacheAPTAsset(ctx, asset); err != nil {
 			t.Fatal(err)
 		}
@@ -50,10 +54,11 @@ func TestMemoryAPTStoreProtectsPoolAndByHashAssets(t *testing.T) {
 func TestMemoryAPTStoreCountsZeroByteAssets(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "apt", Name: "apt", Format: FormatAPT, Type: RepositoryTypeProxy}); err != nil {
+	repo, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "apt", Name: "apt", Format: FormatAPT, Type: RepositoryTypeProxy})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CacheAPTAsset(ctx, APTAsset{RepositoryID: "apt", Path: "dists/stable/Packages", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/empty", Size: 0, SourceURL: "https://example.test/dists/stable/Packages"}); err != nil {
+	if _, err := store.CacheAPTAsset(ctx, APTAsset{RepositoryID: "apt", SourceVersion: repo.Version, Path: "dists/stable/Packages", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "apt/empty", Size: 0, SourceURL: "https://example.test/dists/stable/Packages"}); err != nil {
 		t.Fatal(err)
 	}
 	capacity, err := store.GetRepositoryCapacity(ctx, "apt")

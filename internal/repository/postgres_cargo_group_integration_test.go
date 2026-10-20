@@ -141,7 +141,11 @@ func TestPostgresCargoGroupPreflightsKnownHostedCoordinates(t *testing.T) {
 	defer func() {
 		_, _ = store.db.ExecContext(context.Background(), `DELETE FROM hosted_repositories WHERE id=$1`, proxyID)
 	}()
-	index := CargoProxyIndex{RepositoryID: proxyID, Name: "demo-crate", Status: 200,
+	proxyRepo, err := store.GetHostedRepository(ctx, proxyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := CargoProxyIndex{RepositoryID: proxyID, SourceVersion: proxyRepo.Version, Name: "demo-crate", Status: 200,
 		Body:      []byte(`{"name":"demo-crate","vers":"1.0.0","cksum":"` + strings.Repeat("b", 64) + `","yanked":false}` + "\n"),
 		FetchedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour)}
 	if err := store.PutCargoProxyIndex(ctx, index); err != nil {

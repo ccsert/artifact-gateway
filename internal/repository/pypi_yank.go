@@ -48,6 +48,9 @@ func ValidPyPIYankReason(reason string) bool {
 func validatePyPIProxyFiles(files []PyPIFile) error {
 	seen := make(map[string]PyPIFile, len(files))
 	for _, file := range files {
+		if file.SourceVersion != files[0].SourceVersion {
+			return ErrVersionConflict
+		}
 		if !ValidPyPIYankReason(file.YankReason) || !file.Yanked && file.YankReason != "" {
 			return ErrInvalidPyPIYank
 		}

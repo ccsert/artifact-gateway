@@ -156,7 +156,7 @@ func TestCargoProxyIndexRejectsImmutableRewrite(t *testing.T) {
 	now := time.Now().UTC()
 	checksum := strings.Repeat("a", 64)
 	row := `{"name":"demo","vers":"1.0.0","cksum":"` + checksum + `","yanked":false}` + "\n"
-	index := repository.CargoProxyIndex{RepositoryID: repo.ID, Name: "demo", Status: 200, Body: []byte(row), FetchedAt: now, ExpiresAt: now.Add(time.Hour)}
+	index := repository.CargoProxyIndex{RepositoryID: repo.ID, SourceVersion: repo.Version, Name: "demo", Status: 200, Body: []byte(row), FetchedAt: now, ExpiresAt: now.Add(time.Hour)}
 	if err := store.PutCargoProxyIndex(ctx, index); err != nil {
 		t.Fatal(err)
 	}
