@@ -48,6 +48,7 @@ type sourceFixture struct {
 	stream            bool
 	metadataSizes     map[string]int64
 	duplicateMetadata bool
+	pageSize          int
 }
 
 func (f *sourceFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +76,11 @@ func (f *sourceFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		sort.Strings(paths)
 		offset, _ := strconv.Atoi(r.URL.Query().Get("continuationToken"))
-		end := offset + 2
+		pageSize := f.pageSize
+		if pageSize == 0 {
+			pageSize = 2
+		}
+		end := offset + pageSize
 		if end > len(paths) {
 			end = len(paths)
 		}

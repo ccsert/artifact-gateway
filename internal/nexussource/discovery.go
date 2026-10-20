@@ -385,67 +385,43 @@ type assetRaw struct {
 }
 
 func (s *session) assets(repo Repository, maxPages, maxAssets int) ([]Asset, []UnsupportedAsset, error) {
-	out := []Asset{}
-	unsupported := []UnsupportedAsset{}
+	out, unsupported := []Asset{}, []UnsupportedAsset{}
 	token := ""
-	seenTokens := map[string]bool{}
-	seenPaths := map[string]bool{}
+	seenTokens, seenPaths := map[string]bool{}, map[string]bool{}
 	for {
 		if s.stats.Pages >= maxPages {
 			return nil, nil, fail("source_limit_exceeded")
 		}
-		query := url.Values{"repository": {repo.Name}}
-		if token != "" {
-			query.Set("continuationToken", token)
-		}
-		var page struct {
-			Items             *[]assetRaw     `json:"items"`
-			ContinuationToken json.RawMessage `json:"continuationToken"`
-		}
-		if err := s.read("assets", query, &page); err != nil {
+		page, err := s.inventoryPage(repo, token)
+		if err != nil {
 			return nil, nil, err
 		}
-		s.stats.Pages++
-		if page.Items == nil || len(page.ContinuationToken) == 0 {
-			return nil, nil, fail("source_invalid_response")
+		if len(page.Assets)+len(page.UnsupportedAssets) > maxAssets-len(out)-len(unsupported) {
+			return nil, nil, fail("source_limit_exceeded")
 		}
-		for _, raw := range *page.Items {
-			if len(out)+len(unsupported) >= maxAssets {
-				return nil, nil, fail("source_limit_exceeded")
-			}
-			a, err := s.asset(repo, raw)
-			if err != nil {
-				return nil, nil, err
-			}
-			if seenPaths[a.Path] {
+		paths := make([]string, 0, len(page.Assets)+len(page.UnsupportedAssets))
+		for _, a := range page.Assets {
+			paths = append(paths, a.Path)
+		}
+		for _, a := range page.UnsupportedAssets {
+			paths = append(paths, a.Path)
+		}
+		for _, p := range paths {
+			if seenPaths[p] {
 				return nil, nil, fail("source_duplicate_asset")
 			}
-			seenPaths[a.Path] = true
-			format, _ := NativeFormat(repo.Format)
-			_, _, reason := assetRoute(format, a.Path)
-			if reason == "" {
-				reason = mavenUnsupportedPath(repo, a.Path)
-			}
-			if reason != "" {
-				unsupported = append(unsupported, UnsupportedAsset{Repository: repo.Name, Path: a.Path, Reason: reason})
-			} else {
-				out = append(out, a)
-			}
+			seenPaths[p] = true
 		}
-		var next *string
-		if json.Unmarshal(page.ContinuationToken, &next) != nil {
-			return nil, nil, fail("source_invalid_response")
+		out, unsupported = append(out, page.Assets...), append(unsupported, page.UnsupportedAssets...)
+		if page.NextCursor == "" {
+			return out, unsupported, nil
 		}
-		if next == nil || *next == "" {
-			break
-		}
-		token = *next
-		if len(token) > 4096 || strings.ContainsAny(token, "\r\n\x00") || seenTokens[token] {
+		token = page.NextCursor
+		if seenTokens[token] {
 			return nil, nil, fail("source_pagination_cycle")
 		}
 		seenTokens[token] = true
 	}
-	return out, unsupported, nil
 }
 func (s *session) asset(repo Repository, raw assetRaw) (Asset, error) {
 	format, supported := NativeFormat(repo.Format)

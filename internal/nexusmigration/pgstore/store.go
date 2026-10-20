@@ -290,9 +290,9 @@ func (s *Store) Claim(ctx context.Context, formats []string) (m.Batch, error) {
 	if len(formats) == 0 {
 		return m.Batch{}, m.ErrNotFound
 	}
-	// Recover only outside the publication fence; recovery never blesses a
-	// partial scan. A later retry performs a fresh complete enumeration.
-	_, err := s.db.ExecContext(ctx, `WITH expired AS (SELECT id FROM nexus_migration_batches WHERE lease_token<>'' AND lease_expires_at<=clock_timestamp() AND pg_try_advisory_xact_lock(hashtextextended('nexus-migration-lease:'||id::text,0)) FOR UPDATE SKIP LOCKED) UPDATE nexus_migration_batches b SET state=CASE WHEN NOT b.scan_complete THEN 'failed' WHEN b.cancel_requested THEN 'cancelled' WHEN b.pause_requested THEN 'paused' ELSE 'ready' END,lease_token='',lease_expires_at=NULL,last_error=CASE WHEN NOT b.scan_complete THEN 'scan_interrupted' ELSE b.last_error END,version=version+1,updated_at=clock_timestamp() FROM expired WHERE b.id=expired.id`)
+	// Recovery owns the same fence as scan receipts and native publication. A
+	// partial scan resumes its private checkpoint; it never becomes ready.
+	_, err := s.db.ExecContext(ctx, `WITH expired AS (SELECT id FROM nexus_migration_batches WHERE lease_token<>'' AND lease_expires_at<=clock_timestamp() AND pg_try_advisory_xact_lock(hashtextextended('nexus-migration-lease:'||id::text,0)) FOR UPDATE SKIP LOCKED) UPDATE nexus_migration_batches b SET state=CASE WHEN b.cancel_requested THEN 'cancelled' WHEN b.pause_requested THEN 'paused' WHEN NOT b.scan_complete THEN 'scanning' ELSE 'ready' END,lease_token='',lease_expires_at=NULL,last_error=b.last_error,version=version+1,updated_at=clock_timestamp() FROM expired WHERE b.id=expired.id`)
 	if err != nil {
 		return m.Batch{}, err
 	}
@@ -328,13 +328,20 @@ func validLease(ctx context.Context, tx *sql.Tx, id, token string) error {
 	return nil
 }
 func (s *Store) Seal(ctx context.Context, b m.Batch, entries []m.Entry, hash string, metadata, total int64) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.inventoryTransaction(ctx, b)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err = validLease(ctx, tx, b.ID, b.LeaseToken); err != nil {
+	scan, err := readInventoryScan(ctx, tx, b.ID)
+	if err != nil {
 		return err
+	}
+	if !scan.Verified() || metadata != scan.AssetCount {
+		return m.Failed("source_scan_incomplete")
+	}
+	if scan.BindingSHA256 != m.InventoryBinding(b, scan.Repositories) {
+		return m.Failed("source_changed")
 	}
 	for i, e := range entries {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_entries(id,batch_id,ordinal,source_repository,target_repository_id,format,identity,state,assets,last_error) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, e.ID, b.ID, i, e.SourceRepository, e.TargetRepositoryID, e.Format, e.Identity, e.State, encodeAssets(e.Assets), e.LastError); err != nil {

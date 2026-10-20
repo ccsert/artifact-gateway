@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,8 @@ type ociDepthScanStore struct {
 	*ociPlanStore
 	entries  []Entry
 	finished string
+	scan     InventoryScan
+	pages    []InventoryPage
 }
 
 func (s *ociDepthScanStore) Claim(context.Context, []string) (Batch, error) { return s.batch, nil }
@@ -95,12 +98,40 @@ type ociDepthScanSource struct{ ociPlanSource }
 func (s ociDepthScanSource) Get(context.Context, string) (nexussource.Source, error) {
 	return nexussource.Source{Version: "1"}, nil
 }
-func (s ociDepthScanSource) Discover(context.Context, string, nexussource.DiscoveryInput) (nexussource.Discovery, error) {
+func (s ociDepthScanSource) InventoryRepositories(context.Context, string, string, []string) ([]nexussource.Repository, error) {
+	return []nexussource.Repository{{Name: "images", Format: "docker", Type: "hosted", Status: "supported"}}, nil
+}
+func (s ociDepthScanSource) ReadInventoryPage(context.Context, string, string, nexussource.Repository, string) (nexussource.InventoryPage, error) {
 	assets := []nexussource.Asset{}
 	for path, body := range s.fixture.Bytes {
 		assets = append(assets, nexussource.Asset{Repository: "images", Path: path, Size: int64(len(body)), Checksum: map[string]string{"sha256": s.fixture.Digests[path]}})
 	}
-	return nexussource.Discovery{Preflight: nexussource.Preflight{SourceVersion: "1", Repositories: []nexussource.Repository{{Name: "images", Format: "docker", Type: "hosted", Status: "supported"}}}, Assets: assets}, nil
+	sort.Slice(assets, func(i, j int) bool { return assets[i].Path < assets[j].Path })
+	return nexussource.InventoryPage{Assets: assets}, nil
+}
+func (s *ociDepthScanStore) InventoryScan(context.Context, string) (InventoryScan, error) {
+	if s.scan.BindingSHA256 == "" {
+		return InventoryScan{}, ErrNotFound
+	}
+	return s.scan, nil
+}
+func (s *ociDepthScanStore) BeginInventoryScan(_ context.Context, _ Batch, scan InventoryScan) error {
+	s.scan = scan
+	return nil
+}
+func (s *ociDepthScanStore) AppendInventoryPage(_ context.Context, _ Batch, _ InventoryScan, page nexussource.InventoryPage) error {
+	s.pages = append(s.pages, InventoryPage{SourceRepository: "images", SHA256: InventoryPageDigest(page), Page: page})
+	s.scan.PageCount++
+	s.scan.AssetCount += int64(len(page.Assets))
+	s.scan.RepositoryIndex++
+	return nil
+}
+func (s *ociDepthScanStore) InventoryPage(_ context.Context, _ string, ordinal int64) (InventoryPage, error) {
+	return s.pages[ordinal], nil
+}
+func (s *ociDepthScanStore) VerifyInventoryPage(context.Context, Batch, int64, string, int64) error {
+	s.scan.VerifiedPages++
+	return nil
 }
 
 func sharedDepthSource(t *testing.T, depth int) ocifixture.Fixture {
