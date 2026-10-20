@@ -53,6 +53,16 @@ PYCLEAN
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# Even `conan --version` initializes its home. Bind every bootstrap/version
+# process before installing or invoking the client; per-case homes are set by Go.
+export CONAN_HOME="$workdir/conan-bootstrap-home"
+mkdir -m 0700 "$CONAN_HOME"
+python3 - "$workdir" "$CONAN_HOME" <<'PYCONANHOME'
+import os, pathlib, sys
+work, home = map(pathlib.Path, sys.argv[1:])
+if home.is_symlink() or home.resolve().parent != work.resolve() or home.stat().st_uid != os.getuid():
+    raise SystemExit('Conan bootstrap home is not owned by this fixture')
+PYCONANHOME
 printf 'Private upstream owned project=%s docker-context=%s\n' "$project" "$context"
 python3 - "$evidence/source.json" <<'PYSOURCE'
 import hashlib, json, pathlib, subprocess, sys
@@ -102,6 +112,11 @@ versions = {name:subprocess.check_output(command,text=True).splitlines()[0] for 
 record = {'versions':versions, 'npmArchiveSHA512':hashlib.sha512(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest(),
           'aptImage':'debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241',
           'pythonPackagesSHA256':hashlib.sha256((pathlib.Path(sys.argv[1]).parent/'python-packages.txt').read_bytes()).hexdigest()}
+home = pathlib.Path(os.environ['CONAN_HOME'])
+if home.is_symlink() or home.resolve().parent != pathlib.Path(sys.argv[2]).resolve().parent or home.stat().st_uid != os.getuid():
+    raise SystemExit('Conan version probes escaped the owned bootstrap home')
+record['conanBootstrapHomeOwned'] = True
+record['conanBootstrapHome'] = str(home.resolve())
 pathlib.Path(sys.argv[1]).write_text(json.dumps(record,indent=2)+'\n')
 PYCLIENT
 started=1
