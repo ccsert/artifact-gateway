@@ -26,6 +26,8 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 started=1
 "${compose[@]}" up -d --wait --wait-timeout 60 postgres rustfs
 "${compose[@]}" run --rm --no-deps rustfs-ready
@@ -50,7 +52,8 @@ required = {"TestPostgresMigrationInventoryLargeResumeMatchesUninterruptedManife
             "TestPostgresMigrationInventoryRejectsDriftDuplicateCycleAndIncompletePages",
             "TestPostgresMigrationInventoryCheckpointBindsSourceShapeMappingAndPolicy",
             "TestPostgresMigrationInventoryBackendLossRollsBackWholePage",
-            "TestPostgresMigrationInventoryLeaseExpiryInsideTransactionRollsBackPage"}
+            "TestPostgresMigrationInventoryLeaseExpiryInsideTransactionRollsBackPage",
+            "TestPostgresMigrationInventoryPageProgressPreservesPublicControlVersion"}
 events = [json.loads(line) for line in path.read_text().splitlines()]
 run = {event.get("Test") for event in events if event.get("Action") == "run"}
 passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
@@ -67,5 +70,5 @@ for event in events:
         print(event["Output"], end="")
 if int(sys.argv[3]) or required - run or required - passed or failed or skipped or packages != {"github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"}:
     raise SystemExit("mandatory inventory scan proof is missing, skipped or failed; see results.json")
-print("Verified all 8 required inventory scan fixtures: 101 pages / 10002 assets, PG recovery, receipts and fencing; no existing source migration.")
+print("Verified all 9 required inventory scan fixtures: 101 pages / 10002 assets, PG recovery, receipts and fencing; no existing source migration.")
 PY

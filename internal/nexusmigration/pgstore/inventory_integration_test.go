@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/app"
 	m "github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/nexussource"
@@ -606,4 +609,75 @@ func TestPostgresMigrationInventoryLeaseExpiryInsideTransactionRollsBackPage(t *
 	f.service = f.newService(m.Options{})
 	f.run(b)
 	requireState(t, *b, "completed")
+}
+
+func TestPostgresMigrationInventoryPageProgressPreservesPublicControlVersion(t *testing.T) {
+	f := newFixture(t, "raw", map[string][]byte{"a.bin": []byte("a"), "b.bin": []byte("b"), "c.bin": []byte("c")})
+	b := f.start()
+	owner, err := f.ledger.Claim(context.Background(), []string{"raw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repos, err := f.source.InventoryRepositories(context.Background(), b.SourceID, b.SourceVersion, []string{"source"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.ledger.BeginInventoryScan(context.Background(), owner, m.InventoryScan{BindingSHA256: m.InventoryBinding(owner, repos), Repositories: repos}); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.service, SourceService: f.source}, Store: f.native, NPMMetadata: f.native, NPMRestore: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "owned-scan-admin"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v2/migrations/nexus/batches/" + b.ID
+	get := httptest.NewRequest(http.MethodGet, path, nil)
+	get.Header.Set("Authorization", "Bearer owned-admin")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, get)
+	version := response.Header().Get("ETag")
+	if response.Code != http.StatusOK || version == "" {
+		t.Fatalf("batch before progress=%d %s", response.Code, response.Body.String())
+	}
+	page, err := f.source.ReadInventoryPage(context.Background(), b.SourceID, b.SourceVersion, repos[0], "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.ledger.AppendInventoryPage(context.Background(), owner, f.scanCheckpoint(b.ID), page); err != nil {
+		t.Fatal(err)
+	}
+	pause := httptest.NewRequest(http.MethodPost, path+"/pause", nil)
+	pause.Header.Set("Authorization", "Bearer owned-admin")
+	pause.Header.Set("If-Match", version)
+	pause.Header.Set("Idempotency-Key", uuid.NewString())
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, pause)
+	if response.Code != http.StatusOK {
+		t.Fatalf("one page made a valid public pause stale: %d %s", response.Code, response.Body.String())
+	}
+	var paused m.Batch
+	if err = json.Unmarshal(response.Body.Bytes(), &paused); err != nil {
+		t.Fatal(err)
+	}
+	if paused.State != "pausing" || paused.MetadataDiscovered != 2 || paused.Version == version {
+		t.Fatalf("pause/progress version semantics changed: %+v", paused)
+	}
+	checkpoint := f.scanCheckpoint(b.ID)
+	next, err := f.source.ReadInventoryPage(context.Background(), b.SourceID, b.SourceVersion, repos[0], checkpoint.Cursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.ledger.AppendInventoryPage(context.Background(), owner, checkpoint, next); !errors.Is(err, m.ErrStopped) {
+		t.Fatalf("acknowledged public pause allowed page commit: %v", err)
+	}
+	if after := f.scanCheckpoint(b.ID); after.PageCount != checkpoint.PageCount || after.Cursor != checkpoint.Cursor {
+		t.Fatalf("paused cursor advanced: before=%+v after=%+v", checkpoint, after)
+	}
+	if err = f.ledger.Finish(context.Background(), owner.ID, owner.LeaseToken, "paused", ""); err != nil {
+		t.Fatal(err)
+	}
+	current, err := f.ledger.Get(context.Background(), b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.assertUnsealed(current)
 }

@@ -171,7 +171,7 @@ func (s *Store) AppendInventoryPage(ctx context.Context, b m.Batch, expected m.I
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE nexus_migration_batches SET metadata_discovered=$2,version=version+1,updated_at=clock_timestamp() WHERE id=$1`, b.ID, current.AssetCount+count)
+	_, err = tx.ExecContext(ctx, `UPDATE nexus_migration_batches SET metadata_discovered=$2,updated_at=clock_timestamp() WHERE id=$1`, b.ID, current.AssetCount+count)
 	if err != nil {
 		return err
 	}
