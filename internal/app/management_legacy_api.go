@@ -35,14 +35,10 @@ type generatedRepositoryAPIAdapter struct {
 	siteSettings           repository.SiteSettingsStore
 	consoleThemePackages   repository.ConsoleThemeStore
 	consoleThemes          *consoletheme.Registry
-	oidcRuntime            *OIDCRuntime
 	replication            repository.ReplicationStore
 	oci                    repository.NativeOCIStore
 	cargo                  repository.NativeCargoStore
 	conan                  repository.NativeConanStore
-	apiKeys                repository.APIKeyStore
-	serviceAccounts        repository.ServiceAccountStore
-	users                  userManagementStore
 	audit                  repository.Store
 	maintenance            *CacheMaintenance
 	searchProjection       repository.ArtifactSearchStore
@@ -59,10 +55,4 @@ type generatedRepositoryAPIAdapter struct {
 	logBuffer              *operationalog.Buffer
 	artifactScanner        scanning.Scanner
 	artifactScanFormats    []repository.Format
-}
-
-type userManagementStore interface {
-	repository.UserStore
-	repository.UserIdentityStore
-	repository.UserSessionStore
 }

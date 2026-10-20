@@ -81,6 +81,26 @@ scope. Aggregated grant records are an explicit optional read port, rather than
 a runtime assertion on the grants writer. Cross-repository scope filtering and
 audit actor resolution are shared authorization helpers.
 
+## Identity administration
+
+The fourth slice (#431) extracts `identityManagementHandler`. All 25 identity
+operations, including current identity, users, sessions, external identity links,
+API keys, service accounts and OIDC settings, belong to this handler. Its explicit
+ports contain only the management methods each record needs: API-key hash
+lookups, login writes, session creation and expiry jobs are not part of them.
+OIDC exposes only settings, replacement and connection testing; its runtime is
+injected explicitly when configured. Authentication and audit use the shared
+scope, without repository content, queues or site persistence.
+
+Independent generated-HTTP tests construct this domain without `GatewayStore`
+or repository/catalog ports. They exercise user CAS and password/session
+management, one-time credential responses, revocation and audit. All 24
+administrator operations reject unauthenticated, member and password-change
+requests before touching domain stores. Current identity remains available to
+authenticated members. Existing identity and OIDC lifecycle tests continue to
+exercise the full composition. Lifecycle, operations, site and APT remain on
+the temporary adapter; extracting identity does not complete #280.
+
 ## Verification and limits
 
 Construct domain handlers directly with only their repository/Group ports and

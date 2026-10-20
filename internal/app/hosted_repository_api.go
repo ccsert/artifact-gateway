@@ -249,14 +249,6 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 	return "", false
 }
 
-func (h generatedRepositoryAPIAdapter) GetCurrentIdentity(w http.ResponseWriter, r *http.Request) {
-	principal, ok := h.authenticate(w, r)
-	if !ok {
-		return
-	}
-	writeNativeMavenJSON(w, http.StatusOK, currentIdentityResponse(principal))
-}
-
 func (h hostedRepositoryAPIHandler) create(w http.ResponseWriter, r *http.Request, principal Principal) {
 	h.createWithIdempotencyKey(w, r, principal, r.Header.Get("Idempotency-Key"))
 }
