@@ -475,6 +475,12 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 		if member.Type == repository.MemberProxy && h.Cache != nil && !h.Cache.UpstreamAllowed(ctx, member.Endpoint) {
 			h.Resolver.Metrics.ociCircuitOpen.Add(1)
 			hadUpstreamFailure = true
+			if member.UpstreamAuth != nil || member.OCIBearer != nil {
+				if err := h.Resolver.RecordOCIFailure(ctx, groupName, repositoryName, member.Name, actor, repository.AuditUpstreamError); err != nil {
+					return CachedOCIContent{}, err
+				}
+				return CachedOCIContent{}, &ociFetchError{status: http.StatusBadGateway, code: "UNKNOWN", message: "upstream registry unavailable"}
+			}
 			continue
 		}
 		response, fetchErr := h.Client.Fetch(ctx, method, member, repositoryName, resource, reference, headers)
@@ -486,7 +492,7 @@ func (h OCIHandler) fetchOCIContent(ctx context.Context, method string, members 
 				h.Cache.RecordUpstreamFailure(ctx, member.Endpoint)
 			}
 			hadUpstreamFailure = true
-			if member.UpstreamAuth != nil {
+			if member.UpstreamAuth != nil || member.OCIBearer != nil {
 				return CachedOCIContent{}, &ociFetchError{status: http.StatusBadGateway, code: "UNKNOWN", message: "upstream registry unavailable"}
 			}
 			continue

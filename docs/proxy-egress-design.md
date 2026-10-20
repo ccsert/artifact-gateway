@@ -341,7 +341,9 @@ Repository version and a digest of its encrypted credential record. Existing
 unscoped Maven and prior OCI cache keys are re-fetched; there is no old-key
 fallback. OCI cache hits recheck the current source allowlist and require audit
 success. Source `401`/`403` is a stable `502` upstream failure, not a reason to
-fall through to an anonymous Group member. Invalid encrypted configuration
+fall through to an anonymous Group member. An open circuit for a credential-bound
+source or explicitly bound OCI issuer also remains a `502`, records the blocked
+request and never skips ahead to an anonymous member. Invalid encrypted configuration
 fails closed. Source error bodies and secrets never enter native responses or
 audit records.
 

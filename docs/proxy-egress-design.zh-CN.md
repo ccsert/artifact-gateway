@@ -200,7 +200,8 @@ allowlist 也剥离。上游凭据从不取自客户端 header 或 cookie。
 scope、OCI 正/负内容 key 和 token key 绑定当前 Repository version 与加密凭据记录的
 摘要。无 scope 的 Maven 缓存和旧 OCI key 重新抓取，不提供旧 key fallback。OCI 命中
 缓存仍须通过当前源允许列表并成功写入审计。源端 `401`/`403` 映射为稳定的 `502`
-上游失败，不继续尝试匿名 Group 成员；无法解密的配置关闭读取。源端错误响应体与秘密
+上游失败，不继续尝试匿名 Group 成员。绑定凭据的源或显式 OCI issuer 熔断时也返回
+`502` 并记录此次阻止请求的审计，不跳过该源而尝试匿名成员；无法解密的配置关闭读取。源端错误响应体与秘密
 不进入原生响应或审计。
 
 使用本地 Docker、Maven 和 ORAS 执行 `scripts/private-upstream-auth-e2e.sh`。脚本创建

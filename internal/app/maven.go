@@ -224,6 +224,16 @@ func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.
 			if !h.Cache.UpstreamAllowed(request.Context(), member.Endpoint) {
 				h.Metrics.mavenCircuitOpen.Add(1)
 				hadFailure = true
+				if member.UpstreamAuth != nil {
+					if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditUpstreamError); err != nil {
+						h.Metrics.failed.Add(1)
+						http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+						return
+					}
+					h.Metrics.failed.Add(1)
+					http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
+					return
+				}
 				continue
 			}
 			served := false
