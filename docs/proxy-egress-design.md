@@ -313,9 +313,14 @@ credentials. Management writes seal it with `GATEWAY_SETTINGS_ENCRYPTION_KEY`
 under the `repository-upstream-auth` purpose; reads expose only scheme, username
 and `credentialsConfigured`, never plaintext or ciphertext.
 
-A PATCH that omits `upstreamAuth` preserves it. Omitting `secret` while keeping
-the same scheme preserves the existing secret; changing schemes requires a
-fresh secret. `{"upstreamAuth":{"scheme":"none"}}` removes it. Updates use the
+A PATCH that omits `upstreamAuth` preserves it only when its destination binding
+is unchanged. Omitting `secret` while keeping the same scheme and binding
+preserves the existing secret; changing schemes requires a fresh secret.
+Changing the endpoint, OCI issuer realm or service, enabling a bound issuer,
+or switching from a bound issuer to direct registry authentication requires
+an explicit fresh `secret` or `{"upstreamAuth":{"scheme":"none"}}`. Otherwise
+the API returns `400 upstream_credential_rebind_required` without changing the
+Repository version, binding or stored ciphertext. Selecting `none` removes it. Updates use the
 Repository's `If-Match` version; a stale rotation or clear returns `412`. The
 Console exposes the same protected credential editor for these three formats.
 

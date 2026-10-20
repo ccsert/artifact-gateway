@@ -64,6 +64,28 @@ func resolveUpstreamAuth(request *upstreamAuthRequest, existing *repository.Upst
 	return resolved, nil
 }
 
+// upstreamCredentialBindingChanged treats the complete configured endpoint and
+// OCI issuer/audience as the authority boundary for a stored source credential.
+func upstreamCredentialBindingChanged(existing, next repository.HostedRepository) bool {
+	if existing.Endpoint != next.Endpoint {
+		return true
+	}
+	if existing.Format != repository.FormatOCI {
+		return false
+	}
+	if existing.OCIBearer == nil || next.OCIBearer == nil {
+		return (existing.OCIBearer == nil) != (next.OCIBearer == nil)
+	}
+	return *existing.OCIBearer != *next.OCIBearer
+}
+
+func upstreamCredentialRebindNeedsSecret(existing, next repository.HostedRepository, request *upstreamAuthRequest) bool {
+	if existing.UpstreamAuth == nil || existing.UpstreamAuth.Scheme == repository.UpstreamAuthSchemeNone || next.UpstreamAuth == nil || !upstreamCredentialBindingChanged(existing, next) {
+		return false
+	}
+	return request == nil || request.Secret == ""
+}
+
 // redactUpstreamAuth strips the stored secret from a repository about to be
 // encoded in a management response, replacing it with a configured marker. The
 // copy keeps the stored value intact for the protocol paths.

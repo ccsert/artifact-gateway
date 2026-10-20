@@ -72,3 +72,7 @@ to Maven and OCI Proxy repositories. The earlier Go-only admission statement
 above describes its original delivery. Current supported schemes, bound OCI
 issuer behavior, rotation/clear and credential-bound cache semantics are in
 [Proxy egress and upstream authentication](../proxy-egress-design.md#protected-maven-and-oci-upstreams).
+Go follows the same destination binding rule: changing the endpoint while
+retaining Basic/Bearer authentication requires an explicit fresh secret or
+`scheme: none`; otherwise PATCH returns `400 upstream_credential_rebind_required`
+without changing its stored version or ciphertext.

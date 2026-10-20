@@ -515,6 +515,10 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		updatedRepo.UpstreamAuth = upstreamAuth
+		if upstreamCredentialRebindNeedsSecret(repo, updatedRepo, request.UpstreamAuth) {
+			writeHostedProblem(w, http.StatusBadRequest, "upstream_credential_rebind_required", "changing the upstream endpoint or OCI issuer binding requires a new secret or clearing upstream authentication")
+			return
+		}
 	} else {
 		if request.Endpoint != nil || request.AllowedHosts != nil || request.EgressProxy != nil || request.UpstreamAuth != nil || request.OCIBearer != nil {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "hosted repositories only support anonymousRead and Maven publication policy updates")

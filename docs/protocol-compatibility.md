@@ -53,6 +53,10 @@ are separate acceptance steps.
 Maven and OCI private upstream credentials, rotation/clear and cache boundaries are
 documented in [Proxy egress](proxy-egress-design.md#protected-maven-and-oci-upstreams).
 The isolated real-client gate is `scripts/private-upstream-auth-e2e.sh`.
+Changing a credential's endpoint or OCI issuer realm/service requires a fresh
+secret or explicit `scheme: none`; otherwise PATCH fails with
+`400 upstream_credential_rebind_required` and preserves the existing version
+and ciphertext. This rule also applies to Go Proxy repositories.
 
 ## Contract alignment
 

@@ -73,3 +73,16 @@ func newPrivateProxyPostgresBackend(t *testing.T) privateProxyBackend {
 		return store, control
 	}}
 }
+
+func TestPrivateProxyCredentialRebindingPostgres(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("isolated PostgreSQL is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	privateProxyCredentialRebindingContract(t, store)
+}

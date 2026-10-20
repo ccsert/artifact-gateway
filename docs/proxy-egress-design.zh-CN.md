@@ -183,8 +183,11 @@ Go、Maven 与 OCI Proxy 仓库接收原生 `upstreamAuth` 对象，Hosted 与�
 `repository-upstream-auth` 用途加密；读取只返回 scheme、username 与
 `credentialsConfigured`，从不返回明文或密文。
 
-PATCH 省略 `upstreamAuth` 保留原值；同 scheme 省略 `secret` 保留原密钥，切换 scheme
-须提交新密钥。`{"upstreamAuth":{"scheme":"none"}}` 清除。更新使用 Repository 的
+仅当目标绑定不变时，PATCH 省略 `upstreamAuth` 才保留原值；同 scheme、同绑定省略
+`secret` 保留原密钥，切换 scheme 须提交新密钥。修改 endpoint、OCI issuer realm 或
+service、启用绑定 issuer，或从 issuer 切换为直连 registry，须显式提交新 `secret` 或
+`{"upstreamAuth":{"scheme":"none"}}`；否则返回 `400 upstream_credential_rebind_required`，
+Repository version、目标绑定和旧密文均不变。选择 `none` 会清除凭据。更新使用 Repository 的
 `If-Match` 版本，陈旧轮换或清除返回 `412`。Console 为这三种格式提供同一受保护凭据编辑器。
 
 Maven 对绑定源的 metadata、POM、checksum 和完整资产请求消费凭据。OCI 未配置

@@ -48,6 +48,9 @@ Nexus 发现仍作为只读迁移输入；导入数据与切换生产客户端 U
 
 Maven/OCI 私有源、轮换/清除及缓存边界详见[Proxy 出站与上游认证](proxy-egress-design.zh-CN.md#maven-与-oci-受保护上游)，
 真实客户端隔离门禁为 `scripts/private-upstream-auth-e2e.sh`。
+修改凭据绑定的 endpoint 或 OCI issuer realm/service，须提交新密钥或显式选择
+`scheme: none`；否则 PATCH 返回 `400 upstream_credential_rebind_required`，旧版本与
+密文不变。Go Proxy 仓库也遵循同一规则。
 
 ## 契约对齐
 

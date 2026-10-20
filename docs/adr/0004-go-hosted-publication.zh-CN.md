@@ -53,3 +53,5 @@ Group fallback。详见[安全准入策略](../security-admission-policy.zh-CN.m
 更新（2026-10-20）：#423/#424 将同一受保护 `upstreamAuth` 模型扩展到 Maven 与 OCI
 Proxy；上文仅 Go 准入的描述是原始交付状态。当前 scheme、OCI issuer 绑定、轮换/清除
 与凭据身份缓存语义详见[Proxy 出站与上游认证](../proxy-egress-design.zh-CN.md#maven-与-oci-受保护上游)。
+Go 同样绑定目标：保留 Basic/Bearer 认证并修改 endpoint 时，须显式提交新密钥或选择
+`scheme: none`；否则 PATCH 返回 `400 upstream_credential_rebind_required`，存储版本与旧密文均不变。
