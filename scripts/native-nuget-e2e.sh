@@ -125,7 +125,7 @@ events=[]
 for line in (evidence/'results.jsonl').read_text().splitlines():
     try: events.append(json.loads(line))
     except ValueError: pass
-required={'TestNuGetMemoryStoreContract','TestPostgresNuGetStoreContract','TestPostgresNuGetPaginationAndReopen','TestNuGetPreviewExplicitCompositionAndFormalDiscoveryBoundary','TestPostgresRustFSNuGetStagedRestartAndLostCommitResponse','TestPostgresRustFSNuGetLostUploadResponseAndConcurrentQuota','TestPostgresRustFSNuGetCollectionAndPublicationSerialize','TestPostgresNuGetPublishedBackupReferences','TestNativeNuGetRealDotnetPushAndColdTransitiveRestore'}
+required={'TestNuGetMemoryStoreContract','TestPostgresNuGetStoreContract','TestPostgresNuGetPaginationAndReopen','TestNuGetPreviewExplicitCompositionAndFormalDiscoveryBoundary','TestPostgresRustFSNuGetStagedRestartAndLostCommitResponse','TestPostgresRustFSNuGetLostUploadResponseAndConcurrentQuota','TestPostgresRustFSNuGetCollectionAndPublicationSerialize','TestPostgresRustFSNuGetCredentialRotationAndRevocation','TestPostgresNuGetPublishedBackupReferences','TestNativeNuGetRealDotnetPushAndColdTransitiveRestore'}
 passed={e['Test'] for e in events if e.get('Action')=='pass' and 'Test'in e}
 bad=[e for e in events if e.get('Action') in ('skip','fail')]
 report={'exitCode':result.returncode,'required':sorted(required),'requiredPassed':sorted(required&passed),'missing':sorted(required-passed),'passedTests':len(passed),'passedTopLevelTests':len([t for t in passed if '/'not in t]),'failOrSkip':bad,'resultsSHA256':hashlib.sha256((evidence/'results.jsonl').read_bytes()).hexdigest()}
