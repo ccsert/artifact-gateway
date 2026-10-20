@@ -232,7 +232,7 @@ npm、PyPI、Cargo 与 APT 在持久缓存元数据和资产时记录当前 Repo
 Proxy 与 Group 逐请求解析成员当前配置，源端 `401`/`403` 不返回 stale 内容，也不继续
 匿名尝试后续成员。错误与审计不包含源端秘密或响应体。
 
-新增格式执行 `make private-upstream-formats-e2e`。64 个必需用例包含 48 次真实客户端
+新增格式执行 `make private-upstream-formats-e2e`。66 个必需用例包含 48 次真实客户端
 消费：六格式、Basic/Bearer、Proxy/Group 与冷/热缓存的完整组合。固定 npm、pip、Cargo、
 Conan、Debian 客户端及 curl 使用自有配置和缓存；Conan 启动阶段版本探测也使用自有
 `CONAN_HOME`。Cargo 与 rustc 显式选择已安装的 1.96.0 配对，以绝对路径和自有客户端
