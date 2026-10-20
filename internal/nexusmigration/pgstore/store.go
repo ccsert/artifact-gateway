@@ -373,14 +373,19 @@ func (s *Store) PublicationContext(ctx context.Context, id, token string) contex
 			return err
 		}
 		var valid bool
-		err := tx.QueryRowContext(ctx, `SELECT lease_token=$2 AND lease_expires_at>clock_timestamp() AND state IN ('running','pausing') AND NOT cancel_requested FROM nexus_migration_batches WHERE id::text=$1 FOR UPDATE`, id, token).Scan(&valid)
+		var sourceID, sourceVersion string
+		err := tx.QueryRowContext(ctx, `SELECT lease_token=$2 AND lease_expires_at>clock_timestamp() AND state IN ('running','pausing') AND NOT cancel_requested,source_id::text,source_version FROM nexus_migration_batches WHERE id::text=$1 FOR UPDATE`, id, token).Scan(&valid, &sourceID, &sourceVersion)
 		if err != nil {
 			return err
 		}
 		if !valid {
 			return m.ErrLeaseLost
 		}
-		return nil
+		if err = lockSourceVersion(ctx, tx, sourceID, sourceVersion); err != nil {
+			return err
+		}
+		// Waiting for a source writer may outlive the initial owner check.
+		return validLease(ctx, tx, id, token)
 	})
 }
 func (s *Store) Finish(ctx context.Context, id, token, state, message string) error {

@@ -71,21 +71,22 @@ func (s *Store) inventoryTransaction(ctx context.Context, b m.Batch) (*sql.Tx, e
 	if m.InventoryBinding(actual, nil) != m.InventoryBinding(b, nil) {
 		return bad(m.Failed("source_changed"))
 	}
-	// Lock order is lease fence, batch, then source. Source Update/Delete only
-	// lock their source row. FOR SHARE also conflicts with a non-key version
-	// update, keeping this local binding valid until the page/Seal commits.
-	var sourceVersion string
-	err = tx.QueryRowContext(ctx, `SELECT version::text FROM nexus_migration_sources WHERE id::text=$1 FOR SHARE`, actual.SourceID).Scan(&sourceVersion)
-	if errors.Is(err, sql.ErrNoRows) {
-		return bad(m.Failed("source_changed"))
-	}
-	if err != nil {
+	if err = lockSourceVersion(ctx, tx, actual.SourceID, actual.SourceVersion); err != nil {
 		return bad(err)
 	}
-	if sourceVersion != actual.SourceVersion {
-		return bad(m.Failed("source_changed"))
-	}
 	return tx, nil
+}
+
+// Lock order is lease fence, batch, then source. Source Update/Delete only lock
+// their source row. FOR SHARE also conflicts with a non-key version update and
+// remains held until the actual inventory/native publication transaction ends.
+func lockSourceVersion(ctx context.Context, tx *sql.Tx, id, expected string) error {
+	var version string
+	err := tx.QueryRowContext(ctx, `SELECT version::text FROM nexus_migration_sources WHERE id::text=$1 FOR SHARE`, id).Scan(&version)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && version != expected {
+		return m.Failed("source_changed")
+	}
+	return err
 }
 
 func (s *Store) BeginInventoryScan(ctx context.Context, b m.Batch, want m.InventoryScan) error {

@@ -55,7 +55,9 @@ required = {"TestPostgresMigrationInventoryLargeResumeMatchesUninterruptedManife
             "TestPostgresMigrationInventoryLeaseExpiryInsideTransactionRollsBackPage",
             "TestPostgresMigrationInventoryPageProgressPreservesPublicControlVersion",
             "TestPostgresMigrationInventoryRejectsSourceUpdateBeforeMutation",
-            "TestPostgresMigrationInventorySourceUpdateSerializesWithTransactions"}
+            "TestPostgresMigrationInventorySourceUpdateSerializesWithTransactions",
+            "TestPostgresMigrationInventorySourceUpdateAfterFinalCheckCannotPublish",
+            "TestPostgresMigrationInventoryPublicationSourceLockAndLease"}
 events = [json.loads(line) for line in path.read_text().splitlines()]
 run = {event.get("Test") for event in events if event.get("Action") == "run"}
 passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
@@ -72,5 +74,5 @@ for event in events:
         print(event["Output"], end="")
 if int(sys.argv[3]) or required - run or required - passed or failed or skipped or packages != {"github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"}:
     raise SystemExit("mandatory inventory scan proof is missing, skipped or failed; see results.json")
-print("Verified all 11 required inventory scan fixtures: 101 pages / 10002 assets, PG recovery, receipts and source/control fencing; no existing source migration.")
+print("Verified all 13 required inventory scan fixtures: 101 pages / 10002 assets, PG recovery, receipts and scan/native publication source/control fencing; no existing source migration.")
 PY
