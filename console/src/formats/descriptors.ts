@@ -50,6 +50,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   oci: {
     ...base,
     format: "oci",
+    upstreamAuthentication: true,
     artifactColumn: "formats.name",
     searchPlaceholder: "formats.filterByImageNamePrefix",
     searchKeywordPlaceholder: "formats.filterByImageNameKeyword",
@@ -64,6 +65,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   maven: {
     ...base,
     format: "maven",
+    upstreamAuthentication: true,
     artifactColumn: "formats.artifact",
     searchPlaceholder: "formats.searchGAVCoordinates",
     directoryBrowse: ["hosted", "proxy", "group"],

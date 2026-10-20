@@ -311,7 +311,7 @@ func TestOCICacheWithoutEndpointProvenanceIsRefetched(t *testing.T) {
 	authorize(request, "resolver-secret")
 	first := httptest.NewRecorder()
 	handler.ServeHTTP(first, request)
-	key := cache.Key("team", "team/app", ociManifest, "latest")
+	key := cache.Key(upstreamCacheNamespace("team", []repository.Member{{Name: "proxy", Type: repository.MemberProxy, Endpoint: "https://registry.example"}}), "team/app", ociManifest, "latest")
 	encoded, err := objects.Get(context.Background(), key)
 	if err != nil {
 		t.Fatal(err)

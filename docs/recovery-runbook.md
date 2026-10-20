@@ -119,6 +119,23 @@ membership are checked before writes. Bridge isolation separates data/projects;
 it is not an outbound network firewall. Gateway runs with API roles, a read-only
 root, dropped capabilities and a bounded `/tmp` memory mount for protocol spools.
 
+Binary recovery supports verified `linux/amd64` and `linux/arm64` artifacts and
+selects a fixed platform manifest from the existing trusted distroless index
+`sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab`.
+The [original index bytes](../internal/backupops/testdata/binary-runtime-index.json)
+are retained and hash-checked with the child descriptors in regression tests:
+
+| Verified binary platform | Runtime child digest (`gcr.io/distroless/static-debian12:nonroot`) |
+| --- | --- |
+| `linux/amd64` | `sha256:52dcfbabb7457ea47c82f6e13af8c8a4a1d9f7b0145142b3ecab20f2b888411d` |
+| `linux/arm64` | `sha256:06c3c14b7fa252d9f4285242d2d665ce3b51f74b02d3c529464f220f2912aecb` |
+
+Docker receives the child digest and verified platform, so a cached root index
+alias for the other architecture cannot select the runtime. Unknown binary
+platforms fail before resource creation. This needs no cache clearing or shared
+image replacement and preserves the approved binary, archive and SQL ledger.
+OCI software profiles retain their independently approved image reference.
+
 All input bytes, approved software/schema and the complete decompressed PG custom
 archive are checked before target creation. `pg_restore --exit-on-error` then
 restores the new DB; all public-table fingerprints (including grant sets,

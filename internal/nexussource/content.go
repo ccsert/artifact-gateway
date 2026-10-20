@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 // AssetRequest contains a fixed manifest identity, never a caller-selected URL.
 type AssetRequest struct {
+	Format    string
 	Path      string
 	Size      int64
 	Validator string
@@ -18,6 +20,7 @@ type AssetRequest struct {
 type Content struct {
 	Body      io.ReadCloser
 	Validator string
+	MediaType string
 }
 type contentBody struct {
 	io.Reader
@@ -42,7 +45,8 @@ func (b *contentBody) Close() error { err := b.Closer.Close(); b.done(); return 
 // OpenAsset uses exactly the same encrypted source, HTTPS, pinned egress and
 // redirect boundary as discovery. Each request is bounded by size and time.
 func (s *Service) OpenAsset(ctx context.Context, id, version, repository string, in AssetRequest) (*Content, error) {
-	if !sourceName.MatchString(repository) || !validAssetPath(in.Path) || in.Size < 0 || in.Size > 1<<30 {
+	canonical, wire, reason := assetRoute(in.Format, in.Path)
+	if !sourceName.MatchString(repository) || reason != "" || canonical != in.Path || in.Size < 0 || in.Size > 1<<30 {
 		return nil, fail("invalid_request")
 	}
 	remote, source, done, err := s.connect(ctx, id)
@@ -53,13 +57,16 @@ func (s *Service) OpenAsset(ctx context.Context, id, version, repository string,
 	if source.Version != version {
 		return bad("source_version_changed")
 	}
-	u := url.URL{Scheme: remote.base.Scheme, Host: remote.base.Host, Path: remote.base.Path + "/repository/" + repository + "/" + in.Path}
+	u := url.URL{Scheme: remote.base.Scheme, Host: remote.base.Host, Path: remote.base.Path + "/repository/" + repository + "/" + wire}
 	req, err := http.NewRequestWithContext(remote.ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return bad("source_invalid_response")
 	}
 	if strings.HasPrefix(in.Validator, "etag:") {
 		req.Header.Set("If-Match", strings.TrimPrefix(in.Validator, "etag:"))
+	}
+	if in.Format == "oci" && strings.Contains(wire, "/manifests/") {
+		req.Header.Set("Accept", "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json")
 	}
 	if remote.credential.Username != "" {
 		req.SetBasicAuth(remote.credential.Username, remote.credential.Password)
@@ -95,5 +102,14 @@ func (s *Service) OpenAsset(ctx context.Context, id, version, repository string,
 		_ = resp.Body.Close()
 		return bad("source_changed")
 	}
-	return &Content{Body: &contentBody{Reader: io.LimitReader(resp.Body, in.Size+1), Closer: resp.Body, ctx: remote.ctx, done: done}, Validator: validator}, nil
+	mediaType := resp.Header.Get("Content-Type")
+	if in.Format == "oci" && mediaType != "" {
+		parsed, _, parseErr := mime.ParseMediaType(mediaType)
+		if parseErr != nil {
+			_ = resp.Body.Close()
+			return bad("source_invalid_response")
+		}
+		mediaType = strings.ToLower(parsed)
+	}
+	return &Content{Body: &contentBody{Reader: io.LimitReader(resp.Body, in.Size+1), Closer: resp.Body, ctx: remote.ctx, done: done}, Validator: validator, MediaType: mediaType}, nil
 }

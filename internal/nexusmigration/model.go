@@ -1,4 +1,4 @@
-// Package nexusmigration owns durable, append-only Nexus release/Raw migration.
+// Package nexusmigration owns durable, append-only migration into native artifacts.
 package nexusmigration
 
 import (
@@ -24,7 +24,7 @@ type Failure struct{ Code string }
 func (e *Failure) Error() string { return e.Code }
 func Failed(code string) error   { return &Failure{Code: code} }
 
-const PolicyVersion = "release-raw-v1"
+const PolicyVersion = "native-v1"
 const MaxAttempts = 3
 
 type Mapping struct {
@@ -104,6 +104,7 @@ type Asset struct {
 	Size       int64  `json:"size"`
 	SHA256     string `json:"sha256"`
 	Validator  string `json:"validator"`
+	MediaType  string `json:"mediaType,omitempty"`
 	Uploaded   bool   `json:"uploaded"`
 	Verified   bool   `json:"verified"`
 	SHA1       string `json:"-"`

@@ -40,15 +40,28 @@ func TestCargoTombstoneRestoreAndGroupOwner(t *testing.T) {
 		return w
 	}
 	payload, archive := cargoC0PublishFixture(t, "demo", "1.0.0", "demo")
-	for _, repo := range []repository.HostedRepository{first, second} {
-		r := httptest.NewRequest(http.MethodPut, "/cargo/"+repo.Name+"/api/v1/crates/new", bytes.NewReader(payload))
-		r.Host = "localhost:8080"
-		authorize(r, "admin-secret")
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		if w.Code != http.StatusOK {
-			t.Fatalf("publish %s=%d %s", repo.Name, w.Code, w.Body.String())
-		}
+	r := httptest.NewRequest(http.MethodPut, "/cargo/"+first.Name+"/api/v1/crates/new", bytes.NewReader(payload))
+	r.Host = "localhost:8080"
+	authorize(r, "admin-secret")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("publish %s=%d %s", first.Name, w.Code, w.Body.String())
+	}
+	// Group duplicates require the full immutable source index, including pubtime.
+	// Seed the second member like a distribution import, preserving the archive.
+	source, err := store.GetCargoPublication(ctx, first.ID, "demo", "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate := source
+	duplicate.RepositoryID = second.ID
+	duplicate.CreatedAt, duplicate.UpdatedAt = time.Time{}, time.Time{}
+	if _, _, err := store.ReserveCargoIdentity(ctx, duplicate.CargoIdentityClaim); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.CommitCargoPublication(ctx, duplicate); err != nil {
+		t.Fatalf("seed identical member publication: %v", err)
 	}
 	groupIndex := "/cargo/" + group.Name + "/de/mo/demo"
 	groupDownload := "/cargo/" + group.Name + "/api/v1/crates/demo/1.0.0/download"

@@ -2,12 +2,14 @@
 
 [English](nexus-migration-batches.md) · [文档索引](README.zh-CN.md)
 
-管理员 API 将[只读源发现](nexus-source-discovery.zh-CN.md)接到真实 Maven release
-与 Raw Hosted 发布。它不执行生产切流、不删除制品、不覆盖冲突，也不迁移 Proxy
-历史缓存、OCI 或在线 SNAPSHOT 历史。已交付的离线 SNAPSHOT 导入器保持独立。
+管理员 API 将[只读源发现](nexus-source-discovery.zh-CN.md)接到原生 Maven release、
+Raw、OCI 与 Conan 2 Hosted 发布。批次统一使用 `native-v1`，不支持旧策略输入或历史
+管理接口。生产切流、源删除、冲突覆盖、Proxy 历史缓存和在线 SNAPSHOT 历史不在此
+流程范围内。已交付的离线 SNAPSHOT 导入器保持独立。
 
 先应用 `000147_nexus_migration_batches.sql` 和
-`000148_nexus_migration_scan_diagnostics.sql`。将
+`000148_nexus_migration_scan_diagnostics.sql`，以及追加的
+`000154_nexus_native_migration_formats.sql`；统一使用标准迁移程序。将
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` 配置为真实对象存储池标识；Compose 转发给所有
 继承的 Gateway 角色。不配置时仅禁止迁移写入，其他网关功能和迁移报告仍可读。
 源 HTTPS、凭据加密、精确内部地址 allowlist、DNS 固定及禁止重定向均复用源发现，
@@ -22,7 +24,7 @@
   的对象存储 endpoint/bucket 求摘要；自定义装配必须为实际存储提供匹配绑定，不能假设
   不同格式存储属于同一池。
 - `POST /migrations/nexus/batches` 固定 `sourceId`、精确 `sourceVersion`、源仓库到
-  已有目标仓库 UUID 的显式映射、`policyVersion=release-raw-v1` 和容量证据。
+  已有目标仓库 UUID 的显式映射、`policyVersion=native-v1` 和容量证据。
   后台完整枚举后才原子封存 manifest 与条目。扫描中断、响应非法、超限或分页循环均
   明确失败，半清单永远不能执行。
 - `GET` 集合、`/{batchId}` 和 `/{batchId}/entries` 回读持久状态；集合/条目使用
@@ -61,6 +63,21 @@ Raw 使用原生只创建 CAS。Maven 冻结包括 POM、主件和 classifier �
 packaging 明确不支持；已有 GAV 的资产集合变化产生冲突。无法原生寻址的路径及 Raw
 虚拟校验资源路径也明确不支持。
 
+OCI 将 Nexus `docker` 库存显式映射到原生 OCI。每个 tag/digest 保留完整原始
+OCI index / Docker manifest list、嵌套 manifest、config、layer、全部平台及共享对象，
+图深度最多 8、对象最多 1,024；每份 manifest 最多 16 MiB、单次库存预读总计最多 64 MiB。扫描先读取并校验 manifest 正文再封存，复制时重新核对。
+完整验证闭包与缺失 tag 在同一事务中可见；已有不同 tag 冲突，不展开 index、不覆盖 tag。
+缺 child、描述符 size/hash 错误、tag 漂移和无效图不能成为完整成功闭包。
+foreign layer、subject/referrer 图和未知媒体类型明确不支持；没有平台子集选项。
+
+Conan 只从精确 revision storage path 识别身份，不从 Browse 展示推断：
+`conans/name/version/user/channel/revisions/RREV/files/file`；package 在其下使用
+`packages/PID/revisions/PREV/files/file`。源文件下载增加 `v2/` 协议前缀。
+每个 recipe/package revision 都复用原生 Conan 的完整 manifest、展开文件和身份校验，
+原始归档逐字节保留，recipe 先于其 package 发布。过期后新会话使用新的 stage key；
+可见元数据、会话完成和真实操作者审计共用带批次租约 fence 的事务。隔离或墓碑 revision
+不能计为验证后跳过。Conan 1、SCM revision、可选 metadata 和非 tgz 归档不支持。
+
 旧成功记录不能直接作为完成证据。同身份同摘要必须再次验证当前源字节/validator、
 目标身份、完整 size/SHA-256 后才能跳过。目标内容不同则保留并冲突。上传后未落账和
 提交响应丢失通过完整读回核对恢复，不生成第二份可见发布。源配置版本、映射或策略
@@ -71,12 +88,14 @@ packaging 明确不支持；已有 GAV 的资产集合变化产生冲突。无�
 
 `metadataDiscovered` 计库存条数，并优先使用发现结果已有的必需摘要。缺 SHA-256，或
 Maven 为生成旁文件缺 SHA-1/MD5 时，执行有界源验证，真实读取字节独立持久计为
-`sourceVerificationBytes`，扫描未完成/失败也保留。此阶段仅流式计算摘要，不写目标、
+`sourceVerificationBytes`，扫描未完成/失败也保留。OCI 图还需预读 manifest 正文；
+此阶段不写目标、
 不使用本地下载暂存文件。
 
 `transferredBytes` 计复制阶段真实源正文读取字节，包含重试和对已有身份的重新验证；
 `verifiedBytes` 按唯一原始目标字节的完整读回证据计数，不因重试膨胀；
-`visibleIdentities` 独立计原生 Raw 路径/Maven GAV 的已提交或读回确认数量。
+`visibleIdentities` 独立计原生 Raw 路径、Maven GAV、OCI 引用、Conan revision 的
+已提交或读回确认数量。
 `totalBytes` 在清单完整封存前为 null，之后计支持范围内唯一原始字节。Unsupported 与
 源删除项保留独立报告，不能把这些计数称为官方客户端验收。
 不支持的路径使用 `/unsupported/<解码后的源路径>` 合成报告身份，与原生相对 Raw
@@ -102,3 +121,11 @@ Range/multipart 续传。大清单明确失败，需要后续分页扩展，不�
 `6766ada7101d292b42b8b15681120acd68effa4a9660935853cf6d61f0d984d4`）。
 两种客户端都仅经 Gateway 验证完整预期库存、size 与 SHA-256。这份 loopback HTTP
 证据不证明生产 TLS，也不授权切流；任何本机/CI 通过都不代表生产迁移放行。
+
+新增 `make nexus-oci-migration-e2e` 固定官方 crane 0.22.1，对 OCI index、Docker list、
+嵌套 index 分别使用独立空 layout 验证全部平台及 amd64/arm64，并覆盖真实 PostgreSQL
+租约 fence、原子闭包发布、响应丢失恢复和 GC 竞争。`make conan-e2e` 同时强制 Conan
+迁移验收；`make nexus-conan-migration-e2e` 可单独运行，固定 Conan 2.21.0，真实重启
+PostgreSQL/RustFS，验证两个历史 revision 在全新客户端 home 中只从目标冷安装。
+自有 fixture 均核对资源清零。这些使用合成 Nexus REST 库存及标准协议源，不代表所有
+已部署 Nexus 版本或业务库存均已验收；生产信任、容量和最终切流另需证据。

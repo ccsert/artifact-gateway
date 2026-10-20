@@ -25,12 +25,12 @@ type upstreamAuthRequest struct {
 }
 
 // upstreamAuthSupported reports whether a format/type pair consumes upstream
-// credentials. Only Go Proxy repositories do today. Rejecting the field
+// credentials. Go, Maven and OCI Proxy repositories consume them. Rejecting the field
 // everywhere else is deliberate: accepting a credential that the fetch path
 // never reads would let an operator configure authentication that silently
 // does nothing.
 func upstreamAuthSupported(format repository.Format, repoType repository.RepositoryType) bool {
-	return format == repository.FormatGo && repoType == repository.RepositoryTypeProxy
+	return repoType == repository.RepositoryTypeProxy && (format == repository.FormatGo || format == repository.FormatMaven || format == repository.FormatOCI)
 }
 
 // resolveUpstreamAuth validates the request shape and encrypts the secret.
@@ -62,6 +62,28 @@ func resolveUpstreamAuth(request *upstreamAuthRequest, existing *repository.Upst
 		return nil, err
 	}
 	return resolved, nil
+}
+
+// upstreamCredentialBindingChanged treats the complete configured endpoint and
+// OCI issuer/audience as the authority boundary for a stored source credential.
+func upstreamCredentialBindingChanged(existing, next repository.HostedRepository) bool {
+	if existing.Endpoint != next.Endpoint {
+		return true
+	}
+	if existing.Format != repository.FormatOCI {
+		return false
+	}
+	if existing.OCIBearer == nil || next.OCIBearer == nil {
+		return (existing.OCIBearer == nil) != (next.OCIBearer == nil)
+	}
+	return *existing.OCIBearer != *next.OCIBearer
+}
+
+func upstreamCredentialRebindNeedsSecret(existing, next repository.HostedRepository, request *upstreamAuthRequest) bool {
+	if existing.UpstreamAuth == nil || existing.UpstreamAuth.Scheme == repository.UpstreamAuthSchemeNone || next.UpstreamAuth == nil || !upstreamCredentialBindingChanged(existing, next) {
+		return false
+	}
+	return request == nil || request.Secret == ""
 }
 
 // redactUpstreamAuth strips the stored secret from a repository about to be

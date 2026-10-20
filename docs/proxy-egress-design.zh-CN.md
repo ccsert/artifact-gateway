@@ -99,7 +99,7 @@ Maven 与 OCI Proxy 内容读取对首个请求和每次重定向分别应用有
 
 配置 endpoint 的精确 origin（含端口）获准；额外 `allowedHosts` 批准 HTTPS 主机的
 443 端口，管理 API 仍只接受裸主机名。进程内 Member 的显式端口条目精确匹配，不能
-仅按 hostname 匹配。内容主机许可不能建立 OCI token 签发者信任。匿名 Bearer 交换
+仅按 hostname 匹配。内容主机许可不能建立 OCI token 签发者信任。Bearer 交换
 须使用下文独立、显式的签发者／受众配置。
 
 direct、环境 `NO_PROXY`、custom `noProxy` 及 SOCKS5 本地 DNS 路径每跳先检查全部
@@ -131,7 +131,7 @@ HTTP 路径。Raw 保持独立的禁止重定向策略。Hosted 字节、digest 
 ## 原生 OCI Proxy Bearer 配置
 
 管理员可通过 `POST /api/v2/repositories` 或
-`PATCH /api/v2/repositories/{repositoryId}` 为原生 OCI Proxy 仓库显式启用匿名上游
+`PATCH /api/v2/repositories/{repositoryId}` 为原生 OCI Proxy 仓库显式启用绑定上游
 Bearer challenge 交换：
 
 ```json
@@ -157,18 +157,61 @@ Bearer challenge 交换：
 迁移 `000144_oci_bearer_configuration.sql` 为 `hosted_repositories` 增加可空
 JSONB `oci_bearer`，旧行保持禁用。仅持久化配置，从不持久化交换所得 token。API
 不会修改 `allowedHosts`，跨 origin token realm 仍须在仓库既有出站策略下独立
-获准。私有认证 registry 及生产身份、网络策略或部署变更仍需独立工作。生成的
-Console 客户端包含此字段，本变更未增加 Console 配置表单。
+获准。私有 registry 与 issuer 使用下文 `upstreamAuth` 配置；生产身份、网络策略、
+部署与切流仍独立于隔离验收。
 
 交换只接受一个明确的 Bearer challenge，精确绑定配置的 realm/service 和请求仓库的
-`pull` scope。每次最多一次匿名 token GET 和一次内容重试。客户端凭据不会进入这两种
+`pull` scope。每次最多一次 token GET 和一次内容重试。未配置 `upstreamAuth` 时匿名
+请求 issuer；配置后只有绑定 issuer 收到该源端凭据。Gateway 客户端凭据不会进入这两种
 请求；跨来源跳转会清除已交换 token。token GET 与内容共用最多五跳的出站检查，
 issuer/CDN 主机必须分别明确获准。非法 challenge/token、重复 401 返回不含认证报文的
 稳定错误，调用者仍能判断取消或超时。
 
 运行时缓存在进程内，最多 256 项、32 个在途刷新 key，绑定仓库身份、registry、issuer、
-service、scope 与出站/主机策略。并发调用共享最长 30 秒的刷新，取消单个等待者不取消
+service、scope、出站/主机策略、当前 Repository version 与加密凭据身份。并发调用共享最长 30 秒的刷新，取消单个等待者不取消
 其他调用；被拒的缓存 token 按版本失效。缺省 `expires_in` 为 60 秒，正的实际剩余寿命
 最多缓存 300 秒，提前五秒刷新。可选 RFC3339 `issued_at` 不得比当前时间晚超过 30 秒，
 也不得使 token 已过期。challenge/token/JSON 响应上限分别为 8 KiB/8 KiB/64 KiB。
 不请求 refresh token 或持久身份。
+
+## Maven 与 OCI 受保护上游
+
+Go、Maven 与 OCI Proxy 仓库接收原生 `upstreamAuth` 对象，Hosted 与其他格式明确拒绝。
+管理员可配置 Basic `{"scheme":"basic","username":"source-reader","secret":"synthetic-example"}`，
+或静态 Bearer `{"scheme":"bearer","secret":"synthetic-example"}`。源端凭据与 Gateway
+客户端凭据、出站代理凭据分开。管理写入使用 `GATEWAY_SETTINGS_ENCRYPTION_KEY`，以
+`repository-upstream-auth` 用途加密；读取只返回 scheme、username 与
+`credentialsConfigured`，从不返回明文或密文。
+
+仅当目标绑定不变时，PATCH 省略 `upstreamAuth` 才保留原值；同 scheme、同绑定省略
+`secret` 保留原密钥，切换 scheme 须提交新密钥。修改 endpoint、OCI issuer realm 或
+service、启用绑定 issuer，或从 issuer 切换为直连 registry，须显式提交新 `secret` 或
+`{"upstreamAuth":{"scheme":"none"}}`；否则返回 `400 upstream_credential_rebind_required`，
+Repository version、目标绑定和旧密文均不变。选择 `none` 会清除凭据。更新使用 Repository 的
+`If-Match` 版本，陈旧轮换或清除返回 `412`。Console 为这三种格式提供同一受保护凭据编辑器。
+
+Maven 对绑定源的 metadata、POM、checksum 和完整资产请求消费凭据。OCI 未配置
+`ociBearer` 时对 registry 内容直接消费；配置后只有显式绑定的 issuer 收到源端凭据，
+内容请求仅使用交换得到的 repository `pull` token。原生 Proxy 与原生 Group 每个请求
+投影当前 Repository 配置。重定向仍逐跳执行出站校验：同来源保留凭据，跨来源即便已
+allowlist 也剥离。上游凭据从不取自客户端 header 或 cookie。
+
+替换、清除凭据或修改 Repository 配置都会要求新的凭据身份缓存解析。Maven 正/负缓存
+scope、OCI 正/负内容 key 和 token key 绑定当前 Repository version 与加密凭据记录的
+摘要。无 scope 的 Maven 缓存和旧 OCI key 重新抓取，不提供旧 key fallback。OCI 命中
+缓存仍须通过当前源允许列表并成功写入审计。源端 `401`/`403` 映射为稳定的 `502`
+上游失败，不继续尝试匿名 Group 成员。需要访问源时，任何已开路的上游熔断都直接
+返回 `502` 并记录此次阻止请求的审计，不跳过该成员；凭据从未配置或已显式清除时也
+遵循此规则，Group 故障转移不绕过熔断。无法解密的配置关闭读取。源端错误响应体与秘密
+不进入原生响应或审计。
+
+使用本地 Docker、Maven 和 ORAS 执行 `scripts/private-upstream-auth-e2e.sh`。脚本创建
+并清理独占 PostgreSQL/RustFS 项目，覆盖 Basic/Bearer、直连 registry/绑定 issuer、
+原生 Proxy/Group、正/负缓存冷/热读取、Repository/缓存连接关闭重建、轮换/清除、
+CAS 拒绝及非管理员拒绝。官方 Maven 客户端从空目标缓存解析原始完整 POM/JAR；ORAS
+从空 layout 复制七份原始 index/manifest/config/layer 对象。只有本地源码编译的 Maven
+fixture plugin 预置。显式用户/全局 settings、自有 registry 文件和子进程环境允许列表
+隔离用户身份与制品缓存。测试 hook 只把合成 HTTPS 源映射到自有监听器，保留证书校验。
+这些是隔离协议与持久化验收，不表示生产迁移或切流。
+
+Console 设置草稿以仓库 UUID 为身份边界；切换到另一个已缓存仓库时重建表单，清空所有上游/出站代理明文输入及 OCI issuer 草稿。并发更新继续由仓库版本 CAS 保护。

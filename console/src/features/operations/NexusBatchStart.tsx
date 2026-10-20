@@ -17,6 +17,7 @@ import {
 } from "../../components/ui/Feedback";
 import { Card, Field, Pagination } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
+import { migrationTargetFormat } from "./migrationFormats";
 import { useRepositoryPages } from "../repository/repositoryQueries";
 import { assertSourceSnapshot, migrationRequest } from "./migrationModel";
 import {
@@ -99,7 +100,7 @@ function NexusBatchStartContent({
       (item) =>
         item.type === "hosted" &&
         item.status === "supported" &&
-        ["raw", "maven2"].includes(item.format),
+        migrationTargetFormat(item.format) !== undefined,
     ) ?? [];
   const selectedRepositories = supported.filter((item) =>
     selected.includes(item.name),
@@ -138,7 +139,7 @@ function NexusBatchStartContent({
           target.id === targetFor(item.name) &&
           target.state === "active" &&
           target.type === "hosted" &&
-          target.format === (item.format === "maven2" ? "maven" : "raw"),
+          target.format === migrationTargetFormat(item.format),
       ),
     );
   const sourceValid =
@@ -193,7 +194,7 @@ function NexusBatchStartContent({
                     sourceId,
                     sourceVersion: source.data!.version,
                     mappings,
-                    policyVersion: "release-raw-v1",
+                    policyVersion: "native-v1",
                     capacityEvidence: evidence,
                   },
                 }),
@@ -333,7 +334,7 @@ function NexusBatchStartContent({
                               target.type === "hosted" &&
                               target.state === "active" &&
                               target.format ===
-                                (item.format === "maven2" ? "maven" : "raw"),
+                                migrationTargetFormat(item.format),
                           )
                           .map((target) => ({
                             label: target.name,

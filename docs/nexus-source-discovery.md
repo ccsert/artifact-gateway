@@ -42,13 +42,17 @@ the deployment's audit monitoring and retention policy.
 
 The client reuses the Gateway egress factory, environment proxy policy, TLS
 verification and DNS pinning. Every redirect is refused. Asset URLs must match the
-configured HTTPS origin and exact `/repository/<source-name>/<asset-path>`;
+configured HTTPS origin and exact format-specific source file route;
 userinfo, query/fragment, traversal and a foreign origin fail. Equivalent percent
 encoding is accepted only when its decoded path exactly matches safe asset
 metadata: `%2B`/`%2b` may represent a literal `+`, and the returned URL is rebuilt
 from the approved origin and metadata path. Encoded dot traversal and double
 encoding cannot satisfy that exact match. Metadata paths containing literal `%`,
-`#` or `?` remain unsupported. Discovery validates these URLs without downloading them.
+`#` or `?` remain unsupported. Raw/Maven use `/repository/<source-name>/<asset-path>`, OCI uses its validated
+`v2/<name>/manifests|blobs/<reference>` storage identity, and Conan uses
+`v2/conans/.../files/<file>`. Unknown shapes remain unsupported. Discovery
+validates these URLs without downloading them; durable batch planning performs
+any required graph and manifest reads.
 
 Direct private endpoints are denied by default. An operator can set an exact
 hostname and private CIDR allowlist, for example:
@@ -85,7 +89,7 @@ requests, 2 MiB per decoded response, 16 MiB total and 30 seconds including sour
 lookup, DNS, TLS and pagination. Supported and unsupported asset entries both
 consume the asset budget. There are no automatic retries.
 
-Raw Hosted and Maven RELEASE Hosted assets are supported. MIXED Maven repositories
+Raw, Maven RELEASE, OCI (`docker`) and Conan Hosted assets are supported. MIXED Maven repositories
 return identifiable release-version paths; SNAPSHOT directories, shared
 `maven-metadata.xml` and unclassifiable paths appear separately in
 `unsupportedAssets` with a reason. A release is identified by Maven's
@@ -112,7 +116,7 @@ or target lookup 503. Invalid source input is 400 and a missing source is 404.
 ## Explicit mapping preview
 
 `POST /migration-sources/{sourceId}/mapping-preview` accepts `mappings`, each
-containing `sourceRepository`, native `targetName`, `format` (`raw`/`maven`),
+containing `sourceRepository`, native `targetName`, `format` (`raw`/`maven`/`oci`/`conan`),
 `type` (`hosted`/`proxy`/`group`) and optional ordered `targetMembers`. It re-reads
 source configuration and checks native names, duplicate targets, compatible
 existing target repositories, format/type and each Group member's explicit

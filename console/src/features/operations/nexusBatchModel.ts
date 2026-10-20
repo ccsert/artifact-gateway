@@ -115,6 +115,18 @@ const codes: Record<string, NexusBatchMessageKey | MigrationMessageKey> = {
   raw_path_unsupported: "nexusBatch.unsupportedReason",
   maven_pom_missing: "nexusBatch.unsupportedReason",
   maven_release_closure_unsupported: "nexusBatch.unsupportedReason",
+  conan_identity_invalid: "nexusBatch.unsupportedReason",
+  conan_revision_incomplete: "nexusBatch.unsupportedReason",
+  conan_source_shape_unsupported: "nexusBatch.unsupportedReason",
+  conan_parent_recipe_incomplete: "nexusBatch.unsupportedReason",
+  oci_source_path_unsupported: "nexusBatch.unsupportedReason",
+  oci_inventory_digest_required: "nexusBatch.unsupportedReason",
+  oci_dependency_missing: "nexusBatch.unsupportedReason",
+  oci_graph_invalid: "nexusBatch.unsupportedReason",
+  oci_graph_limit_exceeded: "nexusBatch.unsupportedReason",
+  oci_media_type_unsupported: "nexusBatch.unsupportedReason",
+  oci_unreferenced_inventory_object: "nexusBatch.unsupportedReason",
+  oci_root_missing: "nexusBatch.unsupportedReason",
   native_checksum_or_metadata_regenerated: "migration.reasonMetadata",
   maven_mixed_metadata_requires_regeneration: "migration.reasonMetadata",
   version_conflict: "nexusBatch.versionConflict",
@@ -137,6 +149,8 @@ const codes: Record<string, NexusBatchMessageKey | MigrationMessageKey> = {
   native_session_conflict: "nexusBatch.targetConflict",
   source_bytes_mismatch: "nexusBatch.sourceFailure",
   target_bytes_mismatch: "nexusBatch.sourceFailure",
+  artifact_quarantined: "nexusBatch.targetConflict",
+  capacity_reference_conflict: "nexusBatch.targetConflict",
 };
 export function batchReason(code: string, t: Translator): string {
   return t(
@@ -159,6 +173,7 @@ export function scanStage(
     source_verification_read: "nexusBatch.scanRead",
     source_verification_digest: "nexusBatch.scanDigest",
     source_version_validation: "nexusBatch.scanVersion",
+    oci_graph_validation: "nexusBatch.scanGraph",
   };
   return stages[stage];
 }

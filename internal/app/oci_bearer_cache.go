@@ -61,7 +61,7 @@ func (c UpstreamClient) ociBearerCacheKey(member repository.Member, scope string
 			effective = append(effective, value)
 		}
 	}
-	data, _ := json.Marshal([]any{identity, member.Endpoint, member.OCIBearer.Realm, member.OCIBearer.Service, scope, member.AllowedHosts, member.EgressProxy, effective})
+	data, _ := json.Marshal([]any{identity, member.Endpoint, member.OCIBearer.Realm, member.OCIBearer.Service, scope, member.AllowedHosts, member.EgressProxy, effective, upstreamCredentialIdentity(member)})
 	return sha256.Sum256(data), nil
 }
 func (c *OCIBearerTokenCache) lookup(key [32]byte) ociBearerToken {

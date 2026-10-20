@@ -525,19 +525,19 @@ describe("RepositorySettingsTab upstream authentication", () => {
     );
   });
 
-  it("offers upstream authentication only for a Go proxy repository", () => {
-    const mavenProxy = {
+  it("does not offer credentials for a proxy format without upstream authentication", () => {
+    const pypiProxy = {
       ...goProxy,
-      format: "maven",
-      name: "maven-proxy",
-      endpoint: "https://repo1.maven.org",
+      format: "pypi",
+      name: "pypi-proxy",
+      endpoint: "https://pypi.org",
     } as const;
 
     render(
       <TestQueryProvider>
         <PreferencesProvider>
           <RepositorySettingsTab
-            repo={mavenProxy}
+            repo={pypiProxy}
             capabilities={null}
             onUpdated={vi.fn()}
           />

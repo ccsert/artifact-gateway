@@ -49,6 +49,21 @@ export function useProxySettingsDraft(
   );
   const [upstreamSecret, setUpstreamSecret] = useState("");
 
+  const [ociBearerEnabled, setOciBearerEnabled] = useState(
+    Boolean(repo.ociBearer),
+  );
+  const [ociBearerRealm, setOciBearerRealm] = useState(
+    repo.ociBearer?.realm ?? "",
+  );
+  const [ociBearerService, setOciBearerService] = useState(
+    repo.ociBearer?.service ?? "",
+  );
+
+  const clearSecrets = () => {
+    setEgressPassword("");
+    setUpstreamSecret("");
+  };
+
   const reset = () => {
     setEndpoint(repo.endpoint ?? "");
     setHosts((repo.allowedHosts ?? []).join(", "));
@@ -65,6 +80,9 @@ export function useProxySettingsDraft(
     setUpstreamScheme(repo.upstreamAuth?.scheme ?? "none");
     setUpstreamUsername(repo.upstreamAuth?.username ?? "");
     setUpstreamSecret("");
+    setOciBearerEnabled(Boolean(repo.ociBearer));
+    setOciBearerRealm(repo.ociBearer?.realm ?? "");
+    setOciBearerService(repo.ociBearer?.service ?? "");
   };
 
   const buildEgressProxyBody = (): EgressProxyWritable => {
@@ -104,15 +122,21 @@ export function useProxySettingsDraft(
   const runEgressTest = async () => {
     setEgressTesting(true);
     setEgressTestResult(null);
-    const { data, error: err } = await testEgressProxy({
-      path: { repositoryId: repo.id },
-    });
-    setEgressTesting(false);
-    if (err) {
-      setError(err);
-      return;
+    setError(null);
+    try {
+      const { data, error: err } = await testEgressProxy({
+        path: { repositoryId: repo.id },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      if (data) setEgressTestResult(data);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setEgressTesting(false);
     }
-    if (data) setEgressTestResult(data);
   };
 
   /** The proxy part of a repository update. */
@@ -124,6 +148,13 @@ export function useProxySettingsDraft(
       .filter(Boolean),
     egressProxy: buildEgressProxyBody(),
     ...(withUpstreamAuth ? { upstreamAuth: buildUpstreamAuthBody() } : {}),
+    ...(repo.type === "proxy" && repo.format === "oci"
+      ? {
+          ociBearer: ociBearerEnabled
+            ? { realm: ociBearerRealm.trim(), service: ociBearerService.trim() }
+            : null,
+        }
+      : {}),
   });
 
   return {
@@ -154,11 +185,21 @@ export function useProxySettingsDraft(
     egressTestResult,
     setEgressTestResult,
     upstreamScheme,
-    setUpstreamScheme,
+    setUpstreamScheme: (scheme: "none" | "basic" | "bearer") => {
+      setUpstreamScheme(scheme);
+      setUpstreamSecret("");
+    },
     upstreamUsername,
     setUpstreamUsername,
     upstreamSecret,
     setUpstreamSecret,
+    ociBearerEnabled,
+    setOciBearerEnabled,
+    ociBearerRealm,
+    setOciBearerRealm,
+    ociBearerService,
+    setOciBearerService,
+    clearSecrets,
     egress,
     reset,
     body,

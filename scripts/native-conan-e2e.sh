@@ -7,6 +7,8 @@ for binary in python3 docker go; do
 done
 workdir=$(mktemp -d)
 project="artifact-gateway-conan-$$-${RANDOM}"
+evidence="$repo_root/output/nexus-conan-migration-e2e/$project"
+mkdir -p "$evidence"
 python3 - "$workdir/compose.conan.yml" <<'PY'
 import pathlib, socket, sys
 sockets = [socket.socket(), socket.socket()]
@@ -29,6 +31,12 @@ started=0
 cleanup() {
   local status=$?
   if [[ "$started" == 1 ]] && ! "${compose[@]}" down -v --remove-orphans; then status=1; fi
+  local containers volumes networks
+  containers=$(docker ps -aq --filter "label=com.docker.compose.project=$project")
+  volumes=$(docker volume ls -q --filter "label=com.docker.compose.project=$project")
+  networks=$(docker network ls -q --filter "label=com.docker.compose.project=$project")
+  if [[ -n "$containers$volumes$networks" ]]; then status=1; fi
+  printf '{"project":"%s","exitCode":%s,"remainingContainers":"%s","remainingVolumes":"%s","remainingNetworks":"%s"}\n' "$project" "$status" "$containers" "$volumes" "$networks" >"$evidence/cleanup.json"
   rm -rf "$workdir"
   trap - EXIT
   exit "$status"
@@ -36,7 +44,7 @@ cleanup() {
 trap cleanup EXIT
 export CONAN_HOME="$workdir/conan-home"
 python3 -m venv "$workdir/client"
-"$workdir/client/bin/python" -m pip install --disable-pip-version-check --no-input 'conan==2.21.0'
+PIP_CONFIG_FILE=/dev/null "$workdir/client/bin/python" -m pip --isolated install --index-url https://pypi.org/simple --cache-dir "$workdir/pip-cache" --disable-pip-version-check --no-input 'conan==2.21.0'
 export CONAN_BINARY="$workdir/client/bin/conan"
 [[ "$("$CONAN_BINARY" --version)" == 'Conan version 2.21.0' ]]
 printf 'Official Conan 2.21.0; owned persistence fixture %s\n' "$project"
@@ -56,12 +64,13 @@ export TEST_CONAN_COMPOSE_PROJECT="$project"
 export TEST_CONAN_COMPOSE_FILE="$repo_root/compose.integration.yml"
 export TEST_CONAN_COMPOSE_OVERRIDE="$workdir/compose.conan.yml"
 export CONAN_PERSISTENCE_REQUIRED=1
+export CONAN_MIGRATION_REQUIRED=1
 # Synthetic protocol signing material, separate from the fixture machine credential.
 export TEST_CONAN_TOKEN_SECRET=synthetic-native-conan-signing-key-312-only
 go test -json -count=1 -p 1 -tags=integration ./internal/app ./internal/repository \
   -run '^TestConan2Client|^TestPostgres.*Conan' \
-  | tee "$workdir/results.jsonl"
-python3 - "$workdir/results.jsonl" <<'PY'
+  | tee "$evidence/results.jsonl"
+python3 - "$evidence/results.jsonl" <<'PY'
 import json, pathlib, sys
 required = {'TestConan2ClientUploadsAndInstallsNative',
             'TestPostgresRustFSConanNativeClientRestartAndColdInstall',
@@ -72,10 +81,22 @@ required = {'TestConan2ClientUploadsAndInstallsNative',
             'TestPostgresConanReferenceSearchProjection',
             'TestPostgresAndRustFSConanReclaimRetriesAndPreventsRestore',
             'TestPostgresConanGroupPreservesManagedRepositoryBinding',
-            'TestPostgresArtifactIdentitiesUseResolvableRawAndConanAssets'}
-passed = {e.get('Test') for e in map(json.loads, pathlib.Path(sys.argv[1]).read_text().splitlines())
-          if e.get('Action') == 'pass'}
-if required - passed:
+            'TestPostgresArtifactIdentitiesUseResolvableRawAndConanAssets',
+            'TestPostgresMigrationTargetOnlyConan2Client',
+            'TestPostgresNexusConanMigrationFinalVerifyCannotOutliveOwner',
+            'TestPostgresNexusConanMigrationNativeTransactionLossCannotPublish',
+            'TestPostgresRustFSNexusConanMigrationCompleteRevisionReopen',
+            'TestPostgresRustFSNexusConanMigrationExpiredSessionUsesFreshObjects',
+            'TestPostgresNexusConanMigrationGuardPreventsVisibilityAndAudit',
+            'TestPostgresRustFSNexusConanMigrationStagedBytesRemainImmutable',
+            'TestPostgresRustFSNexusConanMigrationRecoversUploadAndCommitAckLoss',
+            'TestPostgresNexusConanMigrationRejectsSameSizeSourceDrift',
+            'TestPostgresNexusConanMigrationQuarantineCannotBecomeVerifiedSkip'}
+events = list(map(json.loads, pathlib.Path(sys.argv[1]).read_text().splitlines()))
+run = {e.get('Test') for e in events if e.get('Action') == 'run'}
+passed = {e.get('Test') for e in events if e.get('Action') == 'pass'}
+skipped = {e.get('Test') for e in events if e.get('Action') == 'skip'}
+if required - run or required - passed or skipped:
     raise SystemExit('Required Conan native/persistence fixture did not pass: ' + ', '.join(sorted(required-passed)))
-print('Verified all required Conan native, storage and restart client fixtures')
+print('Verified all required Conan native, migration, storage and restart client fixtures; zero skipped tests')
 PY

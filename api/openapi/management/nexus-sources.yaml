@@ -651,6 +651,8 @@ schemas:
         enum:
         - raw
         - maven
+        - oci
+        - conan
       type:
         type: string
         enum:

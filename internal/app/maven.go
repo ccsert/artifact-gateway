@@ -44,6 +44,9 @@ func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member re
 		}
 	}
 	if member.Type == repository.MemberProxy {
+		if err := applyUpstreamAuth(request, member.UpstreamAuth); err != nil {
+			return nil, &proxyFetchError{message: "Maven upstream credential unavailable", cause: err}
+		}
 		return c.doProxyUpstream(ctx, member, request)
 	}
 	response, err := tracedHTTPClient(c.HTTPClient).Do(request)
@@ -220,8 +223,14 @@ func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.
 			}
 			if !h.Cache.UpstreamAllowed(request.Context(), member.Endpoint) {
 				h.Metrics.mavenCircuitOpen.Add(1)
-				hadFailure = true
-				continue
+				if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditUpstreamError); err != nil {
+					h.Metrics.failed.Add(1)
+					http.Error(w, "unable to record repository audit", http.StatusInternalServerError)
+					return
+				}
+				h.Metrics.failed.Add(1)
+				http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
+				return
 			}
 			served := false
 			locked, lockErr := h.Cache.WithRequestLock(request.Context(), cacheKey, func() error {
@@ -247,6 +256,11 @@ func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.
 			hadFailure = true
 			if member.Type == repository.MemberProxy && h.Cache != nil {
 				h.Cache.RecordUpstreamFailure(request.Context(), member.Endpoint)
+			}
+			if member.UpstreamAuth != nil {
+				h.Metrics.failed.Add(1)
+				http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
+				return
 			}
 			continue
 		}
@@ -291,6 +305,13 @@ func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.
 			hadFailure = true
 			if member.Type == repository.MemberProxy && h.Cache != nil {
 				h.Cache.RecordUpstreamFailure(request.Context(), member.Endpoint)
+			}
+			// An upstream authentication refusal is authoritative. Falling
+			// through to another Group member would hide missing/rotated credentials.
+			if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+				h.Metrics.failed.Add(1)
+				http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
+				return
 			}
 			continue
 		}
@@ -393,7 +414,7 @@ func (h MavenHandler) serveNativeProxy(w http.ResponseWriter, request *http.Requ
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return true
 	}
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
+	member := repository.Member{Type: repository.MemberProxy, RepositoryID: repo.ID, RepositoryVersion: repo.Version, UpstreamAuth: repo.UpstreamAuth, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	h.serveResolvedMembers(w, request, repo.Name, artifactPath, principal.Actor, []repository.Member{member})
 	return true
 }
@@ -456,12 +477,8 @@ func (h MavenHandler) cacheSourceAllowed(content CachedMavenContent, members []r
 	if !cacheSourceAllowed(content.Member, content.Endpoint, members, h.Cache.ProxyAllowed) {
 		return false
 	}
-	if content.ResolutionScope == "" {
-		// A legacy source proves a single candidate, never the absence or
-		// precedence of other candidates in a Group.
-		return len(members) == 1
-	}
-	return content.ResolutionScope == h.mavenResolutionScope(members)
+
+	return content.ResolutionScope != "" && content.ResolutionScope == h.mavenResolutionScope(members)
 }
 
 func (h MavenHandler) fetchMavenWithRetry(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {

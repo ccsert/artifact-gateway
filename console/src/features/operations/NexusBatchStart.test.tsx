@@ -112,6 +112,77 @@ async function fillCapacity() {
   await user.paste(new Date(Date.now() + 600000).toISOString());
 }
 describe("explicit start", () => {
+  it.each([
+    ["docker", "oci"],
+    ["conan", "conan"],
+  ] as const)(
+    "starts a %s batch only against its %s Hosted target",
+    async (sourceFormat, targetFormat) => {
+      vi.mocked(preflightMigrationSource).mockResolvedValue({
+        data: {
+          ...migrationPreflight,
+          repositories: [
+            { ...migrationPreflight.repositories[0], format: sourceFormat },
+          ],
+        },
+      } as never);
+      vi.mocked(listRepositories).mockResolvedValue({
+        data: {
+          items: [
+            { ...nexusTargets[0], format: targetFormat },
+            nexusTargets[1],
+          ],
+          nextPageToken: "",
+        },
+      } as never);
+      const accepted = show();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "运行预检" }),
+      );
+      await screen.findByRole("combobox", { name: "releases 的目标仓库" });
+      await fillCapacity();
+      const submit = screen.getByRole("button", { name: "应用映射并创建批次" });
+      expect(submit).toBeEnabled();
+      await userEvent.click(submit);
+      await waitFor(() => expect(accepted).toHaveBeenCalledWith(nexusBatch));
+      expect(startNexusMigrationBatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            policyVersion: "native-v1",
+            mappings: [
+              {
+                sourceRepository: "releases",
+                targetRepositoryId: nexusTargets[0].id,
+              },
+            ],
+          }),
+        }),
+      );
+    },
+  );
+  it("does not infer a Raw target for an unknown source format", async () => {
+    vi.mocked(preflightMigrationSource).mockResolvedValue({
+      data: {
+        ...migrationPreflight,
+        repositories: [
+          { ...migrationPreflight.repositories[0], format: "future-format" },
+        ],
+      },
+    } as never);
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "运行预检" }),
+    );
+    await screen.findByText("此凭据可见范围内没有仓库");
+    await fillCapacity();
+    expect(
+      screen.queryByRole("combobox", { name: "releases 的目标仓库" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "应用映射并创建批次" }),
+    ).toBeDisabled();
+    expect(startNexusMigrationBatch).not.toHaveBeenCalled();
+  });
   for (const status of [401, 403])
     for (const query of ["list", "detail", "preflight"] as const)
       it(`discards an executable draft and its source facts after ${query} refuses ${status}`, async () => {
@@ -196,7 +267,7 @@ describe("explicit start", () => {
         body: expect.objectContaining({
           sourceId: migrationSource.id,
           sourceVersion: "1",
-          policyVersion: "release-raw-v1",
+          policyVersion: "native-v1",
           mappings: [
             {
               sourceRepository: "releases",

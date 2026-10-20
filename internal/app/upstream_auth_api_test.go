@@ -132,12 +132,12 @@ func TestRepositoryUpstreamAuthUpdateKeepsClearsAndSwitchesScheme(t *testing.T) 
 	}
 }
 
-func TestRepositoryUpstreamAuthRejectedOutsideGoProxy(t *testing.T) {
+func TestRepositoryUpstreamAuthRejectedOutsideImplementedProxyFormats(t *testing.T) {
 	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", upstreamAuthTestKey)
 	store := repository.NewMemoryStore()
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 
-	// A non-Go proxy format must reject the field outright. Accepting it would
+	// A proxy format without a credential-consuming path must reject the field. Accepting it would
 	// let an operator configure authentication that the fetch path never reads.
 	post := func(idempotencyKey, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
@@ -147,9 +147,9 @@ func TestRepositoryUpstreamAuthRejectedOutsideGoProxy(t *testing.T) {
 		handler.ServeHTTP(rec, r)
 		return rec
 	}
-	maven := post("reject-maven", `{"name":"maven-proxy","format":"maven","type":"proxy","endpoint":"https://repo1.maven.org","upstreamAuth":{"scheme":"bearer","secret":"s3cret"}}`)
-	if maven.Code != http.StatusBadRequest || !strings.Contains(maven.Body.String(), "Go Proxy") {
-		t.Fatalf("maven upstreamAuth=%d body=%s", maven.Code, maven.Body.String())
+	pypi := post("reject-pypi", `{"name":"pypi-proxy","format":"pypi","type":"proxy","endpoint":"https://pypi.org","allowedHosts":["pypi.org"],"upstreamAuth":{"scheme":"bearer","secret":"s3cret"}}`)
+	if pypi.Code != http.StatusBadRequest || !strings.Contains(pypi.Body.String(), "Go, Maven and OCI Proxy") {
+		t.Fatalf("pypi upstreamAuth=%d body=%s", pypi.Code, pypi.Body.String())
 	}
 
 	// Hosted repositories reject proxy-only settings as before.
@@ -171,7 +171,7 @@ func TestRepositoryUpstreamAuthRejectedOutsideGoProxy(t *testing.T) {
 	r.Header.Set("If-Match", "1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Go Proxy") {
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Go, Maven and OCI Proxy") {
 		t.Fatalf("npm update upstreamAuth=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

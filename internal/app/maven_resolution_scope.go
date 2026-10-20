@@ -14,12 +14,13 @@ import (
 // Only its digest enters the cache; credentials are never stored in this field.
 func (h MavenHandler) mavenResolutionScope(members []repository.Member) string {
 	type candidate struct {
-		Member       repository.Member
-		ProxyAllowed bool
+		Member             repository.Member
+		ProxyAllowed       bool
+		CredentialIdentity string
 	}
 	candidates := make([]candidate, 0, len(members))
 	for _, member := range members {
-		candidates = append(candidates, candidate{Member: member, ProxyAllowed: member.Type != repository.MemberProxy || h.Cache.ProxyAllowed(member.Endpoint)})
+		candidates = append(candidates, candidate{Member: member, ProxyAllowed: member.Type != repository.MemberProxy || h.Cache.ProxyAllowed(member.Endpoint), CredentialIdentity: upstreamCredentialIdentity(member)})
 	}
 	encoded, err := json.Marshal(candidates)
 	if err != nil {

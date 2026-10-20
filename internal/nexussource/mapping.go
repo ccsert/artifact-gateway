@@ -61,11 +61,8 @@ func (s *Service) PreviewMapping(ctx context.Context, id string, mappings []Mapp
 		if !targetName.MatchString(m.TargetName) || targetCounts[m.TargetName] > 1 {
 			reject("invalid", "target_name_invalid_or_duplicate")
 		}
-		format := r.Format
-		if format == "maven2" {
-			format = "maven"
-		}
-		if (m.Format != "maven" && m.Format != "raw") || m.Format != format {
+		format, supported := NativeFormat(r.Format)
+		if !supported || m.Format != format {
 			reject("invalid", "target_format_mismatch")
 		}
 		if (m.Type != "hosted" && m.Type != "proxy" && m.Type != "group") || m.Type != r.Type {

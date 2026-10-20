@@ -112,12 +112,16 @@ describe("format registry", () => {
     ).toEqual(["apt"]);
   });
 
-  it("keeps each single-format behaviour on its format", () => {
+  it("declares the formats that support each behaviour", () => {
     const only = (trait: (format: Format) => unknown) =>
       pick((format) => Boolean(trait(format)));
     const d = (format: Format) => FORMAT_DESCRIPTORS[format];
     expect(only((f) => d(f).strictPublicationSetting)).toEqual(["maven"]);
-    expect(only((f) => d(f).upstreamAuthentication)).toEqual(["go"]);
+    expect(only((f) => d(f).upstreamAuthentication)).toEqual([
+      "go",
+      "maven",
+      "oci",
+    ]);
     expect(only((f) => d(f).separateAssetPath)).toEqual(["maven"]);
     expect(only((f) => d(f).signedIndexes)).toEqual(["apt"]);
     expect(only((f) => d(f).hostedOnlyJobs)).toEqual(["apt"]);

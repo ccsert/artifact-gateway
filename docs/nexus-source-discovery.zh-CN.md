@@ -67,7 +67,7 @@ continuation token。整个操作最多 128 次源请求、每个解码响应 2 
 总时间 30 秒，时间包含源查询、DNS、TLS 与分页。支持与不支持的资产都占用资产预算。
 不会自动重试。
 
-支持 Raw Hosted 与 Maven RELEASE Hosted。Maven MIXED 仓库返回可辨识的 release
+支持 Raw、Maven RELEASE、OCI（源格式为 `docker`）与 Conan Hosted。Maven MIXED 仓库返回可辨识的 release
 版本路径；SNAPSHOT 目录、共享 `maven-metadata.xml` 和无法分类的路径明确列在
 `unsupportedAssets` 并附原因。Release 根据 Maven 的
 `group/artifact/version/artifact-version…` 布局辨识。SNAPSHOT 专用仓库、未知格式或
@@ -87,7 +87,7 @@ Problem 只回显有限错误码：`source_unauthorized`、`source_forbidden`、
 ## 显式映射预览
 
 `POST /migration-sources/{sourceId}/mapping-preview` 接受 `mappings`，每项包含
-`sourceRepository`、原生 `targetName`、`format`（`raw`/`maven`）、
+`sourceRepository`、原生 `targetName`、`format`（`raw`/`maven`/`oci`/`conan`）、
 `type`（`hosted`/`proxy`/`group`）及可选有序 `targetMembers`。服务重新读取源配置，
 验证原生名称、重复目标、已有目标仓库的兼容性、格式/类型和每个 Group 成员的显式映射。
 缺失或不兼容依赖、成员乱序均无效。
@@ -148,3 +148,8 @@ integration build tag 的包均包含在该命令中。这些是本机 fixture �
 [Assets API](https://help.sonatype.com/en/assets-api.html) 和
 [分页说明](https://help.sonatype.com/en/pagination.html)。元数据与字节阶段分离也遵循
 [ADR 0009](adr/0009-native-architecture.zh-CN.md) 中的方向。
+
+源 storage path 与实际下载路由按格式严格区分：Raw/Maven 为原始资产路径，OCI 为
+受限的 `v2/<name>/manifests|blobs/<reference>`，Conan 为
+`v2/conans/.../files/<file>`。未知形状明确不支持，不跟随任意资产 URL；持久批次规划
+另行读取必要的图与 manifest 正文，源发现本身只验证元数据。

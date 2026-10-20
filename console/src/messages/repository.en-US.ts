@@ -145,9 +145,22 @@ export const repositoryEnUS: Record<RepositoryMessageKey, string> = {
   "repository.objects2": "{bytes} · {number} objects",
   "repository.viewCapacity": "View capacity",
   "repository.effectiveAccess": "Effective access",
+  "repository.ociTokenExchange": "OCI token exchange",
+  "repository.ociTokenBindingHint":
+    "Bind a token service and audience for Registry Bearer challenges. This does not grant network access; allow the issuer host separately. Changing the binding requires a new upstream secret or clearing the stored credential.",
+  "repository.ociTokenServiceURL": "Token service URL",
+  "repository.ociTokenServiceURLHint":
+    "The exact HTTPS realm in the upstream challenge. No username, password, query or fragment.",
+  "repository.ociTokenAudience": "Token audience",
+  "repository.ociTokenAudienceHint":
+    "The exact service in the upstream challenge, without spaces or control characters.",
+  "repository.upstreamCredentialToBoundIssuer":
+    "Send this credential only to the bound token service. Registry content uses the exchanged pull token; cross-origin redirects strip credentials.",
+  "repository.upstreamCredentialRebindRequired":
+    "The upstream endpoint or OCI token binding changed. Enter a new secret, or choose Anonymous to clear the stored credential, then save again.",
   "repository.upstreamAuthentication": "Upstream authentication",
   "repository.attachACredentialToUpstreamFetchesWhenThe":
-    "Attach a credential to upstream fetches when the Go module proxy or code host requires authentication. The credential is sent only to the upstream endpoint host and is stripped on any cross-host redirect.",
+    "Authenticate to the configured Go, Maven or OCI upstream. Credentials are sent only to the bound source; cross-origin redirects strip them.",
   "repository.anonymous": "Anonymous",
   "repository.sendNoCredentialAndClearTheStoredOne":
     "Send no credential and clear the stored one",
@@ -162,13 +175,13 @@ export const repositoryEnUS: Record<RepositoryMessageKey, string> = {
   "repository.upstreamPassword": "Upstream password",
   "repository.upstreamToken": "Upstream token",
   "repository.storedEncryptedWithAES256GCMLeaveBlank":
-    "Stored encrypted with AES-256-GCM. Leave blank to keep the current credential; changing the scheme requires resubmitting it.",
+    "Write-only and encrypted at rest. Every save clears this input. Leave blank to keep the credential only when its binding and scheme are unchanged; otherwise enter it again.",
   "repository.configuredEnterAValueToReplaceIt":
     "Configured; enter a value to replace it",
   "repository.notConfigured": "Not configured",
   "repository.upstreamURL": "Upstream URL",
   "repository.hTTPSBaseURLChangesTakeEffectImmediatelyOn":
-    "HTTPS base URL. Changes take effect immediately on the next request.",
+    "HTTPS base URL. Changing it requires a new upstream secret or clearing the stored credential. Saved changes apply on the next request.",
   "repository.allowedHosts": "Allowed hosts",
   "repository.commaSeparatedRequiredForRawConanNpmPyPI":
     "Comma-separated. Required for Raw, Conan, npm, PyPI, Go, Cargo, and APT proxies. Cargo normally needs index.crates.io and static.crates.io.",
@@ -196,7 +209,7 @@ export const repositoryEnUS: Record<RepositoryMessageKey, string> = {
   "repository.proxyUsernameOptional": "Proxy username (optional)",
   "repository.proxyPasswordOptional": "Proxy password (optional)",
   "repository.storedEncryptedWithAES256GCMLeaveBlank2":
-    "Stored encrypted with AES-256-GCM. Leave blank to keep the current credential.",
+    "Write-only and encrypted at rest. Every save clears this input. Leave blank to keep the current credential.",
   "repository.clearStoredProxyCredentials": "Clear stored proxy credentials",
   "repository.bypassListNoProxy": "Bypass list (noProxy)",
   "repository.commaSeparatedHostnameSuffixesOrCIDRsMatchingUpstreams":

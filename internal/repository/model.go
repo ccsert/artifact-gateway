@@ -1247,10 +1247,11 @@ const (
 	MemberProxy  MemberType = "proxy"
 )
 
-// OCIBearer opts an OCI Proxy into anonymous upstream Bearer challenge exchange.
+// OCIBearer opts an OCI Proxy into bound upstream Bearer challenge exchange.
 // Realm and Service bind challenges to this repository's configured issuer and
-// audience. This configuration carries no credentials and grants no egress
-// permission; every request still requires the repository's egress policy.
+// audience. UpstreamAuth, when configured, authenticates only to that issuer.
+// This binding grants no egress permission; every request still requires the
+// repository's egress policy.
 type OCIBearer struct {
 	Realm   string `json:"realm"`
 	Service string `json:"service"`
@@ -1266,8 +1267,12 @@ type Member struct {
 	EgressProxy  *EgressProxy `json:"egressProxy,omitempty"`
 	// OCIBearer is projected from V2 repository configuration at runtime. It is
 	// not a configuration field on the legacy Group management surface.
-	OCIBearer    *OCIBearer `json:"-"`
-	RepositoryID string     `json:"repositoryId,omitempty"`
+	OCIBearer *OCIBearer `json:"-"`
+	// UpstreamAuth and RepositoryVersion are runtime projections of the current
+	// repository configuration. They never enter a Group response or export.
+	UpstreamAuth      *UpstreamAuth `json:"-"`
+	RepositoryVersion string        `json:"-"`
+	RepositoryID      string        `json:"repositoryId,omitempty"`
 }
 
 type Group struct {

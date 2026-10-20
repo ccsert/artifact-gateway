@@ -18,6 +18,7 @@ import {
   emptyCapacity,
   inventoryComplete,
   observationReport,
+  scanStage,
 } from "./nexusBatchModel";
 
 const now = Date.parse("2026-10-19T00:10:00Z");
@@ -146,6 +147,34 @@ describe("batch truth and safe reports", () => {
       code: "unclassified_failure",
     });
     expect(JSON.stringify(failed)).not.toContain("secret");
+  });
+  it("preserves bounded OCI and Conan diagnostics in the exported observation", () => {
+    for (const code of [
+      "oci_dependency_missing",
+      "oci_media_type_unsupported",
+      "oci_graph_limit_exceeded",
+      "conan_revision_incomplete",
+      "conan_parent_recipe_incomplete",
+    ]) {
+      const report = observationReport(
+        {
+          ...nexusBatch,
+          lastScanFailure: {
+            ...nexusScanFailure,
+            stage: "oci_graph_validation",
+            code,
+          },
+        },
+        [],
+        false,
+        [],
+      );
+      expect(report.lastScanFailure).toMatchObject({
+        stage: "oci_graph_validation",
+        code,
+      });
+    }
+    expect(scanStage("oci_graph_validation")).toBe("nexusBatch.scanGraph");
   });
   it("gates controls by server state and retryable counts rather than optimistic progress", () => {
     expect(canPause({ ...nexusBatch, state: "running" })).toBe(true);

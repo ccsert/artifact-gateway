@@ -153,7 +153,7 @@ func (s *session) repositories() ([]Repository, error) {
 		}
 		seen[v.Name] = true
 		r := Repository{Name: v.Name, Format: v.Format, Type: v.Type, Members: []string{}, Fields: []Field{}, Status: "unsupported", Reason: "format_unsupported"}
-		if v.Format == "maven2" || v.Format == "raw" {
+		if _, supported := NativeFormat(v.Format); supported {
 			if v.Type == "hosted" || v.Type == "proxy" || v.Type == "group" {
 				r.Status = "preview_only"
 				r.Reason = "configuration_not_read"
@@ -421,7 +421,11 @@ func (s *session) assets(repo Repository, maxPages, maxAssets int) ([]Asset, []U
 				return nil, nil, fail("source_duplicate_asset")
 			}
 			seenPaths[a.Path] = true
-			reason := mavenUnsupportedPath(repo, a.Path)
+			format, _ := NativeFormat(repo.Format)
+			_, _, reason := assetRoute(format, a.Path)
+			if reason == "" {
+				reason = mavenUnsupportedPath(repo, a.Path)
+			}
 			if reason != "" {
 				unsupported = append(unsupported, UnsupportedAsset{Repository: repo.Name, Path: a.Path, Reason: reason})
 			} else {
@@ -444,14 +448,16 @@ func (s *session) assets(repo Repository, maxPages, maxAssets int) ([]Asset, []U
 	return out, unsupported, nil
 }
 func (s *session) asset(repo Repository, raw assetRaw) (Asset, error) {
-	if raw.Repository != repo.Name || raw.Format != repo.Format || raw.FileSize == nil || *raw.FileSize < 0 || !validAssetPath(raw.Path) {
+	format, supported := NativeFormat(repo.Format)
+	canonical, wire, _ := assetRoute(format, raw.Path)
+	if raw.Repository != repo.Name || raw.Format != repo.Format || raw.FileSize == nil || *raw.FileSize < 0 || !supported || canonical == "" {
 		return Asset{}, fail("source_invalid_response")
 	}
 	if repo.Format == "maven2" && repo.VersionPolicy == "RELEASE" && strings.Contains(raw.Path, "-SNAPSHOT/") {
 		return Asset{}, fail("source_snapshot_unsupported")
 	}
 	u, err := url.Parse(raw.DownloadURL)
-	expected := s.base.Path + "/repository/" + repo.Name + "/" + raw.Path
+	expected := s.base.Path + "/repository/" + repo.Name + "/" + wire
 	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, s.base.Host) || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Path != expected || u.Opaque != "" {
 		return Asset{}, fail("source_download_url_denied")
 	}
@@ -479,7 +485,7 @@ func (s *session) asset(repo Repository, raw assetRaw) (Asset, error) {
 	// acceptable only after the decoded path exactly matches safe metadata.
 	// Reconstruct the URL so source RawPath aliases never cross this boundary.
 	downloadURL := (&url.URL{Scheme: s.base.Scheme, Host: s.base.Host, Path: expected}).String()
-	return Asset{repo.Name, raw.Path, downloadURL, *raw.FileSize, checksum}, nil
+	return Asset{repo.Name, canonical, downloadURL, *raw.FileSize, checksum}, nil
 }
 func validAssetPath(value string) bool {
 	if value == "" || len(value) > 2048 || strings.HasPrefix(value, "/") || path.Clean(value) != value || strings.ContainsAny(value, "\\\r\n\x00?#%") {

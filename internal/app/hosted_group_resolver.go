@@ -145,13 +145,15 @@ func (r v2GroupResolver) resolveMembers(ctx context.Context, group repository.Ho
 			continue
 		}
 		resolved := repository.Member{
-			Name:         repo.Name,
-			Position:     member.Position,
-			RepositoryID: repo.ID,
-			AllowedHosts: repo.AllowedHosts,
-			EgressProxy:  repo.EgressProxy,
-			OCIBearer:    repo.OCIBearer,
-			Anonymous:    repo.AnonymousRead,
+			Name:              repo.Name,
+			Position:          member.Position,
+			RepositoryID:      repo.ID,
+			AllowedHosts:      repo.AllowedHosts,
+			EgressProxy:       repo.EgressProxy,
+			OCIBearer:         repo.OCIBearer,
+			UpstreamAuth:      repo.UpstreamAuth,
+			RepositoryVersion: repo.Version,
+			Anonymous:         repo.AnonymousRead,
 		}
 		switch repo.Type {
 		case repository.RepositoryTypeProxy:

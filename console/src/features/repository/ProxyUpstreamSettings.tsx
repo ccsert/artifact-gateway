@@ -15,6 +15,7 @@ import { usePreferences } from "../../lib/preferences";
 
 import type { ProxySettingsDraft } from "./useProxySettingsDraft";
 import { UpstreamAuthFields } from "./UpstreamAuthFields";
+import { OCIBearerFields } from "./OCIBearerFields";
 
 /** A proxy's upstream: endpoint, allowed hosts, egress proxy and upstream auth. */
 export function ProxyUpstreamSettings({
@@ -192,6 +193,7 @@ export function ProxyUpstreamSettings({
               >
                 <Input.Password
                   className="w-64"
+                  autoComplete="new-password"
                   placeholder={
                     repo.egressProxy?.credentialsConfigured
                       ? t("repository.configuredEnterAValueToReplaceIt")
@@ -252,6 +254,7 @@ export function ProxyUpstreamSettings({
             ))}
         </div>
       </div>
+      {repo.format === "oci" && <OCIBearerFields draft={draft} />}
       {descriptor?.upstreamAuthentication && (
         <UpstreamAuthFields repo={repo} draft={draft} />
       )}

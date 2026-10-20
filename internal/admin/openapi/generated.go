@@ -1845,14 +1845,20 @@ func (e MigrationSourceFieldDisposition) Valid() bool {
 
 // Defines values for MigrationSourceMappingFormat.
 const (
+	MigrationSourceMappingFormatConan MigrationSourceMappingFormat = "conan"
 	MigrationSourceMappingFormatMaven MigrationSourceMappingFormat = "maven"
+	MigrationSourceMappingFormatOci   MigrationSourceMappingFormat = "oci"
 	MigrationSourceMappingFormatRaw   MigrationSourceMappingFormat = "raw"
 )
 
 // Valid indicates whether the value is a known member of the MigrationSourceMappingFormat enum.
 func (e MigrationSourceMappingFormat) Valid() bool {
 	switch e {
+	case MigrationSourceMappingFormatConan:
+		return true
 	case MigrationSourceMappingFormatMaven:
+		return true
+	case MigrationSourceMappingFormatOci:
 		return true
 	case MigrationSourceMappingFormatRaw:
 		return true
@@ -2028,14 +2034,20 @@ func (e NexusMigrationCapabilitiesCapacityEvidenceSource) Valid() bool {
 
 // Defines values for NexusMigrationEntryFormat.
 const (
+	NexusMigrationEntryFormatConan NexusMigrationEntryFormat = "conan"
 	NexusMigrationEntryFormatMaven NexusMigrationEntryFormat = "maven"
+	NexusMigrationEntryFormatOci   NexusMigrationEntryFormat = "oci"
 	NexusMigrationEntryFormatRaw   NexusMigrationEntryFormat = "raw"
 )
 
 // Valid indicates whether the value is a known member of the NexusMigrationEntryFormat enum.
 func (e NexusMigrationEntryFormat) Valid() bool {
 	switch e {
+	case NexusMigrationEntryFormatConan:
+		return true
 	case NexusMigrationEntryFormatMaven:
+		return true
+	case NexusMigrationEntryFormatOci:
 		return true
 	case NexusMigrationEntryFormatRaw:
 		return true
@@ -2090,6 +2102,7 @@ func (e NexusMigrationEntryState) Valid() bool {
 const (
 	ManifestPlanning         NexusMigrationScanFailureStage = "manifest_planning"
 	MetadataDiscovery        NexusMigrationScanFailureStage = "metadata_discovery"
+	OciGraphValidation       NexusMigrationScanFailureStage = "oci_graph_validation"
 	SourceVerificationDigest NexusMigrationScanFailureStage = "source_verification_digest"
 	SourceVerificationOpen   NexusMigrationScanFailureStage = "source_verification_open"
 	SourceVerificationRead   NexusMigrationScanFailureStage = "source_verification_read"
@@ -2102,6 +2115,8 @@ func (e NexusMigrationScanFailureStage) Valid() bool {
 	case ManifestPlanning:
 		return true
 	case MetadataDiscovery:
+		return true
+	case OciGraphValidation:
 		return true
 	case SourceVerificationDigest:
 		return true
@@ -2118,13 +2133,13 @@ func (e NexusMigrationScanFailureStage) Valid() bool {
 
 // Defines values for NexusMigrationStartPolicyVersion.
 const (
-	ReleaseRawV1 NexusMigrationStartPolicyVersion = "release-raw-v1"
+	NativeV1 NexusMigrationStartPolicyVersion = "native-v1"
 )
 
 // Valid indicates whether the value is a known member of the NexusMigrationStartPolicyVersion enum.
 func (e NexusMigrationStartPolicyVersion) Valid() bool {
 	switch e {
-	case ReleaseRawV1:
+	case NativeV1:
 		return true
 	default:
 		return false
@@ -2247,40 +2262,41 @@ func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
 
 // Defines values for ProblemCode.
 const (
-	ProblemCodeAccessDenied                 ProblemCode = "access_denied"
-	ProblemCodeArtifactQuarantined          ProblemCode = "artifact_quarantined"
-	ProblemCodeAuthorizationPending         ProblemCode = "authorization_pending"
-	ProblemCodeCoordinateExists             ProblemCode = "coordinate_exists"
-	ProblemCodeDigestMismatch               ProblemCode = "digest_mismatch"
-	ProblemCodeEncryptionKeyUnavailable     ProblemCode = "encryption_key_unavailable"
-	ProblemCodeIdempotencyConflict          ProblemCode = "idempotency_conflict"
-	ProblemCodeIdentityMismatch             ProblemCode = "identity_mismatch"
-	ProblemCodeInternalError                ProblemCode = "internal_error"
-	ProblemCodeInvalidCursor                ProblemCode = "invalid_cursor"
-	ProblemCodeInvalidFilter                ProblemCode = "invalid_filter"
-	ProblemCodeInvalidLimit                 ProblemCode = "invalid_limit"
-	ProblemCodeInvalidPageToken             ProblemCode = "invalid_page_token"
-	ProblemCodeInvalidRequest               ProblemCode = "invalid_request"
-	ProblemCodeInvalidState                 ProblemCode = "invalid_state"
-	ProblemCodeInvalidTimeWindow            ProblemCode = "invalid_time_window"
-	ProblemCodeLogBufferUnavailable         ProblemCode = "log_buffer_unavailable"
-	ProblemCodeLogCursorScopeChanged        ProblemCode = "log_cursor_scope_changed"
-	ProblemCodeLogQueryTimeout              ProblemCode = "log_query_timeout"
-	ProblemCodeLogSourceIdentityUnavailable ProblemCode = "log_source_identity_unavailable"
-	ProblemCodeNameExists                   ProblemCode = "name_exists"
-	ProblemCodeNotFound                     ProblemCode = "not_found"
-	ProblemCodeNotSupported                 ProblemCode = "not_supported"
-	ProblemCodePasswordChangeRequired       ProblemCode = "password_change_required"
-	ProblemCodeQuotaExceeded                ProblemCode = "quota_exceeded"
-	ProblemCodeRemoteLogQueryUnavailable    ProblemCode = "remote_log_query_unavailable"
-	ProblemCodeRetentionProtected           ProblemCode = "retention_protected"
-	ProblemCodeSecurityPolicyDenied         ProblemCode = "security_policy_denied"
-	ProblemCodeSessionClosed                ProblemCode = "session_closed"
-	ProblemCodeSignerUnavailable            ProblemCode = "signer_unavailable"
-	ProblemCodeSnapshotCorrupt              ProblemCode = "snapshot_corrupt"
-	ProblemCodeUnsupportedMediaType         ProblemCode = "unsupported_media_type"
-	ProblemCodeUntrustedArchive             ProblemCode = "untrusted_archive"
-	ProblemCodeVersionConflict              ProblemCode = "version_conflict"
+	ProblemCodeAccessDenied                     ProblemCode = "access_denied"
+	ProblemCodeArtifactQuarantined              ProblemCode = "artifact_quarantined"
+	ProblemCodeAuthorizationPending             ProblemCode = "authorization_pending"
+	ProblemCodeCoordinateExists                 ProblemCode = "coordinate_exists"
+	ProblemCodeDigestMismatch                   ProblemCode = "digest_mismatch"
+	ProblemCodeEncryptionKeyUnavailable         ProblemCode = "encryption_key_unavailable"
+	ProblemCodeIdempotencyConflict              ProblemCode = "idempotency_conflict"
+	ProblemCodeIdentityMismatch                 ProblemCode = "identity_mismatch"
+	ProblemCodeInternalError                    ProblemCode = "internal_error"
+	ProblemCodeInvalidCursor                    ProblemCode = "invalid_cursor"
+	ProblemCodeInvalidFilter                    ProblemCode = "invalid_filter"
+	ProblemCodeInvalidLimit                     ProblemCode = "invalid_limit"
+	ProblemCodeInvalidPageToken                 ProblemCode = "invalid_page_token"
+	ProblemCodeInvalidRequest                   ProblemCode = "invalid_request"
+	ProblemCodeInvalidState                     ProblemCode = "invalid_state"
+	ProblemCodeInvalidTimeWindow                ProblemCode = "invalid_time_window"
+	ProblemCodeLogBufferUnavailable             ProblemCode = "log_buffer_unavailable"
+	ProblemCodeLogCursorScopeChanged            ProblemCode = "log_cursor_scope_changed"
+	ProblemCodeLogQueryTimeout                  ProblemCode = "log_query_timeout"
+	ProblemCodeLogSourceIdentityUnavailable     ProblemCode = "log_source_identity_unavailable"
+	ProblemCodeNameExists                       ProblemCode = "name_exists"
+	ProblemCodeNotFound                         ProblemCode = "not_found"
+	ProblemCodeNotSupported                     ProblemCode = "not_supported"
+	ProblemCodePasswordChangeRequired           ProblemCode = "password_change_required"
+	ProblemCodeQuotaExceeded                    ProblemCode = "quota_exceeded"
+	ProblemCodeRemoteLogQueryUnavailable        ProblemCode = "remote_log_query_unavailable"
+	ProblemCodeRetentionProtected               ProblemCode = "retention_protected"
+	ProblemCodeSecurityPolicyDenied             ProblemCode = "security_policy_denied"
+	ProblemCodeSessionClosed                    ProblemCode = "session_closed"
+	ProblemCodeSignerUnavailable                ProblemCode = "signer_unavailable"
+	ProblemCodeSnapshotCorrupt                  ProblemCode = "snapshot_corrupt"
+	ProblemCodeUnsupportedMediaType             ProblemCode = "unsupported_media_type"
+	ProblemCodeUntrustedArchive                 ProblemCode = "untrusted_archive"
+	ProblemCodeUpstreamCredentialRebindRequired ProblemCode = "upstream_credential_rebind_required"
+	ProblemCodeVersionConflict                  ProblemCode = "version_conflict"
 )
 
 // Valid indicates whether the value is a known member of the ProblemCode enum.
@@ -2351,6 +2367,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeUnsupportedMediaType:
 		return true
 	case ProblemCodeUntrustedArchive:
+		return true
+	case ProblemCodeUpstreamCredentialRebindRequired:
 		return true
 	case ProblemCodeVersionConflict:
 		return true
@@ -4583,13 +4601,13 @@ type CreateRepository struct {
 	MavenStrictPublication *bool  `json:"mavenStrictPublication,omitempty"`
 	Name                   string `json:"name"`
 
-	// OciBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+	// OciBearer Optional upstream Bearer challenge exchange for OCI Proxy repositories. Without this configuration content requests use the explicit upstreamAuth setting. The realm and service bind the approved issuer and audience. With this configuration upstreamAuth credentials are sent only to the bound issuer; this object contains no credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null. Changing this binding while protected upstream credentials are configured requires a fresh upstreamAuth.secret or upstreamAuth.scheme none in the same request.
 	OciBearer *OCIBearer `json:"ociBearer,omitempty"`
 
 	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 	Type *CreateRepositoryType `json:"type,omitempty"`
 
-	// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	// UpstreamAuth Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
 	UpstreamAuth *UpstreamAuth `json:"upstreamAuth,omitempty"`
 }
 
@@ -5519,13 +5537,15 @@ type MigrationSourceUnsupportedAsset struct {
 
 // NexusMigrationAsset defines model for NexusMigrationAsset.
 type NexusMigrationAsset struct {
-	Sha256     string `json:"sha256"`
-	Size       int64  `json:"size"`
-	SourcePath string `json:"sourcePath"`
-	TargetPath string `json:"targetPath"`
-	Uploaded   bool   `json:"uploaded"`
-	Validator  string `json:"validator"`
-	Verified   bool   `json:"verified"`
+	// MediaType Verified source OCI manifest media type, frozen with the immutable asset. Omitted for other assets.
+	MediaType  *string `json:"mediaType,omitempty"`
+	Sha256     string  `json:"sha256"`
+	Size       int64   `json:"size"`
+	SourcePath string  `json:"sourcePath"`
+	TargetPath string  `json:"targetPath"`
+	Uploaded   bool    `json:"uploaded"`
+	Validator  string  `json:"validator"`
+	Verified   bool    `json:"verified"`
 }
 
 // NexusMigrationBatch defines model for NexusMigrationBatch.
@@ -5677,7 +5697,7 @@ type NexusMigrationStart struct {
 // NexusMigrationStartPolicyVersion defines model for NexusMigrationStart.PolicyVersion.
 type NexusMigrationStartPolicyVersion string
 
-// OCIBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+// OCIBearer Optional upstream Bearer challenge exchange for OCI Proxy repositories. Without this configuration content requests use the explicit upstreamAuth setting. The realm and service bind the approved issuer and audience. With this configuration upstreamAuth credentials are sent only to the bound issuer; this object contains no credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null. Changing this binding while protected upstream credentials are configured requires a fresh upstreamAuth.secret or upstreamAuth.scheme none in the same request.
 type OCIBearer struct {
 	// Realm Exact complete HTTPS token-service URL. The first exchange contract rejects userinfo, all query parameters, and fragments.
 	Realm string `json:"realm"`
@@ -6065,7 +6085,7 @@ type Repository struct {
 	MavenStrictPublication bool   `json:"mavenStrictPublication"`
 	Name                   string `json:"name"`
 
-	// OciBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+	// OciBearer Optional upstream Bearer challenge exchange for OCI Proxy repositories. Without this configuration content requests use the explicit upstreamAuth setting. The realm and service bind the approved issuer and audience. With this configuration upstreamAuth credentials are sent only to the bound issuer; this object contains no credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null. Changing this binding while protected upstream credentials are configured requires a fresh upstreamAuth.secret or upstreamAuth.scheme none in the same request.
 	OciBearer *OCIBearer `json:"ociBearer,omitempty"`
 
 	// State Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
@@ -6074,7 +6094,7 @@ type Repository struct {
 	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 	Type *RepositoryType `json:"type,omitempty"`
 
-	// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	// UpstreamAuth Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
 	UpstreamAuth *UpstreamAuth `json:"upstreamAuth,omitempty"`
 	Version      string        `json:"version"`
 }
@@ -6717,10 +6737,10 @@ type UpdateRepository struct {
 	// MavenStrictPublication Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate.
 	MavenStrictPublication *bool `json:"mavenStrictPublication,omitempty"`
 
-	// OciBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+	// OciBearer Optional upstream Bearer challenge exchange for OCI Proxy repositories. Without this configuration content requests use the explicit upstreamAuth setting. The realm and service bind the approved issuer and audience. With this configuration upstreamAuth credentials are sent only to the bound issuer; this object contains no credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null. Changing this binding while protected upstream credentials are configured requires a fresh upstreamAuth.secret or upstreamAuth.scheme none in the same request.
 	OciBearer *OCIBearer `json:"ociBearer,omitempty"`
 
-	// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	// UpstreamAuth Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
 	UpstreamAuth *UpstreamAuth `json:"upstreamAuth,omitempty"`
 }
 
@@ -6760,7 +6780,7 @@ type UpdateWebhookSubscription struct {
 	Secret      *string            `json:"secret,omitempty"`
 }
 
-// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+// UpstreamAuth Protected upstream credentials for Go, Maven and OCI Proxy repositories. Basic or Bearer authentication targets the bound upstream. When OCI ociBearer is configured, these credentials are sent only to its bound issuer and content requests use the exchanged pull token. Cross-origin redirects strip credentials. Rotation or clear invalidates credential-bound content and token caches. Changing the upstream URL or OCI issuer binding requires a fresh secret or scheme none; stored credentials are never implicitly rebound to a new destination. Other formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
 type UpstreamAuth struct {
 	// CredentialsConfigured True when an encrypted upstream credential is stored.
 	CredentialsConfigured *bool `json:"credentialsConfigured,omitempty"`
@@ -6768,7 +6788,7 @@ type UpstreamAuth struct {
 	// Scheme none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`.
 	Scheme UpstreamAuthScheme `json:"scheme"`
 
-	// Secret Upstream password or token. Write-only; stored encrypted. Omit on update to keep the stored secret while the scheme is unchanged. Both schemes require a secret, so clear a stored credential by setting scheme to none rather than sending an empty secret.
+	// Secret Upstream password or token. Write-only; stored encrypted. Omit on update to keep the stored secret only while its scheme and upstream destination binding are unchanged. Both schemes require a secret, so clear a stored credential by setting scheme to none rather than sending an empty secret.
 	Secret *string `json:"secret,omitempty"`
 
 	// Username basic only. Upstream account name. Rejected for bearer.

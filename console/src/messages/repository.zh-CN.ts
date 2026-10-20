@@ -143,9 +143,22 @@ export const repositoryZhCN = {
   "repository.objects2": "{bytes} · {number} 个对象",
   "repository.viewCapacity": "查看容量",
   "repository.effectiveAccess": "当前访问判定",
+  "repository.ociTokenExchange": "OCI 令牌交换",
+  "repository.ociTokenBindingHint":
+    "绑定 Registry Bearer 认证的令牌服务和受众。此设置不授予出站权限，仍需单独允许签发者主机。更改绑定后须输入新的上游密钥，或清除已存凭据。",
+  "repository.ociTokenServiceURL": "令牌服务地址",
+  "repository.ociTokenServiceURLHint":
+    "与上游认证挑战的 realm 完全一致的 HTTPS 地址，不含用户名、密码、query 或 fragment。",
+  "repository.ociTokenAudience": "令牌受众",
+  "repository.ociTokenAudienceHint":
+    "与上游认证挑战的 service 完全一致，不含空白或控制字符。",
+  "repository.upstreamCredentialToBoundIssuer":
+    "凭据仅发送到绑定的令牌服务；Registry 内容使用交换得到的 pull token，跨来源重定向会剥离凭据。",
+  "repository.upstreamCredentialRebindRequired":
+    "上游地址或 OCI 令牌绑定已更改。请输入新的密钥，或选择“匿名访问”清除已存凭据，再次保存。",
   "repository.upstreamAuthentication": "上游认证",
   "repository.attachACredentialToUpstreamFetchesWhenThe":
-    "当上游 Go 模块代理或代码托管要求认证时，为拉取请求附带凭据。凭据只发送给上游端点主机；跨主机重定向会剥离凭据。",
+    "为配置的 Go、Maven 或 OCI 上游提供认证。凭据仅发送给绑定的源，跨来源重定向会剥离凭据。",
   "repository.anonymous": "匿名访问",
   "repository.sendNoCredentialAndClearTheStoredOne":
     "不附带凭据，并清除已存储的凭据",
@@ -159,12 +172,12 @@ export const repositoryZhCN = {
   "repository.upstreamPassword": "上游密码",
   "repository.upstreamToken": "上游令牌",
   "repository.storedEncryptedWithAES256GCMLeaveBlank":
-    "AES-256-GCM 加密落库，留空则保留已存凭据。切换认证方式时必须重新填写。",
+    "仅写入并加密保存，每次保存后清空输入。绑定与认证方式均未更改时，留空保留已存凭据；否则须重新输入。",
   "repository.configuredEnterAValueToReplaceIt": "已配置，输入以替换",
   "repository.notConfigured": "未配置",
   "repository.upstreamURL": "上游地址",
   "repository.hTTPSBaseURLChangesTakeEffectImmediatelyOn":
-    "HTTPS 基础地址，修改后立即生效（按请求读取）。",
+    "HTTPS 基础地址。更改后须输入新的上游密钥，或清除已存凭据；保存后按请求读取。",
   "repository.allowedHosts": "允许主机",
   "repository.commaSeparatedRequiredForRawConanNpmPyPI":
     "逗号分隔，Raw / Conan / npm / PyPI / Go / Cargo / APT 代理必填。Cargo 通常需要 index.crates.io 和 static.crates.io。",
@@ -192,7 +205,7 @@ export const repositoryZhCN = {
   "repository.proxyUsernameOptional": "代理认证用户名（可选）",
   "repository.proxyPasswordOptional": "代理认证密码（可选）",
   "repository.storedEncryptedWithAES256GCMLeaveBlank2":
-    "AES-256-GCM 加密落库，留空则保留已存凭据。",
+    "仅写入并加密保存，每次保存后清空输入；留空保留当前凭据。",
   "repository.clearStoredProxyCredentials": "清除已存储的代理凭据",
   "repository.bypassListNoProxy": "绕过列表（noProxy）",
   "repository.commaSeparatedHostnameSuffixesOrCIDRsMatchingUpstreams":

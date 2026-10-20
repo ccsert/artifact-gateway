@@ -30,7 +30,7 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.moreSources": "Load more sources",
   "nexusBatch.mappingSummary": "{source} → {target}",
   "nexusBatch.explicitMapping":
-    "Mappings become immutable batch inputs. Only selected Maven releases and Raw Hosted content are copied. Configure Proxy/Group separately.",
+    "Mappings become immutable batch inputs. Selected Maven releases, Raw, OCI and Conan 2 Hosted content are copied. Configure Proxy/Group separately.",
   "nexusBatch.capabilities": "Execution capability and capacity evidence",
   "nexusBatch.disabled": "Migration writes are disabled in this deployment",
   "nexusBatch.disabledHint":
@@ -177,6 +177,7 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.scanRead": "Read source verification stream",
   "nexusBatch.scanDigest": "Check source asset digest",
   "nexusBatch.scanVersion": "Revalidate source connection version",
+  "nexusBatch.scanGraph": "Validate the complete OCI dependency graph",
   "nexusBatch.scanInterrupted":
     "The scan was interrupted and never sealed. Fresh capacity evidence allows a full rescan of the same batch.",
   "nexusBatch.pageFailure":
@@ -184,5 +185,5 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.targetConflict":
     "The target has a different identity or bytes. It was preserved and reported as a conflict.",
   "nexusBatch.unsupportedReason":
-    "The entry does not satisfy the release/Raw migration policy. It remains unsupported and needs separate handling.",
+    "The entry does not meet its native format's complete migration requirements. It remains unsupported and needs separate handling.",
 };

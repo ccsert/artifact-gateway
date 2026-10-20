@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- binary 备份恢复按已核验的 `linux/amd64`、`linux/arm64` 平台选择同一受信 distroless index 下的固定 child digest（#427）。不同平台缓存可并存，无需替换共享 index alias；未知 binary 平台在创建资源前拒绝。已批准发布字节、迁移账本与 OCI 软件镜像身份保持不变。
+
 - Conan 对象回收以持久栅栏保护恢复、发布和分发，也覆盖晋升仓库共享的 key（#421）。新引用先取得原子边界时阻止回收；回收开始后，失败和 Worker 重启仍保留栅栏，直到幂等清理完成。因引用保护而完成的任务在最后一个引用再次撤下后可调度唯一确定性后继，保留原有任务历史（#422）。
 
 - 官方 Conan 2.21.0 upload 现在复用持久 Session 发布完整 Recipe/Package revision（#312）。规范远程入口为 `/conan/<repository>`，旧版号在名称前的布局返回 404；原生与管理发布均校验完整 manifest、官方 hash 身份和全部资产，经版本 fence 保护后原子提交 revision/session、真实调用者审计及调度扫描；旧不完整声明不再接受。Console 审计展开详情显示关联会话 UUID 和本地化的已提交状态。提交应答丢失后仅重试 manifest 会保留完整已发布快照并重验全部字节，不覆盖并发上传。中断后可跨 PostgreSQL/对象存储重启续传，短期令牌使用独立 `GATEWAY_CONAN_TOKEN_SECRET` 并逐请求复查机器凭据。Group/Proxy 禁写。见[发布边界与验收](docs/conan-native-publication.zh-CN.md)。
