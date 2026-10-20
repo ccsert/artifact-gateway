@@ -303,7 +303,10 @@ apt-get $opts update
 cd /work
 apt-get $opts download private-demo=1.0.0
 `
-	privateClientCommand(t, work, append(env, "DOCKER_HOST="+os.Getenv("TEST_PRIVATE_FORMATS_DOCKER_HOST")), "docker", "run", "--rm", "--name", container, "--label", "io.artifact-gateway.private-formats="+project, "--network", os.Getenv("TEST_PRIVATE_FORMATS_NETWORK"), "--add-host", "host.docker.internal:host-gateway", "--volume", work+":/work", "debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241", "/bin/sh", "-ec", command)
+	// The bind-mounted cache belongs to the test runner. Root-created apt
+	// directories cannot be removed by an unprivileged Linux runner's TempDir
+	// cleanup, even after the complete package download succeeds.
+	privateClientCommand(t, work, append(env, "DOCKER_HOST="+os.Getenv("TEST_PRIVATE_FORMATS_DOCKER_HOST")), "docker", "run", "--rm", "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--name", container, "--label", "io.artifact-gateway.private-formats="+project, "--network", os.Getenv("TEST_PRIVATE_FORMATS_NETWORK"), "--add-host", "host.docker.internal:host-gateway", "--volume", work+":/work", "debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241", "/bin/sh", "-ec", command)
 	files, err := filepath.Glob(filepath.Join(work, "private-demo_1.0.0_*.deb"))
 	if err != nil || len(files) != 1 {
 		t.Fatalf("APT did not download one authenticated package: %v", err)
