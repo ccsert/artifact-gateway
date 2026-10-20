@@ -179,6 +179,8 @@ func (s *Service) planOCIEntries(ctx context.Context, b Batch, sourceRepo, targe
 		}
 		err := visit(root, "", 0)
 		if err == nil {
+			// Inventory reads are deduplicated by digest. Validate the longest
+			// path across all shared parents before sealing an executable root.
 			err = ocigraph.Validate(rootDigest, objects)
 		}
 		if err != nil {

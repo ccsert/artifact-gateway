@@ -174,51 +174,62 @@ func Validate(root string, objects []Object) error {
 		}
 		byDigest[object.Digest] = object
 	}
-	visited, active := map[string]bool{}, map[string]bool{}
-	var visit func(string, int) error
-	visit = func(digest string, depth int) error {
+	// Cache the longest remaining path, rather than only whether a digest was
+	// seen. A shared subtree reached later through a deeper parent must still
+	// fit in the root's depth budget. Each node and edge is expanded once.
+	heights, active := map[string]int{}, map[string]bool{}
+	var visit func(string, int) (int, error)
+	visit = func(digest string, depth int) (int, error) {
 		if depth > MaxDepth {
-			return ErrLimit
+			return 0, ErrLimit
 		}
 		if active[digest] {
-			return ErrInvalid
+			return 0, ErrInvalid
 		}
-		if visited[digest] {
-			return nil
+		if height, found := heights[digest]; found {
+			if depth+height > MaxDepth {
+				return 0, ErrLimit
+			}
+			return height, nil
 		}
 		object, found := byDigest[digest]
 		if !found {
-			return ErrIncomplete
+			return 0, ErrIncomplete
 		}
-		visited[digest], active[digest] = true, true
+		active[digest] = true
 		defer delete(active, digest)
 		if object.Document == nil {
 			if digest == root || IsIndex(object.MediaType) || IsManifest(object.MediaType) {
-				return ErrInvalid
+				return 0, ErrInvalid
 			}
-			return nil
+			heights[digest] = 0
+			return 0, nil
 		}
 		if object.Document.MediaType != object.MediaType {
-			return ErrInvalid
+			return 0, ErrInvalid
 		}
+		height := 0
 		for _, descriptor := range object.Document.Dependencies() {
 			child, found := byDigest[descriptor.Digest]
 			if !found {
-				return ErrIncomplete
+				return 0, ErrIncomplete
 			}
 			if descriptor.Size == nil || child.Size != *descriptor.Size || child.MediaType != descriptor.MediaType {
-				return ErrInvalid
+				return 0, ErrInvalid
 			}
-			if err := visit(descriptor.Digest, depth+1); err != nil {
-				return err
+			childHeight, err := visit(descriptor.Digest, depth+1)
+			if err != nil {
+				return 0, err
 			}
+			height = max(height, childHeight+1)
 		}
-		return nil
+		heights[digest] = height
+		return height, nil
 	}
-	if err := visit(root, 0); err != nil {
+	if _, err := visit(root, 0); err != nil {
 		return err
 	}
-	if len(visited) != len(objects) {
+	if len(heights) != len(objects) {
 		return ErrInvalid
 	}
 	return nil
