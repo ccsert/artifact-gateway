@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Binary backup recovery selects fixed `linux/amd64` and `linux/arm64` runtime child digests from the same trusted distroless index (#427). Different platform caches can coexist without replacing a shared index alias; unsupported binary platforms fail before resource creation. Approved release bytes, migration ledgers and OCI software image identities are unchanged.
+
 - Durable Nexus batches now import complete OCI image graphs and Conan 2 historical revisions into native Hosted targets (#206, #425). All-platform OCI index/list bytes, immutable revisions, lease-fenced publication, full target read-back and restart recovery share `native-v1`; old policy inputs are retired. Console mapping and exported protocol URLs support all four migration formats. Fixed official crane/Conan clients run against owned PostgreSQL/RustFS fixtures with source stopped and empty client caches.
 
 - Maven and OCI Proxy/Group consume encrypted Basic/Bearer upstream credentials (#423, #424), including explicit OCI issuer bindings in Console. Secret rotation/clear isolates positive, negative and token caches; private authorization failures cannot fall through to anonymous sources. Changing an upstream or issuer binding requires a fresh secret or an explicit credential clear. No old unscoped-cache trust path remains. Navigating between cached repositories rebuilds settings drafts and drops both upstream and egress secrets (#426).

@@ -102,7 +102,11 @@ func integrationOCIRelease(t *testing.T, ctx context.Context, d Docker, release 
 	if err != nil || os.WriteFile(filepath.Join(dir, "gateway"), binary, 0555) != nil {
 		t.Fatal("OCI fixture binary staging failed")
 	}
-	dockerfile := fmt.Sprintf("FROM %s\nLABEL %s=%q org.opencontainers.image.version=%q org.opencontainers.image.revision=%q\nCOPY gateway /gateway\nENTRYPOINT [\"/gateway\"]\n", binaryRuntimeImage, registryFixtureLabel, f.owner, release.Identity.Version, release.Identity.Revision)
+	runtimeImage, err := binaryRuntimeImage(release.Identity.Artifact.Platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dockerfile := fmt.Sprintf("FROM %s\nLABEL %s=%q org.opencontainers.image.version=%q org.opencontainers.image.revision=%q\nCOPY gateway /gateway\nENTRYPOINT [\"/gateway\"]\n", runtimeImage, registryFixtureLabel, f.owner, release.Identity.Version, release.Identity.Revision)
 	if os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(dockerfile), 0600) != nil {
 		t.Fatal("OCI fixture Dockerfile staging failed")
 	}

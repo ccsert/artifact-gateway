@@ -89,6 +89,20 @@ RustFS 和 Gateway。端口只绑定 127.0.0.1；写入前核对身份、所有�
 网络归属。bridge 提供数据/项目隔离，不是出口防火墙。Gateway 使用 API role、只读
 根目录、移除 capability 与有界 /tmp 内存挂载，支持既有协议 spool。
 
+binary 恢复支持已核验的 `linux/amd64`、`linux/arm64` 制品，并从既有受信 distroless
+index `sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab`
+选择固定平台 manifest。[原始 index 字节](../internal/backupops/testdata/binary-runtime-index.json)
+已保留，回归测试核对完整摘要及 child descriptor 对应关系：
+
+| 已核验 binary 平台 | runtime child digest（`gcr.io/distroless/static-debian12:nonroot`） |
+| --- | --- |
+| `linux/amd64` | `sha256:52dcfbabb7457ea47c82f6e13af8c8a4a1d9f7b0145142b3ecab20f2b888411d` |
+| `linux/arm64` | `sha256:06c3c14b7fa252d9f4285242d2d665ce3b51f74b02d3c529464f220f2912aecb` |
+
+Docker 接收 child digest 和已核验平台，另一架构的共享 root index alias 缓存不会影响
+runtime 选择。未知 binary 平台在创建资源前拒绝。无需清缓存或替换共享镜像，已批准的
+binary、归档及 SQL ledger 保持原样；OCI 软件 profile 继续使用独立批准的镜像引用。
+
 创建目标前验证全部输入、批准的软件/schema 和完整解压 PG custom archive。随后
 pg_restore --exit-on-error 写入新 DB，在 Gateway 启动前核对完整 ledger 与所有 public
 表指纹，包括 grant set、Group 归属、历史审计和持久工作。S3 上传后全字节读回；

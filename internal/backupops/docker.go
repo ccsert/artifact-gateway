@@ -19,7 +19,6 @@ import (
 
 const postgresImage = "postgres:16-alpine"
 const rustfsImage = "rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21"
-const binaryRuntimeImage = "gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab"
 
 var errCleanupIncomplete = errors.New("owned resource cleanup incomplete")
 
@@ -140,6 +139,11 @@ type OwnedTarget struct {
 func validateTargetSpec(spec TargetSpec) error {
 	if !resourceName.MatchString(spec.Project) || !strings.HasPrefix(spec.Project, "ag-restore-") || len(spec.Project) > 42 || spec.PostgresPassword == "" || spec.AccessKey == "" || spec.SecretKey == "" || spec.RPCSecret == "" || spec.AdminToken == "" || spec.ResolverToken == "" || len(spec.SecretKey) < 8 || len(spec.RPCSecret) < 32 || spec.SecretKey == spec.RPCSecret || validateReadChecks(spec) != nil {
 		return errors.New("explicit isolated target settings required")
+	}
+	if artifact := spec.Release.Identity.Artifact; artifact != nil && artifact.Kind == "binary" {
+		if _, err := binaryRuntimeImage(artifact.Platform); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -450,16 +454,22 @@ func (t *OwnedTarget) StartGateway(ctx context.Context) (string, error) {
 	if !t.checked {
 		return "", errors.New("target not checked")
 	}
+	spec := t.spec
+	image := spec.Release.ImageReference
+	if artifact := spec.Release.Identity.Artifact; artifact != nil && artifact.Kind == "binary" {
+		var err error
+		image, err = binaryRuntimeImage(artifact.Platform)
+		if err != nil {
+			return "", err
+		}
+	}
 	for _, r := range t.resources {
 		if t.checkResource(ctx, r) != nil {
 			return "", errors.New("target ownership changed")
 		}
 	}
-	spec := t.spec
-	image := spec.Release.ImageReference
 	args := []string{"create", "--name", spec.Project + "-gateway", "--network", spec.Project + "-network", "--label", "artifact-gateway.restore-owner=" + t.owner, "-p", "127.0.0.1::8080", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m,mode=1777", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true"}
 	if g := spec.Release.Identity; g.Artifact != nil && g.Artifact.Kind == "binary" {
-		image = binaryRuntimeImage
 		directory, err := os.MkdirTemp("", "ag-restore-release-")
 		if err != nil {
 			return "", errors.New("release staging unavailable")
