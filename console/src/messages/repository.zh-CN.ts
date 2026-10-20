@@ -158,14 +158,13 @@ export const repositoryZhCN = {
     "上游地址或 OCI 令牌绑定已更改。请输入新的密钥，或选择“匿名访问”清除已存凭据，再次保存。",
   "repository.upstreamAuthentication": "上游认证",
   "repository.attachACredentialToUpstreamFetchesWhenThe":
-    "为配置的 Go、Maven 或 OCI 上游提供认证。凭据仅发送给绑定的源，跨来源重定向会剥离凭据。",
+    "为配置的上游提供认证。凭据仅发送给绑定的源，跨来源重定向会剥离凭据。",
   "repository.anonymous": "匿名访问",
   "repository.sendNoCredentialAndClearTheStoredOne":
     "不附带凭据，并清除已存储的凭据",
   "repository.sendNoCredential": "不附带任何凭据",
   "repository.basic": "基本认证",
-  "repository.sendAnHTTPBasicUsernameAndPassword":
-    "发送 HTTP Basic 用户名与密码",
+  "repository.sendAnHTTPBasicUsernameAndPassword": "使用上游用户名和密码认证",
   "repository.bearerToken": "Bearer 令牌",
   "repository.sendAuthorizationBearerToken": "发送 Authorization: Bearer 令牌",
   "repository.upstreamUsername": "上游用户名",

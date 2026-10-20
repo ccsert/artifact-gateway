@@ -35,105 +35,236 @@ const repository: Repository = {
   version: "7",
 };
 
-async function mockSettings(page: Page) {
+async function mockSettings(
+  page: Page,
+  initial: Repository = repository,
+  rejectedSaves = 2,
+) {
   await authenticateAsAdmin(page);
   await page.route("**/api/v2/site-settings", (route) =>
     route.fulfill({ json: defaultSiteSettings }),
   );
-  let saved = repository;
+  let saved = initial;
   const updates: UpdateRepositoryWritable[] = [];
-  await page.route(
-    `**/api/v2/repositories/${repository.id}**`,
-    async (route) => {
-      const request = route.request();
-      const path = new URL(request.url()).pathname;
-      if (request.method() === "PATCH") {
-        const body: UpdateRepositoryWritable = request.postDataJSON();
-        updates.push(body);
-        expect(request.headers()["if-match"]).toBe("7");
-        if (updates.length < 3) {
-          return route.fulfill({
+  await page.route(`**/api/v2/repositories/${initial.id}**`, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === "PATCH") {
+      const body: UpdateRepositoryWritable = request.postDataJSON();
+      updates.push(body);
+      expect(request.headers()["if-match"]).toBe(saved.version);
+      if (updates.length <= rejectedSaves) {
+        return route.fulfill({
+          status: 400,
+          contentType: "application/problem+json",
+          json: {
             status: 400,
-            contentType: "application/problem+json",
-            json: {
-              status: 400,
-              code:
-                updates.length === 1
-                  ? "upstream_credential_rebind_required"
-                  : "invalid_request",
-              message: "Synthetic upstream configuration rejected",
-              requestId: "safe-config-error",
-            },
-          });
-        }
-        saved = {
-          ...repository,
-          ociBearer: undefined,
-          upstreamAuth: undefined,
-          version: "8",
-        };
-        return route.fulfill({ json: saved });
-      }
-      if (path.endsWith("/capabilities"))
-        return route.fulfill({
-          json: {
-            format: "oci",
-            type: "proxy",
-            operations: ["read", "browse"],
-            artifactScanning: false,
-            publicationScanning: false,
-          },
-        });
-      if (path.endsWith("/capacity"))
-        return route.fulfill({
-          json: {
-            repositoryId: repository.id,
-            format: "oci",
-            usedBytes: 0,
-            objectCount: 0,
-            quotaBytes: 0,
-          },
-        });
-      if (path.endsWith("/effective-access")) {
-        const allowed = {
-          allowed: true,
-          source: "administrator",
-          reason: "administrator",
-        };
-        return route.fulfill({
-          json: {
-            actor: "mock-admin",
-            identity: {
-              actor: "mock-admin",
-              kind: "local_session",
-              role: "admin",
-              administrator: true,
-            },
-            repository: {
-              id: repository.id,
-              name: repository.name,
-              format: "oci",
-              type: "proxy",
-              state: "active",
-            },
-            anonymousRead: {
-              allowed: false,
-              source: "anonymous_policy",
-              reason: "repository_anonymous_read_disabled",
-            },
-            permissions: {
-              read: allowed,
-              write: allowed,
-              admin: allowed,
-              intelligence: allowed,
-            },
+            code:
+              updates.length === 1
+                ? "upstream_credential_rebind_required"
+                : "invalid_request",
+            message: "Synthetic upstream configuration rejected",
+            requestId: "safe-config-error",
           },
         });
       }
+      const nextAuth = body.upstreamAuth;
+      saved = {
+        ...saved,
+        endpoint: body.endpoint ?? saved.endpoint,
+        allowedHosts: body.allowedHosts ?? saved.allowedHosts,
+        ociBearer:
+          body.ociBearer === null
+            ? undefined
+            : (body.ociBearer ?? saved.ociBearer),
+        upstreamAuth:
+          nextAuth?.scheme === "none"
+            ? undefined
+            : nextAuth
+              ? {
+                  scheme: nextAuth.scheme,
+                  username: nextAuth.username,
+                  credentialsConfigured: true,
+                }
+              : saved.upstreamAuth,
+        version: String(Number(saved.version) + 1),
+      };
       return route.fulfill({ json: saved });
-    },
-  );
+    }
+    if (path.endsWith("/capabilities"))
+      return route.fulfill({
+        json: {
+          format: initial.format,
+          type: "proxy",
+          operations: ["read", "browse"],
+          artifactScanning: false,
+          publicationScanning: false,
+        },
+      });
+    if (path.endsWith("/capacity"))
+      return route.fulfill({
+        json: {
+          repositoryId: initial.id,
+          format: initial.format,
+          usedBytes: 0,
+          objectCount: 0,
+          quotaBytes: 0,
+        },
+      });
+    if (path.endsWith("/effective-access")) {
+      const allowed = {
+        allowed: true,
+        source: "administrator",
+        reason: "administrator",
+      };
+      return route.fulfill({
+        json: {
+          actor: "mock-admin",
+          identity: {
+            actor: "mock-admin",
+            kind: "local_session",
+            role: "admin",
+            administrator: true,
+          },
+          repository: {
+            id: initial.id,
+            name: initial.name,
+            format: initial.format,
+            type: "proxy",
+            state: "active",
+          },
+          anonymousRead: {
+            allowed: false,
+            source: "anonymous_policy",
+            reason: "repository_anonymous_read_disabled",
+          },
+          permissions: {
+            read: allowed,
+            write: allowed,
+            admin: allowed,
+            intelligence: allowed,
+          },
+        },
+      });
+    }
+    return route.fulfill({ json: saved });
+  });
   return updates;
+}
+
+for (const format of ["npm", "pypi", "cargo", "apt", "raw", "conan"] as const) {
+  for (const width of [1440, 390]) {
+    test(`${format} credentials rotate and clear without leaking at ${width}px`, async ({
+      page,
+    }, info) => {
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") errors.push(message.text());
+      });
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(() => {
+        localStorage.setItem("ag.console.locale", "en-US");
+        localStorage.setItem("ag.console.theme", "light");
+      });
+      const initial: Repository = {
+        ...repository,
+        name: `private-${format}`,
+        format,
+        ociBearer: undefined,
+      };
+      const updates = await mockSettings(page, initial, 0);
+      await page.goto(`/repositories/${initial.id}?tab=settings`);
+      const description = page.getByText(
+        /^Manage read access and upstream connectivity for proxy repositories\./,
+      );
+      await expect(description).toBeVisible();
+      const descriptionBox = await description.boundingBox();
+      const actionBox = await page
+        .getByRole("button", { name: "Save changes" })
+        .boundingBox();
+      expect(descriptionBox).not.toBeNull();
+      expect(actionBox).not.toBeNull();
+      if (width < 640) {
+        expect(descriptionBox?.width).toBeGreaterThan(200);
+        const actionGap =
+          (actionBox?.y ?? 0) -
+          (descriptionBox?.y ?? 0) -
+          (descriptionBox?.height ?? 0);
+        expect(actionGap).toBeGreaterThanOrEqual(14);
+        expect(actionGap).toBeLessThanOrEqual(18);
+      }
+      const authentication = page.getByRole("group", {
+        name: "Upstream authentication",
+        exact: true,
+      });
+      await expect(authentication).toBeVisible();
+      await expect(
+        page.getByRole("switch", { name: "OCI token exchange" }),
+      ).toHaveCount(0);
+      await authentication.getByRole("radio", { name: /Basic/ }).click();
+      await authentication
+        .getByLabel("Upstream username", { exact: true })
+        .fill("owned-upstream-user");
+      const password = authentication.getByLabel("Upstream password", {
+        exact: true,
+      });
+      const secret = `owned-${format}-rotated-secret`;
+      await password.fill(secret);
+      const save = page.getByRole("button", { name: "Save changes" });
+      await save.click();
+      await expect.poll(() => updates.length).toBe(1);
+      await expect(page.getByText("Repository settings saved")).toBeVisible();
+      expect(updates[0]?.upstreamAuth).toEqual({
+        scheme: "basic",
+        username: "owned-upstream-user",
+        secret,
+      });
+      await expect(password).toHaveValue("");
+      const storage = await page.evaluate(() =>
+        JSON.stringify({
+          local: { ...localStorage },
+          session: { ...sessionStorage },
+        }),
+      );
+      expect(storage).not.toContain(secret);
+      expect(page.url()).not.toContain(secret);
+      await expect(page.locator("body")).not.toContainText(secret);
+      const geometry = await authentication.evaluate((element) => {
+        const parent = element.parentElement;
+        const previous = parent?.previousElementSibling;
+        const current = element.getBoundingClientRect();
+        const before = previous?.getBoundingClientRect();
+        return {
+          left: current.left,
+          right: current.right,
+          gap: before ? current.top - before.bottom : null,
+        };
+      });
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(width);
+      expect(geometry.gap).not.toBeNull();
+      expect(geometry.gap).toBeGreaterThanOrEqual(14);
+      expect(geometry.gap).toBeLessThanOrEqual(18);
+      expect(
+        await page
+          .locator("html")
+          .evaluate((node) => node.scrollWidth - node.clientWidth),
+      ).toBeLessThanOrEqual(0);
+      await page.screenshot({
+        path: info.outputPath(`private-${format}-${width}.png`),
+        fullPage: true,
+      });
+      await authentication.getByRole("radio", { name: /Anonymous/ }).click();
+      await expect(save).not.toHaveClass(/ant-btn-loading/);
+      await save.click();
+      await expect.poll(() => updates.length).toBe(2);
+      expect(updates[1]?.upstreamAuth).toEqual({ scheme: "none" });
+      await expect(password).toHaveCount(0);
+      expect(JSON.stringify(updates[1])).not.toContain(secret);
+      expect(errors).toEqual([]);
+    });
+  }
 }
 
 for (const width of [1440, 390]) {

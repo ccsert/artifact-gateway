@@ -176,7 +176,8 @@ service、scope、出站/主机策略、当前 Repository version 与加密凭�
 
 ## Maven 与 OCI 受保护上游
 
-Go、Maven 与 OCI Proxy 仓库接收原生 `upstreamAuth` 对象，Hosted 与其他格式明确拒绝。
+Go、Maven、OCI、npm、PyPI、Cargo、APT、Raw 与 Conan Proxy 仓库接收原生
+`upstreamAuth` 对象，Hosted 与未支持格式明确拒绝。
 管理员可配置 Basic `{"scheme":"basic","username":"source-reader","secret":"synthetic-example"}`，
 或静态 Bearer `{"scheme":"bearer","secret":"synthetic-example"}`。源端凭据与 Gateway
 客户端凭据、出站代理凭据分开。管理写入使用 `GATEWAY_SETTINGS_ENCRYPTION_KEY`，以
@@ -188,7 +189,7 @@ Go、Maven 与 OCI Proxy 仓库接收原生 `upstreamAuth` 对象，Hosted 与�
 service、启用绑定 issuer，或从 issuer 切换为直连 registry，须显式提交新 `secret` 或
 `{"upstreamAuth":{"scheme":"none"}}`；否则返回 `400 upstream_credential_rebind_required`，
 Repository version、目标绑定和旧密文均不变。选择 `none` 会清除凭据。更新使用 Repository 的
-`If-Match` 版本，陈旧轮换或清除返回 `412`。Console 为这三种格式提供同一受保护凭据编辑器。
+`If-Match` 版本，陈旧轮换或清除返回 `412`。Console 为这九种 Proxy 格式提供同一受保护凭据编辑器，OCI issuer 设置仍仅适用于 OCI。
 
 Maven 对绑定源的 metadata、POM、checksum 和完整资产请求消费凭据。OCI 未配置
 `ociBearer` 时对 registry 内容直接消费；配置后只有显式绑定的 issuer 收到源端凭据，
@@ -213,5 +214,29 @@ CAS 拒绝及非管理员拒绝。官方 Maven 客户端从空目标缓存解析
 fixture plugin 预置。显式用户/全局 settings、自有 registry 文件和子进程环境允许列表
 隔离用户身份与制品缓存。测试 hook 只把合成 HTTPS 源映射到自有监听器，保留证书校验。
 这些是隔离协议与持久化验收，不表示生产迁移或切流。
+
+## npm、PyPI、Cargo、APT、Raw 与 Conan 私有上游
+
+新增六格式复用相同的加密凭据配置和 endpoint 重绑规则。npm Packument、精确版本
+元数据与 Tarball，PyPI Simple 元数据和分发文件，Cargo 配置、sparse index 与 crate，
+以及 APT 元数据、签名、Index 和软件包均消费已配置的源端凭据。每次重定向继续逐跳
+校验出站策略；跨 origin 即便在允许列表内也会剥离凭据。Raw 与 Conan 直接拒绝源端
+重定向。Conan Basic 先访问绑定源的 `/v2/users/authenticate`，再用返回的 Bearer token
+读取元数据和资产；显式配置的 Conan Bearer token 直接使用。交换 token 仅限单次抓取，
+不会跨凭据轮换或清除复用。
+
+npm、PyPI、Cargo 与 APT 在持久缓存元数据和资产时记录当前 Repository version，
+并在写入引用的同一 PostgreSQL 事务中复查版本，拒绝旧在途响应写入新源配置。
+未知版本或版本不同的条目重新抓取，离线读取也不信任这些条目；不复用旧匿名缓存，
+不为历史条目伪造凭据绑定。Raw 与 Conan 使用凭据身份命名空间，不回落旧无绑定 key。
+Proxy 与 Group 逐请求解析成员当前配置，源端 `401`/`403` 不返回 stale 内容，也不继续
+匿名尝试后续成员。错误与审计不包含源端秘密或响应体。
+
+新增格式执行 `make private-upstream-formats-e2e`。63 个必需用例包含 48 次真实客户端
+消费：六格式、Basic/Bearer、Proxy/Group 与冷/热缓存的完整组合。固定 npm、pip、Cargo、
+Conan、Debian 客户端及 curl 使用自有配置和缓存；Conan 启动阶段版本探测也使用自有
+`CONAN_HOME`。门禁创建并清理独占 PostgreSQL/RustFS，验证轮换/清除、陈旧 CAS、
+源失败、重定向隔离和迟到缓存写入，保留机器可读结果与自有资源清理为零的记录。
+所有必需用例均不得失败或跳过。
 
 Console 设置草稿以仓库 UUID 为身份边界；切换到另一个已缓存仓库时重建表单，清空所有上游/出站代理明文输入及 OCI issuer 草稿。并发更新继续由仓库版本 CAS 保护。

@@ -676,15 +676,17 @@ OCIBearer:
         whitespace or control characters.
 UpstreamAuth:
   type: object
-  description: Protected upstream credentials for Go, Maven and OCI Proxy
-    repositories. Basic or Bearer authentication targets the bound upstream.
+  description: Protected upstream credentials for Go, Maven, OCI, npm, PyPI,
+    Cargo, APT, Raw and Conan Proxy repositories. Basic or Bearer authentication
+    targets the bound upstream. Conan exchanges Basic credentials through its
+    users/authenticate endpoint before reading protected metadata or files.
     When OCI ociBearer is configured, these credentials are sent only to its
     bound issuer and content requests use the exchanged pull token.
     Cross-origin redirects strip credentials. Rotation or clear invalidates
     credential-bound content and token caches. Changing the upstream URL or
     OCI issuer binding requires a fresh secret or scheme none; stored
-    credentials are never implicitly rebound to a new destination. Other formats reject this
-    field. `secret` is accepted on write over TLS and stored AES-256-GCM
+    credentials are never implicitly rebound to a new destination. Hosted
+    repositories and unsupported formats reject this field. `secret` is accepted on write over TLS and stored AES-256-GCM
     encrypted; responses never return it and carry `credentialsConfigured`
     instead.
   required:
@@ -698,7 +700,8 @@ UpstreamAuth:
       - basic
       - bearer
       description: none removes any stored credential and reads the upstream
-        anonymously; basic sends an HTTP Basic credential; bearer sends
+        anonymously; basic authenticates with an HTTP Basic credential
+        (Conan exchanges it for a source token); bearer sends
         `Authorization - Bearer <secret>`.
     username:
       type: string

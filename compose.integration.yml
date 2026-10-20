@@ -42,7 +42,7 @@ services:
       TEST_RUSTFS_ACCESS_KEY: integration-rustfs
       TEST_RUSTFS_SECRET_KEY: integration-password
     working_dir: /src
-    command: ["go", "test", "-count=1", "-p", "1", "-tags=integration", "./internal/app", "./internal/aptpublication", "./internal/repository", "./internal/objectstore", "./internal/nexussource/pgstore", "./internal/nexusmigration/pgstore"]
+    command: ["go", "test", "-count=1", "-p", "1", "-tags=integration", "./internal/app", "./internal/aptpublication", "./internal/repository", "./internal/objectstore", "./internal/nexussource/pgstore", "./internal/nexusmigration/pgstore", "./internal/format/nuget", "./internal/backupops"]
     volumes:
       - ./:/src:ro
       - artifact-gateway-go-mod:/go/pkg/mod

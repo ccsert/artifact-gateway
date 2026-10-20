@@ -11,7 +11,8 @@ importer remains independent.
 
 Apply migrations `000147_nexus_migration_batches.sql` and
 `000148_nexus_migration_scan_diagnostics.sql` and the appended
-`000154_nexus_native_migration_formats.sql` through the standard migration runner. Configure
+`000154_nexus_native_migration_formats.sql` and
+`000155_nexus_migration_scan_checkpoints.sql` through the standard migration runner. Configure
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` with the real object-storage pool identity.
 Compose forwards it to every inherited Gateway role. Without it migration writes
 are disabled; the rest of Gateway and migration reports remain available. Source
@@ -31,8 +32,9 @@ All paths below are relative to `/api/v2`, require an administrator, and return
 - `POST /migrations/nexus/batches` fixes `sourceId`, exact `sourceVersion`,
   explicit source-to-existing-target UUID mappings, `policyVersion=native-v1`
   and `capacityEvidence`. A background worker completely enumerates the source
-  before atomically sealing the manifest and entries. An interrupted, malformed,
-  oversized or cyclic scan fails; no partial inventory becomes executable.
+  before atomically sealing the manifest and entries. Restart resumes committed
+  pages; malformed, oversized, cyclic or changed inventories fail explicitly.
+  No partial inventory becomes executable.
 - `GET` the collection, `/{batchId}` and `/{batchId}/entries` reads durable state.
   Collection and entry pagination use `limit` (1–100) and UUID `cursor`.
 - `POST /{batchId}/pause`, `/resume`, `/retry`, `/cancel` controls the batch.
@@ -60,8 +62,11 @@ different batches can run in parallel. The worker role and `migration` kind must
 be enabled, and its format filter must admit every format in that batch. Claims use `SKIP LOCKED`, tokens and epochs.
 Expired owners cannot update checkpoints. The actual native publication transaction
 takes the same transaction advisory fence as recovery and controls, locks the batch
-row and validates its live token, expiry and cancellation state before changing
-visible references. Losing that physical transaction also aborts publication;
+row and source configuration row in that order, then validates the source version,
+live token, expiry and cancellation state before changing visible references.
+The source row remains locked through the native transaction commit; a source
+update either precedes publication and rejects it, or follows that commit.
+Lease expiry is checked again after waiting for the source lock. Losing that physical transaction also aborts publication;
 there is no independent session fence whose loss could permit an old publisher.
 Format locks cover staging through publication and coordinate GC. A native commit
 followed by a lost entry checkpoint remains a full-readback recovery window.
@@ -139,12 +144,31 @@ metadata stage identifies the selected repository scope without leaking upstream
 URLs or credentials. A partial scan still has no executable manifest or entries
 and `totalBytes=null`. A later complete scan clears the old failure diagnostic.
 
-The first version retains source bounds: up to ten repositories, 100 pages and
-10,000 assets, 16 MiB metadata, and 30 seconds per source operation/file. Each file
-is limited to 1 GiB, read with a size-plus-one bound and full hash. A slow file can
-fail before reaching that size. Downloads use immediately unlinked private
-temporary files; recovery retries whole files, with no promised range/multipart
-resume. Large inventories fail explicitly and require a later paging extension.
+Migration inventory scanning uses a dedicated paged source reader. Its explicit
+budgets are ten repositories, 10,000 recorded pages, 100,000 assets and 64 MiB
+of cumulative asset wire metadata, including the second observation; each page is bounded to 2 MiB and 30 seconds. The interactive
+discovery preview retains its smaller 100-page/10,000-asset budget. Neither path
+silently truncates an inventory when its budget is exhausted.
+
+Private PostgreSQL checkpoints commit each page and its next cursor together,
+bound to the source version, selected repository shapes, mappings and policy.
+Restart or a lost acknowledgment resumes the committed cursor. Paused/cancelled
+batches and expired workers cannot advance it. Once enumeration ends, a second
+paged observation must match every recorded page before the complete manifest
+can be sealed. Cursor expiry, loops, duplicate paths, changed source observations
+or budget exhaustion fail explicitly; a new batch is required for source drift.
+These observations do not make the Nexus REST API a transactional snapshot.
+Before sealing there are no executable entries and `totalBytes` remains null,
+even when `metadataDiscovered` has advanced.
+
+Each file remains limited to 1 GiB and 30 seconds, read with a size-plus-one
+bound and full hash. Downloads use immediately unlinked private temporary files;
+recovery retries whole files, with no promised range/multipart resume.
+
+`make nexus-inventory-scan-e2e` verifies more than 100 pages and 10,000 assets,
+restart and lost-acknowledgment recovery, lease fencing, pause/cancel, source
+binding and scan-budget rejection against an owned PostgreSQL/RustFS fixture.
+Required tests cannot be skipped, and its owned resources must be removed.
 
 `make integration-test` includes the domain PG package and exercises
 real PostgreSQL/RustFS crash windows, competing/expired workers, pause/cancel,

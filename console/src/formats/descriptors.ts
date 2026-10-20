@@ -87,6 +87,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   npm: {
     ...base,
     format: "npm",
+    upstreamAuthentication: true,
     artifactColumn: "formats.package",
     searchPlaceholder: "formats.filterByPackageNamePrefix",
     searchKeywordPlaceholder: "formats.filterByPackageNameKeyword",
@@ -107,6 +108,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   pypi: {
     ...base,
     format: "pypi",
+    upstreamAuthentication: true,
     artifactColumn: "formats.project",
     searchPlaceholder: "formats.filterByProjectNamePrefix",
     searchKeywordPlaceholder: "formats.filterByProjectNameKeyword",
@@ -147,6 +149,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   cargo: {
     ...base,
     format: "cargo",
+    upstreamAuthentication: true,
     artifactColumn: "formats.crate",
     searchPlaceholder: "formats.searchCrateNames",
     packageVersions: true,
@@ -163,6 +166,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   conan: {
     ...base,
     format: "conan",
+    upstreamAuthentication: true,
     serverKeywordSearch: false,
     artifactColumn: "formats.name",
     searchPlaceholder: "formats.filterByReference",
@@ -174,6 +178,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   raw: {
     ...base,
     format: "raw",
+    upstreamAuthentication: true,
     artifactColumn: "formats.filePath",
     searchPlaceholder: "formats.searchPaths",
     pathAddressed: true,
@@ -187,6 +192,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   apt: {
     ...base,
     format: "apt",
+    upstreamAuthentication: true,
     repositoryFeatures: {
       security: ["hosted"],
       jobs: ["hosted"],

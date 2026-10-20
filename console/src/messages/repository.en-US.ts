@@ -160,14 +160,14 @@ export const repositoryEnUS: Record<RepositoryMessageKey, string> = {
     "The upstream endpoint or OCI token binding changed. Enter a new secret, or choose Anonymous to clear the stored credential, then save again.",
   "repository.upstreamAuthentication": "Upstream authentication",
   "repository.attachACredentialToUpstreamFetchesWhenThe":
-    "Authenticate to the configured Go, Maven or OCI upstream. Credentials are sent only to the bound source; cross-origin redirects strip them.",
+    "Authenticate to the configured upstream. Credentials are sent only to the bound source; cross-origin redirects strip them.",
   "repository.anonymous": "Anonymous",
   "repository.sendNoCredentialAndClearTheStoredOne":
     "Send no credential and clear the stored one",
   "repository.sendNoCredential": "Send no credential",
   "repository.basic": "Basic",
   "repository.sendAnHTTPBasicUsernameAndPassword":
-    "Send an HTTP Basic username and password",
+    "Use an upstream username and password",
   "repository.bearerToken": "Bearer token",
   "repository.sendAuthorizationBearerToken":
     "Send Authorization: Bearer <token>",

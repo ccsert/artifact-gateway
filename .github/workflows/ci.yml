@@ -106,12 +106,21 @@ jobs:
       - name: Verify target-only Nexus migration with official clients
         run: make nexus-migration-client-e2e
         timeout-minutes: 10
+      - name: Verify durable large-inventory scan and restart recovery
+        run: make nexus-inventory-scan-e2e
+        timeout-minutes: 10
+      - name: Verify NuGet Hosted preview with official .NET clients
+        run: make native-nuget-e2e
+        timeout-minutes: 15
       - name: Verify complete Nexus OCI graph migration and target-only clients
         run: make nexus-oci-migration-e2e
         timeout-minutes: 10
       - name: Verify private Maven and OCI upstream clients
         run: make private-upstream-auth-e2e
         timeout-minutes: 10
+      - name: Verify private npm PyPI Cargo APT Raw and Conan upstream clients
+        run: make private-upstream-formats-e2e
+        timeout-minutes: 15
       - name: Preserve native migration and private upstream evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -121,6 +130,9 @@ jobs:
             output/nexus-oci-migration-e2e/
             output/nexus-conan-migration-e2e/
             output/private-upstream-auth-e2e/
+            output/private-upstream-formats-e2e/
+            output/nexus-inventory-scan-e2e/
+            output/native-nuget-e2e/
       - name: Check release readiness entrypoints
         run: make release-readiness-check
   quality:

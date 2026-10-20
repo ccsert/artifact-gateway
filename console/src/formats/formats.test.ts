@@ -118,9 +118,15 @@ describe("format registry", () => {
     const d = (format: Format) => FORMAT_DESCRIPTORS[format];
     expect(only((f) => d(f).strictPublicationSetting)).toEqual(["maven"]);
     expect(only((f) => d(f).upstreamAuthentication)).toEqual([
+      "apt",
+      "cargo",
+      "conan",
       "go",
       "maven",
+      "npm",
       "oci",
+      "pypi",
+      "raw",
     ]);
     expect(only((f) => d(f).separateAssetPath)).toEqual(["maven"]);
     expect(only((f) => d(f).signedIndexes)).toEqual(["apt"]);
