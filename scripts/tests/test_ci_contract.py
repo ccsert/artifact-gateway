@@ -866,6 +866,71 @@ class ColdCacheCleanupTests(unittest.TestCase):
         self.assertFalse(report['cleanup']['ownedTemporaryDirectoryRemoved'])
         self.assert_foreign_preserved()
 
+    def test_mid_traversal_root_swap_cannot_change_outside_directory_modes(self):
+        self.foreign.chmod(0o755)
+        outside = self.foreign / 'go-mod' / 'example.test' / 'module@v1.0.0' / 'nested'
+        outside.mkdir(parents=True)
+        (outside / 'sentinel.go').write_text('outside unchanged\n')
+        for directory in [outside, outside.parent, outside.parent.parent,
+                          self.foreign / 'go-mod', self.foreign]:
+            directory.chmod(0o555)
+        before = {str(p.relative_to(self.foreign)): p.stat().st_mode & 0o777
+                  for p in [self.foreign, *self.foreign.rglob('*')]}
+        original_open = os.open
+        swapped = False
+        def racing_open(path, flags, *arguments, **keywords):
+            nonlocal swapped
+            descriptor = original_open(path, flags, *arguments, **keywords)
+            if ((os.fspath(path) == str(self.work)) or
+                    (os.fspath(path) == self.work.name and keywords.get('dir_fd') is not None)) and not swapped:
+                swapped = True
+                self.work.rename(self.root / 'retained-original-work')
+                self.work.symlink_to(self.foreign, target_is_directory=True)
+            return descriptor
+        with patch.object(ci.os, 'open', side_effect=racing_open):
+            result, report = self.lane(self.readonly_module_cache)
+        self.assertTrue(swapped)
+        self.assertEqual(result, 1)
+        self.assertTrue(report['cleanup']['errors'])
+        after = {str(p.relative_to(self.foreign)): p.stat().st_mode & 0o777
+                 for p in [self.foreign, *self.foreign.rglob('*')]}
+        self.assertEqual(after, before)
+        self.assertEqual((outside / 'sentinel.go').read_text(), 'outside unchanged\n')
+        self.assert_foreign_preserved()
+
+    def test_mid_traversal_parent_swap_cannot_follow_replacement(self):
+        self.work.rmdir()
+        parent = self.root / 'owned-parent'
+        parent.mkdir()
+        self.work = parent / 'owned-work'
+        self.work.mkdir()
+        self.foreign.chmod(0o755)
+        outside_work = self.foreign / 'owned-work'
+        outside_work.mkdir()
+        (outside_work / 'sentinel').write_text('outside parent unchanged')
+        outside_work.chmod(0o555)
+        self.foreign.chmod(0o555)
+        original_open = os.open
+        swapped = False
+        def racing_open(path, flags, *arguments, **keywords):
+            nonlocal swapped
+            descriptor = original_open(path, flags, *arguments, **keywords)
+            if ((os.fspath(path) == str(self.work)) or
+                    (os.fspath(path) == self.work.name and keywords.get('dir_fd') is not None)) and not swapped:
+                swapped = True
+                parent.rename(self.root / 'retained-owned-parent')
+                parent.symlink_to(self.foreign, target_is_directory=True)
+            return descriptor
+        with patch.object(ci.os, 'open', side_effect=racing_open):
+            result, report = self.lane(self.readonly_module_cache)
+        self.assertTrue(swapped)
+        self.assertEqual(result, 1)
+        self.assertFalse(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+        self.assertFalse((self.root / 'retained-owned-parent' / 'owned-work').exists())
+        self.assertEqual(outside_work.stat().st_mode & 0o777, 0o555)
+        self.assertEqual((outside_work / 'sentinel').read_text(), 'outside parent unchanged')
+        self.assert_foreign_preserved()
+
     def test_replaced_work_root_is_rejected_without_touching_target(self):
         self.work.rmdir()
         self.work.symlink_to(self.foreign, target_is_directory=True)

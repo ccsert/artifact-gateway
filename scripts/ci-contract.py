@@ -312,18 +312,36 @@ def case_summary(directory):
 
 
 def remove_owned_work(work):
-    # Go downloads module directories read-only. Restore owner write access
-    # only within this lane's fresh temporary tree before unlinking it. Directory
-    # descriptors never follow a replaced root or any directory symlink.
-    for directory, _, _ in os.walk(work, followlinks=False):
-        descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    # Go downloads module directories read-only. Hold the original directory
+    # descriptors through permission repair and deletion; paths can be renamed.
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    parent_descriptor = os.open(work.parent, flags)
+    try:
+        root_descriptor = os.open(work.name, flags, dir_fd=parent_descriptor)
         try:
-            mode = stat.S_IMODE(os.fstat(descriptor).st_mode)
-            if not mode & stat.S_IWUSR:
-                os.fchmod(descriptor, mode | stat.S_IWUSR)
+            original = os.fstat(root_descriptor)
+            for _, _, _, descriptor in os.fwalk('.', follow_symlinks=False,
+                                                 dir_fd=root_descriptor):
+                mode = stat.S_IMODE(os.fstat(descriptor).st_mode)
+                if not mode & stat.S_IWUSR:
+                    os.fchmod(descriptor, mode | stat.S_IWUSR)
+            if not os.path.samestat(original, os.stat(work.name, dir_fd=parent_descriptor,
+                                                      follow_symlinks=False)):
+                raise OSError('owned temporary directory was replaced')
+            for name in os.listdir(root_descriptor):
+                if stat.S_ISDIR(os.stat(name, dir_fd=root_descriptor,
+                                       follow_symlinks=False).st_mode):
+                    shutil.rmtree(name, dir_fd=root_descriptor)
+                else:
+                    os.unlink(name, dir_fd=root_descriptor)
+            if not os.path.samestat(original, os.stat(work.name, dir_fd=parent_descriptor,
+                                                      follow_symlinks=False)):
+                raise OSError('owned temporary directory was replaced')
+            os.rmdir(work.name, dir_fd=parent_descriptor)
         finally:
-            os.close(descriptor)
-    shutil.rmtree(work)
+            os.close(root_descriptor)
+    finally:
+        os.close(parent_descriptor)
 
 
 def run_lane(args):
