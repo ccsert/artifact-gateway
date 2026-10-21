@@ -215,6 +215,13 @@ class ContractGateTests(unittest.TestCase):
                 result = ci.run_command([sys.executable, '-c', body], self.root / 'child.log', dict(os.environ), timeout)
                 self.assertEqual(result['status'], expected)
 
+    def test_benchmark_rejects_failed_or_skipped_artifact_collection(self):
+        for result in ('failure', 'cancelled', 'skipped', ''):
+            env = {'GITHUB_ACTIONS': 'true', 'CI_CONTRACT_ARTIFACT_RESULT': result}
+            with self.subTest(result=result), patch.dict(os.environ, env):
+                with self.assertRaisesRegex(ValueError, 'benchmark artifact download did not succeed'):
+                    ci.benchmark(argparse.Namespace())
+
     def test_actual_cancellation_waits_for_its_owned_child(self):
         source = str(ROOT / 'scripts/ci-contract.py')
         code = ('import importlib.util,json,os,sys; from pathlib import Path; '

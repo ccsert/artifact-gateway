@@ -47,7 +47,7 @@ def business_source():
     def excluded(name):
         return (name.startswith(('.github/workflows/', 'scripts/ci-', 'docs/ci-contract-lanes'))
                 or name in ('scripts/tests/test_ci_contract.py', 'CONTRIBUTING.md',
-                            'CONTRIBUTING.zh-CN.md', 'CHANGELOG.md'))
+                            'CONTRIBUTING.zh-CN.md', 'CHANGELOG.md', 'CHANGELOG.zh-CN.md'))
     files = {name: sha(ROOT / name) for name in git('ls-files').splitlines()
              if not excluded(name) and (ROOT / name).is_file()}
     digest = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
@@ -428,6 +428,8 @@ def timestamp(value):
 
 
 def benchmark(args):
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('CI_CONTRACT_ARTIFACT_RESULT') != 'success':
+        raise ValueError('benchmark artifact download did not succeed')
     validate_needs(json.loads(os.environ['CI_CONTRACT_NEEDS']), ['serial-gate', 'parallel-gate'])
     serial = validate_evidence(args.input, 'benchmark-serial', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     parallel = validate_evidence(args.input, 'benchmark-parallel', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
