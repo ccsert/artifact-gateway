@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+- Console now requires Vite 7.3.7, the patched 7.x release for the launch-editor advisories GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm (#439). The generated lockfile retains every other package version, and dependency audit gains no exception.
+
+- Gateway, agctl and the Go sidecars now build with Go 1.26.10 to address GO-2026-6809 in `crypto/x509` (#438). Build and integration images share the verified official multi-architecture digest; dependency audit remains strict without a new exception.
+
+- CI splits the existing contract checks into an independent core and six isolated native lanes with a stable fail-closed `contract-and-test` aggregate. Original targets, client pins, timeouts and publication prerequisites remain; each lane preserves source hashes, raw evidence and owned cleanup. A separate same-source cold-cache serial/parallel benchmark measures actual concurrency and critical-path improvement.
+
 - Private upstream authentication now covers npm, PyPI, Cargo, APT, Raw and Conan (#432–#434), alongside Go/Maven/OCI. Basic/Bearer credentials stay sealed, Groups resolve the current member binding, cache publication rejects stale source versions, and unknown old cache bindings require a fresh read. Conan Basic performs the native token handshake. Console supports rotation and clearing for every admitted Proxy format. The isolated gate verifies 48 official-client cold/hot Proxy/Group consumptions; see [Proxy egress](docs/proxy-egress-design.md#private-npm-pypi-cargo-apt-raw-and-conan-upstreams).
 
 - NuGet Hosted has an explicit, default-disabled [preview](docs/nuget-hosted-preview.md) with independent management and native routes (#287). Verified nupkg staging and commit, dependency metadata, native reads, quota reservations, response-loss recovery and reference-safe expired-upload collection remain separate from formal format admission. The official .NET SDK gate publishes a three-package dependency chain, restores across Gateway/PostgreSQL/RustFS restart and executes offline; Proxy/Group and full governance remain tracked by #288/#289.

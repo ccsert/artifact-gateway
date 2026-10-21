@@ -20,121 +20,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  contract-core:
+    uses: ./.github/workflows/contract-lane.yml
+    with:
+      lane: core
+
+  contract-native:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        lane: [migration-clients, inventory, nuget, oci-migration, maven-oci-auth, six-format-auth]
+    uses: ./.github/workflows/contract-lane.yml
+    with:
+      lane: ${{ matrix.lane }}
+
   contract-and-test:
+    if: always()
+    needs: [contract-core, contract-native]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: 1.96.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            console/package-lock.json
-            tools/openapi/package-lock.json
-      - name: Verify public npm lockfile sources
-        run: node scripts/npm-lockfile-check.mjs
-      - name: Install OpenAPI tooling
-        run: npm ci --ignore-scripts --no-audit --no-fund --timing --loglevel=http
-        timeout-minutes: 10
-        working-directory: tools/openapi
-      - name: Install Console code generation dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund --timing --loglevel=http
-        timeout-minutes: 10
-        working-directory: console
-      - name: Validate OpenAPI contract
-        run: make openapi-check
-      - name: Validate agctl command map against the API contracts
-        run: make cli-contract-check
-      - name: Validate agctl parsing, schemas and agent recipes
-        run: make cli-test
-      - name: Run tests
-        run: make test
-      - name: Validate Cargo C0 with the pinned official client
-        run: make cargo-contract
-      - name: Validate Kubernetes manifests
-        run: make kubernetes-local-check
-      - name: Verify opt-in Compose email roles with owned TLS SMTP
-        run: make email-compose-check
-      - name: Verify agctl runtime restart and dependency failure contracts
-        run: make cli-runtime-e2e
-      - name: Run Native OCI E2E
-        run: make native-oci-e2e
-      - name: Run Native Raw E2E
-        run: make native-raw-e2e
-      - name: Run Native Maven E2E
-        env:
-          MAVEN_POM_COMPAT_UPSTREAM: https://maven-central.storage-download.googleapis.com/maven2
+      - name: Prepare aggregate evidence before checkout
         run: |
-          # Mirror public dependencies only; owned Gateway repositories remain local.
-          settings="${RUNNER_TEMP}/native-maven-central-settings.xml"
-          cat > "$settings" <<'EOF'
-          <settings><mirrors><mirror><id>public-central-fixture</id><mirrorOf>central</mirrorOf><url>https://maven-central.storage-download.googleapis.com/maven2</url></mirror></mirrors></settings>
-          EOF
-          export MAVEN_ARGS="--global-settings ${settings}"
-          make native-maven-e2e
-      - name: Run Native npm E2E
-        run: make native-npm-e2e
-      - name: Run Native PyPI E2E
-        run: make native-pypi-e2e
-      - name: Run Go Module Proxy E2E
-        run: make native-go-e2e
-      - name: Run APT Proxy and Hosted E2E
-        run: make native-apt-e2e
-      - name: Run APT external signer rotation E2E
-        run: make apt-signer-rotation-e2e
-      - name: Run Conan E2E
-        run: make conan-e2e
-      - name: Verify isolated S3 backup transfers
-        run: make backup-transfer-test
-      - name: Verify original published native backup identity and PG/RustFS recovery
-        run: make published-native-backup-test
-        timeout-minutes: 15
-      - name: Verify fixed v0.5.0 alert upgrade and snapshot rollback
-        run: make upgrade-readiness
-        timeout-minutes: 10
-      - name: Run integration tests
-        run: make integration-test
-      - name: Verify target-only Nexus migration with official clients
-        run: make nexus-migration-client-e2e
-        timeout-minutes: 10
-      - name: Verify durable large-inventory scan and restart recovery
-        run: make nexus-inventory-scan-e2e
-        timeout-minutes: 10
-      - name: Verify NuGet Hosted preview with official .NET clients
-        run: make native-nuget-e2e
-        timeout-minutes: 15
-      - name: Verify complete Nexus OCI graph migration and target-only clients
-        run: make nexus-oci-migration-e2e
-        timeout-minutes: 10
-      - name: Verify private Maven and OCI upstream clients
-        run: make private-upstream-auth-e2e
-        timeout-minutes: 10
-      - name: Verify private npm PyPI Cargo APT Raw and Conan upstream clients
-        run: make private-upstream-formats-e2e
-        timeout-minutes: 15
-      - name: Preserve native migration and private upstream evidence
+          mkdir -p "$RUNNER_TEMP/contract-aggregate"
+          printf '{"status":"bootstrap_incomplete","head":"%s","runId":"%s","attempt":"%s"}\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/contract-aggregate/bootstrap.json"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Download every isolated lane artifact
+        id: lane-artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: contract-*
+          path: ${{ runner.temp }}/contract-input
+      - name: Preserve complete job logs including checkout and setup
+        id: job-logs
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci-contract.py collect-job-logs --output "$RUNNER_TEMP/contract-aggregate"
+      - name: Require all job results and complete matching lane evidence
+        if: always()
+        env:
+          CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}
+          CI_CONTRACT_ARTIFACT_RESULT: ${{ steps.lane-artifacts.outcome }}
+          CI_CONTRACT_JOB_LOG_RESULT: ${{ steps.job-logs.outcome }}
+        run: python3 scripts/ci-contract.py aggregate --input "$RUNNER_TEMP/contract-input" --output "$RUNNER_TEMP/contract-aggregate"
+      - name: Preserve aggregate evidence on every outcome
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: native-migration-upstream-evidence
-          path: |
-            output/nexus-oci-migration-e2e/
-            output/nexus-conan-migration-e2e/
-            output/private-upstream-auth-e2e/
-            output/private-upstream-formats-e2e/
-            output/nexus-inventory-scan-e2e/
-            output/native-nuget-e2e/
-      - name: Check release readiness entrypoints
-        run: make release-readiness-check
+          name: contract-aggregate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/contract-aggregate/
+          if-no-files-found: error
+
   quality:
     runs-on: ubuntu-latest
     steps:

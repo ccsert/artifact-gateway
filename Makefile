@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-GO_IMAGE := golang:1.26.9-alpine
+GO_IMAGE := golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
 LINT_IMAGE := golangci/golangci-lint:v2.12.2
 OPENAPI_TOOLS := tools/openapi
 CONSOLE_DIR := console

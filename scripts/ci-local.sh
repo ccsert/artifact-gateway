@@ -12,6 +12,7 @@
 #
 # Options:
 #   --job <name>      quality, contract, console, all (default: fast)
+#   --lane <name>     one isolated contract lane; use --list for names
 #   --keep-going      run every selected check instead of stopping at the first failure
 #   --with-console-e2e  include Console E2E, which needs a running gateway stack
 #
@@ -28,7 +29,8 @@ with_console_e2e=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --job) job=${2:-}; shift 2 ;;
+    --job) [[ $# -ge 2 ]] || { printf "--job requires a value\n" >&2; exit 2; }; job=$2; shift 2 ;;
+    --lane) [[ $# -ge 2 ]] || { printf "--lane requires a value\n" >&2; exit 2; }; job=lane:$2; shift 2 ;;
     --keep-going) keep_going=1; shift ;;
     --with-console-e2e) with_console_e2e=1; shift ;;
     --list) job=list; shift ;;
@@ -87,17 +89,7 @@ summary() {
 # of the change under review, so assert the equivalent property: regenerating must
 # not change what is already on disk.
 check_openapi_fresh() {
-  local paths=(api/openapi/native-hosted-v1.json api/openapi/management-runtime-v1.json internal/admin/openapi/generated.go console/src/client/sdk.gen.ts console/src/client/types.gen.ts)
-  local before after
-  before=$(git hash-object "${paths[@]}") || return 1
-  make openapi-generate-admin >/dev/null || return 1
-  npm --prefix console run generate:api >/dev/null || return 1
-  after=$(git hash-object "${paths[@]}") || return 1
-  if [[ "$before" != "$after" ]]; then
-    printf 'generated artifacts were stale; the regenerated output differs from what is on disk\n' >&2
-    return 1
-  fi
-  return 0
+  python3 scripts/ci-contract.py openapi-fresh
 }
 
 gateway_ready() {
@@ -116,37 +108,23 @@ run_quality() {
   run "dependency audit" make dependency-audit
 }
 
+run_contract_lane() {
+  local lane=$1
+  local evidence="output/ci-contract-local/${lane}-${BASHPID}-${RANDOM}"
+  local args=(run "$lane" --local --output "$evidence")
+  if [[ $keep_going -eq 1 ]]; then args+=(--keep-going); fi
+  run "contract lane: $lane" python3 scripts/ci-contract.py "${args[@]}" </dev/null
+}
+
 run_contract() {
-  printf '\n== contract-and-test ==\n'
-  run "npm lockfile sources" node scripts/npm-lockfile-check.mjs
-  run "openapi generated artifacts fresh" check_openapi_fresh
-  run "agctl parsing, schemas and agent recipes" make cli-test
-  run "unit and integration scripts" make test
-  run "cargo C0 contract" make cargo-contract
-  run "kubernetes manifests" make kubernetes-local-check
-  run "opt-in Compose email TLS chain" make email-compose-check
-  run "native OCI E2E" make native-oci-e2e
-  run "native Raw E2E" make native-raw-e2e
-  run "native Maven E2E" make native-maven-e2e
-  run "native npm E2E" make native-npm-e2e
-  run "native PyPI E2E" make native-pypi-e2e
-  run "native Go E2E" make native-go-e2e
-  run "native APT E2E" make native-apt-e2e
-  run "APT signer rotation E2E" make apt-signer-rotation-e2e
-  run "Conan E2E" make conan-e2e
-  run "isolated backup transfers" make backup-transfer-test
-  run "original published native backup recovery" make published-native-backup-test
-  run "v0.5.0 upgrade and snapshot rollback" make upgrade-readiness
-  run "integration tests" make integration-test
-  run "target-only Nexus migration clients" make nexus-migration-client-e2e
-  run "durable large-inventory scan and restart recovery" make nexus-inventory-scan-e2e
-  run "NuGet Hosted preview and official .NET clients" make native-nuget-e2e
-  run "complete Nexus OCI graph migration" make nexus-oci-migration-e2e
-  run "private Maven and OCI upstream clients" make private-upstream-auth-e2e
-  run "private npm PyPI Cargo APT Raw Conan upstream clients" make private-upstream-formats-e2e
+  printf '\n== contract-and-test (core plus every native lane) ==\n'
+  run_contract_lane core
+  while IFS= read -r lane; do
+    run_contract_lane "$lane"
+  done < <(python3 -c 'import json; print("\n".join(json.load(open("scripts/ci-contract-lanes.json"))["nativeOrder"]))')
+  # Keep the existing additional local CLI stack check; CI runs this client
+  # against the Console job's gateway instead.
   run "agctl CLI E2E (isolated Compose stack)" make cli-e2e
-  run "agctl runtime restart and dependency failures" make cli-runtime-e2e
-  run "release readiness entrypoints" make release-readiness-check
 }
 
 run_console() {
@@ -186,10 +164,12 @@ case "$job" in
   list)
     printf 'fast     : lint, vet, go test ./..., docs-check, CLI command map contract, openapi freshness, console typecheck/check/test\n'
     printf 'quality  : CI job quality\n'
-    printf 'contract : CI job contract-and-test\n'
+    printf 'contract : core plus all six native lanes, then the local CLI stack check\n'
+    printf 'lanes    : use --lane core|migration-clients|inventory|nuget|oci-migration|maven-oci-auth|six-format-auth\n'
     printf 'console  : CI job console\n'
     printf 'all      : quality, contract, console\n'
     ;;
+  lane:*) run_contract_lane "${job#lane:}" ;;
   fast) run_fast ;;
   quality) run_quality ;;
   contract) run_contract ;;
