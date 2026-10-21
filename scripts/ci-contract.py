@@ -10,7 +10,6 @@ import re
 import selectors
 import shutil
 import signal
-import stat
 import subprocess
 import sys
 import tempfile
@@ -311,39 +310,6 @@ def case_summary(directory):
     return {k: sorted(v) for k, v in events.items()}
 
 
-def remove_owned_work(work):
-    # Go downloads module directories read-only. Hold the original directory
-    # descriptors through permission repair and deletion; paths can be renamed.
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    parent_descriptor = os.open(work.parent, flags)
-    try:
-        root_descriptor = os.open(work.name, flags, dir_fd=parent_descriptor)
-        try:
-            original = os.fstat(root_descriptor)
-            for _, _, _, descriptor in os.fwalk('.', follow_symlinks=False,
-                                                 dir_fd=root_descriptor):
-                mode = stat.S_IMODE(os.fstat(descriptor).st_mode)
-                if not mode & stat.S_IWUSR:
-                    os.fchmod(descriptor, mode | stat.S_IWUSR)
-            if not os.path.samestat(original, os.stat(work.name, dir_fd=parent_descriptor,
-                                                      follow_symlinks=False)):
-                raise OSError('owned temporary directory was replaced')
-            for name in os.listdir(root_descriptor):
-                if stat.S_ISDIR(os.stat(name, dir_fd=root_descriptor,
-                                       follow_symlinks=False).st_mode):
-                    shutil.rmtree(name, dir_fd=root_descriptor)
-                else:
-                    os.unlink(name, dir_fd=root_descriptor)
-            if not os.path.samestat(original, os.stat(work.name, dir_fd=parent_descriptor,
-                                                      follow_symlinks=False)):
-                raise OSError('owned temporary directory was replaced')
-            os.rmdir(work.name, dir_fd=parent_descriptor)
-        finally:
-            os.close(root_descriptor)
-    finally:
-        os.close(parent_descriptor)
-
-
 def run_lane(args):
     lane = PLAN['lanes'][args.lane]
     output = args.output.resolve()
@@ -369,7 +335,8 @@ def run_lane(args):
     work = Path(tempfile.mkdtemp(prefix='ag-contract-' + args.lane + '-'))
     env = dict(os.environ, TMPDIR=str(work))
     if args.cold_cache:
-        env.update(GOCACHE=str(work / 'go-build'), GOMODCACHE=str(work / 'go-mod'))
+        env.update(GOCACHE=str(work / 'go-build'), GOMODCACHE=str(work / 'go-mod'),
+                   GOFLAGS=(env.get('GOFLAGS', '') + ' -modcacherw').strip())
     dedicated_core = dedicated and args.lane == 'core' and not args.local
     caches = None
     def stop_lane(signum, _frame):
@@ -432,7 +399,7 @@ def run_lane(args):
             except Exception as error:
                 cleanup['errors'].append({'stage': 'raw-evidence', 'error': type(error).__name__})
             try:
-                remove_owned_work(work)
+                shutil.rmtree(work)
             except Exception as error:
                 cleanup['errors'].append({'stage': 'temporary-directory', 'error': type(error).__name__})
             cleanup['ownedTemporaryDirectoryRemoved'] = not work.exists()

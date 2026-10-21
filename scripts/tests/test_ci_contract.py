@@ -13,6 +13,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('ci_contract', ROOT / 'scripts/ci-contract.py')
@@ -789,155 +790,110 @@ class ContractGateTests(unittest.TestCase):
         self.assertEqual(workflow.count('--benchmark-only'), 2)
 
 
-class ColdCacheCleanupTests(unittest.TestCase):
+class ColdModuleCacheTests(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory(prefix='ag-cold-cleanup-controls-')
+        self.directory = tempfile.TemporaryDirectory(prefix='ag-cold-module-controls-')
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.work = self.root / 'owned-work'
         self.work.mkdir()
-        self.output = self.root / 'evidence'
-        self.foreign = self.root / 'outside-sentinel'
+        self.project = self.root / 'project'
+        self.project.mkdir()
+        self.proxy = self.root / 'proxy' / 'example.test' / 'cold-cache' / '@v'
+        self.proxy.mkdir(parents=True)
+        self.mod = 'module example.test/cold-cache\n\ngo 1.20\n'
+        (self.proxy / 'v1.0.0.mod').write_text(self.mod)
+        (self.proxy / 'v1.0.0.info').write_text('{"Version":"v1.0.0","Time":"2026-01-01T00:00:00Z"}')
+        self.archive()
+        (self.project / 'go.mod').write_text('module example.test/consumer\n\ngo 1.20\n\nrequire example.test/cold-cache v1.0.0\n')
+        self.sums = ('example.test/cold-cache v1.0.0 h1:S2G5cFkb+JhWvCkT8nfHSMlNsONlwMIIkU72iYj8mPo=\n'
+                     'example.test/cold-cache v1.0.0/go.mod h1:37wizKh8CH2eu2LLMbQD03xAs8Eqc8N1g2d2CYStrZI=\n')
+        (self.project / 'go.sum').write_text(self.sums)
+        self.foreign = self.root / 'existing-cache'
         self.foreign.mkdir()
-        (self.foreign / 'content').write_text('must remain unchanged')
-        self.foreign.chmod(0o555)
+        (self.foreign / 'sentinel').write_text('preserve existing cache')
 
-    def lane(self, setup, producer_status='success'):
+    def archive(self, content='verified fixture'):
+        with zipfile.ZipFile(self.proxy / 'v1.0.0.zip', 'w') as archive:
+            prefix = 'example.test/cold-cache@v1.0.0/'
+            archive.writestr(prefix + 'go.mod', self.mod)
+            archive.writestr(prefix + 'cache.go', 'package cache\n\nconst Value = "' + content + '"\n')
+
+    def lane(self, cold=True, command=None, cleanup_error=False):
+        output = self.root / 'evidence'
         source = {'head': 'a' * 40, 'tree': 'b' * 40, 'businessDigest': 'c' * 64}
+        command = command or ['go', '-C', str(self.project), 'mod', 'download', 'example.test/cold-cache@v1.0.0']
         plan = {'lanes': {'cold-probe': {'rawDirectories': [], 'steps': [
-            {'name': 'owned cold module cache', 'command': ['owned-probe'], 'timeoutSeconds': 2}]}}}
-        args = argparse.Namespace(lane='cold-probe', output=self.output, prefix='control',
-                                  cold_cache=True, local=True, keep_going=False)
-        def producer(_command, log, environment, _timeout):
-            self.assertEqual(environment['GOMODCACHE'], str(self.work / 'go-mod'))
-            setup()
-            log.write_text('owned cold-cache permissions probe\n')
-            return {'status': producer_status, 'exitCode': 0 if producer_status == 'success' else 7}
+            {'name': 'verified local Go module', 'command': command, 'timeoutSeconds': 30}]}}}
+        args = argparse.Namespace(lane='cold-probe', output=output, prefix='control',
+                                  cold_cache=cold, local=True, keep_going=False)
+        environment = {'GITHUB_ACTIONS': 'false', 'GOFLAGS': '-trimpath', 'GOENV': 'off',
+                       'GOTOOLCHAIN': 'local', 'GOWORK': 'off',
+                       'GONOSUMDB': 'example.test/cold-cache',
+                       'GOPROXY': (self.root / 'proxy').as_uri(),
+                       'GOCACHE': str(self.foreign / 'build'), 'GOMODCACHE': str(self.foreign / 'mod')}
+        original_command, original_remove = ci.run_command, ci.shutil.rmtree
+        observed = {}
+        def producer(command, log, env, timeout):
+            observed['flags'] = env['GOFLAGS']
+            observed['moduleCache'] = env['GOMODCACHE']
+            result = original_command(command, log, env, timeout)
+            module = Path(env['GOMODCACHE']) / 'example.test' / 'cold-cache@v1.0.0'
+            if module.exists():
+                observed['moduleMode'] = module.stat().st_mode & 0o777
+                observed['content'] = (module / 'cache.go').read_text()
+            return result
+        def remove(path, *arguments, **keywords):
+            if cleanup_error and Path(path) == self.work:
+                raise PermissionError('owned cleanup denied')
+            return original_remove(path, *arguments, **keywords)
         with patch.object(ci, 'PLAN', plan), patch.object(ci, 'business_source', return_value=source), \
                 patch.object(ci.tempfile, 'mkdtemp', return_value=str(self.work)), \
                 patch.object(ci, 'run_command', side_effect=producer), \
-                patch.dict(os.environ, {'GITHUB_ACTIONS': 'false'}):
-            result = ci.run_lane(args)
-        return result, json.loads((self.output / 'report.json').read_text())
+                patch.object(ci.shutil, 'rmtree', side_effect=remove), \
+                patch.dict(os.environ, environment):
+            status = ci.run_lane(args)
+            self.assertEqual(os.environ['GOFLAGS'], '-trimpath')
+            self.assertEqual(os.environ['GOMODCACHE'], str(self.foreign / 'mod'))
+        self.assertEqual((self.project / 'go.sum').read_text(), self.sums)
+        self.assertEqual((self.foreign / 'sentinel').read_text(), 'preserve existing cache')
+        return status, json.loads((output / 'report.json').read_text()), observed
 
-    def readonly_module_cache(self):
-        module = self.work / 'go-mod' / 'example.test' / 'module@v1.0.0'
-        nested = module / 'nested'
-        nested.mkdir(parents=True)
-        (nested / 'module.go').write_text('package fixture\n')
-        (nested / 'module.go').chmod(0o444)
-        nested.chmod(0o555)
-        module.chmod(0o555)
-
-    def assert_foreign_preserved(self):
-        self.assertEqual((self.foreign / 'content').read_text(), 'must remain unchanged')
-        self.assertEqual(self.foreign.stat().st_mode & 0o777, 0o555)
-
-    def test_cold_readonly_go_modules_are_removed_before_success(self):
-        result, report = self.lane(self.readonly_module_cache)
-        self.assertEqual(result, 0)
+    def test_cold_verified_module_is_writable_and_removed(self):
+        status, report, observed = self.lane()
+        self.assertEqual(status, 0)
+        self.assertIn('-trimpath', observed['flags'])
+        self.assertTrue(observed['moduleMode'] & 0o200)
+        self.assertIn('verified fixture', observed['content'])
+        self.assertEqual(observed['moduleCache'], str(self.work / 'go-mod'))
         self.assertEqual(report['cleanup']['errors'], [])
         self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
-        self.assertFalse(self.work.exists())
-        self.assert_foreign_preserved()
+        self.assertEqual(list(self.foreign.iterdir()), [self.foreign / 'sentinel'])
 
-    def test_readonly_cache_cleanup_does_not_hide_producer_failure(self):
-        result, report = self.lane(self.readonly_module_cache, 'failure')
-        self.assertEqual(result, 1)
-        self.assertEqual(report['steps'][0]['exitCode'], 7)
+    def test_cold_flag_does_not_bypass_recorded_module_checksum(self):
+        self.archive('tampered fixture')
+        status, report, _ = self.lane()
+        self.assertEqual(status, 1)
+        self.assertNotEqual(report['steps'][0]['exitCode'], 0)
+        self.assertIn('checksum mismatch', (self.root / 'evidence/logs/00.log').read_text())
         self.assertEqual(report['cleanup']['errors'], [])
         self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
-        self.assert_foreign_preserved()
 
-    def test_directory_symlinks_never_change_external_permissions(self):
-        def setup():
-            (self.work / 'go-mod').mkdir()
-            (self.work / 'go-mod' / 'outside').symlink_to(self.foreign, target_is_directory=True)
-        result, report = self.lane(setup)
-        self.assertEqual(result, 0)
-        self.assertEqual(report['cleanup']['errors'], [])
-        self.assert_foreign_preserved()
+    def test_non_cold_lane_preserves_existing_flags_and_cache(self):
+        status, report, observed = self.lane(cold=False, command=['go', 'env', 'GOFLAGS'])
+        self.assertEqual(status, 0)
+        self.assertEqual(observed['flags'], '-trimpath')
+        self.assertEqual(observed['moduleCache'], str(self.foreign / 'mod'))
+        self.assertEqual((self.root / 'evidence/logs/00.log').read_text().strip(), '-trimpath')
+        self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
 
-    def test_permission_repair_failure_still_fails_closed(self):
-        with patch.object(ci.os, 'fchmod', side_effect=PermissionError('owned permission denied')):
-            result, report = self.lane(self.readonly_module_cache)
-        self.assertEqual(result, 1)
-        self.assertTrue(report['cleanup']['errors'])
+    def test_cold_cleanup_error_still_fails_successful_producer(self):
+        status, report, _ = self.lane(cleanup_error=True)
+        self.assertEqual(status, 1)
+        self.assertEqual(report['steps'][0]['exitCode'], 0)
+        self.assertEqual(report['cleanup']['errors'], [
+            {'stage': 'temporary-directory', 'error': 'PermissionError'}])
         self.assertFalse(report['cleanup']['ownedTemporaryDirectoryRemoved'])
-        self.assert_foreign_preserved()
-
-    def test_mid_traversal_root_swap_cannot_change_outside_directory_modes(self):
-        self.foreign.chmod(0o755)
-        outside = self.foreign / 'go-mod' / 'example.test' / 'module@v1.0.0' / 'nested'
-        outside.mkdir(parents=True)
-        (outside / 'sentinel.go').write_text('outside unchanged\n')
-        for directory in [outside, outside.parent, outside.parent.parent,
-                          self.foreign / 'go-mod', self.foreign]:
-            directory.chmod(0o555)
-        before = {str(p.relative_to(self.foreign)): p.stat().st_mode & 0o777
-                  for p in [self.foreign, *self.foreign.rglob('*')]}
-        original_open = os.open
-        swapped = False
-        def racing_open(path, flags, *arguments, **keywords):
-            nonlocal swapped
-            descriptor = original_open(path, flags, *arguments, **keywords)
-            if ((os.fspath(path) == str(self.work)) or
-                    (os.fspath(path) == self.work.name and keywords.get('dir_fd') is not None)) and not swapped:
-                swapped = True
-                self.work.rename(self.root / 'retained-original-work')
-                self.work.symlink_to(self.foreign, target_is_directory=True)
-            return descriptor
-        with patch.object(ci.os, 'open', side_effect=racing_open):
-            result, report = self.lane(self.readonly_module_cache)
-        self.assertTrue(swapped)
-        self.assertEqual(result, 1)
-        self.assertTrue(report['cleanup']['errors'])
-        after = {str(p.relative_to(self.foreign)): p.stat().st_mode & 0o777
-                 for p in [self.foreign, *self.foreign.rglob('*')]}
-        self.assertEqual(after, before)
-        self.assertEqual((outside / 'sentinel.go').read_text(), 'outside unchanged\n')
-        self.assert_foreign_preserved()
-
-    def test_mid_traversal_parent_swap_cannot_follow_replacement(self):
-        self.work.rmdir()
-        parent = self.root / 'owned-parent'
-        parent.mkdir()
-        self.work = parent / 'owned-work'
-        self.work.mkdir()
-        self.foreign.chmod(0o755)
-        outside_work = self.foreign / 'owned-work'
-        outside_work.mkdir()
-        (outside_work / 'sentinel').write_text('outside parent unchanged')
-        outside_work.chmod(0o555)
-        self.foreign.chmod(0o555)
-        original_open = os.open
-        swapped = False
-        def racing_open(path, flags, *arguments, **keywords):
-            nonlocal swapped
-            descriptor = original_open(path, flags, *arguments, **keywords)
-            if ((os.fspath(path) == str(self.work)) or
-                    (os.fspath(path) == self.work.name and keywords.get('dir_fd') is not None)) and not swapped:
-                swapped = True
-                parent.rename(self.root / 'retained-owned-parent')
-                parent.symlink_to(self.foreign, target_is_directory=True)
-            return descriptor
-        with patch.object(ci.os, 'open', side_effect=racing_open):
-            result, report = self.lane(self.readonly_module_cache)
-        self.assertTrue(swapped)
-        self.assertEqual(result, 1)
-        self.assertFalse(report['cleanup']['ownedTemporaryDirectoryRemoved'])
-        self.assertFalse((self.root / 'retained-owned-parent' / 'owned-work').exists())
-        self.assertEqual(outside_work.stat().st_mode & 0o777, 0o555)
-        self.assertEqual((outside_work / 'sentinel').read_text(), 'outside parent unchanged')
-        self.assert_foreign_preserved()
-
-    def test_replaced_work_root_is_rejected_without_touching_target(self):
-        self.work.rmdir()
-        self.work.symlink_to(self.foreign, target_is_directory=True)
-        result, report = self.lane(lambda: None)
-        self.assertEqual(result, 1)
-        self.assertTrue(report['cleanup']['errors'])
-        self.assert_foreign_preserved()
 
 
 if __name__ == '__main__':
