@@ -63,7 +63,7 @@ func (m *Module) authorizeGroup(w http.ResponseWriter, r *http.Request, group re
 	}
 	return p, true
 }
-func (m *Module) groupMetadata(ctx context.Context, group repository.HostedGroup, members []repository.HostedRepository, id string, query url.Values, autocomplete bool) ([]repository.NuGetPublication, error) {
+func (m *Module) groupMetadata(ctx context.Context, group repository.HostedGroup, members []repository.HostedRepository, id string, query url.Values, autocomplete bool, readable func(string) bool) ([]repository.NuGetPublication, error) {
 	all := map[string]map[string]repository.NuGetPublication{}
 	first := map[string]repository.NuGetPublication{}
 	memberByID := map[string]repository.HostedRepository{}
@@ -102,6 +102,11 @@ func (m *Module) groupMetadata(ctx context.Context, group repository.HostedGroup
 	out := make([]repository.NuGetPublication, 0, len(keys))
 	for _, key := range keys {
 		candidate := first[key]
+		// Collection access can authorize discovery without granting this full
+		// package ID. Do not let a filtered result establish a global authority.
+		if readable != nil && !readable(candidate.PackageID) {
+			continue
+		}
 		member := memberByID[candidate.RepositoryID]
 		owner, err := m.sources.BindNuGetGroupAuthority(ctx, group.Version, repository.NuGetGroupAuthority{GroupID: group.ID, PackageID: candidate.PackageID, Version: candidate.Version, RepositoryID: member.ID, RepositoryVersion: member.Version})
 		if err != nil {
@@ -122,7 +127,7 @@ func (m *Module) groupMetadata(ctx context.Context, group repository.HostedGroup
 	return out, nil
 }
 func (m *Module) groupPackage(ctx context.Context, group repository.HostedGroup, members []repository.HostedRepository, id, version string) (repository.NuGetPublication, error) {
-	items, err := m.groupMetadata(ctx, group, members, id, nil, false)
+	items, err := m.groupMetadata(ctx, group, members, id, nil, false, nil)
 	if err != nil {
 		return repository.NuGetPublication{}, err
 	}
@@ -210,28 +215,22 @@ func (m *Module) serveGroup(w http.ResponseWriter, r *http.Request, group reposi
 			m.problem(w, 400, "invalid_search_query")
 			return
 		}
-		items, err := m.groupMetadata(r.Context(), group, members, "", r.URL.Query(), parts[0] == "autocomplete")
+		readable := func(id string) bool {
+			if principal.Actor != "anonymous" {
+				for _, member := range members {
+					if !m.access.AuthorizeResource(r.Context(), principal, member, authorization.RepositoryRead, id).Allowed {
+						return false
+					}
+				}
+			}
+			return true
+		}
+		items, err := m.groupMetadata(r.Context(), group, members, "", r.URL.Query(), parts[0] == "autocomplete", readable)
 		if err != nil {
 			m.failure(w, err)
 			return
 		}
-		// Filter both the Group and actual owner at the full canonical ID.
-		filtered := items[:0]
-		for _, item := range items {
-			allowed := true
-			if principal.Actor != "anonymous" {
-				for _, member := range members {
-					if !m.access.AuthorizeResource(r.Context(), principal, member, authorization.RepositoryRead, item.PackageID).Allowed {
-						allowed = false
-						break
-					}
-				}
-			}
-			if allowed {
-				filtered = append(filtered, item)
-			}
-		}
-		m.searchItems(w, r, repo, principal, parts[0] == "autocomplete", filtered, skip, take, false)
+		m.searchItems(w, r, repo, principal, parts[0] == "autocomplete", items, skip, take, false)
 		return
 	}
 	if len(parts) < 3 || resource == "" {
@@ -239,7 +238,7 @@ func (m *Module) serveGroup(w http.ResponseWriter, r *http.Request, group reposi
 		return
 	}
 	if parts[0] == "flat" && len(parts) == 3 && parts[2] == "index.json" {
-		items, err := m.groupMetadata(r.Context(), group, members, resource, nil, false)
+		items, err := m.groupMetadata(r.Context(), group, members, resource, nil, false, nil)
 		if err != nil {
 			m.failure(w, err)
 			return
@@ -257,7 +256,7 @@ func (m *Module) serveGroup(w http.ResponseWriter, r *http.Request, group reposi
 		return
 	}
 	if parts[0] == "registration" {
-		items, err := m.groupMetadata(r.Context(), group, members, resource, nil, false)
+		items, err := m.groupMetadata(r.Context(), group, members, resource, nil, false, nil)
 		if err != nil {
 			m.failure(w, err)
 			return

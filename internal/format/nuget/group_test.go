@@ -33,6 +33,56 @@ func hostedPackage(t *testing.T, f fixture, repo repository.HostedRepository, bo
 	}
 }
 
+func TestNuGetGroupSearchAuthorizesBeforeBinding(t *testing.T) {
+	for _, endpoint := range []string{"query", "autocomplete"} {
+		for _, permitted := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/authorized=%t", endpoint, permitted), func(t *testing.T) {
+				body := packageFixture(t, "Acme.Shared", "1.0.0", "")
+				feed := newTestFeed(t, body)
+				f, proxy := proxyFixture(t, feed)
+				hostedPackage(t, f, f.repo, body)
+				group := testNuGetGroup(t, f, f.repo, proxy)
+				prefix := "allowed."
+				if permitted {
+					prefix = "acme."
+				}
+				for _, id := range []string{f.repo.ID, proxy.ID} {
+					if _, err := f.store.ReplaceRepositoryGrants(t.Context(), id, []repository.RepositoryGrant{{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: prefix}}, "1"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				r := httptest.NewRequest(http.MethodGet, "https://gateway.test/nuget/"+group.Name+"/v3/"+endpoint+"?q=acme", nil)
+				r.Header.Set("Authorization", "Bearer nuget-test-reader")
+				w := httptest.NewRecorder()
+				f.module.ServeHTTP(w, r)
+				if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "acme.shared") != permitted {
+					t.Fatalf("search visibility: %d %s", w.Code, w.Body.String())
+				}
+				owner, err := f.store.GetNuGetGroupAuthority(t.Context(), group.ID, "acme.shared", "1.0.0")
+				if permitted {
+					if err != nil || owner.RepositoryID != f.repo.ID {
+						t.Fatalf("authorized search did not bind its owner: %+v %v", owner, err)
+					}
+				} else if !errors.Is(err, repository.ErrNotFound) {
+					t.Fatalf("unauthorized search primed a global authority: %+v %v", owner, err)
+				}
+				group, err = f.store.ReplaceHostedGroupMembers(t.Context(), group.ID, []repository.GroupMember{{RepositoryID: proxy.ID, Position: 0}, {RepositoryID: f.repo.ID, Position: 1}}, group.Version)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedOwner := proxy.ID
+				if permitted {
+					expectedOwner = f.repo.ID
+				}
+				resolved := nativeGet(t, f.module, group.Name+"/v3/flat/acme.shared/1.0.0/acme.shared.1.0.0.nupkg")
+				if resolved.Code != http.StatusOK || !bytes.Equal(resolved.Body.Bytes(), body) || resolved.Header().Get("X-NuGet-Source-Repository") != expectedOwner {
+					t.Fatalf("authorized resolution after reorder: %d owner=%s expected=%s", resolved.Code, resolved.Header().Get("X-NuGet-Source-Repository"), expectedOwner)
+				}
+			})
+		}
+	}
+}
+
 func TestNuGetGroupExplicitRevalidationPreservesIdentityAfterCredentialRotation(t *testing.T) {
 	t.Setenv(secrets.KeyEnv, strings.Repeat("64", 32))
 	body := packageFixture(t, "Acme.Rotate", "1.0.0", "")
