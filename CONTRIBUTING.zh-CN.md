@@ -163,6 +163,51 @@ Docker Desktop Kubernetes 可用时，再执行 `make kubernetes-local-up`、
 资产时运行 `make docs-check`；该门禁会检查双语入口互链和本地文档链接。完整必需矩阵以
 CI workflow 为最终事实来源。
 
+### 契约 lane 与性能证据
+
+`contract-and-test` 保持稳定的 required 汇总门禁。`contract-core` 与六条原生
+lane 独立启动；原生 matrix 使用 `fail-fast: false`，最多同时调度三个 job。
+主线制品仍等待汇总、quality 和 Console。汇总拒绝失败、跳过、取消、缺失、
+过期或损坏的结果。同一 run/head 的定向重跑可复用较早 attempt 的成功工件，
+但保留其原 attempt；较新的失败不能回退为较早的成功。
+
+可编辑的目标和超时清单为 `scripts/ci-contract-lanes.json`：
+
+| lane | 既有目标 | 目标时间上限 |
+| --- | --- | --- |
+| migration-clients | `nexus-migration-client-e2e` | 10 分钟 |
+| inventory | `nexus-inventory-scan-e2e` | 10 分钟 |
+| nuget | `native-nuget-e2e` | 15 分钟 |
+| oci-migration | `nexus-oci-migration-e2e` | 10 分钟 |
+| maven-oci-auth | `private-upstream-auth-e2e` | 10 分钟 |
+| six-format-auth | `private-upstream-formats-e2e` | 15 分钟 |
+
+核心保留其它既有目标，包括发布备份 15 分钟、升级 10 分钟的检查。
+`./scripts/ci-local.sh --lane inventory` 单独执行一条 lane；`--job contract`
+执行核心、全部六条 lane，以及原来额外的本地 CLI 栈检查。本地 OpenAPI
+新鲜度通过再生成和文件摘要比较验证，允许审查未提交的生成改动。编排控制测试：
+`python3 -B -m unittest discover -s scripts/tests -p test_ci_contract.py`。
+
+每条 lane 即使在环境准备时失败，也上传 `contract-<lane>-<attempt>`。
+只有 bootstrap 的工件代表失败，不能冒充测试完成。证据保留 head/tree、业务
+文件摘要、原始命令和超时、case 事件、producer 原始文件、计时及清理结果。
+客户端沿用已有自有 fixture 目录；包装层删除自己创建的临时目录，不删除其它
+任务资源。专用 GitHub runner 另记录容器、卷和网络的执行前后差异；本地保留
+fixture 自有清理报告，不把其它并行开发者资源当作自己所有。
+`contract-aggregate-<attempt>` 另保存包含准备阶段的完整 GitHub job 日志。
+只有该采集器增加只读 `actions: read`，发布写权限保持原样。
+
+`contract-benchmark.yml` 进入默认分支后，执行
+`gh workflow run contract-benchmark.yml --ref main`。它在同一提交调用两组相同
+的六条 lane：串行 matrix 限一槽，并行 matrix 最多三槽；两组均使用全新私有
+Go 缓存和相同固定客户端，各自经过严格汇总。最终报告读取已结束的 job 元数据，
+记录 checkout/setup、执行、工件上传、清理、汇总、排队及实际获分配并发数。
+业务文件摘要、缓存条件、runner 架构或 CPU/内存等级不一致时拒绝对照。
+实际至少两个并发 runner，且六 lane 关键路径缩短至少 25%，才构成成功的性能
+证据。样本不可比或只有一槽时性能仍未证明；功能正确不等于已经加速。旧完整
+contract 与新汇总的 wall time 另行报告，并注明各自真实缓存条件。该性能
+工作流不发布发行资产或镜像。
+
 ## 文档约定
 
 每份会进入文档站的 Markdown 都必须有英文规范路由和简体中文 companion。英文使用不带

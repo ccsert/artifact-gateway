@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "baseline": "7396c223d4c833ef16204f3bb8642b123480be4a",
+  "nativeOrder": [
+    "migration-clients",
+    "inventory",
+    "nuget",
+    "oci-migration",
+    "maven-oci-auth",
+    "six-format-auth"
+  ],
+  "lanes": {
+    "core": {
+      "timeoutMinutes": 360,
+      "steps": [
+        {
+          "name": "CI lane control contracts",
+          "command": [
+            "python3",
+            "-B",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "scripts/tests",
+            "-p",
+            "test_ci_contract.py"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "npm lockfile sources",
+          "command": [
+            "node",
+            "scripts/npm-lockfile-check.mjs"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "openapi-check",
+          "command": [
+            "make",
+            "openapi-check"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "cli-contract-check",
+          "command": [
+            "make",
+            "cli-contract-check"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "cli-test",
+          "command": [
+            "make",
+            "cli-test"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "test",
+          "command": [
+            "make",
+            "test"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "cargo-contract",
+          "command": [
+            "make",
+            "cargo-contract"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "kubernetes-local-check",
+          "command": [
+            "make",
+            "kubernetes-local-check"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "email-compose-check",
+          "command": [
+            "make",
+            "email-compose-check"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "cli-runtime-e2e",
+          "command": [
+            "make",
+            "cli-runtime-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "native-oci-e2e",
+          "command": [
+            "make",
+            "native-oci-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "native-raw-e2e",
+          "command": [
+            "make",
+            "native-raw-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "native-maven-e2e",
+          "command": [
+            "make",
+            "native-maven-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "native-npm-e2e",
+          "command": [
+            "make",
+            "native-npm-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "native-pypi-e2e",
+          "command": [
+            "make",
+            "native-pypi-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "native-go-e2e",
+          "command": [
+            "make",
+            "native-go-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "native-apt-e2e",
+          "command": [
+            "make",
+            "native-apt-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "apt-signer-rotation-e2e",
+          "command": [
+            "make",
+            "apt-signer-rotation-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "conan-e2e",
+          "command": [
+            "make",
+            "conan-e2e"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "backup-transfer-test",
+          "command": [
+            "make",
+            "backup-transfer-test"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "published-native-backup-test",
+          "command": [
+            "make",
+            "published-native-backup-test"
+          ],
+          "timeoutSeconds": 900
+        },
+        {
+          "name": "upgrade-readiness",
+          "command": [
+            "make",
+            "upgrade-readiness"
+          ],
+          "timeoutSeconds": 600
+        },
+        {
+          "name": "integration-test",
+          "command": [
+            "make",
+            "integration-test"
+          ],
+          "timeoutSeconds": null
+        },
+        {
+          "name": "release-readiness-check",
+          "command": [
+            "make",
+            "release-readiness-check"
+          ],
+          "timeoutSeconds": null
+        }
+      ],
+      "rawDirectories": [
+        "output/nexus-conan-migration-e2e"
+      ]
+    },
+    "migration-clients": {
+      "timeoutMinutes": 10,
+      "steps": [
+        {
+          "name": "nexus-migration-client-e2e",
+          "command": [
+            "make",
+            "nexus-migration-client-e2e"
+          ],
+          "timeoutSeconds": 600
+        }
+      ],
+      "rawDirectories": []
+    },
+    "inventory": {
+      "timeoutMinutes": 10,
+      "steps": [
+        {
+          "name": "nexus-inventory-scan-e2e",
+          "command": [
+            "make",
+            "nexus-inventory-scan-e2e"
+          ],
+          "timeoutSeconds": 600
+        }
+      ],
+      "rawDirectories": [
+        "output/nexus-inventory-scan-e2e"
+      ]
+    },
+    "nuget": {
+      "timeoutMinutes": 15,
+      "steps": [
+        {
+          "name": "native-nuget-e2e",
+          "command": [
+            "make",
+            "native-nuget-e2e"
+          ],
+          "timeoutSeconds": 900
+        }
+      ],
+      "rawDirectories": [
+        "output/native-nuget-e2e"
+      ]
+    },
+    "oci-migration": {
+      "timeoutMinutes": 10,
+      "steps": [
+        {
+          "name": "nexus-oci-migration-e2e",
+          "command": [
+            "make",
+            "nexus-oci-migration-e2e"
+          ],
+          "timeoutSeconds": 600
+        }
+      ],
+      "rawDirectories": [
+        "output/nexus-oci-migration-e2e"
+      ]
+    },
+    "maven-oci-auth": {
+      "timeoutMinutes": 10,
+      "steps": [
+        {
+          "name": "private-upstream-auth-e2e",
+          "command": [
+            "make",
+            "private-upstream-auth-e2e"
+          ],
+          "timeoutSeconds": 600
+        }
+      ],
+      "rawDirectories": [
+        "output/private-upstream-auth-e2e"
+      ]
+    },
+    "six-format-auth": {
+      "timeoutMinutes": 15,
+      "steps": [
+        {
+          "name": "private-upstream-formats-e2e",
+          "command": [
+            "make",
+            "private-upstream-formats-e2e"
+          ],
+          "timeoutSeconds": 900
+        }
+      ],
+      "rawDirectories": [
+        "output/private-upstream-formats-e2e"
+      ]
+    }
+  }
+}

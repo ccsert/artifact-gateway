@@ -194,6 +194,62 @@ or local assets; it enforces bilingual entry-point links and validates local
 documentation references.
 The CI workflow is the final source of truth for the complete required matrix.
 
+### Contract lanes and performance evidence
+
+`contract-and-test` is the stable required aggregate. `contract-core` and the six
+native lanes start independently; the native matrix uses `fail-fast: false` and
+at most three concurrent jobs. Publication still waits for the aggregate,
+quality and Console. The aggregate rejects failed, skipped, cancelled, missing,
+stale or corrupt results. A targeted rerun may reuse successful artifacts from
+an earlier attempt of the same run and head; their original attempt remains
+visible and a newer failure never falls back to an older success.
+
+The editable target/timeout inventory is `scripts/ci-contract-lanes.json`:
+
+| Lane | Existing target | Target timeout |
+| --- | --- | --- |
+| migration-clients | `nexus-migration-client-e2e` | 10 minutes |
+| inventory | `nexus-inventory-scan-e2e` | 10 minutes |
+| nuget | `native-nuget-e2e` | 15 minutes |
+| oci-migration | `nexus-oci-migration-e2e` | 10 minutes |
+| maven-oci-auth | `private-upstream-auth-e2e` | 10 minutes |
+| six-format-auth | `private-upstream-formats-e2e` | 15 minutes |
+
+Core retains the other existing targets, including the 15-minute published
+backup and 10-minute upgrade checks. Run one lane with
+`./scripts/ci-local.sh --lane inventory`; `--job contract` runs core and all six
+lanes plus the existing additional local CLI stack check. Local OpenAPI freshness
+regenerates and compares file hashes so uncommitted generated changes remain
+reviewable. The orchestration controls run with
+`python3 -B -m unittest discover -s scripts/tests -p test_ci_contract.py`.
+
+Each lane uploads `contract-<lane>-<attempt>` even after setup failure. A
+bootstrap-only artifact is a failure, not a completed test. Evidence contains
+head/tree, business-file hashes, exact commands and timeouts, case events, raw
+producer files, timings and cleanup. Each client uses the existing owned
+fixture directories; the wrapper removes its private temporary directory and
+never deletes other jobs' resources. Dedicated GitHub runners also compare
+container/volume/network inventories before and after execution; local runs
+retain fixture-owned cleanup reports without claiming ownership of other
+concurrent developers' resources. `contract-aggregate-<attempt>` also preserves
+complete GitHub job logs including setup. Only that collector gains read-only
+`actions: read`; publication write permissions are unchanged.
+
+Once `contract-benchmark.yml` is on the default branch, run
+`gh workflow run contract-benchmark.yml --ref main`. It invokes the same six
+lanes twice on the same commit: a one-slot serial matrix and a matrix capped at
+three slots, both with fresh private Go caches and the same pinned clients.
+Each mode has its own strict aggregate. The final report reads completed job
+metadata and includes checkout/setup, execution, artifact upload, cleanup,
+aggregate duration, queue time and actual allocated concurrency. It rejects
+different business-file hashes, cache conditions, runner architecture or
+CPU/memory class. At least two observed concurrent runners and a 25% reduction
+in the six-lane critical path are required for a successful performance proof.
+No comparable sample or one observed slot leaves performance unproven; normal
+contract correctness does not imply a speedup. The old full contract wall time
+and the new aggregate wall time must be reported separately with their actual
+cache conditions. The benchmark does not publish distribution assets or images.
+
 ## Documentation conventions
 
 Every published Markdown document has an English canonical route and a

@@ -1,0 +1,127 @@
+name: Contract lane benchmark
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  serial:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        lane: [migration-clients, inventory, nuget, oci-migration, maven-oci-auth, six-format-auth]
+    uses: ./.github/workflows/contract-lane.yml
+    with:
+      lane: ${{ matrix.lane }}
+      prefix: benchmark-serial
+      cold_cache: true
+
+  serial-gate:
+    if: always()
+    needs: serial
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare aggregate evidence before checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/benchmark-gate"
+          printf '{"status":"bootstrap_incomplete","head":"%s","runId":"%s","attempt":"%s"}\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/benchmark-gate/bootstrap.json"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: lane-artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: benchmark-serial-*
+          path: ${{ runner.temp }}/benchmark-input
+      - name: Require every native lane and its original evidence
+        if: always()
+        env:
+          CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}
+          CI_CONTRACT_ARTIFACT_RESULT: ${{ steps.lane-artifacts.outcome }}
+        run: python3 scripts/ci-contract.py aggregate --native-only --prefix benchmark-serial --needs-job serial --input "$RUNNER_TEMP/benchmark-input" --output "$RUNNER_TEMP/benchmark-gate"
+      - name: Preserve aggregate on all outcomes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benchmark-serial-gate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/benchmark-gate/
+          if-no-files-found: error
+
+  parallel:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        lane: [migration-clients, inventory, nuget, oci-migration, maven-oci-auth, six-format-auth]
+    uses: ./.github/workflows/contract-lane.yml
+    with:
+      lane: ${{ matrix.lane }}
+      prefix: benchmark-parallel
+      cold_cache: true
+
+  parallel-gate:
+    if: always()
+    needs: parallel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare aggregate evidence before checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/benchmark-gate"
+          printf '{"status":"bootstrap_incomplete","head":"%s","runId":"%s","attempt":"%s"}\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/benchmark-gate/bootstrap.json"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: lane-artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: benchmark-parallel-*
+          path: ${{ runner.temp }}/benchmark-input
+      - name: Require every native lane and its original evidence
+        if: always()
+        env:
+          CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}
+          CI_CONTRACT_ARTIFACT_RESULT: ${{ steps.lane-artifacts.outcome }}
+        run: python3 scripts/ci-contract.py aggregate --native-only --prefix benchmark-parallel --needs-job parallel --input "$RUNNER_TEMP/benchmark-input" --output "$RUNNER_TEMP/benchmark-gate"
+      - name: Preserve aggregate on all outcomes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benchmark-parallel-gate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/benchmark-gate/
+          if-no-files-found: error
+
+  benchmark-report:
+    if: always()
+    needs: [serial-gate, parallel-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Prepare performance evidence before checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/benchmark-report"
+          printf '{"status":"bootstrap_incomplete","head":"%s","runId":"%s","attempt":"%s"}\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/benchmark-report/bootstrap.json"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: lane-artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: benchmark-*
+          path: ${{ runner.temp }}/benchmark-input
+      - name: Compare complete gates with matching cold business inputs
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}
+          CI_CONTRACT_ARTIFACT_RESULT: ${{ steps.lane-artifacts.outcome }}
+        run: python3 scripts/ci-contract.py benchmark --input "$RUNNER_TEMP/benchmark-input" --output "$RUNNER_TEMP/benchmark-report"
+      - name: Preserve performance evidence including unsuccessful comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: contract-benchmark-report-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/benchmark-report/
+          if-no-files-found: error
