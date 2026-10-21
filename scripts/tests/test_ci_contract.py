@@ -896,5 +896,213 @@ class ColdModuleCacheTests(unittest.TestCase):
         self.assertFalse(report['cleanup']['ownedTemporaryDirectoryRemoved'])
 
 
+class JobLogConsistencyTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(prefix='ag-job-log-consistency-')
+        self.addCleanup(self.directory.cleanup)
+        self.output = Path(self.directory.name)
+        self.env = {'GITHUB_REPOSITORY': 'synthetic/repository', 'GITHUB_RUN_ID': '123',
+                    'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_SHA': '1' * 40,
+                    'GITHUB_EVENT_NAME': 'push',
+                    'GITHUB_TOKEN': 'synthetic-token-not-recorded'}
+        self.job = {'id': 42, 'name': 'contract-core / contract/core',
+                    'run_id': 123, 'run_attempt': 2, 'head_sha': self.env['GITHUB_SHA'],
+                    'status': 'completed', 'conclusion': 'success'}
+        self.log = b'Set up job\nOriginal producer output\nComplete job\n'
+        self.elapsed = 0
+        self.calls = []
+        self.sleeps = []
+        self.request_elapsed = {}
+
+    def collect(self, snapshots, logs):
+        calls = {'metadata': 0, 'log': 0}
+        class Response:
+            def __init__(self, body):
+                self.body = body
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return False
+            def read(self):
+                return self.body
+        def open_response(request, *, timeout):
+            endpoint = 'metadata' if '/jobs?filter=latest&' in request.full_url else 'log'
+            self.calls.append({'endpoint': endpoint, 'timeout': timeout})
+            self.elapsed += self.request_elapsed.get(endpoint, 0)
+            values = snapshots if endpoint == 'metadata' else logs
+            value = values[min(calls[endpoint], len(values) - 1)]
+            calls[endpoint] += 1
+            if isinstance(value, Exception):
+                raise value
+            return Response(json.dumps({'jobs': value}).encode() if endpoint == 'metadata' else value)
+        def sleep(seconds):
+            self.assertGreater(seconds, 0)
+            self.sleeps.append(seconds)
+            self.elapsed += seconds
+        class Opener:
+            open = staticmethod(open_response)
+        with patch.dict(os.environ, self.env), \
+                patch.object(ci.urllib.request, 'build_opener', return_value=Opener()), \
+                patch.object(ci.time, 'monotonic', side_effect=lambda: self.elapsed), \
+                patch.object(ci.time, 'sleep', side_effect=sleep):
+            return ci.collect_job_logs(self.output, lanes=('core',))
+
+    def manifest(self):
+        return json.loads((self.output / 'job-log-manifest.json').read_text())
+
+    def poll_readbacks(self):
+        return [json.loads(path.read_text())
+                for path in sorted((self.output / 'job-log-polls').glob('*-readback.json'))]
+
+    def test_successful_steps_with_stale_job_status_are_read_again(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None,
+                 'steps': [{'name': 'Complete job', 'status': 'completed', 'conclusion': 'success'}]}
+        jobs = self.collect([[stale], [self.job]], [self.log])
+        self.assertEqual(jobs, [self.job])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        snapshots = sorted((self.output / 'job-log-polls').glob('*-jobs.json'))
+        self.assertEqual([json.loads(path.read_text())[0]['status'] for path in snapshots],
+                         ['in_progress', 'completed'])
+        self.assertEqual(self.manifest()['missing'], [])
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_permanently_stale_metadata_stops_at_the_collection_deadline(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None}
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[stale]], [self.log])
+        self.assertEqual(self.elapsed, 120)
+        self.assertLessEqual(len(self.sleeps), 60)
+        self.assertFalse(self.manifest()['complete'])
+        self.assertEqual(self.manifest()['missing'], ['contract/core'])
+        self.assertFalse((self.output / 'job-42.log').exists())
+        self.assertGreater(len(self.poll_readbacks()), 1)
+
+    def test_job_log_not_ready_404_is_read_again_without_rerunning_a_job(self):
+        unavailable = ci.urllib.error.HTTPError('https://api.github.com/synthetic/logs', 404,
+                                               'not ready', {}, None)
+        self.collect([[self.job]], [unavailable, self.log])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertEqual([r['logReads'][0]['status'] for r in self.poll_readbacks()],
+                         ['not_ready', 'ready'])
+        self.assertEqual(self.poll_readbacks()[0]['logReads'][0]['httpStatus'], 404)
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_log_forbidden_fails_immediately_and_diagnostics_omit_credentials(self):
+        forbidden = ci.urllib.error.HTTPError('https://api.github.com/synthetic/logs', 403,
+                                             'forbidden', {}, None)
+        with self.assertRaises(ci.urllib.error.HTTPError) as raised:
+            self.collect([[self.job]], [forbidden, self.log])
+        self.assertEqual(raised.exception.code, 403)
+        self.assertEqual(self.sleeps, [])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertEqual(self.poll_readbacks()[-1]['error']['httpStatus'], 403)
+        self.assertNotIn(self.env['GITHUB_TOKEN'], ''.join(
+            path.read_text() for path in self.output.rglob('*.json')))
+
+    def test_metadata_api_errors_are_not_polled_away(self):
+        for code in (403, 500):
+            with self.subTest(status=code):
+                error = ci.urllib.error.HTTPError('https://api.github.com/synthetic/jobs', code,
+                                                 'unavailable', {}, None)
+                with self.assertRaises(ci.urllib.error.HTTPError):
+                    self.collect([error, [self.job]], [self.log])
+                self.assertEqual(self.sleeps, [])
+                self.assertFalse(self.manifest()['complete'])
+                self.assertEqual(self.poll_readbacks()[-1]['error']['httpStatus'], code)
+
+    def test_unavailable_logs_never_satisfy_complete_collection(self):
+        unavailable = ci.urllib.error.HTTPError('https://api.github.com/synthetic/logs', 404,
+                                               'not ready', {}, None)
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[self.job]], [unavailable])
+        self.assertEqual(self.elapsed, 120)
+        self.assertEqual(self.manifest()['missingLogs'], ['contract/core'])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse((self.output / 'job-42.log').exists())
+
+    def test_empty_log_is_not_ready_evidence(self):
+        self.collect([[self.job]], [b' \n', self.log])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertEqual(self.poll_readbacks()[0]['logReads'][0]['reason'], 'empty_log')
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_wrong_source_run_or_attempt_is_rejected_before_log_download(self):
+        for change in ({'head_sha': '0' * 40}, {'run_id': 456}, {'run_attempt': 3}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'binding'):
+                self.collect([[{**self.job, **change}]], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+            self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_settling_cannot_switch_to_another_same_named_job(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None}
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            self.collect([[stale], [{**self.job, 'id': 43}]], [self.log])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_source_run_and_observed_attempt_cannot_drift_between_polls(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None}
+        for change in ({'head_sha': '0' * 40}, {'run_id': 456}, {'run_attempt': 1}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'binding|identity'):
+                self.collect([[stale], [{**self.job, **change}]], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+            self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_each_request_uses_remaining_budget_and_late_success_still_fails(self):
+        self.request_elapsed = {'metadata': 119, 'log': 2}
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[self.job]], [self.log])
+        self.assertEqual([call['timeout'] for call in self.calls], [45, 1])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse((self.output / 'job-42.log').exists())
+
+    def test_completed_failed_job_keeps_its_original_result_and_log(self):
+        failed = {**self.job, 'conclusion': 'failure'}
+        self.assertEqual(self.collect([[failed]], [self.log]), [failed])
+        self.assertEqual(json.loads((self.output / 'jobs.json').read_text()), [failed])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_retained_successful_attempt_keeps_its_provenance(self):
+        retained = {**self.job, 'run_attempt': 1}
+        self.assertEqual(self.collect([[retained]], [self.log]), [retained])
+        self.assertEqual(self.manifest()['selectedAttempts'], {'42': 1})
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_previous_failed_attempt_cannot_satisfy_the_latest_execution(self):
+        retained = {**self.job, 'run_attempt': 1, 'conclusion': 'failure'}
+        with self.assertRaisesRegex(ValueError, 'retained job source binding'):
+            self.collect([[retained]], [self.log])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_pull_request_api_head_is_bound_separately_from_the_merge_commit(self):
+        payload = {'repository': {'full_name': self.env['GITHUB_REPOSITORY']},
+                   'pull_request': {'head': {'sha': self.job['head_sha']}}}
+        event = self.output / 'event.json'
+        ci.write(event, payload)
+        self.env.update(GITHUB_EVENT_NAME='pull_request', GITHUB_EVENT_PATH=str(event),
+                        GITHUB_SHA='2' * 40)
+        self.assertEqual(self.collect([[self.job]], [self.log]), [self.job])
+        self.assertEqual(self.manifest()['head'], '2' * 40)
+        self.assertEqual(self.manifest()['apiHead'], self.job['head_sha'])
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_pull_request_event_binding_cannot_be_missing_or_point_to_another_source(self):
+        event = self.output / 'event.json'
+        self.env.update(GITHUB_EVENT_NAME='pull_request', GITHUB_EVENT_PATH=str(event),
+                        GITHUB_SHA='2' * 40)
+        for payload in ({}, {'repository': {'full_name': 'other/repository'},
+                             'pull_request': {'head': {'sha': self.job['head_sha']}}},
+                        {'repository': {'full_name': self.env['GITHUB_REPOSITORY']},
+                         'pull_request': {'head': {'sha': '3' * 40}}}):
+            with self.subTest(payload=payload):
+                ci.write(event, payload)
+                with self.assertRaisesRegex(ValueError, 'binding'):
+                    self.collect([[self.job]], [self.log])
+                self.assertFalse(self.manifest()['complete'])
+                self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+
 if __name__ == '__main__':
     unittest.main()
