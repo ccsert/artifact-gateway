@@ -313,7 +313,9 @@ func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, reposit
 // digest verification and circuit breaking all come from fetchOCIContent.
 func (h OCIHandler) serveNativeProxy(w http.ResponseWriter, request *http.Request, repo repository.HostedRepository, imageName, resource, reference, actor string) {
 	member := repository.Member{Type: repository.MemberProxy, RepositoryID: repo.ID, RepositoryVersion: repo.Version, UpstreamAuth: repo.UpstreamAuth, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, OCIBearer: repo.OCIBearer}
-	h.serveV2GroupProxy(w, request, repo.Name, member, imageName, resource, reference, actor)
+	if !h.serveV2GroupProxy(w, request, repo.Name, member, imageName, resource, reference, actor) {
+		writeOCIError(w, http.StatusNotFound, map[string]string{ociManifest: "MANIFEST_UNKNOWN", ociBlob: "BLOB_UNKNOWN"}[resource], "resource unknown to registry")
+	}
 }
 
 // serveV2GroupProxy serves a manifest or blob read against a single proxy
@@ -321,7 +323,7 @@ func (h OCIHandler) serveNativeProxy(w http.ResponseWriter, request *http.Reques
 // while the upstream image name is the path component after it. It reuses the
 // Group proxy fetch path: upstream client, read-through cache, digest
 // verification and circuit breaking all come from fetchOCIContent.
-func (h OCIHandler) serveV2GroupProxy(w http.ResponseWriter, request *http.Request, groupName string, member repository.Member, imageName, resource, reference, actor string) {
+func (h OCIHandler) serveV2GroupProxy(w http.ResponseWriter, request *http.Request, groupName string, member repository.Member, imageName, resource, reference, actor string) bool {
 	members := []repository.Member{member}
 	cacheKey := ""
 	if h.Cache != nil {
@@ -391,14 +393,18 @@ func (h OCIHandler) serveV2GroupProxy(w http.ResponseWriter, request *http.Reque
 		h.Resolver.RecordOCIRequestFailure()
 		var fetchErr *ociFetchError
 		if errors.As(err, &fetchErr) {
+			if fetchErr.status == http.StatusNotFound {
+				return false
+			}
 			writeOCIError(w, fetchErr.status, fetchErr.code, fetchErr.message)
-			return
+			return true
 		}
 		writeOCIError(w, http.StatusBadGateway, "UNKNOWN", "upstream registry unavailable")
-		return
+		return true
 	}
 	defer content.Cleanup()
 	serveCachedOCIContent(w, request, reference, content)
+	return true
 }
 
 type ociFetchError struct {

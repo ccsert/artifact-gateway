@@ -52,6 +52,7 @@ agree with executable tests and the
 ## Protocols and formats
 
 - [Protocol compatibility](protocol-compatibility.md) — implemented behavior and explicit limits by format.
+- [OCI Catalog and Referrers](oci-discovery.md) — authorized enumeration, coverage, verified closures and stable source bindings.
 - [Conan 2 native publication](conan-native-publication.md) — canonical remote, manifest visibility and client acceptance.
 - [PyPI file yanking](pypi-yank.md) — file selection, atomic management, pip and recovery evidence.
 - [Raw HTTP ranges](raw-http-ranges.md) — bounded multipart reads and immutable validators.
@@ -65,7 +66,9 @@ agree with executable tests and the
 - [APT Hosted roadmap](apt-hosted-roadmap.md) — ordered H1-H4 acceptance gates.
 - [Cargo client setup](cargo-usage.md) — Hosted, Proxy, and Group registry configuration and commands.
 - [Cargo repository research](cargo-repository-research.md) — sparse registry decisions and C0-C4 implementation record.
-- [NuGet roadmap](nuget-roadmap.md) — deferred protocol and lifecycle plan.
+- [NuGet Hosted preview](nuget-hosted-preview.md) — default-off native publication and verified restore.
+- [NuGet Proxy and Group preview](nuget-proxy-group-preview.md) — V3 source discovery, persistent authority and private verified caches.
+- [NuGet roadmap](nuget-roadmap.md) — preview acceptance and remaining lifecycle/admission work.
 - [Legacy Group migration](legacy-group-migration.md) — compatibility behavior and migration guidance.
 - [Gitea backend reference](gitea-backend-reference.md) — preflight and evidence-loop design reference.
 

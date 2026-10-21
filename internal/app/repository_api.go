@@ -247,6 +247,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: upstreamClient, Authenticator: authenticator, Cache: cache}
 	publicationScanner := NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
 	nativeOCI := newNativeOCIHandler(store, options.Storage[repository.FormatOCI], authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
+	nativeOCI.discovery, nativeOCI.groups = options.OCIDiscoveryStore, store
 	rawLegacy := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}
 	rawModule := rawformat.New(rawformat.Options{Store: store, Repositories: store, Groups: store, Objects: options.Storage[repository.FormatRaw], Authenticator: authenticator,
 		Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
@@ -258,7 +259,13 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	modules := []formatmodule.Module{rawModule}
 	var nugetPreview http.Handler
 	if options.NuGetPreviewEnabled {
-		nugetModule, err := nugetformat.New(nugetformat.Options{Store: options.NuGetStore, Repositories: store, Objects: options.NuGetObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		client := nugetformat.Upstream(UpstreamClient{})
+		if options.NuGetUpstream != nil {
+			client = options.NuGetUpstream
+		} else if configured, ok := upstreamClient.(nugetformat.Upstream); ok {
+			client = configured
+		}
+		nugetModule, err := nugetformat.New(nugetformat.Options{Store: options.NuGetStore, Sources: options.NuGetSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.NuGetObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
 		if err != nil {
 			return nil, err
 		}

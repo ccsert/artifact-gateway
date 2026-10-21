@@ -1,6 +1,15 @@
 import type { FormatsMessageKey } from "./formats.zh-CN";
 
 export const formatsEnUS: Record<FormatsMessageKey, string> = {
+  "formats.ociDiscovery": "OCI catalog and attached artifacts",
+  "formats.ociCatalogCoverage":
+    "The native Catalog lists authorized image names and sources, and reports upstream coverage. The cache below is not a complete inventory.",
+  "formats.ociReferrerAuthority":
+    "Attached artifacts follow the source of the image digest, even after Group members are reordered. Source configuration changes require a new check.",
+  "formats.ociDiscoveryTrust":
+    "Finding an SBOM or signature confirms its content relationship; it does not verify signer identity or trust policy.",
+  "formats.ociReferrersApiRequired":
+    "Upstreams must support the Referrers API. Unsupported sources return an explicit error; tag fallback is unavailable.",
   "formats.name": "Name",
   "formats.filterByImageNamePrefix": "Filter by image name prefix…",
   "formats.artifact": "Artifact",

@@ -45,6 +45,8 @@ export interface PublishGuideProps {
 
 /** The format-specific pieces pages render; every slot is optional. */
 export interface FormatViews {
+  /** Format-owned interpretation of the artifact browser's coverage. */
+  BrowserNotice?: ComponentType;
   ArtifactDetail?: ComponentType<ArtifactDetailProps>;
   /** How to publish into a hosted repository of this format. */
   PublishGuide?: ComponentType<PublishGuideProps>;

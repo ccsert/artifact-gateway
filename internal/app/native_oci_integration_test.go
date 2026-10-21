@@ -475,9 +475,9 @@ func TestNativeOCIReferrersAndCatalogAcrossPostgresAndRustFSGatewayInstances(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsA, repository.FormatRaw: objectsA}}))
+	serverA := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeA, OCIDiscoveryStore: storeA, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsA, repository.FormatRaw: objectsA}}))
 	defer serverA.Close()
-	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsB, repository.FormatRaw: objectsB}}))
+	serverB := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: storeB, OCIDiscoveryStore: storeB, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectsB, repository.FormatRaw: objectsB}}))
 	defer serverB.Close()
 	request := func(method, address string, body []byte) *http.Response {
 		t.Helper()

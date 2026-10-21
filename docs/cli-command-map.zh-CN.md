@@ -302,6 +302,10 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /raw/{repository}/`<br>`listRawRootDirectory` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /apt/{repository}/{path}`<br>`getAptAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `HEAD /apt/{repository}/{path}`<br>`headAptAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
+| `GET /v2/_catalog`<br>`listOCICatalog` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #315 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
+| `HEAD /v2/_catalog`<br>`headOCICatalog` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #315 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
+| `GET /v2/{name}/referrers/{digest}`<br>`listOCIReferrers` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #316 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
+| `HEAD /v2/{name}/referrers/{digest}`<br>`headOCIReferrers` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #316 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
 | `POST /v2/{name}/blobs/uploads/`<br>`startOCIUpload` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /v2/{name}/blobs/uploads/{uuid}`<br>`getOCIUploadStatus` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `PATCH /v2/{name}/blobs/uploads/{uuid}`<br>`appendOCIUpload` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
@@ -405,3 +409,16 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /nuget/{repository}/v3/{path}`<br>`readNuGetHostedRepresentation` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
 | `HEAD /nuget/{repository}/v3/{path}`<br>`headNuGetHostedRepresentation` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
 | `PUT /nuget/{repository}/api/v2/package/`<br>`publishNuGetHostedPackage` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+
+## NuGet Proxy/Group 预览（#288）
+
+以下显式启用的预览操作暂无 agctl 命令，不会将 NuGet 加入正式格式目录或 Console；治理和正式准入仍属 #289。
+
+| Operation | CLI applicability | Owner | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `PUT /previews/nuget/repositories/{repositoryId}`<br>`replaceNuGetPreviewRepository` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/groups`<br>`createNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/groups/{groupId}`<br>`getNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/nuget/groups/{groupId}`<br>`replaceNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version}`<br>`getNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate`<br>`revalidateNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |

@@ -29,6 +29,20 @@ import (
 type nugetOfficialClient struct {
 	work, image, project, evidence string
 	admin, reader                  string
+	sharedHostNetwork              bool
+}
+
+// Linux fixture services publish only on the host loopback interface. A
+// private Proxy/Group client joins that namespace and maps the fixture alias to
+// loopback; offline pack/execute commands always retain a network-less sandbox.
+func (c nugetOfficialClient) networkArgs(offline bool) []string {
+	if offline {
+		return []string{"--network", "none"}
+	}
+	if c.sharedHostNetwork {
+		return []string{"--network", "host", "--add-host", "host.docker.internal:127.0.0.1"}
+	}
+	return []string{"--add-host", "host.docker.internal:host-gateway"}
 }
 
 func (c nugetOfficialClient) command(t *testing.T, phase, name string, offline bool, args ...string) (string, error) {
@@ -39,11 +53,7 @@ func (c nugetOfficialClient) command(t *testing.T, phase, name string, offline b
 		}
 	}
 	dockerArgs := []string{"run", "--rm", "--label", "com.docker.compose.project=" + c.project, "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()), "--mount", "type=bind,src=" + c.work + ",dst=/work", "--workdir", "/work", "--env", "HOME=/work/home-" + phase, "--env", "DOTNET_CLI_HOME=/work/cli-" + phase, "--env", "NUGET_PACKAGES=/work/packages-" + phase, "--env", "NUGET_HTTP_CACHE_PATH=/work/http-" + phase, "--env", "NUGET_PLUGINS_CACHE_PATH=/work/plugins-" + phase, "--env", "DOTNET_CLI_TELEMETRY_OPTOUT=1", "--env", "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1", "--env", "DOTNET_NOLOGO=1", "--env", "DOTNET_MULTILEVEL_LOOKUP=0", "--env", "NUGET_CREDENTIALPROVIDERS_PATH=/work/no-providers"}
-	if offline {
-		dockerArgs = append(dockerArgs, "--network", "none")
-	} else {
-		dockerArgs = append(dockerArgs, "--add-host", "host.docker.internal:host-gateway")
-	}
+	dockerArgs = append(dockerArgs, c.networkArgs(offline)...)
 	dockerArgs = append(dockerArgs, c.image, "dotnet")
 	dockerArgs = append(dockerArgs, args...)
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)

@@ -22,6 +22,7 @@ import uuid
 ROOT = Path(__file__).resolve().parent.parent
 PLAN = json.loads((ROOT / 'scripts/ci-contract-lanes.json').read_text())
 LANES = tuple(PLAN['lanes'])
+BENCHMARK_LANES = tuple(PLAN['benchmarkOrder'])
 RAW_DIRS = sorted({p for lane in PLAN['lanes'].values() for p in lane['rawDirectories']})
 
 
@@ -334,7 +335,8 @@ def run_lane(args):
     work = Path(tempfile.mkdtemp(prefix='ag-contract-' + args.lane + '-'))
     env = dict(os.environ, TMPDIR=str(work))
     if args.cold_cache:
-        env.update(GOCACHE=str(work / 'go-build'), GOMODCACHE=str(work / 'go-mod'))
+        env.update(GOCACHE=str(work / 'go-build'), GOMODCACHE=str(work / 'go-mod'),
+                   GOFLAGS=(env.get('GOFLAGS', '') + ' -modcacherw').strip())
     dedicated_core = dedicated and args.lane == 'core' and not args.local
     caches = None
     def stop_lane(signum, _frame):
@@ -535,51 +537,163 @@ def collect_job_logs(destination, prefixes=('contract',), lanes=LANES):
     repository = os.environ['GITHUB_REPOSITORY']
     run = os.environ['GITHUB_RUN_ID']
     token = os.environ['GITHUB_TOKEN']
+    head = os.environ.get('GITHUB_SHA', '')
+    attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '')
+    event = os.environ.get('GITHUB_EVENT_NAME', '')
+    api_head = head
+    event_read = False
     opener = urllib.request.build_opener(StripRedirectCredential())
+    budget = 120
+    deadline = time.monotonic() + budget
+    required = [p + '/' + lane for p in prefixes for lane in lanes]
+    manifest = {'required': required, 'selectedJobIDs': [], 'missing': required,
+                'missingLogs': required, 'complete': False, 'deadlineSeconds': budget,
+                'head': head, 'runId': run, 'attempt': attempt, 'event': event}
+    identities = {}
+    downloaded = set()
+    poll = 0
+
+    def remaining():
+        available = deadline - time.monotonic()
+        if available <= 0:
+            raise ValueError('complete job log collection deadline exceeded (120s)')
+        return available
 
     def fetch(url):
         request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token,
                                          'Accept': 'application/vnd.github+json',
-                                         'X-GitHub-Api-Version': '2022-11-28'})
-        with opener.open(request, timeout=45) as response:
-            return response.read()
+                                         'X-GitHub-Api-Version': '2022-11-28',
+                                         'Cache-Control': 'no-cache'})
+        with opener.open(request, timeout=min(45, remaining())) as response:
+            data = response.read()
+        remaining()
+        return data
 
-    jobs = []
-    page = 1
+    # A dependent job can start while the jobs API still reports its completed
+    # prerequisite as in_progress. Wait only for read-only publication of that
+    # same job and its log; never substitute another execution or hide errors.
     while True:
-        batch = json.loads(fetch(f'{api}/repos/{repository}/actions/runs/{run}/jobs?filter=latest&per_page=100&page={page}'))['jobs']
-        jobs.extend(batch)
-        if len(batch) < 100:
-            break
-        page += 1
-    write(destination / 'jobs.json', jobs)
-    selected = []
-    missing = []
-    for prefix in prefixes:
-        for lane in lanes:
-            matching = [j for j in jobs if j['name'].endswith(prefix + '/' + lane)]
-            if len(matching) != 1 or matching[0]['status'] != 'completed':
-                missing.append(prefix + '/' + lane)
-            else:
-                selected.append(matching[0])
-    write(destination / 'job-log-manifest.json', {'required': [p + '/' + l for p in prefixes for l in lanes],
-          'selectedJobIDs': [j['id'] for j in selected], 'missing': missing})
-    for job in selected:
-        (destination / f'job-{job["id"]}.log').write_bytes(fetch(f'{api}/repos/{repository}/actions/jobs/{job["id"]}/logs'))
-    if missing:
-        raise ValueError('complete job logs unavailable: ' + ', '.join(missing))
-    return jobs
+        poll += 1
+        readback = {'poll': poll, 'elapsedSeconds': budget - (deadline - time.monotonic()),
+                    'logReads': [], 'status': 'waiting'}
+        try:
+            jobs = []
+            page = 1
+            while True:
+                data = fetch(f'{api}/repos/{repository}/actions/runs/{run}/jobs?filter=latest&per_page=100&page={page}')
+                page_path = destination / 'job-log-polls' / f'{poll:03d}-page-{page:03d}.json'
+                page_path.parent.mkdir(parents=True, exist_ok=True)
+                page_path.write_bytes(data)
+                batch = json.loads(data)['jobs']
+                jobs.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            write(destination / 'jobs.json', jobs)
+            write(destination / 'job-log-polls' / f'{poll:03d}-jobs.json', jobs)
+            matching = {name: [j for j in jobs if j['name'].endswith(name)] for name in required}
+            manifest['missing'] = [name for name in required if len(matching[name]) != 1]
+            if manifest['missing']:
+                raise ValueError('complete job logs unavailable: ' + ', '.join(manifest['missing']))
+            if (not re.fullmatch(r'[0-9a-f]{40}', head) or not run.isdecimal()
+                    or not attempt.isdecimal() or int(run) < 1 or int(attempt) < 1):
+                raise ValueError('GitHub job source binding unavailable')
+            if not event_read:
+                if event == 'pull_request':
+                    # Jobs API identifies the PR head; GITHUB_SHA and artifact
+                    # validation identify its synthetic merge commit.
+                    try:
+                        payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+                        api_head = payload['pull_request']['head']['sha']
+                        if (payload['repository']['full_name'] != repository
+                                or not isinstance(api_head, str)
+                                or not re.fullmatch(r'[0-9a-f]{40}', api_head)):
+                            raise ValueError('invalid event binding')
+                    except (KeyError, OSError, TypeError, ValueError):
+                        raise ValueError('GitHub pull request source binding unavailable') from None
+                manifest['apiHead'] = api_head
+                event_read = True
+            selected = []
+            for name in required:
+                job = matching[name][0]
+                if (job.get('head_sha') != api_head or type(job.get('run_id')) is not int
+                        or job['run_id'] != int(run) or type(job.get('run_attempt')) is not int
+                        or not 1 <= job['run_attempt'] <= int(attempt)):
+                    raise ValueError('GitHub job source binding mismatch: ' + name)
+                if type(job.get('id')) is not int or job['id'] < 1:
+                    raise ValueError('GitHub job identity unavailable: ' + name)
+                identity = (job['id'], job['run_attempt'])
+                if name in identities and identities[name] != identity:
+                    raise ValueError('GitHub job identity changed during collection: ' + name)
+                identities[name] = identity
+                if (job['run_attempt'] < int(attempt)
+                        and (job['status'] != 'completed' or job.get('conclusion') != 'success')):
+                    raise ValueError('GitHub retained job source binding is not successful: ' + name)
+                if (job['status'] == 'completed' and job.get('conclusion') in
+                        ('success', 'failure', 'cancelled', 'skipped', 'timed_out',
+                         'action_required', 'neutral', 'stale', 'startup_failure')):
+                    selected.append(job)
+                elif (job['status'] in ('queued', 'in_progress', 'waiting', 'pending', 'requested')
+                      or (job['status'] == 'completed' and job.get('conclusion') is None)):
+                    manifest['missing'].append(name)
+                else:
+                    raise ValueError('unknown GitHub job status: ' + name)
+            manifest['selectedJobIDs'] = [job['id'] for job in selected]
+            manifest['selectedAttempts'] = {str(job['id']): job['run_attempt'] for job in selected}
+            for job in selected:
+                if job['id'] in downloaded:
+                    continue
+                observed = {'jobId': job['id'], 'status': 'not_ready'}
+                readback['logReads'].append(observed)
+                try:
+                    data = fetch(f'{api}/repos/{repository}/actions/jobs/{job["id"]}/logs')
+                except urllib.error.HTTPError as error:
+                    if error.code != 404:
+                        raise
+                    observed['httpStatus'] = 404
+                    error.close()
+                    continue
+                if not data.strip():
+                    observed['reason'] = 'empty_log'
+                    continue
+                (destination / f'job-{job["id"]}.log').write_bytes(data)
+                downloaded.add(job['id'])
+                observed.update(status='ready', bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
+            manifest['missingLogs'] = [name for name in required if identities[name][0] not in downloaded]
+            if not manifest['missing'] and not manifest['missingLogs']:
+                manifest['complete'] = True
+                readback['status'] = 'success'
+                return jobs
+            remaining()
+        except Exception as error:
+            readback['status'] = 'failure'
+            readback['error'] = {'type': type(error).__name__}
+            if isinstance(error, ValueError):
+                readback['error']['reason'] = str(error)
+            if isinstance(error, urllib.error.HTTPError):
+                readback['error']['httpStatus'] = error.code
+                error.close()
+            raise
+        finally:
+            manifest['polls'] = poll
+            readback['missing'] = list(manifest['missing'])
+            readback['missingLogs'] = list(manifest['missingLogs'])
+            write(destination / 'job-log-manifest.json', manifest)
+            write(destination / 'job-log-polls' / f'{poll:03d}-readback.json', readback)
+        delay = min(2, max(0, deadline - time.monotonic()))
+        if delay:
+            time.sleep(delay)
 
 
 def aggregate(args):
     if os.environ.get('GITHUB_ACTIONS') == 'true':
         if os.environ.get('CI_CONTRACT_ARTIFACT_RESULT') != 'success':
             raise ValueError('lane artifact download did not succeed')
-        if not args.native_only and os.environ.get('CI_CONTRACT_JOB_LOG_RESULT') != 'success':
+        if not args.benchmark_only and os.environ.get('CI_CONTRACT_JOB_LOG_RESULT') != 'success':
             raise ValueError('complete job log collection did not succeed')
     required_jobs = [args.needs_job] if args.needs_job else ['contract-core', 'contract-native']
     validate_needs(json.loads(os.environ['CI_CONTRACT_NEEDS']), required_jobs)
-    expected = PLAN['nativeOrder'] if args.native_only else LANES
+    expected = BENCHMARK_LANES if args.benchmark_only else LANES
     found = validate_evidence(args.input, args.prefix, expected, os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     write(args.output / 'aggregate.json', {'status': 'success', 'head': os.environ['GITHUB_SHA'],
                                         'runId': os.environ['GITHUB_RUN_ID'],
@@ -607,7 +721,7 @@ def validate_benchmark_aggregates(root, head, run, attempt):
             candidates[observed] = item
         item = candidates.get(int(attempt))
         if (not item or item.get('status') != 'success' or item.get('head') != head
-                or item.get('runId') != run or item.get('lanes') != sorted(PLAN['nativeOrder'])):
+                or item.get('runId') != run or item.get('lanes') != sorted(BENCHMARK_LANES)):
             raise ValueError('benchmark aggregate must succeed in the current execution attempt: ' + prefix)
         found[prefix] = item
     return found
@@ -617,8 +731,8 @@ def benchmark(args):
     if os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('CI_CONTRACT_ARTIFACT_RESULT') != 'success':
         raise ValueError('benchmark artifact download did not succeed')
     validate_needs(json.loads(os.environ['CI_CONTRACT_NEEDS']), ['serial-gate', 'parallel-gate'])
-    serial = validate_evidence(args.input, 'benchmark-serial', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
-    parallel = validate_evidence(args.input, 'benchmark-parallel', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
+    serial = validate_evidence(args.input, 'benchmark-serial', BENCHMARK_LANES, os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
+    parallel = validate_evidence(args.input, 'benchmark-parallel', BENCHMARK_LANES, os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     reports = [*serial.values(), *parallel.values()]
     # GitHub gives retained successful jobs new IDs/run_attempt values while
     # preserving their old timestamps. Artifact provenance is the execution
@@ -634,12 +748,12 @@ def benchmark(args):
                     r['runner']['imageVersion']) for r in reports}
     if len(constraints) != 1:
         raise ValueError('benchmark runner constraints differ')
-    jobs = collect_job_logs(args.output, ('benchmark-serial', 'benchmark-parallel'), PLAN['nativeOrder'])
+    jobs = collect_job_logs(args.output, ('benchmark-serial', 'benchmark-parallel'), BENCHMARK_LANES)
     results = {}
     for mode, prefix in [('serial', 'benchmark-serial'), ('parallel', 'benchmark-parallel')]:
-        lanes = [j for j in jobs if any(j['name'].endswith(prefix + '/' + lane) for lane in PLAN['nativeOrder'])]
+        lanes = [j for j in jobs if any(j['name'].endswith(prefix + '/' + lane) for lane in BENCHMARK_LANES)]
         gates = [j for j in jobs if j['name'] == mode + '-gate']
-        if len(lanes) != 6 or len(gates) != 1 or any(j['conclusion'] != 'success' for j in [*lanes, *gates]):
+        if len(lanes) != len(BENCHMARK_LANES) or len(gates) != 1 or any(j['conclusion'] != 'success' for j in [*lanes, *gates]):
             raise ValueError('missing successful benchmark jobs: ' + mode)
         start = min(timestamp(j['started_at']) for j in lanes)
         end = timestamp(gates[0]['completed_at'])
@@ -682,7 +796,7 @@ def main():
     agg.add_argument('--input', required=True, type=Path)
     agg.add_argument('--output', required=True, type=Path)
     agg.add_argument('--prefix', default='contract', choices=['contract', 'benchmark-serial', 'benchmark-parallel'])
-    agg.add_argument('--native-only', action='store_true')
+    agg.add_argument('--benchmark-only', action='store_true')
     agg.add_argument('--needs-job', choices=['serial', 'parallel'])
     logs = commands.add_parser('collect-job-logs')
     logs.add_argument('--output', required=True, type=Path)

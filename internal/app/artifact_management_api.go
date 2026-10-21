@@ -96,6 +96,10 @@ func newArtifactManagementHandler(options artifactManagementOptions) artifactMan
 }
 
 func (h artifactManagementHandler) authorizeAnonymousGroupBrowse(w http.ResponseWriter, r *http.Request, group repository.HostedGroup) bool {
+	if group.Format == repository.FormatNuGet {
+		writeHostedProblem(w, 404, "not_found", "group not found")
+		return false
+	}
 	if principal, authenticated := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization")); authenticated {
 		if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
 			writeHostedProblem(w, http.StatusForbidden, code, message)

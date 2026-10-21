@@ -27,6 +27,13 @@ var errOCIBearerRetry = errors.New("OCI upstream bearer authorization failed")
 var ociBearerName = regexp.MustCompile(`^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$`)
 
 func (c UpstreamClient) fetchOCIWithBearer(ctx context.Context, member repository.Member, repositoryName string, request *http.Request) (*http.Response, error) {
+	if len(repositoryName) > 255 || !ociBearerName.MatchString(repositoryName) {
+		return nil, errOCIBearerConfiguration
+	}
+	return c.fetchOCIWithScope(ctx, member, request, "repository:"+repositoryName+":pull")
+}
+
+func (c UpstreamClient) fetchOCIWithScope(ctx context.Context, member repository.Member, request *http.Request, scope string) (*http.Response, error) {
 	if member.OCIBearer == nil {
 		if err := applyUpstreamAuth(request, member.UpstreamAuth); err != nil {
 			return nil, errOCIBearerConfiguration
@@ -34,7 +41,7 @@ func (c UpstreamClient) fetchOCIWithBearer(ctx context.Context, member repositor
 		return c.doProxyUpstream(ctx, member, request)
 	}
 	endpoint, err := url.Parse(member.Endpoint)
-	if member.OCIBearer.Validate() != nil || err != nil || !proxyURLValid(endpoint, false) || request == nil || !proxyURLValid(request.URL, false) || proxyOrigin(request.URL) != proxyOrigin(endpoint) || len(repositoryName) > 255 || !ociBearerName.MatchString(repositoryName) {
+	if member.OCIBearer.Validate() != nil || err != nil || !proxyURLValid(endpoint, false) || request == nil || !proxyURLValid(request.URL, false) || proxyOrigin(request.URL) != proxyOrigin(endpoint) {
 		return nil, errOCIBearerConfiguration
 	}
 	// Check the configured credential even when a scope token is cached. No
@@ -54,7 +61,6 @@ func (c UpstreamClient) fetchOCIWithBearer(ctx context.Context, member repositor
 	content.Header.Del("Authorization")
 	content.Header.Del("Cookie")
 	content.Header.Del("Proxy-Authorization")
-	scope := "repository:" + repositoryName + ":pull"
 	key, err := c.ociBearerCacheKey(member, scope)
 	if err != nil {
 		return nil, errOCIBearerConfiguration

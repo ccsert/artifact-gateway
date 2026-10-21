@@ -36,7 +36,7 @@ Nexus 发现仍作为只读迁移输入；导入数据与切换生产客户端 U
 
 | 协议 | 当前支持 | 明确限制 | 主要回归门禁 |
 | --- | --- | --- | --- |
-| OCI Hosted / Proxy / Group | Hosted 基于 `/v2/<repository>/<image>/...` 实现 Registry V2；支持可恢复 Blob 上传、取消、跨 Hosted 仓库 mount、GET/HEAD/Range、Manifest PUT/GET/HEAD/DELETE、Tag 移动与分页、Catalog 和 Referrers。Proxy 只读缓存 Manifest/Blob，支持直连 registry 或绑定 issuer 的 Basic/Bearer 源端认证，轮换/清除隔离 token 与正/负内容缓存；Group 只读解析 Manifest/Blob/Tag，Hosted 成员优先。可选隔离读取策略会拒绝被隔离 Manifest 及其 Blob closure。 | 不支持直接删除 Blob。Proxy/Group 不支持写入，且不代理或聚合 Catalog/Referrers。Docker/ORAS 黑盒客户端矩阵仍未覆盖全部组合。 | `go test ./internal/app ./internal/repository ./contracts`、`make native-oci-e2e` 与 PostgreSQL/RustFS 上传、Proxy 缓存、Group fallback、锁、Tag、对象意图和孤儿回收测试。 |
+| OCI Hosted / Proxy / Group | Hosted 基于 `/v2/<repository>/<image>/...` 实现 Registry V2，支持可恢复 Blob 上传、取消、跨 Hosted mount、GET/HEAD/Range、Manifest PUT/GET/HEAD/DELETE、描述符校验、媒体类型协商与 Tag 移动/分页。Proxy 校验并缓存 Manifest/Blob，支持直连 Registry 或绑定 issuer 的 Basic/Bearer 源端认证，轮换/清除隔离 token 与内容缓存。Group 只读且 Hosted 成员优先。经授权的 [Catalog 与 OCI 1.1 Referrers 发现](oci-discovery.zh-CN.md) 覆盖 Hosted、Proxy 和 Group：真实枚举报告完整、部分或不支持；不可变分页绑定主体、配置及授权；原始 Manifest、annotations 与完整 Blob 闭包验证后建立持久且按主体隔离的来源绑定。匿名与认证 owner 独立，Group 重排不能替换内容。可选隔离读取策略拒绝被隔离闭包并阻止 Group fallback。 | 不支持直接删除 Blob、经 Proxy/Group 写入、referrers-tag fallback 或签名/证书信任验证。逐上游显式报告 Catalog/Referrers 能力。Referrers 发现超过 15 分钟须重新验证源端；缺失缓存对象只能从其绑定源抓取。 | `go test ./internal/app ./internal/repository ./contracts`、`make native-oci-e2e` 和 `make native-oci-discovery-e2e`。发现门禁固定官方 ORAS 1.3.3 与 Docker 29.7.2，使用独占 PostgreSQL/RustFS、两次迁移、全新客户端/daemon，覆盖 Basic/Bearer Proxy/Group、递归原始字节闭包、重启/断源读取、权限隔离与源版本/授权事务保护。 |
 | Raw Hosted / Proxy / Group | `/raw/<repository>/<path>` 下的 PUT 替换（无条件，或以 `If-Match`/`If-None-Match` 为条件、与引用替换原子判定，`*` 即 create-only，恢复上传的完成同样适用）、GET、HEAD、单 Range 与[有界多段 Range](raw-http-ranges.zh-CN.md)、可读 `Content-Disposition`、Digest/ETag、DELETE、Hosted 目录前缀分页、`.sha256`/`.sha512` 派生 sidecar，以及可恢复上传。path 是可变引用，`path + digest` 才是不可变快照身份。大对象读取走 `Open`/`OpenRange`；上传 PATCH 持久化不可变 offset chunk，完成时只顺序组装一次。Proxy/Group 要求 HTTPS allowlist 上游，使用有界缓冲临时落盘、可续租分布式 single-flight、流式缓存发布/读取，以及可配置的单 Gateway 落盘 admission。字节校验并提交元数据前保持不可见；隔离读取策略同时隐藏路径、sidecar 和 Hosted 目录项。 | 不支持 `If-Unmodified-Since` 与条件 DELETE、Hosted 前缀投影之外的通用文件管理或非 HTTP 客户端。部署仍需临时卷、空闲空间监控和硬性 ephemeral-storage 限额。 | Nexus Raw Hosted 的浏览/管理体验更宽；Gateway 默认保留同路径替换行为以降低迁移门槛，同时保持未完成字节不可见、sidecar 不重复存储，并使用元数据删除和延迟回收。 | `make native-raw-e2e`，以及 Hosted/Proxy 大对象流式读取、落盘 admission、HEAD、Range、恢复上传、条件写入（同一 validator 并发写者）、墓碑、Digest/ETag、回收和 PostgreSQL/RustFS 生命周期测试。 |
 | Maven Hosted / Proxy / Group | Hosted 默认直接发布每个经过验证的标准 Maven/Gradle PUT，不需要 companion 调用；可按仓库开启默认关闭的 `mavenStrictPublication`，把一个坐标暂存到显式 commit。客户端 metadata/checksum 不具权威性，Gateway 从验证对象生成。Proxy 只读缓存，支持 Basic/Bearer 源端凭据和绑定凭据身份的正/负缓存；Group 只读且 Hosted 优先。完整说明见 [Maven Hosted 发布流程](maven-hosted-publication.zh-CN.md)。 | 默认模式在发布中途失败时不保证一个 GAV 的多文件原子可见；严格模式需要 Gateway 专属 commit。不支持客户端 metadata 权威、跨坐标构建事务、可变 Release 覆盖或向 Proxy/Group 写入。 | `make native-maven-e2e`，以及免 commit 的 Maven/Gradle 解析、严格模式 commit 前 404、Proxy 缓存、Group fallback、校验重试、提交冲突、分页、过期、墓碑和回收测试。 |
 | npm Hosted / Proxy / Group | 标准 Packument、精确版本元数据和 Tarball；Hosted 支持 npm CLI 发布不可变 SemVer、scope、dist-tag、生命周期，以及基于 Gateway 主体标识回答的认证 `GET /npm/<repository>/-/whoami` 身份查询（不经过仓库授权）；Proxy 校验并缓存元数据/Tarball，支持条件重验、负缓存、stale 与分布式熔断；Group 按 Hosted 优先和成员顺序合并。Hosted 支持发布后 `npm dist-tag add/rm`（`PUT`/`DELETE /npm/<repository>/-/package/<package>/dist-tags/<tag>`，需要仓库写权限），标签只能指向可见、未墓碑、未隔离的已提交版本；每次修改与审计记录在同一存储事务中原子提交，墓碑会移除指向该版本的标签，`latest` 只能移动不能删除，Tarball 字节与版本身份不变。`npm dist-tag ls` 支持 Hosted、Proxy（缓存的上游标签）与 Group（首个定义该标签的成员为权威）；Proxy 与 Group 拒绝标签写入。Console 展示指向当前所选版本的全部标签。Hosted 原生支持精确/范围提示和清除（仓库 write）、单版本/整包撤包（仓库 admin）以及既有管理恢复；修订号 CAS、操作者/版本原子审计、Group 墓碑权威和持久回收栅栏保持不可变字节。Console 提供提示、写入者编辑与管理员撤包，限制和恢复见 [npm 版本治理](npm-version-governance.zh-CN.md)。 | 不支持 Console 中 dist-tag 的编辑、npmjs.com 账户/时间窗策略和漏洞数据库集成。 | `make native-npm-e2e`（含 scope/非 scope `npm dist-tag add/ls/rm` 与空缓存 `npm install <pkg>@<tag>`），协议、应用、Repository 测试，dist-tag Memory/PostgreSQL 契约、同标签并发移动与标签/墓碑竞争测试，以及 PostgreSQL/RustFS 跨实例缓存、发布、Group 在线/离线安装测试。原生客户端门禁校验官方 npm 11.6.2 压缩包的固定 SHA-512，在 PostgreSQL/RustFS 发布 scope/非 scope 版本，验证标签修改、重建 Gateway 后的持久状态、空缓存安装和完整 Tarball size/SHA-256 身份；同一固定客户端门禁还验证 scope/非 scope 的精确/范围提示和清除、单版本/整包撤包、Group 不复活墓碑、新实例管理恢复与四份原始 Tarball。Memory/PostgreSQL 共用契约、并发发布/删除与元数据 CAS、审计失败回滚、149 前升级、S3 部分回收/重启及撤权均有测试；Console 验证桌面/窄屏明暗主题的标签、提示/编辑/撤包状态，并执行完整 Playwright。 |
@@ -56,19 +56,25 @@ Nexus 发现仍作为只读迁移输入；导入数据与切换生产客户端 U
 
 轮换、清除、重定向边界及 Console 设置详见[Proxy 出站与上游认证](proxy-egress-design.zh-CN.md#maven-与-oci-受保护上游)
 和[新增六格式](proxy-egress-design.zh-CN.md#npmpypicargoaptraw-与-conan-私有上游)。
-Maven/OCI 真实客户端隔离门禁为 `make private-upstream-auth-e2e`，新增六格式为
-`make private-upstream-formats-e2e`。修改凭据绑定的 endpoint 或 OCI issuer realm/service，
+Maven/OCI 及固定官方 Gradle 私有 Maven Proxy/Group 读取的真实客户端隔离门禁为
+`make private-upstream-auth-e2e`，新增六格式为 `make private-upstream-formats-e2e`。
+Gradle 的 Gateway 客户端身份与上游凭据相互独立。修改凭据绑定的 endpoint 或 OCI issuer realm/service，
 须提交新密钥或显式选择 `scheme: none`；否则 PATCH 返回
 `400 upstream_credential_rebind_required`，旧版本与密文不变。
 
-## NuGet Hosted 预览
+## NuGet Hosted、Proxy 与 Group 预览
 
 显式启用的 [NuGet Hosted 预览](nuget-hosted-preview.zh-CN.md) 使用独立的
 `/api/v2/previews/nuget` 管理契约和 `/nuget/<repository>` 原生入口，支持不可变 nupkg
 发布、Session 原子提交、service index/flat container/registration/search、配额预留和
-过期上传回收。`make native-nuget-e2e` 验证官方 .NET SDK 10.0.100 push、传递依赖
-restore、重启恢复及离线执行。它不进入正式格式目录与 Console 格式选择器；NuGet
-Proxy/Group 和治理准入仍由 #288/#289 独立推进。
+过期上传回收。[Proxy/Group 预览](nuget-proxy-group-preview.zh-CN.md) 从配置的 V3
+service index 发现资源，隔离 Basic/Bearer 源凭据与版本化缓存，并持久保存规范包
+ID/版本的来源绑定，Group 重排不能换源。源配置变化后，必须显式核验同一成员的
+完整字节才能前移既有 Group 来源版本。上游 unlisted 精确版本仍可读取，搜索与
+自动补全不展示它。`make native-nuget-e2e` 验证官方 .NET SDK 10.0.100 push、仅以
+目标源恢复传递依赖、完整包身份、冷/热/断源读取，以及 Gateway/PostgreSQL/RustFS
+重启恢复和离线执行。预览不进入正式格式目录与 Console 格式选择器；本地 Hosted
+unlist、治理和正式准入仍由 #289 推进。
 
 ## 契约对齐
 

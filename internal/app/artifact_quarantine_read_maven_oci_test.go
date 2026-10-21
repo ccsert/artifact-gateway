@@ -12,6 +12,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func publishQuarantineReadMaven(t *testing.T, store *repository.MemoryStore, objects *objectstore.MemoryStore, repo repository.HostedRepository) (repository.MavenArtifact, string) {
@@ -164,7 +165,7 @@ func TestOCIQuarantineReadPolicyUsesDeniedAndPreventsGroupFallback(t *testing.T)
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
 	objects := objectstore.NewMemoryStore()
-	hosted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "oci-read-hosted", Name: "oci-read-hosted", Format: repository.FormatOCI})
+	hosted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-read-hosted", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,16 +173,16 @@ func TestOCIQuarantineReadPolicyUsesDeniedAndPreventsGroupFallback(t *testing.T)
 	enableQuarantineReadPolicy(t, store, hosted.ID)
 	quarantineReadIdentity(t, store, hosted, manifest.Name, manifest.Digest)
 
-	upstream := &proxyUpstream{bodies: map[string][]byte{"/v2/app/manifests/latest": []byte(`{"schemaVersion":2,"from":"proxy"}`)}, calls: map[string]int{}}
+	upstream := &proxyUpstream{bodies: map[string][]byte{"/v2/app/manifests/latest": []byte(`{"schemaVersion":2,"from":"proxy"}`), "/v2/_catalog": []byte(`{"repositories":[]}`)}, calls: map[string]int{}}
 	server := httptest.NewServer(upstream)
 	defer server.Close()
 	allowedHost := strings.TrimPrefix(server.URL, "http://")
-	proxy, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "oci-read-proxy", Name: "oci-read-proxy", Format: repository.FormatOCI, Type: repository.RepositoryTypeProxy, Endpoint: server.URL, AllowedHosts: []string{allowedHost}})
+	proxy, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-read-proxy", Format: repository.FormatOCI, Type: repository.RepositoryTypeProxy, Endpoint: server.URL, AllowedHosts: []string{allowedHost}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	createV2Group(t, store, "oci-read-group", repository.FormatOCI, repository.GroupMember{RepositoryID: hosted.ID}, repository.GroupMember{RepositoryID: proxy.ID, Position: 1})
-	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})}, Upstream: UpstreamClient{HTTPClient: server.Client()}})
+	handler := newTestGateway(t, GatewayOptions{OCIDiscoveryStore: store, Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}, Caches: GatewayCaches{OCI: NewOCICache(objectstore.NewMemoryStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})}, Upstream: UpstreamClient{HTTPClient: server.Client(), AllowHTTPForTesting: true}})
 
 	for _, path := range []string{"/v2/" + hosted.Name + "/app/manifests/latest", "/v2/oci-read-group/app/manifests/latest"} {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
@@ -342,7 +343,7 @@ func TestOCIQuarantineReadPolicyPaginationSkipsBlockedTagsAndReferrers(t *testin
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
 	objects := objectstore.NewMemoryStore()
-	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "oci-read-pagination", Name: "oci-read-pagination", Format: repository.FormatOCI})
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "oci-read-pagination", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +397,7 @@ func TestOCIQuarantineReadPolicyPaginationSkipsBlockedTagsAndReferrers(t *testin
 	}
 
 	createV2Group(t, store, "oci-read-pagination-group", repository.FormatOCI, repository.GroupMember{RepositoryID: repo.ID})
-	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
+	handler := newTestGateway(t, GatewayOptions{OCIDiscoveryStore: store, Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects, repository.FormatRaw: objects}})
 	for _, path := range []string{
 		"/v2/" + repo.Name + "/app/tags/list?n=1",
 		"/v2/oci-read-pagination-group/app/tags/list?n=1",

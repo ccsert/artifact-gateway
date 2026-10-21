@@ -206,7 +206,7 @@ scope、OCI 正/负内容 key 和 token key 绑定当前 Repository version 与�
 遵循此规则，Group 故障转移不绕过熔断。无法解密的配置关闭读取。源端错误响应体与秘密
 不进入原生响应或审计。
 
-使用本地 Docker、Maven 和 ORAS 执行 `scripts/private-upstream-auth-e2e.sh`。脚本创建
+使用本地 Docker、Java、Maven 和 ORAS 执行 `scripts/private-upstream-auth-e2e.sh`。脚本创建
 并清理独占 PostgreSQL/RustFS 项目，覆盖 Basic/Bearer、直连 registry/绑定 issuer、
 原生 Proxy/Group、正/负缓存冷/热读取、Repository/缓存连接关闭重建、轮换/清除、
 CAS 拒绝及非管理员拒绝。官方 Maven 客户端从空目标缓存解析原始完整 POM/JAR；ORAS
@@ -214,6 +214,18 @@ CAS 拒绝及非管理员拒绝。官方 Maven 客户端从空目标缓存解析
 fixture plugin 预置。显式用户/全局 settings、自有 registry 文件和子进程环境允许列表
 隔离用户身份与制品缓存。测试 hook 只把合成 HTTPS 源映射到自有监听器，保留证书校验。
 这些是隔离协议与持久化验收，不表示生产迁移或切流。
+
+同一门禁固定官方 Gradle 9.3.1，校验发行 ZIP 的 SHA-256
+`b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06`
+（[官方校验值](https://gradle.org/release-checksums/#9.3.1)）。Basic/Bearer × Proxy/Group
+四组合通过管理 API 配置源端凭据，解析三层依赖闭包；每个成功轮次均比较三个完整
+JAR 和三个 POM 的大小、原始字节、SHA-256 与实际组件身份，动态版本 metadata 与
+校验 sidecar 也经 Gateway 完整读取校验。每次执行新建 Gradle 与 Java HOME。
+门禁要求 59 个必跑命名项（含原 14 项），保留原 265 用例并新增 45 项。32 次 Gradle
+执行包括 20 次完整成功读取与 12 次预期源认证拒绝，不计入六格式门禁的 48 次客户端
+消费。Gateway/缓存/Store 重建关闭并重开 PostgreSQL 连接，复用同一 RustFS 对象；
+这不代表重启 PostgreSQL 或 RustFS 服务进程。最终在自有 HTTPS 源物理停止后读取
+已验证缓存。保留原始客户端拒绝输出、工具 pin、源码摘要与清理证据。
 
 ## npm、PyPI、Cargo、APT、Raw 与 Conan 私有上游
 

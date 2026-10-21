@@ -3,6 +3,8 @@ package repository
 import (
 	"sync"
 	"time"
+
+	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
 )
 
 type MemoryStore struct {
@@ -59,6 +61,8 @@ type MemoryStore struct {
 	ociTags                map[string]string
 	ociUploadLocks         map[string]*sync.Mutex
 	ociObjectLocks         map[string]*sync.Mutex
+	ociDiscoverySnapshots  map[string]ocidiscovery.Snapshot
+	ociSubjectBindings     map[string]ocidiscovery.Binding
 	rawAssets              map[string]RawAsset
 	rawObjects             map[string]RawObject
 	rawAssetTombstones     map[string]RawAsset
@@ -85,6 +89,8 @@ type MemoryStore struct {
 	nugetSessions          map[string]NuGetSession
 	nugetPublications      map[string]NuGetPublication
 	nugetPublicationLocks  map[string]chan struct{}
+	nugetDocuments         map[string]NuGetSourceDocument
+	nugetAuthorities       map[string]NuGetGroupAuthority
 	aptAssets              map[string]APTAsset
 	aptObjectLocks         map[string]*sync.Mutex
 	aptPublicationSessions map[string]APTPublicationSession

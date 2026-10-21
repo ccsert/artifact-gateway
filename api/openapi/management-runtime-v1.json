@@ -16,6 +16,290 @@
     }
   ],
   "paths": {
+    "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "packageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "revalidateNuGetPreviewGroupSource",
+        "description": "Explicitly revalidate the same authoritative member after source configuration or credential rotation. Fully downloads/verifies the current source namespace; atomically advances the binding only when the original complete digest/size match. It cannot choose a different member or replace immutable package bytes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewSourceRevalidation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Same immutable identity confirmed against the current source configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewSource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid revalidation input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "404": {
+            "description": "Canonical version or authority not found"
+          },
+          "409": {
+            "description": "Group/source version or immutable identity conflict"
+          },
+          "410": {
+            "description": "Cache publication reservation expired before verification completed"
+          },
+          "422": {
+            "description": "Unsupported upstream metadata"
+          },
+          "502": {
+            "description": "Upstream authentication or integrity failure"
+          },
+          "503": {
+            "description": "Current source or verified local bytes unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/groups": {
+      "post": {
+        "operationId": "createNuGetPreviewGroup",
+        "description": "Create an ordered NuGet preview Group. Members must be active NuGet preview repositories; no implicit source is admitted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewGroupInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Preview Group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Group or members"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "409": {
+            "description": "Name or idempotency conflict"
+          },
+          "503": {
+            "description": "Preview unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/groups/{groupId}": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewGroup",
+        "responses": {
+          "200": {
+            "description": "Preview Group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewGroup"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Group permission required"
+          },
+          "404": {
+            "description": "Preview Group not found"
+          },
+          "409": {
+            "description": "Configured member source changed or became unavailable"
+          },
+          "503": {
+            "description": "Preview unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceNuGetPreviewGroup",
+        "description": "Compare and replace the ordered member list. Existing package-version authorities survive reordering; removal or changed source bindings fail closed on reads.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewGroupInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview Group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Group or members"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "404": {
+            "description": "Preview Group not found"
+          },
+          "409": {
+            "description": "Group version or name conflict"
+          },
+          "503": {
+            "description": "Preview unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "packageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewGroupSource",
+        "description": "Resolve and fully verify this canonical package version, then explain its durable source. Group and member resource authorization both apply.",
+        "responses": {
+          "200": {
+            "description": "Verified authority",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewSource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid identity"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Group and member permission required"
+          },
+          "404": {
+            "description": "Package not found"
+          },
+          "409": {
+            "description": "Source binding, package or quota conflict"
+          },
+          "410": {
+            "description": "Cache publication reservation expired before verification completed"
+          },
+          "422": {
+            "description": "Unsupported or invalid upstream metadata"
+          },
+          "502": {
+            "description": "Upstream refused authentication or returned invalid content"
+          },
+          "503": {
+            "description": "Required source or verified local bytes unavailable"
+          }
+        }
+      }
+    },
     "/previews/nuget/repositories/{repositoryId}/capacity": {
       "parameters": [
         {
@@ -30,7 +314,7 @@
       ],
       "get": {
         "operationId": "getNuGetPreviewCapacity",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -61,7 +345,7 @@
       },
       "put": {
         "operationId": "replaceNuGetPreviewQuota",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -107,7 +391,7 @@
     "/previews/nuget/repositories": {
       "post": {
         "operationId": "createNuGetPreviewRepository",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "201": {
             "description": "NuGet Hosted preview response",
@@ -161,7 +445,7 @@
       ],
       "get": {
         "operationId": "getNuGetPreviewRepository",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -189,6 +473,50 @@
             "description": "Preview capability unavailable"
           }
         }
+      },
+      "put": {
+        "operationId": "replaceNuGetPreviewRepository",
+        "description": "Replace a preview source using its current version. Source rebinding requires a new secret or explicit none; old cache namespaces are never reused.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewRepositoryReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated preview source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewRepository"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source or missing fresh credential"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "409": {
+            "description": "Source configuration version conflict"
+          },
+          "503": {
+            "description": "Preview unavailable"
+          }
+        }
       }
     },
     "/previews/nuget/repositories/{repositoryId}/packages": {
@@ -205,7 +533,7 @@
       ],
       "get": {
         "operationId": "listNuGetPreviewPackages",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -286,7 +614,7 @@
       ],
       "get": {
         "operationId": "getNuGetPreviewPackage",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -330,7 +658,7 @@
       ],
       "post": {
         "operationId": "createNuGetPublicationSession",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "201": {
             "description": "NuGet Hosted preview response",
@@ -353,6 +681,9 @@
           },
           "404": {
             "description": "Preview resource not found"
+          },
+          "405": {
+            "description": "Publication sessions are available only on Hosted repositories"
           },
           "409": {
             "description": "Identity, session or quota conflict"
@@ -411,7 +742,7 @@
       ],
       "get": {
         "operationId": "getNuGetPublicationSession",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -434,6 +765,9 @@
           },
           "404": {
             "description": "Preview resource not found"
+          },
+          "405": {
+            "description": "Publication sessions are available only on Hosted repositories"
           },
           "503": {
             "description": "Preview capability unavailable"
@@ -464,7 +798,7 @@
       ],
       "put": {
         "operationId": "stageNuGetPublicationSession",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -487,6 +821,9 @@
           },
           "404": {
             "description": "Preview resource not found"
+          },
+          "405": {
+            "description": "Publication sessions are available only on Hosted repositories"
           },
           "409": {
             "description": "Identity, session or quota conflict"
@@ -537,7 +874,7 @@
       ],
       "post": {
         "operationId": "commitNuGetPublicationSession",
-        "description": "Internal NuGet Hosted preview; not a public format admission.",
+        "description": "Internal NuGet preview; not a public format admission.",
         "responses": {
           "200": {
             "description": "NuGet Hosted preview response",
@@ -560,6 +897,9 @@
           },
           "404": {
             "description": "Preview resource not found"
+          },
+          "405": {
+            "description": "Publication sessions are available only on Hosted repositories"
           },
           "409": {
             "description": "Identity, session or quota conflict"
@@ -8286,6 +8626,247 @@
   },
   "components": {
     "schemas": {
+      "NuGetPreviewSourceRevalidation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "groupVersion",
+          "repositoryVersion"
+        ],
+        "properties": {
+          "groupVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "repositoryVersion": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Previously bound source configuration version. Only the same member and complete immutable digest/size can be confirmed after a new source configuration."
+          }
+        }
+      },
+      "NuGetPreviewRepositoryReplace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ],
+            "default": "hosted"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "description": "Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index."
+          },
+          "allowedHosts": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins."
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/NuGetPreviewUpstreamAuth"
+          },
+          "egressMode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment"
+            ],
+            "default": "direct"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "NuGetPreviewUpstreamAuth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scheme"
+        ],
+        "description": "Write-only source credential, sealed separately from local client credentials. A changed source binding requires a fresh secret or explicit none.",
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "none",
+              "basic",
+              "bearer"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 16384,
+            "writeOnly": true
+          }
+        }
+      },
+      "NuGetPreviewUpstreamAuthStatus": {
+        "type": "object",
+        "required": [
+          "scheme",
+          "credentialsConfigured"
+        ],
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "none",
+              "basic",
+              "bearer"
+            ]
+          },
+          "username": {
+            "type": "string"
+          },
+          "credentialsConfigured": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NuGetPreviewGroupInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "members"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false
+          },
+          "members": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "version": {
+            "type": "string",
+            "description": "Required when replacing an existing Group. Compared atomically."
+          }
+        }
+      },
+      "NuGetPreviewGroup": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "format",
+          "preview",
+          "version",
+          "members",
+          "sourceUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "const": "nuget"
+          },
+          "preview": {
+            "type": "boolean",
+            "const": true
+          },
+          "version": {
+            "type": "string"
+          },
+          "anonymousRead": {
+            "type": "boolean"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "NuGetPreviewSource": {
+        "type": "object",
+        "required": [
+          "groupId",
+          "packageId",
+          "version",
+          "repositoryId",
+          "repositoryVersion",
+          "digest",
+          "size"
+        ],
+        "description": "Durable authority for the canonical package version. A reorder never changes this owner; a missing or changed owner fails closed.",
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryVersion": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "NuGetPreviewRepositoryCreate": {
         "type": "object",
         "additionalProperties": false,
@@ -8300,6 +8881,39 @@
           "anonymousRead": {
             "type": "boolean",
             "default": false
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ],
+            "default": "hosted"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "description": "Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index."
+          },
+          "allowedHosts": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins."
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/NuGetPreviewUpstreamAuth"
+          },
+          "egressMode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment"
+            ],
+            "default": "direct"
           }
         }
       },
@@ -8310,7 +8924,9 @@
           "name",
           "format",
           "preview",
-          "sourceUrl"
+          "sourceUrl",
+          "type",
+          "version"
         ],
         "properties": {
           "id": {
@@ -8331,6 +8947,36 @@
           "sourceUrl": {
             "type": "string",
             "format": "uri"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/NuGetPreviewUpstreamAuthStatus"
+          },
+          "egressMode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment"
+            ]
           }
         }
       },
@@ -8463,6 +9109,18 @@
             "format": "uri"
           },
           "registrationUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "sourceVersion": {
+            "type": "string",
+            "description": "Source configuration namespace of a fully verified Proxy cache publication."
+          },
+          "upstreamPackageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "upstreamRegistrationUrl": {
             "type": "string",
             "format": "uri"
           }
@@ -8672,6 +9330,9 @@
             "items": {
               "$ref": "#/components/schemas/RepositoryOperation"
             }
+          },
+          "ociDiscovery": {
+            "$ref": "#/components/schemas/OCIDiscoveryProfile"
           }
         }
       },
@@ -14137,6 +14798,34 @@
           },
           "templateVersion": {
             "type": "string"
+          }
+        }
+      },
+      "OCIDiscoveryProfile": {
+        "type": "object",
+        "description": "Gateway OCI discovery API support, independent of any upstream's enumeration coverage. Each Catalog/Referrers response reports its actual coverage or an explicit unsupported/error response. Verified content digests do not establish signer trust.",
+        "required": [
+          "catalog",
+          "referrers",
+          "tagFallback",
+          "signatureVerification"
+        ],
+        "properties": {
+          "catalog": {
+            "type": "boolean",
+            "description": "Supports authorized, bounded Catalog snapshots, including Proxy and Group sources."
+          },
+          "referrers": {
+            "type": "boolean",
+            "description": "Supports OCI 1.1 Referrers API discovery and validated subject/artifact content from one bound source."
+          },
+          "tagFallback": {
+            "type": "boolean",
+            "description": "Supports the referrers tag schema fallback. Currently false."
+          },
+          "signatureVerification": {
+            "type": "boolean",
+            "description": "Verifies signature identity and trust policy. Currently false; digest/subject validation alone does not verify the signer."
           }
         }
       },

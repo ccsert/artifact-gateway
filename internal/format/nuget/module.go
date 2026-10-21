@@ -35,6 +35,22 @@ type CapacityStore interface {
 	ReplaceRepositoryCapacityQuota(context.Context, string, int64) (repository.RepositoryCapacity, error)
 }
 
+type ConfigurationStore interface {
+	UpdateHostedRepository(context.Context, repository.HostedRepository, string) (repository.HostedRepository, error)
+}
+type GroupStore interface {
+	CreateHostedGroupIdempotently(context.Context, repository.HostedGroup, string, string, string) (repository.HostedGroup, bool, error)
+	GetHostedGroup(context.Context, string) (repository.HostedGroup, error)
+	GetHostedGroupByName(context.Context, string) (repository.HostedGroup, error)
+	ReplaceHostedGroup(context.Context, repository.HostedGroup, string) (repository.HostedGroup, error)
+}
+
+// Upstream owns HTTP/egress and per-hop origin isolation. It receives no local
+// credential and never constructs a persistence store.
+type Upstream interface {
+	FetchNuGet(context.Context, repository.HostedRepository, string, http.Header) (*http.Response, error)
+}
+
 type Options struct {
 	Store           repository.NativeNuGetStore
 	Repositories    RepositoryStore
@@ -45,17 +61,25 @@ type Options struct {
 	Anonymous       AnonymousPolicy
 	Capacities      CapacityStore
 	MaxPackageBytes int64
+	Sources         repository.NuGetSourceStore
+	Configuration   ConfigurationStore
+	Groups          GroupStore
+	Upstream        Upstream
 }
 type Module struct {
-	store      repository.NativeNuGetStore
-	repos      RepositoryStore
-	objects    objectstore.Store
-	auth       authorization.Authenticator
-	access     authorization.RepositoryAuthorizer
-	audit      Auditor
-	anonymous  AnonymousPolicy
-	capacities CapacityStore
-	maxBytes   int64
+	store         repository.NativeNuGetStore
+	repos         RepositoryStore
+	objects       objectstore.Store
+	auth          authorization.Authenticator
+	access        authorization.RepositoryAuthorizer
+	audit         Auditor
+	anonymous     AnonymousPolicy
+	capacities    CapacityStore
+	maxBytes      int64
+	sources       repository.NuGetSourceStore
+	configuration ConfigurationStore
+	groups        GroupStore
+	upstream      Upstream
 }
 
 func nilPort(value any) bool {
@@ -73,7 +97,7 @@ func New(o Options) (*Module, error) {
 	if nilPort(o.Store) || nilPort(o.Repositories) || nilPort(o.Audit) {
 		return nil, errors.New("NuGet preview requires publication, repository and audit ports")
 	}
-	for _, port := range []any{o.Anonymous, o.Capacities, o.Authorizer.Grants} {
+	for _, port := range []any{o.Anonymous, o.Capacities, o.Authorizer.Grants, o.Sources, o.Configuration, o.Groups, o.Upstream} {
 		if port != nil && nilPort(port) {
 			return nil, errors.New("NuGet optional capability is typed nil")
 		}
@@ -87,7 +111,10 @@ func New(o Options) (*Module, error) {
 	if o.MaxPackageBytes < 1 || o.MaxPackageBytes > 256<<20 {
 		return nil, errors.New("NuGet package limit must be between 1 and 256 MiB")
 	}
-	return &Module{store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxPackageBytes}, nil
+	if o.Sources != nil && (o.Configuration == nil || o.Groups == nil || o.Upstream == nil) {
+		return nil, errors.New("NuGet Proxy/Group requires explicit source, configuration, Group and upstream ports")
+	}
+	return &Module{store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxPackageBytes, sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream}, nil
 }
 func (*Module) Format() repository.Format { return repository.FormatNuGet }
 func (m *Module) Routes() []formatmodule.Route {
@@ -172,7 +199,7 @@ func (m *Module) repository(ctx context.Context, idOrName string, byID bool) (re
 	} else {
 		repo, err = m.repos.GetHostedRepositoryByName(ctx, idOrName)
 	}
-	if err != nil || repo.Format != repository.FormatNuGet || repo.Type != repository.RepositoryTypeHosted || repo.State != repository.RepositoryActive {
+	if err != nil || repo.Format != repository.FormatNuGet || (repo.Type != repository.RepositoryTypeHosted && repo.Type != repository.RepositoryTypeProxy) || repo.State != repository.RepositoryActive {
 		return repository.HostedRepository{}, repository.ErrNotFound
 	}
 	return repo, nil
@@ -193,7 +220,7 @@ func packageURL(r *http.Request, repo repository.HostedRepository, id, version s
 }
 func (m *Module) problem(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/problem+json")
-	writeJSON(w, nil, status, map[string]any{"type": "about:blank", "title": code, "status": status, "code": code, "detail": "NuGet Hosted preview operation failed"})
+	writeJSON(w, nil, status, map[string]any{"type": "about:blank", "title": code, "status": status, "code": code, "detail": "NuGet preview operation failed"})
 }
 func writeJSON(w http.ResponseWriter, r *http.Request, status int, value any) {
 	if w.Header().Get("Content-Type") == "" {
@@ -211,7 +238,7 @@ func (m *Module) failure(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		m.problem(w, 404, "not_found")
-	case errors.Is(err, repository.ErrNuGetPublicationConflict), errors.Is(err, repository.ErrIdempotencyConflict), errors.Is(err, repository.ErrNameExists):
+	case errors.Is(err, repository.ErrNuGetPublicationConflict), errors.Is(err, repository.ErrIdempotencyConflict), errors.Is(err, repository.ErrNameExists), errors.Is(err, repository.ErrNuGetSourceChanged), errors.Is(err, repository.ErrVersionConflict):
 		m.problem(w, 409, "nuget_identity_conflict")
 	case errors.Is(err, repository.ErrQuotaExceeded), repository.IsQuotaExceeded(err):
 		m.problem(w, 409, "quota_exceeded")
@@ -221,8 +248,10 @@ func (m *Module) failure(w http.ResponseWriter, err error) {
 		m.problem(w, 409, "nuget_session_not_staged")
 	case errors.Is(err, repository.ErrInvalidNuGetPublication):
 		m.problem(w, 400, "invalid_package")
-	case errors.Is(err, errMetadataLimit):
+	case errors.Is(err, errMetadataLimit), errors.Is(err, repository.ErrNuGetCacheLimit), errors.Is(err, errUnsupportedSource):
 		m.problem(w, 422, "nuget_preview_metadata_limit")
+	case errors.Is(err, errSourceRejected):
+		m.problem(w, 502, "nuget_source_rejected")
 	default:
 		m.problem(w, 503, "nuget_unavailable")
 	}
@@ -236,10 +265,20 @@ func (m *Module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	repo, err := m.repository(r.Context(), parts[0], false)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) && m.groups != nil {
+			if group, e := m.groups.GetHostedGroupByName(r.Context(), parts[0]); e == nil && group.Format == repository.FormatNuGet {
+				m.serveGroup(w, r, group, parts[1:])
+				return
+			}
+		}
 		m.failure(w, err)
 		return
 	}
 	if len(parts) == 5 && parts[1] == "api" && parts[2] == "v2" && parts[3] == "package" && parts[4] == "" {
+		if repo.Type != repository.RepositoryTypeHosted {
+			m.problem(w, 405, "read_only_source")
+			return
+		}
 		m.push(w, r, repo)
 		return
 	}

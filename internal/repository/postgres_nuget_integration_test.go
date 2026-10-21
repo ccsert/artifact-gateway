@@ -30,6 +30,10 @@ func TestPostgresNuGetStoreContract(t *testing.T) {
 	testNuGetStoreContract(t, newPostgresNuGetStore(t))
 }
 
+func TestPostgresNuGetSourceStoreContract(t *testing.T) {
+	testNuGetSourceStoreContract(t, newPostgresNuGetStore(t))
+}
+
 func TestPostgresNuGetPaginationAndReopen(t *testing.T) {
 	store := newPostgresNuGetStore(t)
 	ctx := context.Background()

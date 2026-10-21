@@ -8,7 +8,7 @@ NuGet Hosted 发布与原生 V3 读取已通过 #287 提供显式启用的 [Host
 
 N1 字节契约已实现：Gateway 能验证完整 `.nupkg` ZIP，读取根目录一个有界 `.nuspec`，拒绝歧义 XML 或归档路径，规范化 NuGet 版本，并派生大小写不敏感的规范身份。
 
-预览新增独立 OpenAPI 管理与原生契约、持久发布 Session、配额预留和 V3 Hosted 读取。在 #289 治理与准入门禁通过前，NuGet 不进入正式格式目录、Console 选择器或正式仓库创建；Proxy 与 Group 仍由 #288 后续实现。
+预览新增独立 OpenAPI 管理与原生契约、持久发布 Session、配额预留和 V3 Hosted 读取。在 #289 治理与准入门禁通过前，NuGet 不进入正式格式目录、Console 选择器或正式仓库创建；[Proxy/Group 预览](nuget-proxy-group-preview.zh-CN.md) 已在相同默认关闭边界实现 #288，提供按源版本隔离的可验证缓存和规范包 ID/版本的持久来源绑定。
 
 规范参考全部来自 Microsoft：
 
@@ -38,8 +38,13 @@ N1 字节契约已实现：Gateway 能验证完整 `.nupkg` ZIP，读取根目�
 
 ## N3：Proxy 与有序 Group
 
+显式启用的 [Proxy/Group 预览](nuget-proxy-group-preview.zh-CN.md) 提供以下 V3 发现与
+身份边界。固定官方客户端门禁覆盖私有 Basic/Bearer 源、完整传递依赖、上游 unlisted
+精确版本，以及断源和存储重启后的缓存重放。搜索在持久来源绑定前检查完整包 ID
+权限。本阶段不公开接纳该格式，也不实现本地 Hosted unlist 或治理。
+
 - 从各 V3 service index 发现上游资源，不假设 nuget.org URL 结构。
-- 限制元数据/包缓存、负缓存、重定向、上游认证、熔断和出站 allowlist。
+- 限制元数据/包缓存、负缓存、重定向、上游认证和出站 allowlist。
 - Group 按规范化 ID/version 确定成员所有权；高优先级身份先 claim 请求，不能在资产缺失后随意 fallback。
 - 保持 Repository source mapping，防止私有命名空间静默回退到公网。
 
@@ -56,4 +61,4 @@ N1 字节契约已实现：Gateway 能验证完整 `.nupkg` ZIP，读取根目�
 
 ## 交付顺序
 
-保持 #287 Hosted 预览显式启用，再由 #288 实现 Proxy/Group、#289 实现生命周期、Console 与公开准入。APT Hosted 准入继续按独立路线图推进。现有解析器持续测试，能力发现不得提前宣称未完成的 NuGet 仓库行为。
+保持 #287 Hosted 与 #288 Proxy/Group 预览显式启用，生命周期、Console 与公开准入仍由 #289 推进。APT Hosted 准入继续按独立路线图推进。现有解析器持续测试，能力发现不得提前宣称未完成的 NuGet 仓库行为。

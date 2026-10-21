@@ -5,9 +5,10 @@
 NuGet Hosted is an explicitly enabled preview. It has its own repository and
 publication DTOs under `/api/v2/previews/nuget`, and a native `/nuget/{name}`
 protocol endpoint. It remains absent from the admitted format profiles, formal
-repository creation/catalog, and Console format selector. Proxy, Group,
-symbols publication, signature verification, promotion, tombstone/restore,
-retention and full governance admission are tracked separately by #288/#289.
+repository creation/catalog, and Console format selector. The separately enabled
+[Proxy/Group preview](nuget-proxy-group-preview.md) extends native reads.
+Symbols publication, signature verification, promotion, tombstone/restore,
+retention and full governance admission remain tracked by #289.
 There is no `agctl` command for the preview API.
 
 ## Enable and provision

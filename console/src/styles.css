@@ -710,6 +710,16 @@ button:not(:disabled):active,
   min-width: 0;
 }
 
+.ag-artifact-browser-with-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.ag-artifact-browser-with-notice > .ag-artifact-view-toolbar {
+  margin-bottom: 0;
+}
+
 .ag-artifact-view-toolbar {
   display: flex;
   min-width: 0;

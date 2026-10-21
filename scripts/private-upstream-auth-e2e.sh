@@ -33,14 +33,24 @@ cleanup() {
   networks=$(docker --context "$context" network ls -q --filter "label=com.docker.compose.project=$project")
   if [[ -n "$volumes" || -n "$networks" ]]; then result=1; fi
   printf 'Private upstream owned project=%s cleanup=%s containers=%s volumes=%s networks=%s\n' "$project" "$result" "${remaining:-0}" "${volumes:-0}" "${networks:-0}"
-  printf '{"project":"%s","exitCode":%s,"remainingContainers":"%s","remainingVolumes":"%s","remainingNetworks":"%s"}\n' "$project" "$result" "$remaining" "$volumes" "$networks" >"$evidence/cleanup.json"
   rm -rf "$workdir"
+  if [[ -e "$workdir" ]]; then result=1; fi
+  printf '{"project":"%s","exitCode":%s,"remainingContainers":"%s","remainingVolumes":"%s","remainingNetworks":"%s","temporaryDirectory":"%s","temporaryDirectoryRemoved":%s}\n' "$project" "$result" "$remaining" "$volumes" "$networks" "$workdir" "$([[ ! -e "$workdir" ]] && printf true || printf false)" >"$evidence/cleanup.json"
   exit "$result"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 printf 'Private upstream owned project=%s docker-context=%s\n' "$project" "$context"
+python3 - "$evidence/source.json" <<'PYSOURCE'
+import hashlib, json, pathlib, subprocess, sys
+files = set(subprocess.check_output(['git','ls-files','-c','-o','--exclude-standard','-z']).decode().split('\0'))-{''}
+record = {'head':subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),
+          'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}']).decode().strip(),
+          'trackedClean':not subprocess.check_output(['git','status','--porcelain','--untracked-files=no']).strip(),
+          'fileSHA256':{name:hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() for name in sorted(files) if pathlib.Path(name).is_file()}}
+pathlib.Path(sys.argv[1]).write_text(json.dumps(record,indent=2)+'\n')
+PYSOURCE
 # Pin official clients and verify release digests before running them. These
 # executables, settings and caches stay inside this fixture's private directory.
 curl_args=(--disable --proto '=https' --tlsv1.2 --fail --silent --show-error --location --connect-timeout 15 --max-time 120 --retry 2)
@@ -66,8 +76,42 @@ if hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest() != sys.arg
     raise SystemExit("official ORAS 1.3.3 archive SHA-256 mismatch")
 PYHASH
 tar -xzf "$workdir/oras.tar.gz" -C "$workdir/bin" oras
+curl "${curl_args[@]}" https://services.gradle.org/distributions/gradle-9.3.1-bin.zip --output "$workdir/gradle.zip"
+python3 - "$workdir" "$evidence/clients.json" "$oras_platform" <<'PYGRADLE'
+import hashlib, json, os, pathlib, subprocess, sys, zipfile
+work, destination = map(pathlib.Path, sys.argv[1:3])
+archive = work/'gradle.zip'
+expected = 'b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06'
+if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
+    raise SystemExit('official Gradle 9.3.1 distribution SHA-256 mismatch')
+with zipfile.ZipFile(archive) as source:
+    for entry in source.infolist():
+        if not (work/entry.filename).resolve().is_relative_to(work.resolve()):
+            raise SystemExit('Gradle distribution member escapes the owned directory')
+    source.extractall(work)
+binary = work/'gradle-9.3.1/bin/gradle'
+binary.chmod(0o700)
+home, cache, temporary = work/'gradle-bootstrap-home', work/'gradle-bootstrap-cache', work/'gradle-bootstrap-tmp'
+for directory in (home, cache, temporary):
+    directory.mkdir(mode=0o700)
+environment = {'PATH':os.environ['PATH'], 'HOME':str(home), 'GRADLE_USER_HOME':str(cache),
+               'TMPDIR':str(temporary), 'LANG':'C', 'GRADLE_OPTS':'-Duser.home='+str(home)}
+version = subprocess.run([str(binary), '--version'], cwd=work, env=environment, capture_output=True, text=True, timeout=60)
+if version.returncode or '\nGradle 9.3.1\n' not in version.stdout:
+    raise SystemExit('pinned Gradle prerequisite failed: '+version.stdout+version.stderr)
+destination.write_text(json.dumps({'maven':{'version':'3.9.16', 'mode':'owned-official-distribution',
+    'archiveSHA512':hashlib.sha512((work/'maven.tar.gz').read_bytes()).hexdigest()},
+    'oras':{'version':'1.3.3', 'platform':sys.argv[3], 'mode':'owned-official-release',
+    'archiveSHA256':hashlib.sha256((work/'oras.tar.gz').read_bytes()).hexdigest()},
+    'gradle':{'version':'9.3.1', 'mode':'owned-official-distribution',
+    'url':'https://services.gradle.org/distributions/gradle-9.3.1-bin.zip',
+    'checksumSource':'https://gradle.org/release-checksums/#9.3.1', 'archiveSHA256':expected,
+    'binarySHA256':hashlib.sha256(binary.read_bytes()).hexdigest(), 'versionOutput':version.stdout,
+    'ownedBootstrapHome':True}}, indent=2)+'\n')
+PYGRADLE
+export PRIVATE_AUTH_GRADLE="$workdir/gradle-9.3.1/bin/gradle"
 export PATH="$workdir/apache-maven-3.9.16/bin:$workdir/bin:$PATH"
-printf 'Pinned clients: Maven 3.9.16 (SHA-512), ORAS 1.3.3 (SHA-256)\n'
+printf 'Pinned clients: Maven 3.9.16 (SHA-512), ORAS 1.3.3 and Gradle 9.3.1 (SHA-256)\n'
 started=1
 "${compose[@]}" up -d --wait postgres rustfs
 "${compose[@]}" run --rm --no-deps rustfs-ready
@@ -75,19 +119,20 @@ started=1
 "${compose[@]}" run --rm --no-deps migrate
 postgres_address=$("${compose[@]}" port postgres 5432)
 rustfs_address=$("${compose[@]}" port rustfs 9000)
+test_exit=0
 if ! TEST_DATABASE_URL="postgres://gateway:integration-password@${postgres_address}/gateway_test?sslmode=disable" \
 TEST_RUSTFS_ENDPOINT="http://${rustfs_address}" \
 TEST_RUSTFS_ACCESS_KEY=integration-rustfs \
 TEST_RUSTFS_SECRET_KEY=integration-password \
-  go test -json -count=1 -tags='integration mavenclient ociclient' ./internal/app \
-  -run '^Test(PostgresRustFSPrivateProxy(Credentials|OfficialClients)|Private.*)$' \
+  go test -json -count=1 -tags='integration mavenclient ociclient gradleclient' ./internal/app \
+  -run '^Test(PostgresRustFSPrivateProxy(Credentials|OfficialClients|GradleOfficialClient)|Private.*)$' \
   >"$evidence/results.jsonl" 2>&1; then
-  cat "$evidence/results.jsonl" >&2
-  exit 1
+  test_exit=1
 fi
-python3 - "$evidence/results.jsonl" "$evidence/results.json" <<'PYRESULT'
-import hashlib, json, pathlib, sys
-path, destination = map(pathlib.Path, sys.argv[1:])
+python3 - "$evidence/results.jsonl" "$evidence/results.json" "$test_exit" <<'PYRESULT'
+import collections, hashlib, json, pathlib, sys
+path, destination = map(pathlib.Path, sys.argv[1:3])
+test_exit = int(sys.argv[3])
 events = [json.loads(line) for line in path.read_text().splitlines()]
 required = {'TestPostgresRustFSPrivateProxyCredentials', 'TestPostgresRustFSPrivateProxyOfficialClients',
             'TestPrivateProxyUpstreamCredentials', 'TestPrivateOCIIssuerCredentials',
@@ -96,18 +141,55 @@ required = {'TestPostgresRustFSPrivateProxyCredentials', 'TestPostgresRustFSPriv
             'TestPrivateProxyUnauthorizedDoesNotContactAnonymousGroupFallback', 'TestPrivateOCICacheRechecksEgressAndRequiresAudit',
             'TestPrivateProxyCredentialRebinding', 'TestPrivateProxyCredentialRebindingPostgres',
             'TestPrivateProxyCircuitDoesNotFallThrough', 'TestPrivateProxyCircuitDoesNotFallThroughPostgres'}
-run = {e.get('Test') for e in events if e.get('Action') == 'run'}
-passed = {e.get('Test') for e in events if e.get('Action') == 'pass'}
+required.add('TestPostgresRustFSPrivateProxyGradleOfficialClient')
+for scheme in ('basic','bearer'):
+    for route in ('proxy','group'):
+        parent = f'TestPostgresRustFSPrivateProxyGradleOfficialClient/{scheme}/{route}'
+        required.add(parent)
+        for stage in ('missing','cold','restarted-cache','wrong','rotated','expired-source-401','expired-source-403','cleared','restored','disconnected-cache'):
+            required.add(parent+'/'+stage)
+source = json.loads((path.parent/'source.json').read_text())
+changed = [name for name,digest in source['fileSHA256'].items() if not pathlib.Path(name).is_file() or hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()!=digest]
+clients = json.loads((path.parent/'clients.json').read_text())
+outputs = collections.defaultdict(str)
+for event in events:
+    if event.get('Test'):
+        outputs[event['Test']] += event.get('Output', '')
+# test2json can split a single long t.Log line into multiple Output events.
+# Reassemble by test before parsing the complete JSON evidence line.
+def records(marker):
+    return [json.loads(line.split(marker,1)[1]) for output in outputs.values() for line in output.splitlines() if marker in line]
+gradle = records('PRIVATE_GRADLE_CLIENT ')
+rejections = records('PRIVATE_GRADLE_REJECTION ')
+clients['gradle']['consumptions'] = gradle
+clients['gradle']['rejections'] = rejections
+expected = {(scheme,route,stage) for scheme in ('basic','bearer') for route in ('proxy','group') for stage in ('missing','cold','restarted-cache','wrong','rotated','cleared','restored','disconnected-cache')}
+actual = {(r['scheme'],r['route'],r['round']) for r in gradle}
+expected_rejections = {(scheme,route,stage) for scheme in ('basic','bearer') for route in ('proxy','group') for stage in ('missing','wrong','cleared')}
+actual_rejections = {(r['scheme'],r['route'],r['round']) for r in rejections}
+valid_clients = expected == actual and len(gradle) == len(expected) and expected_rejections == actual_rejections and len(rejections) == len(expected_rejections)
+valid_clients &= all(r['sourceRequests'] > 0 and r['sourceStatus'] == 401 and r['gatewayStatus'] == 502 and r['anonymousMemberRequests'] == 0 and 'status code 502' in r['output'] for r in rejections)
+for record in gradle:
+    success = record['round'] not in ('missing','wrong','cleared')
+    valid_clients &= record['expectedSuccess'] == success and record['fullPayloadCheck'] == success and record['version'] == '9.3.1' and record['emptyClientCache'] and record['targetOnly']
+    if success:
+        valid_clients &= len(record['objects']) == 6 and all(o['size'] > 0 and len(o['sha256']) == 64 for o in record['objects'])
+clients['gradle']['validMatrix'] = bool(valid_clients)
+(path.parent/'clients.json').write_text(json.dumps(clients,indent=2)+'\n')
+run = {e['Test'] for e in events if e.get('Action') == 'run' and e.get('Test')}
+passed = {e['Test'] for e in events if e.get('Action') == 'pass' and e.get('Test')}
 failed = {e.get('Test') or e.get('Package') for e in events if e.get('Action') == 'fail'}
 skipped = {e.get('Test') for e in events if e.get('Action') == 'skip'}
 summary = {'required': sorted(required), 'missingRun': sorted(required - run),
            'missingPass': sorted(required - passed), 'failed': sorted(failed),
-           'skipped': sorted(skipped), 'passedCount': len(passed),
+           'skipped': sorted(skipped), 'passedCount': len(passed), 'testExitCode':test_exit,
+           'head':source['head'], 'tree':source['tree'], 'trackedClean':source['trackedClean'], 'sourceUnchanged':not changed,
+           'gradleClientMatrixValid':bool(valid_clients), 'gradleConsumptionCount':len(gradle),
            'logSHA256': hashlib.sha256(path.read_bytes()).hexdigest()}
 destination.write_text(json.dumps(summary, indent=2) + '\n')
 for event in events:
     if event.get('Output'): print(event['Output'], end='')
-if required - run or required - passed or failed or skipped:
+if test_exit or required - run or required - passed or failed or skipped or changed or not valid_clients:
     raise SystemExit('mandatory private upstream fixture missing, failed or skipped; see results.json')
-print('Verified private Maven/OCI proxy and group authentication with pinned official clients, cold and hot caches, zero skipped tests.')
+print('Verified private Maven/OCI/Gradle proxy and group authentication with pinned official clients, cold and hot caches, zero skipped tests.')
 PYRESULT

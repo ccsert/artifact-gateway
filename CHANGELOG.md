@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+- OCI Hosted, Proxy and Group now support authorized [Catalog and OCI 1.1 Referrers discovery](docs/oci-discovery.md) (#315, #316). Coverage reports distinguish complete, partial and unsupported sources; immutable principal-bound pages and persistent source bindings prevent permission changes or Group reordering from substituting content. Referrers validate original manifests, annotations and complete blob closures. Anonymous and authenticated identities have separate owners, and invalid credentials fail closed. Official ORAS/Docker acceptance runs as a required seventh native lane; signature trust and referrers-tag fallback remain unsupported.
+
+- The default-off [NuGet preview](docs/nuget-proxy-group-preview.md) now supports read-only Proxy and ordered Group (#288): V3 resource discovery, verified source-versioned caches, persistent package/version authorities, private upstream credentials and full-resource authorization. Upstream-unlisted exact versions remain readable while search omits them; filtered results cannot establish a Group authority. Formal admission and local Hosted governance remain under #289.
+
+- Protected Maven Proxy/Group reads now have pinned official Gradle 9.3.1 coverage (#286), including a three-level dependency closure, API-configured Basic/Bearer source credentials, per-invocation empty client homes, complete original JAR/POM identity checks, credential rotation/removal and reads after physical source shutdown.
+
 - Console now requires Vite 7.3.7, the patched 7.x release for the launch-editor advisories GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm (#439). The generated lockfile retains every other package version, and dependency audit gains no exception.
 
 - Gateway, agctl and the Go sidecars now build with Go 1.26.10 to address GO-2026-6809 in `crypto/x509` (#438). Build and integration images share the verified official multi-architecture digest; dependency audit remains strict without a new exception.
@@ -19,7 +25,7 @@ their meaning.
 
 - Private upstream authentication now covers npm, PyPI, Cargo, APT, Raw and Conan (#432–#434), alongside Go/Maven/OCI. Basic/Bearer credentials stay sealed, Groups resolve the current member binding, cache publication rejects stale source versions, and unknown old cache bindings require a fresh read. Conan Basic performs the native token handshake. Console supports rotation and clearing for every admitted Proxy format. The isolated gate verifies 48 official-client cold/hot Proxy/Group consumptions; see [Proxy egress](docs/proxy-egress-design.md#private-npm-pypi-cargo-apt-raw-and-conan-upstreams).
 
-- NuGet Hosted has an explicit, default-disabled [preview](docs/nuget-hosted-preview.md) with independent management and native routes (#287). Verified nupkg staging and commit, dependency metadata, native reads, quota reservations, response-loss recovery and reference-safe expired-upload collection remain separate from formal format admission. The official .NET SDK gate publishes a three-package dependency chain, restores across Gateway/PostgreSQL/RustFS restart and executes offline; Proxy/Group and full governance remain tracked by #288/#289.
+- NuGet Hosted has an explicit, default-disabled [preview](docs/nuget-hosted-preview.md) with independent management and native routes (#287). Verified nupkg staging and commit, dependency metadata, native reads, quota reservations, response-loss recovery and reference-safe expired-upload collection remain separate from formal format admission. The official .NET SDK gate publishes a three-package dependency chain, restores across Gateway/PostgreSQL/RustFS restart and executes offline; full governance remains tracked by #289.
 
 - Large Nexus inventories scan page by page with durable private cursors, page receipts and source-version fences (#435). Restart resumes the last committed page, an independent second observation must match before sealing, and partial scans never expose entries or publish. Source configuration changes serialize with inventory sealing and native publication. See [durable migration batches](docs/nexus-migration-batches.md).
 

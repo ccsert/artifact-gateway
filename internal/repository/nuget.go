@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// FormatNuGet is an internal Hosted preview identity. It is deliberately not
+// FormatNuGet is an internal preview identity. It is deliberately not
 // present in SupportedFormatProfiles or the public repository Format enum.
 const FormatNuGet Format = "nuget"
 
@@ -31,6 +31,7 @@ type NuGetSession struct {
 	MetadataJSON, Nuspec                                []byte
 	CreatedAt, ExpiresAt, CommittedAt                   time.Time
 	CollectedAt                                         time.Time
+	SourceVersion, SourceURL, RegistrationURL           string
 }
 
 type NuGetPublication struct {
@@ -38,6 +39,7 @@ type NuGetPublication struct {
 	Size                                                                      int64
 	MetadataJSON, Nuspec                                                      []byte
 	PublishedAt                                                               time.Time
+	SourceVersion, SourceURL, RegistrationURL                                 string
 }
 
 // NativeNuGetStore is injected independently; it is never part of GatewayStore.
@@ -70,17 +72,22 @@ func validNuGetSession(in NuGetSession) bool {
 func validNuGetStaging(in NuGetSession) bool {
 	var meta struct{ ID, Version string }
 	return validNuGetSession(in) && len(in.Nuspec) > 0 && len(in.Nuspec) <= 1<<20 && len(in.MetadataJSON) <= 256<<10 &&
+		(in.SourceVersion == "" && in.SourceURL == "" && in.RegistrationURL == "" || sourceVersionValid(in.SourceVersion) && len(in.SourceURL) > 0 && len(in.SourceURL) <= 4096 && len(in.RegistrationURL) > 0 && len(in.RegistrationURL) <= 4096) &&
 		json.Unmarshal(in.MetadataJSON, &meta) == nil && strings.EqualFold(meta.ID, in.PackageID) && strings.EqualFold(meta.Version, in.Version)
 }
 
 func nuGetSessionObjectKey(in NuGetSession) string {
 	return "native/nuget/" + in.RepositoryID + "/sessions/" + in.ID + "/sha256/" + strings.TrimPrefix(in.Digest, "sha256:")
 }
-func nuGetPublicationKey(repo, id, version string) string {
-	return repo + "\x00" + id + "\x00" + version
+func nuGetPublicationKey(repo, id, version string, sourceVersion ...string) string {
+	key := repo + "\x00" + id + "\x00" + version
+	if len(sourceVersion) > 0 && sourceVersion[0] != "" {
+		key += "\x00" + sourceVersion[0]
+	}
+	return key
 }
 func nuGetSessionSame(a, b NuGetSession) bool {
-	return a.RepositoryID == b.RepositoryID && a.PackageID == b.PackageID && a.Version == b.Version && a.Digest == b.Digest && a.Size == b.Size
+	return a.RepositoryID == b.RepositoryID && a.PackageID == b.PackageID && a.Version == b.Version && a.Digest == b.Digest && a.Size == b.Size && a.SourceVersion == b.SourceVersion
 }
 func cloneNuGetSession(in NuGetSession) NuGetSession {
 	in.MetadataJSON = append([]byte(nil), in.MetadataJSON...)
@@ -93,8 +100,14 @@ func cloneNuGetPublication(in NuGetPublication) NuGetPublication {
 	return in
 }
 func nuGetPublication(in NuGetSession, published time.Time) NuGetPublication {
-	return NuGetPublication{RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, ObjectKey: in.ObjectKey, SessionID: in.ID, Publisher: in.Actor, Size: in.Size, MetadataJSON: append([]byte(nil), in.MetadataJSON...), Nuspec: append([]byte(nil), in.Nuspec...), PublishedAt: published}
+	return NuGetPublication{RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, ObjectKey: in.ObjectKey, SessionID: in.ID, Publisher: in.Actor, Size: in.Size, MetadataJSON: append([]byte(nil), in.MetadataJSON...), Nuspec: append([]byte(nil), in.Nuspec...), PublishedAt: published, SourceVersion: in.SourceVersion, SourceURL: in.SourceURL, RegistrationURL: in.RegistrationURL}
 }
 func nuGetPublicationAudit(in NuGetPublication, repoName string) AuditRecord {
-	return AuditRecord{Repository: repoName, GroupName: repoName, Actor: in.Publisher, Format: string(FormatNuGet), Resource: in.PackageID + "@" + in.Version, Operation: "nuget.publish", Outcome: AuditResolved, Status: 201, OccurredAt: in.PublishedAt, Evidence: map[string]string{"digest": in.Digest, "sessionId": in.SessionID}}
+	operation := "nuget.publish"
+	evidence := map[string]string{"digest": in.Digest, "sessionId": in.SessionID}
+	if in.SourceVersion != "" {
+		operation = "nuget.proxy.cache"
+		evidence["sourceVersion"] = in.SourceVersion
+	}
+	return AuditRecord{Repository: repoName, GroupName: repoName, Actor: in.Publisher, Format: string(FormatNuGet), Resource: in.PackageID + "@" + in.Version, Operation: operation, Outcome: AuditResolved, Status: 201, OccurredAt: in.PublishedAt, Evidence: evidence}
 }

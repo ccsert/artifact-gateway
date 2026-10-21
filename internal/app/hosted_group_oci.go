@@ -33,7 +33,7 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		return
 	}
 	name, resource, reference, _, ok := parseNativeOCIPath(r.URL.Path)
-	if !ok || (resource != "manifest" && resource != "blob" && resource != "tags") {
+	if !ok || (resource != "manifest" && resource != "blob" && resource != "tags" && resource != "referrers") {
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
 		return
 	}
@@ -61,11 +61,20 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
 		return
 	}
-	if isAnonymous(principal) {
+	scope := ociDiscoveryScope{id: "group:" + group.ID, name: group.Name, group: &group}
+	identity := ociDiscoveryPrincipal{Principal: principal, authenticated: authenticated}
+	if (resource == "manifest" || resource == "blob") && h.native.serveOCIBoundObject(w, r, scope, imageName, map[string]string{"manifest": "manifests", "blob": "blobs"}[resource], reference, identity) {
+		return
+	}
+	if resource == "referrers" && !authenticated || resource != "referrers" && isAnonymous(principal) {
 		members = anonymousHostedGroupMembers(group, members)
 	}
 	var denied bool
-	members, denied = resolver.authorizeMembers(r.Context(), principal, repository.FormatOCI, imageName, members)
+	if resource == "referrers" {
+		members, denied = h.authorizeDiscoveryMembers(r, resolver, group, principal, authenticated, imageName, members)
+	} else {
+		members, denied = resolver.authorizeMembers(r.Context(), principal, repository.FormatOCI, imageName, members)
+	}
 	if denied && len(members) == 0 {
 		writeOCIError(w, http.StatusForbidden, "DENIED", "requested access to the resource is denied")
 		return
@@ -73,6 +82,18 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	if len(members) == 0 {
 		resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
 		writeOCIChallenge(w, r)
+		return
+	}
+	if resource == "referrers" {
+		for _, member := range members {
+			repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
+			if err != nil {
+				writeReferrerFailure(w, err)
+				return
+			}
+			scope.repositories = append(scope.repositories, repo)
+		}
+		h.native.discoveryReferrers(w, r, scope, imageName, reference, identity)
 		return
 	}
 	if resource == "tags" {
@@ -97,8 +118,9 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			}
 			continue
 		}
-		h.proxy.serveV2GroupProxy(w, r, group.Name, member, imageName, upstreamResource, reference, principal.Actor)
-		return
+		if h.proxy.serveV2GroupProxy(w, r, group.Name, member, imageName, upstreamResource, reference, principal.Actor) {
+			return
+		}
 	}
 	resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 	writeOCIError(w, http.StatusNotFound, map[string]string{"manifest": "MANIFEST_UNKNOWN", "blob": "BLOB_UNKNOWN"}[resource], "resource unknown to registry")
@@ -255,4 +277,30 @@ func (h nativeOCIHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 		return true, http.StatusOK
 	}
 	return false, 0
+}
+
+// Discovery requires an explicit managed decision for authenticated callers.
+// Its anonymous path is selected from the actual authentication result rather
+// than the actor's name, while ordinary protocol reads keep their own policy.
+func (h v2GroupOCIHandler) authorizeDiscoveryMembers(r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, principal Principal, authenticated bool, image string, members []repository.Member) ([]repository.Member, bool) {
+	if !authenticated {
+		return members, false
+	}
+	eligible := make([]repository.Member, 0, len(members))
+	denied := false
+	for _, member := range members {
+		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
+		decision := AuthorizationDecision{Source: "repository_grants", Reason: "grant_lookup_failed"}
+		managed := false
+		if err == nil && repo.Format == repository.FormatOCI && repo.State == repository.RepositoryActive {
+			decision, managed = h.native.authorizer.ManagedResourceDecision(r.Context(), principal, repo, RepositoryRead, image)
+		}
+		if managed && decision.Allowed {
+			eligible = append(eligible, member)
+			continue
+		}
+		denied = true
+		_ = resolver.auditGroupAuthorizationDenied(r.Context(), group.Name, repository.FormatOCI, image, member.Name, principal.Actor, decision)
+	}
+	return eligible, denied
 }

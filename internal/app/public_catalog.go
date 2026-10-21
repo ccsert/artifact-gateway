@@ -62,7 +62,7 @@ func (h publicRepositoryCatalogHandler) ServeHTTP(w http.ResponseWriter, r *http
 				return
 			}
 			for _, group := range groups {
-				if anonymousHostedGroupReadAllowed(r.Context(), h.anonymous, h.repositories, group, r.Method) {
+				if group.Format != repository.FormatNuGet && anonymousHostedGroupReadAllowed(r.Context(), h.anonymous, h.repositories, group, r.Method) {
 					items = append(items, publicRepositoryCatalogEntry{ID: group.ID, Name: group.Name, Format: group.Format, Type: "group"})
 				}
 			}

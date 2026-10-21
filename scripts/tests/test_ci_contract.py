@@ -13,6 +13,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('ci_contract', ROOT / 'scripts/ci-contract.py')
@@ -486,10 +487,10 @@ class ContractGateTests(unittest.TestCase):
         with patch.dict(os.environ, env), patch.object(ci.urllib.request, 'build_opener', return_value=Opener()):
             with self.assertRaises(ValueError):
                 ci.collect_job_logs(destination)
-        self.assertEqual(len(json.loads((destination / 'job-log-manifest.json').read_text())['missing']), 7)
+        self.assertEqual(len(json.loads((destination / 'job-log-manifest.json').read_text())['missing']), len(ci.LANES))
 
     def test_failed_artifact_or_log_collection_rejects_aggregate(self):
-        args = argparse.Namespace(native_only=False, needs_job=None, input=self.root,
+        args = argparse.Namespace(benchmark_only=False, needs_job=None, input=self.root,
                                   output=self.root / 'aggregate', prefix='contract')
         for artifact, logs in [('failure', 'success'), ('success', 'failure'),
                                ('skipped', 'success'), ('success', 'cancelled'), ('', '')]:
@@ -524,7 +525,7 @@ class ContractGateTests(unittest.TestCase):
 
         for mode in ('serial', 'parallel'):
             prefix = 'benchmark-' + mode
-            for index, lane in enumerate(ci.PLAN['nativeOrder']):
+            for index, lane in enumerate(ci.BENCHMARK_LANES):
                 directory = self.root / prefix / lane
                 shutil.copytree(self.root / lane, directory)
                 item = {**self.reports[lane], 'prefix': prefix, 'attempt': lane_attempt,
@@ -546,7 +547,7 @@ class ContractGateTests(unittest.TestCase):
             ci.write(self.root / (prefix + '-gate') / 'aggregate.json',
                      {'status': 'success', 'head': self.head, 'runId': '1234',
                       'attempt': gate_attempt, 'prefix': prefix,
-                      'lanes': sorted(ci.PLAN['nativeOrder']), 'completedAt': stamp(end + 10)})
+                      'lanes': sorted(ci.BENCHMARK_LANES), 'completedAt': stamp(end + 10)})
         return jobs
 
     def measured_benchmark(self, jobs):
@@ -584,7 +585,7 @@ class ContractGateTests(unittest.TestCase):
         jobs = self.benchmark_sample()
         for mode in ('serial', 'parallel'):
             args = argparse.Namespace(input=self.root, output=self.root / ('benchmark-' + mode + '-gate'),
-                                      prefix='benchmark-' + mode, needs_job=mode, native_only=True)
+                                      prefix='benchmark-' + mode, needs_job=mode, benchmark_only=True)
             env = {'GITHUB_ACTIONS': 'true', 'CI_CONTRACT_ARTIFACT_RESULT': 'success',
                    'GITHUB_SHA': self.head, 'GITHUB_RUN_ID': '1234', 'GITHUB_RUN_ATTEMPT': '2',
                    'CI_CONTRACT_NEEDS': json.dumps({mode: {'result': 'success'}})}
@@ -749,7 +750,10 @@ class ContractGateTests(unittest.TestCase):
         original = baseline.split('  contract-and-test:', 1)[1].split('  quality:', 1)[0]
         expected = re.findall(r'^\s+(?:run:\s+)?make ([a-z0-9-]+)\s*$', original, re.M)
         actual = [s['command'][1] for lane in ci.PLAN['lanes'].values() for s in lane['steps'] if s['command'][0] == 'make']
-        self.assertCountEqual(actual, expected)
+        # The new discovery gate extends the matrix without removing any of
+        # the original targets used by the fixed six-lane performance scope.
+        self.assertCountEqual(actual, [*expected, 'native-oci-discovery-e2e'])
+        self.assertEqual(ci.PLAN['lanes']['oci-discovery']['steps'][-1]['timeoutSeconds'], 900)
         self.assertEqual(ci.PLAN['lanes']['nuget']['steps'][-1]['timeoutSeconds'], 900)
         self.assertEqual(ci.PLAN['lanes']['six-format-auth']['steps'][-1]['timeoutSeconds'], 900)
         for lane in ('migration-clients', 'inventory', 'oci-migration', 'maven-oci-auth'):
@@ -773,6 +777,331 @@ class ContractGateTests(unittest.TestCase):
         self.assertNotIn('continue-on-error', workflow)
         mapped = re.search(r'lane: \[([^]]+)\]', native).group(1).split(', ')
         self.assertEqual(mapped, ci.PLAN['nativeOrder'])
+
+    def test_new_discovery_lane_is_required_without_changing_benchmark_scope(self):
+        self.assertIn('oci-discovery', ci.LANES)
+        self.assertIn('oci-discovery', ci.PLAN['nativeOrder'])
+        self.assertNotIn('oci-discovery', ci.BENCHMARK_LANES)
+        workflow = (ROOT / '.github/workflows/contract-benchmark.yml').read_text()
+        matrices = re.findall(r'lane: \[([^]]+)\]', workflow)
+        self.assertEqual(len(matrices), 2)
+        for matrix in matrices:
+            self.assertEqual(matrix.split(', '), list(ci.BENCHMARK_LANES))
+        self.assertEqual(workflow.count('--benchmark-only'), 2)
+
+
+class ColdModuleCacheTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(prefix='ag-cold-module-controls-')
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.work = self.root / 'owned-work'
+        self.work.mkdir()
+        self.project = self.root / 'project'
+        self.project.mkdir()
+        self.proxy = self.root / 'proxy' / 'example.test' / 'cold-cache' / '@v'
+        self.proxy.mkdir(parents=True)
+        self.mod = 'module example.test/cold-cache\n\ngo 1.20\n'
+        (self.proxy / 'v1.0.0.mod').write_text(self.mod)
+        (self.proxy / 'v1.0.0.info').write_text('{"Version":"v1.0.0","Time":"2026-01-01T00:00:00Z"}')
+        self.archive()
+        (self.project / 'go.mod').write_text('module example.test/consumer\n\ngo 1.20\n\nrequire example.test/cold-cache v1.0.0\n')
+        self.sums = ('example.test/cold-cache v1.0.0 h1:S2G5cFkb+JhWvCkT8nfHSMlNsONlwMIIkU72iYj8mPo=\n'
+                     'example.test/cold-cache v1.0.0/go.mod h1:37wizKh8CH2eu2LLMbQD03xAs8Eqc8N1g2d2CYStrZI=\n')
+        (self.project / 'go.sum').write_text(self.sums)
+        self.foreign = self.root / 'existing-cache'
+        self.foreign.mkdir()
+        (self.foreign / 'sentinel').write_text('preserve existing cache')
+
+    def archive(self, content='verified fixture'):
+        with zipfile.ZipFile(self.proxy / 'v1.0.0.zip', 'w') as archive:
+            prefix = 'example.test/cold-cache@v1.0.0/'
+            archive.writestr(prefix + 'go.mod', self.mod)
+            archive.writestr(prefix + 'cache.go', 'package cache\n\nconst Value = "' + content + '"\n')
+
+    def lane(self, cold=True, command=None, cleanup_error=False):
+        output = self.root / 'evidence'
+        source = {'head': 'a' * 40, 'tree': 'b' * 40, 'businessDigest': 'c' * 64}
+        command = command or ['go', '-C', str(self.project), 'mod', 'download', 'example.test/cold-cache@v1.0.0']
+        plan = {'lanes': {'cold-probe': {'rawDirectories': [], 'steps': [
+            {'name': 'verified local Go module', 'command': command, 'timeoutSeconds': 30}]}}}
+        args = argparse.Namespace(lane='cold-probe', output=output, prefix='control',
+                                  cold_cache=cold, local=True, keep_going=False)
+        environment = {'GITHUB_ACTIONS': 'false', 'GOFLAGS': '-trimpath', 'GOENV': 'off',
+                       'GOTOOLCHAIN': 'local', 'GOWORK': 'off',
+                       'GONOSUMDB': 'example.test/cold-cache',
+                       'GOPROXY': (self.root / 'proxy').as_uri(),
+                       'GOCACHE': str(self.foreign / 'build'), 'GOMODCACHE': str(self.foreign / 'mod')}
+        original_command, original_remove = ci.run_command, ci.shutil.rmtree
+        observed = {}
+        def producer(command, log, env, timeout):
+            observed['flags'] = env['GOFLAGS']
+            observed['moduleCache'] = env['GOMODCACHE']
+            result = original_command(command, log, env, timeout)
+            module = Path(env['GOMODCACHE']) / 'example.test' / 'cold-cache@v1.0.0'
+            if module.exists():
+                observed['moduleMode'] = module.stat().st_mode & 0o777
+                observed['content'] = (module / 'cache.go').read_text()
+            return result
+        def remove(path, *arguments, **keywords):
+            if cleanup_error and Path(path) == self.work:
+                raise PermissionError('owned cleanup denied')
+            return original_remove(path, *arguments, **keywords)
+        with patch.object(ci, 'PLAN', plan), patch.object(ci, 'business_source', return_value=source), \
+                patch.object(ci.tempfile, 'mkdtemp', return_value=str(self.work)), \
+                patch.object(ci, 'run_command', side_effect=producer), \
+                patch.object(ci.shutil, 'rmtree', side_effect=remove), \
+                patch.dict(os.environ, environment):
+            status = ci.run_lane(args)
+            self.assertEqual(os.environ['GOFLAGS'], '-trimpath')
+            self.assertEqual(os.environ['GOMODCACHE'], str(self.foreign / 'mod'))
+        self.assertEqual((self.project / 'go.sum').read_text(), self.sums)
+        self.assertEqual((self.foreign / 'sentinel').read_text(), 'preserve existing cache')
+        return status, json.loads((output / 'report.json').read_text()), observed
+
+    def test_cold_verified_module_is_writable_and_removed(self):
+        status, report, observed = self.lane()
+        self.assertEqual(status, 0)
+        self.assertIn('-trimpath', observed['flags'])
+        self.assertTrue(observed['moduleMode'] & 0o200)
+        self.assertIn('verified fixture', observed['content'])
+        self.assertEqual(observed['moduleCache'], str(self.work / 'go-mod'))
+        self.assertEqual(report['cleanup']['errors'], [])
+        self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+        self.assertEqual(list(self.foreign.iterdir()), [self.foreign / 'sentinel'])
+
+    def test_cold_flag_does_not_bypass_recorded_module_checksum(self):
+        self.archive('tampered fixture')
+        status, report, _ = self.lane()
+        self.assertEqual(status, 1)
+        self.assertNotEqual(report['steps'][0]['exitCode'], 0)
+        self.assertIn('checksum mismatch', (self.root / 'evidence/logs/00.log').read_text())
+        self.assertEqual(report['cleanup']['errors'], [])
+        self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+
+    def test_non_cold_lane_preserves_existing_flags_and_cache(self):
+        status, report, observed = self.lane(cold=False, command=['go', 'env', 'GOFLAGS'])
+        self.assertEqual(status, 0)
+        self.assertEqual(observed['flags'], '-trimpath')
+        self.assertEqual(observed['moduleCache'], str(self.foreign / 'mod'))
+        self.assertEqual((self.root / 'evidence/logs/00.log').read_text().strip(), '-trimpath')
+        self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+
+    def test_cold_cleanup_error_still_fails_successful_producer(self):
+        status, report, _ = self.lane(cleanup_error=True)
+        self.assertEqual(status, 1)
+        self.assertEqual(report['steps'][0]['exitCode'], 0)
+        self.assertEqual(report['cleanup']['errors'], [
+            {'stage': 'temporary-directory', 'error': 'PermissionError'}])
+        self.assertFalse(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+
+
+class JobLogConsistencyTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(prefix='ag-job-log-consistency-')
+        self.addCleanup(self.directory.cleanup)
+        self.output = Path(self.directory.name)
+        self.env = {'GITHUB_REPOSITORY': 'synthetic/repository', 'GITHUB_RUN_ID': '123',
+                    'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_SHA': '1' * 40,
+                    'GITHUB_EVENT_NAME': 'push',
+                    'GITHUB_TOKEN': 'synthetic-token-not-recorded'}
+        self.job = {'id': 42, 'name': 'contract-core / contract/core',
+                    'run_id': 123, 'run_attempt': 2, 'head_sha': self.env['GITHUB_SHA'],
+                    'status': 'completed', 'conclusion': 'success'}
+        self.log = b'Set up job\nOriginal producer output\nComplete job\n'
+        self.elapsed = 0
+        self.calls = []
+        self.sleeps = []
+        self.request_elapsed = {}
+
+    def collect(self, snapshots, logs):
+        calls = {'metadata': 0, 'log': 0}
+        class Response:
+            def __init__(self, body):
+                self.body = body
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return False
+            def read(self):
+                return self.body
+        def open_response(request, *, timeout):
+            endpoint = 'metadata' if '/jobs?filter=latest&' in request.full_url else 'log'
+            self.calls.append({'endpoint': endpoint, 'timeout': timeout})
+            self.elapsed += self.request_elapsed.get(endpoint, 0)
+            values = snapshots if endpoint == 'metadata' else logs
+            value = values[min(calls[endpoint], len(values) - 1)]
+            calls[endpoint] += 1
+            if isinstance(value, Exception):
+                raise value
+            return Response(json.dumps({'jobs': value}).encode() if endpoint == 'metadata' else value)
+        def sleep(seconds):
+            self.assertGreater(seconds, 0)
+            self.sleeps.append(seconds)
+            self.elapsed += seconds
+        class Opener:
+            open = staticmethod(open_response)
+        with patch.dict(os.environ, self.env), \
+                patch.object(ci.urllib.request, 'build_opener', return_value=Opener()), \
+                patch.object(ci.time, 'monotonic', side_effect=lambda: self.elapsed), \
+                patch.object(ci.time, 'sleep', side_effect=sleep):
+            return ci.collect_job_logs(self.output, lanes=('core',))
+
+    def manifest(self):
+        return json.loads((self.output / 'job-log-manifest.json').read_text())
+
+    def poll_readbacks(self):
+        return [json.loads(path.read_text())
+                for path in sorted((self.output / 'job-log-polls').glob('*-readback.json'))]
+
+    def test_successful_steps_with_stale_job_status_are_read_again(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None,
+                 'steps': [{'name': 'Complete job', 'status': 'completed', 'conclusion': 'success'}]}
+        jobs = self.collect([[stale], [self.job]], [self.log])
+        self.assertEqual(jobs, [self.job])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        snapshots = sorted((self.output / 'job-log-polls').glob('*-jobs.json'))
+        self.assertEqual([json.loads(path.read_text())[0]['status'] for path in snapshots],
+                         ['in_progress', 'completed'])
+        self.assertEqual(self.manifest()['missing'], [])
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_permanently_stale_metadata_stops_at_the_collection_deadline(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None}
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[stale]], [self.log])
+        self.assertEqual(self.elapsed, 120)
+        self.assertLessEqual(len(self.sleeps), 60)
+        self.assertFalse(self.manifest()['complete'])
+        self.assertEqual(self.manifest()['missing'], ['contract/core'])
+        self.assertFalse((self.output / 'job-42.log').exists())
+        self.assertGreater(len(self.poll_readbacks()), 1)
+
+    def test_job_log_not_ready_404_is_read_again_without_rerunning_a_job(self):
+        unavailable = ci.urllib.error.HTTPError('https://api.github.com/synthetic/logs', 404,
+                                               'not ready', {}, None)
+        self.collect([[self.job]], [unavailable, self.log])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertEqual([r['logReads'][0]['status'] for r in self.poll_readbacks()],
+                         ['not_ready', 'ready'])
+        self.assertEqual(self.poll_readbacks()[0]['logReads'][0]['httpStatus'], 404)
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_log_forbidden_fails_immediately_and_diagnostics_omit_credentials(self):
+        forbidden = ci.urllib.error.HTTPError('https://api.github.com/synthetic/logs', 403,
+                                             'forbidden', {}, None)
+        with self.assertRaises(ci.urllib.error.HTTPError) as raised:
+            self.collect([[self.job]], [forbidden, self.log])
+        self.assertEqual(raised.exception.code, 403)
+        self.assertEqual(self.sleeps, [])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertEqual(self.poll_readbacks()[-1]['error']['httpStatus'], 403)
+        self.assertNotIn(self.env['GITHUB_TOKEN'], ''.join(
+            path.read_text() for path in self.output.rglob('*.json')))
+
+    def test_metadata_api_errors_are_not_polled_away(self):
+        for code in (403, 500):
+            with self.subTest(status=code):
+                error = ci.urllib.error.HTTPError('https://api.github.com/synthetic/jobs', code,
+                                                 'unavailable', {}, None)
+                with self.assertRaises(ci.urllib.error.HTTPError):
+                    self.collect([error, [self.job]], [self.log])
+                self.assertEqual(self.sleeps, [])
+                self.assertFalse(self.manifest()['complete'])
+                self.assertEqual(self.poll_readbacks()[-1]['error']['httpStatus'], code)
+
+    def test_unavailable_logs_never_satisfy_complete_collection(self):
+        unavailable = ci.urllib.error.HTTPError('https://api.github.com/synthetic/logs', 404,
+                                               'not ready', {}, None)
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[self.job]], [unavailable])
+        self.assertEqual(self.elapsed, 120)
+        self.assertEqual(self.manifest()['missingLogs'], ['contract/core'])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse((self.output / 'job-42.log').exists())
+
+    def test_empty_log_is_not_ready_evidence(self):
+        self.collect([[self.job]], [b' \n', self.log])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertEqual(self.poll_readbacks()[0]['logReads'][0]['reason'], 'empty_log')
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_wrong_source_run_or_attempt_is_rejected_before_log_download(self):
+        for change in ({'head_sha': '0' * 40}, {'run_id': 456}, {'run_attempt': 3}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'binding'):
+                self.collect([[{**self.job, **change}]], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+            self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_settling_cannot_switch_to_another_same_named_job(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None}
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            self.collect([[stale], [{**self.job, 'id': 43}]], [self.log])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_source_run_and_observed_attempt_cannot_drift_between_polls(self):
+        stale = {**self.job, 'status': 'in_progress', 'conclusion': None}
+        for change in ({'head_sha': '0' * 40}, {'run_id': 456}, {'run_attempt': 1}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'binding|identity'):
+                self.collect([[stale], [{**self.job, **change}]], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+            self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_each_request_uses_remaining_budget_and_late_success_still_fails(self):
+        self.request_elapsed = {'metadata': 119, 'log': 2}
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[self.job]], [self.log])
+        self.assertEqual([call['timeout'] for call in self.calls], [45, 1])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse((self.output / 'job-42.log').exists())
+
+    def test_completed_failed_job_keeps_its_original_result_and_log(self):
+        failed = {**self.job, 'conclusion': 'failure'}
+        self.assertEqual(self.collect([[failed]], [self.log]), [failed])
+        self.assertEqual(json.loads((self.output / 'jobs.json').read_text()), [failed])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_retained_successful_attempt_keeps_its_provenance(self):
+        retained = {**self.job, 'run_attempt': 1}
+        self.assertEqual(self.collect([[retained]], [self.log]), [retained])
+        self.assertEqual(self.manifest()['selectedAttempts'], {'42': 1})
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_previous_failed_attempt_cannot_satisfy_the_latest_execution(self):
+        retained = {**self.job, 'run_attempt': 1, 'conclusion': 'failure'}
+        with self.assertRaisesRegex(ValueError, 'retained job source binding'):
+            self.collect([[retained]], [self.log])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
+
+    def test_pull_request_api_head_is_bound_separately_from_the_merge_commit(self):
+        payload = {'repository': {'full_name': self.env['GITHUB_REPOSITORY']},
+                   'pull_request': {'head': {'sha': self.job['head_sha']}}}
+        event = self.output / 'event.json'
+        ci.write(event, payload)
+        self.env.update(GITHUB_EVENT_NAME='pull_request', GITHUB_EVENT_PATH=str(event),
+                        GITHUB_SHA='2' * 40)
+        self.assertEqual(self.collect([[self.job]], [self.log]), [self.job])
+        self.assertEqual(self.manifest()['head'], '2' * 40)
+        self.assertEqual(self.manifest()['apiHead'], self.job['head_sha'])
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_pull_request_event_binding_cannot_be_missing_or_point_to_another_source(self):
+        event = self.output / 'event.json'
+        self.env.update(GITHUB_EVENT_NAME='pull_request', GITHUB_EVENT_PATH=str(event),
+                        GITHUB_SHA='2' * 40)
+        for payload in ({}, {'repository': {'full_name': 'other/repository'},
+                             'pull_request': {'head': {'sha': self.job['head_sha']}}},
+                        {'repository': {'full_name': self.env['GITHUB_REPOSITORY']},
+                         'pull_request': {'head': {'sha': '3' * 40}}}):
+            with self.subTest(payload=payload):
+                ci.write(event, payload)
+                with self.assertRaisesRegex(ValueError, 'binding'):
+                    self.collect([[self.job]], [self.log])
+                self.assertFalse(self.manifest()['complete'])
+                self.assertFalse(any(call['endpoint'] == 'log' for call in self.calls))
 
 
 if __name__ == '__main__':

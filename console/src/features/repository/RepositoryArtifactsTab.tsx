@@ -158,6 +158,7 @@ export function RepositoryArtifactsTab({
   });
 
   const FormatDetail = formatViews(format).ArtifactDetail;
+  const BrowserNotice = formatViews(format).BrowserNotice;
   const containExpandedDetail = format === "npm" || format === "pypi";
   const expandedRowRender = (r: ArtifactRow) => {
     // Proxy Maven lists cache entries, which have their own detail.
@@ -233,7 +234,10 @@ export function RepositoryArtifactsTab({
   }
 
   return (
-    <div className="ag-artifact-browser">
+    <div
+      className={`ag-artifact-browser${BrowserNotice ? " ag-artifact-browser-with-notice" : ""}`}
+    >
+      {BrowserNotice && <BrowserNotice />}
       <div className="ag-artifact-view-toolbar">
         {supportsDirectory && (
           <ArtifactViewSwitch value={view} onChange={setView} />

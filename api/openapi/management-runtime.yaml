@@ -9,6 +9,14 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate":
+    "$ref": "./management/nuget-preview.yaml#/source_revalidation"
+  "/previews/nuget/groups":
+    "$ref": "./management/nuget-preview.yaml#/groups"
+  "/previews/nuget/groups/{groupId}":
+    "$ref": "./management/nuget-preview.yaml#/group"
+  "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}":
+    "$ref": "./management/nuget-preview.yaml#/source"
   "/previews/nuget/repositories/{repositoryId}/capacity":
     "$ref": "./management/nuget-preview.yaml#/capacity"
   "/previews/nuget/repositories":
@@ -319,6 +327,20 @@ paths:
     "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_commit"
 components:
   schemas:
+    NuGetPreviewSourceRevalidation:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewSourceRevalidation"
+    NuGetPreviewRepositoryReplace:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewRepositoryReplace"
+    NuGetPreviewUpstreamAuth:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewUpstreamAuth"
+    NuGetPreviewUpstreamAuthStatus:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewUpstreamAuthStatus"
+    NuGetPreviewGroupInput:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewGroupInput"
+    NuGetPreviewGroup:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewGroup"
+    NuGetPreviewSource:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewSource"
     NuGetPreviewRepositoryCreate:
       "$ref": "./components/nuget-preview.yaml#/NuGetPreviewRepositoryCreate"
     NuGetPreviewRepository:

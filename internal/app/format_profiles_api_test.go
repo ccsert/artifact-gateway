@@ -48,6 +48,13 @@ func TestFormatProfilesAPINeedsAnAuthenticatedCallerAndReturnsCapabilities(t *te
 		t.Fatalf("profiles=%d want=%d", len(result.Items), len(repository.SupportedFormats()))
 	}
 	for _, item := range result.Items {
+		if item.Format == adminopenapi.FormatOci {
+			if item.OciDiscovery == nil || !item.OciDiscovery.Catalog || !item.OciDiscovery.Referrers || item.OciDiscovery.TagFallback || item.OciDiscovery.SignatureVerification {
+				t.Errorf("OCI discovery must advertise API support without fallback or signer trust: %#v", item.OciDiscovery)
+			}
+		} else if item.OciDiscovery != nil {
+			t.Errorf("OCI discovery leaked into %q", item.Format)
+		}
 		if !item.AnonymousRead {
 			t.Errorf("incomplete profile: %#v", item)
 		}

@@ -31,6 +31,22 @@ func (a *Adapter) serve(w http.ResponseWriter, r *http.Request) {
 	a.handler.ServeHTTP(w, r)
 }
 func (a *Adapter) CreateNuGetPreviewRepository(w http.ResponseWriter, r *http.Request) { a.serve(w, r) }
+func (a *Adapter) ReplaceNuGetPreviewRepository(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Adapter) CreateNuGetPreviewGroup(w http.ResponseWriter, r *http.Request) { a.serve(w, r) }
+func (a *Adapter) GetNuGetPreviewGroup(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Adapter) ReplaceNuGetPreviewGroup(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Adapter) GetNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
+	a.serve(w, r)
+}
+func (a *Adapter) RevalidateNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
+	a.serve(w, r)
+}
 func (a *Adapter) GetNuGetPreviewRepository(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
 	a.serve(w, r)
 }

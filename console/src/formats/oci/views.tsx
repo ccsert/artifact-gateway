@@ -1,8 +1,10 @@
 import { OciImageDetail } from "../../features/artifact-detail/OciImageDetail";
 import { OCIPublishGuide } from "../../features/repository/RepositoryUsageGuides";
 import type { FormatViews } from "../viewTypes";
+import { OCIDiscoveryNotice } from "./OCIDiscoveryNotice";
 
 export const ociViews: FormatViews = {
+  BrowserNotice: OCIDiscoveryNotice,
   ArtifactDetail: ({
     repositoryId,
     repositoryName,

@@ -348,6 +348,10 @@ real routes and must not be joined to `/api/v2` blindly. Retired Nexus repositor
 | `GET /raw/{repository}/`<br>`listRawRootDirectory` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `GET /apt/{repository}/{path}`<br>`getAptAsset` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `HEAD /apt/{repository}/{path}`<br>`headAptAsset` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
+| `GET /v2/_catalog`<br>`listOCICatalog` | Native ORAS/OCI discovery; no separate agctl registry client | #315 | N/A | explicit repository-resource discovery authorization | N: official OCI clients own Catalog/Referrers; agctl neither registers nor sends this protocol action |
+| `HEAD /v2/_catalog`<br>`headOCICatalog` | Native ORAS/OCI discovery; no separate agctl registry client | #315 | N/A | explicit repository-resource discovery authorization | N: official OCI clients own Catalog/Referrers; agctl neither registers nor sends this protocol action |
+| `GET /v2/{name}/referrers/{digest}`<br>`listOCIReferrers` | Native ORAS/OCI discovery; no separate agctl registry client | #316 | N/A | explicit repository-resource discovery authorization | N: official OCI clients own Catalog/Referrers; agctl neither registers nor sends this protocol action |
+| `HEAD /v2/{name}/referrers/{digest}`<br>`headOCIReferrers` | Native ORAS/OCI discovery; no separate agctl registry client | #316 | N/A | explicit repository-resource discovery authorization | N: official OCI clients own Catalog/Referrers; agctl neither registers nor sends this protocol action |
 | `POST /v2/{name}/blobs/uploads/`<br>`startOCIUpload` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `GET /v2/{name}/blobs/uploads/{uuid}`<br>`getOCIUploadStatus` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `PATCH /v2/{name}/blobs/uploads/{uuid}`<br>`appendOCIUpload` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
@@ -466,3 +470,16 @@ These explicit preview APIs have no agctl commands. NuGet remains absent from th
 | `GET /nuget/{repository}/v3/{path}`<br>`readNuGetHostedRepresentation` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `HEAD /nuget/{repository}/v3/{path}`<br>`headNuGetHostedRepresentation` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `PUT /nuget/{repository}/api/v2/package/`<br>`publishNuGetHostedPackage` | preview API; no CLI command | #287 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+
+## NuGet Proxy/Group preview (#288)
+
+These opt-in preview operations have no agctl command. They do not admit NuGet into the public format catalog or Console; governance and formal admission remain #289.
+
+| Operation | CLI applicability | Owner | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `PUT /previews/nuget/repositories/{repositoryId}`<br>`replaceNuGetPreviewRepository` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/groups`<br>`createNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/groups/{groupId}`<br>`getNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/nuget/groups/{groupId}`<br>`replaceNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version}`<br>`getNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate`<br>`revalidateNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |

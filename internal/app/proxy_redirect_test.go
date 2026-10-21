@@ -37,6 +37,7 @@ type proxyRedirectRequest struct {
 type proxyRedirectFixture struct {
 	client          UpstreamClient
 	hooks           *egress.Hooks
+	stopSource      func()
 	upstreamAddress string
 	mu              sync.Mutex
 	requests        []proxyRedirectRequest
@@ -80,6 +81,7 @@ func newProxyRedirectFixture(t *testing.T, handler http.HandlerFunc) *proxyRedir
 	}))
 	server.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
 	server.StartTLS()
+	fixture.stopSource = server.Close
 	fixture.upstreamAddress = strings.TrimPrefix(server.URL, "https://")
 	addresses := map[string]string{
 		redirectOrigin: "93.184.216.10", redirectCDN: "93.184.216.11", redirectDenied: "93.184.216.12", redirectProxy: "93.184.216.13",

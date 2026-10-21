@@ -1,7 +1,7 @@
 repositories:
   post:
     operationId: createNuGetPreviewRepository
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '201':
         description: NuGet Hosted preview response
@@ -35,7 +35,7 @@ repository:
         format: uuid
   get:
     operationId: getNuGetPreviewRepository
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -53,6 +53,34 @@ repository:
         description: Preview resource not found
       '503':
         description: Preview capability unavailable
+  put:
+    operationId: replaceNuGetPreviewRepository
+    description: Replace a preview source using its current version. Source rebinding requires a new secret or explicit none; old cache namespaces are never reused.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/nuget-preview.yaml#/NuGetPreviewRepositoryReplace
+    responses:
+      '200':
+        description: Updated preview source
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewRepository
+      '400':
+        description: Invalid source or missing fresh credential
+      '401':
+        description: Authentication required
+      '403':
+        description: Administrator required
+      '404':
+        description: Preview repository not found
+      '409':
+        description: Source configuration version conflict
+      '503':
+        description: Preview unavailable
 packages:
   parameters:
     - name: repositoryId
@@ -63,7 +91,7 @@ packages:
         format: uuid
   get:
     operationId: listNuGetPreviewPackages
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -115,7 +143,7 @@ package:
         minLength: 1
   get:
     operationId: getNuGetPreviewPackage
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -143,7 +171,7 @@ sessions:
         format: uuid
   post:
     operationId: createNuGetPublicationSession
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '201':
         description: NuGet Hosted preview response
@@ -163,6 +191,8 @@ sessions:
         description: Identity, session or quota conflict
       '410':
         description: Publication session expired; create a new session with a new idempotency key
+      '405':
+        description: Publication sessions are available only on Hosted repositories
       '503':
         description: Preview capability unavailable
     requestBody:
@@ -195,7 +225,7 @@ session:
         format: uuid
   get:
     operationId: getNuGetPublicationSession
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -211,6 +241,8 @@ session:
         description: Repository permission required
       '404':
         description: Preview resource not found
+      '405':
+        description: Publication sessions are available only on Hosted repositories
       '503':
         description: Preview capability unavailable
 stage:
@@ -229,7 +261,7 @@ stage:
         format: uuid
   put:
     operationId: stageNuGetPublicationSession
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -251,6 +283,8 @@ stage:
         description: Publication session expired; create a new session with a new idempotency key
       '413':
         description: Package archive exceeds the 256 MiB preview bound
+      '405':
+        description: Publication sessions are available only on Hosted repositories
       '503':
         description: Preview capability unavailable
     requestBody:
@@ -276,7 +310,7 @@ commit:
         format: uuid
   post:
     operationId: commitNuGetPublicationSession
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -296,6 +330,8 @@ commit:
         description: Identity, session or quota conflict
       '410':
         description: Publication session expired; create a new session with a new idempotency key
+      '405':
+        description: Publication sessions are available only on Hosted repositories
       '503':
         description: Preview capability unavailable
 capacity:
@@ -308,7 +344,7 @@ capacity:
         format: uuid
   get:
     operationId: getNuGetPreviewCapacity
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -328,7 +364,7 @@ capacity:
         description: Preview capability unavailable
   put:
     operationId: replaceNuGetPreviewQuota
-    description: Internal NuGet Hosted preview; not a public format admission.
+    description: Internal NuGet preview; not a public format admission.
     responses:
       '200':
         description: NuGet Hosted preview response
@@ -354,3 +390,144 @@ capacity:
         application/json:
           schema:
             $ref: ../components/nuget-preview.yaml#/NuGetPreviewQuota
+groups:
+  post:
+    operationId: createNuGetPreviewGroup
+    description: Create an ordered NuGet preview Group. Members must be active NuGet preview repositories; no implicit source is admitted.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/nuget-preview.yaml#/NuGetPreviewGroupInput
+    responses:
+      '201':
+        description: Preview Group
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewGroup
+      '400':
+        description: Invalid Group or members
+      '401':
+        description: Authentication required
+      '403':
+        description: Administrator required
+      '409':
+        description: Name or idempotency conflict
+      '503':
+        description: Preview unavailable
+group:
+  parameters:
+    - name: groupId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  get:
+    operationId: getNuGetPreviewGroup
+    responses:
+      '200':
+        description: Preview Group
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewGroup
+      '401': {description: "Authentication required"}
+      '403': {description: "Group permission required"}
+      '404': {description: "Preview Group not found"}
+      '409': {description: Configured member source changed or became unavailable}
+      '503': {description: "Preview unavailable"}
+  put:
+    operationId: replaceNuGetPreviewGroup
+    description: Compare and replace the ordered member list. Existing package-version authorities survive reordering; removal or changed source bindings fail closed on reads.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/nuget-preview.yaml#/NuGetPreviewGroupInput
+    responses:
+      '200':
+        description: Preview Group
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewGroup
+      '400': {description: "Invalid Group or members"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Administrator required"}
+      '404': {description: "Preview Group not found"}
+      '409': {description: "Group version or name conflict"}
+      '503': {description: "Preview unavailable"}
+source:
+  parameters:
+    - name: groupId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    - name: packageId
+      in: path
+      required: true
+      schema: {type: string}
+    - name: version
+      in: path
+      required: true
+      schema: {type: string}
+  get:
+    operationId: getNuGetPreviewGroupSource
+    description: Resolve and fully verify this canonical package version, then explain its durable source. Group and member resource authorization both apply.
+    responses:
+      '200':
+        description: Verified authority
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewSource
+      '400': {description: "Invalid identity"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Group and member permission required"}
+      '404': {description: "Package not found"}
+      '409': {description: "Source binding, package or quota conflict"}
+      '410': {description: Cache publication reservation expired before verification completed}
+      '422': {description: "Unsupported or invalid upstream metadata"}
+      '502': {description: "Upstream refused authentication or returned invalid content"}
+      '503': {description: "Required source or verified local bytes unavailable"}
+source_revalidation:
+  parameters:
+    - name: groupId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    - name: packageId
+      in: path
+      required: true
+      schema: {type: string}
+    - name: version
+      in: path
+      required: true
+      schema: {type: string}
+  post:
+    operationId: revalidateNuGetPreviewGroupSource
+    description: Explicitly revalidate the same authoritative member after source configuration or credential rotation. Fully downloads/verifies the current source namespace; atomically advances the binding only when the original complete digest/size match. It cannot choose a different member or replace immutable package bytes.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/nuget-preview.yaml#/NuGetPreviewSourceRevalidation
+    responses:
+      '200':
+        description: Same immutable identity confirmed against the current source configuration
+        content:
+          application/json:
+            schema:
+              $ref: ../components/nuget-preview.yaml#/NuGetPreviewSource
+      '400': {description: Invalid revalidation input}
+      '401': {description: Authentication required}
+      '403': {description: Administrator required}
+      '404': {description: Canonical version or authority not found}
+      '409': {description: Group/source version or immutable identity conflict}
+      '410': {description: Cache publication reservation expired before verification completed}
+      '422': {description: Unsupported upstream metadata}
+      '502': {description: Upstream authentication or integrity failure}
+      '503': {description: Current source or verified local bytes unavailable}
