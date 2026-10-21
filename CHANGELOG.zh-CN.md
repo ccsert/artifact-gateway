@@ -8,6 +8,10 @@
 
 ## Unreleased
 
+- 默认关闭的 [NuGet 预览](docs/nuget-proxy-group-preview.zh-CN.md) 新增只读 Proxy 与有序 Group（#288）：V3 资源发现、按源版本隔离的可验证缓存、包 ID/版本持久来源绑定、私有上游凭据及完整资源授权。上游 unlisted 精确版本仍可读取，搜索不展示它；被过滤的结果不能建立 Group 来源绑定。正式准入和本地 Hosted 治理仍由 #289 跟踪。
+
+- 受保护的 Maven Proxy/Group 新增固定官方 Gradle 9.3.1 验证（#286），覆盖三层依赖闭包、管理 API 配置的 Basic/Bearer 源凭据、每轮空客户端 HOME、原始完整 JAR/POM 身份校验、凭据轮换/清除及物理断源后的读取。
+
 - CI 将核心契约与六条隔离原生门禁独立调度，保留统一且严格校验证据的 `contract-and-test` 准入（#437）。原有目标、客户端、超时及发行依赖保留，准备阶段与退出清理均留存证据；单独的同源码冷缓存串并行对照记录实际并发和关键路径。
 
 - Console 将 Vite 最低版本提升到已修复 launch-editor 公告 GHSA-698v-4r3x-3vcv、GHSA-r825-w8mm-5pxw 与 GHSA-587h-7wmj-h5pm 的 7.3.7（#439）。生成的锁文件保持其余包版本，依赖审计不增加例外。
@@ -16,7 +20,7 @@
 
 - npm、PyPI、Cargo、APT、Raw 与 Conan 补齐私有上游认证，与 Go/Maven/OCI 共用加密凭据配置（#432–#434）。Group 逐请求使用成员当前绑定，持久缓存写入拒绝陈旧源版本，未知历史缓存须重新抓取；Conan Basic 执行原生 token 握手。Console 为全部已准入 Proxy 格式提供轮换与清除；隔离门禁验证 48 次官方客户端冷/热 Proxy/Group 消费，见[Proxy 出站设计](docs/proxy-egress-design.zh-CN.md#npmpypicargoaptraw-与-conan-私有上游)。
 
-- NuGet Hosted 新增默认关闭、显式启用的[预览](docs/nuget-hosted-preview.zh-CN.md)，使用独立管理与原生入口（#287）。nupkg 校验暂存与原子提交、依赖元数据、原生读取、配额预留、响应丢失恢复及引用安全的过期上传回收均独立于正式格式准入。官方 .NET SDK 门禁发布三层依赖链，跨 Gateway/PostgreSQL/RustFS 重启恢复并离线执行；Proxy/Group 与完整治理继续由 #288/#289 跟踪。
+- NuGet Hosted 新增默认关闭、显式启用的[预览](docs/nuget-hosted-preview.zh-CN.md)，使用独立管理与原生入口（#287）。nupkg 校验暂存与原子提交、依赖元数据、原生读取、配额预留、响应丢失恢复及引用安全的过期上传回收均独立于正式格式准入。官方 .NET SDK 门禁发布三层依赖链，跨 Gateway/PostgreSQL/RustFS 重启恢复并离线执行；完整治理继续由 #289 跟踪。
 
 - Nexus 大库存按页扫描并持久保存私有游标、页回执和源版本保护（#435）。重启从最后已提交页继续，第二次独立观察一致后才封存；未完成扫描不暴露条目、不发布。源配置变化与库存封存、原生发布在事务边界串行化，见[持久迁移批次](docs/nexus-migration-batches.zh-CN.md)。
 

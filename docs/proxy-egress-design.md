@@ -351,7 +351,7 @@ Invalid encrypted configuration
 fails closed. Source error bodies and secrets never enter native responses or
 audit records.
 
-Run `scripts/private-upstream-auth-e2e.sh` with local Docker, Maven and ORAS.
+Run `scripts/private-upstream-auth-e2e.sh` with local Docker, Java, Maven and ORAS.
 The script owns an isolated PostgreSQL/RustFS project and removes it afterward.
 It exercises Basic/Bearer, direct registry/bound issuer, native Proxy/Group,
 positive/negative cold and hot caches, repository/cache connection reconstruction,
@@ -363,6 +363,23 @@ settings, an owned registry file and allowlisted subprocess environments prevent
 use of the user's identities or artifact caches. Test hooks map only the owned
 synthetic HTTPS sources while preserving certificate verification. This is
 isolated protocol and persistence acceptance, not a production migration or cutover.
+
+The same gate pins Gradle 9.3.1 to its official binary ZIP SHA-256
+`b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06`
+([official checksum](https://gradle.org/release-checksums/#9.3.1)). Basic/Bearer
+and Proxy/Group combinations configure source credentials through the management
+API and resolve three dependency levels. Every successful invocation compares
+all three complete JARs and POMs with source size, bytes, SHA-256 and resolved
+component identities; dynamic-version metadata and checksum sidecars are also
+verified through Gateway. Each invocation starts with new Gradle and Java homes.
+The gate requires 59 named cases, including the original 14, and retains the
+original 265 tests while adding 45. Its 32 Gradle invocations include 20 successful
+complete reads and 12 expected source-authentication rejections; they are
+separate from the six-format gate's 48 client consumptions. Gateway/cache/store
+reconstruction reopens PostgreSQL connections and retains RustFS objects; it
+does not restart the PostgreSQL or RustFS server processes. Final reads occur
+after physical shutdown of the owned HTTPS source. Raw client rejection output,
+tool pins, source hashes and cleanup evidence are retained.
 
 ## Private npm, PyPI, Cargo, APT, Raw and Conan upstreams
 

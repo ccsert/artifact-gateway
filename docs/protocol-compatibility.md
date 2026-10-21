@@ -64,22 +64,31 @@ Rotation, clearing, redirect boundaries and Console settings are documented in
 [Proxy egress](proxy-egress-design.md#protected-maven-and-oci-upstreams) and
 [the six additional formats](proxy-egress-design.md#private-npm-pypi-cargo-apt-raw-and-conan-upstreams).
 The isolated real-client gates are `make private-upstream-auth-e2e` for
-Maven/OCI and `make private-upstream-formats-e2e` for the additional formats.
+Maven/OCI and pinned official Gradle private Maven Proxy/Group reads, and
+`make private-upstream-formats-e2e` for the additional six formats. Gradle's
+Gateway client identity remains separate from the upstream credential.
 Changing a credential's endpoint or OCI issuer realm/service requires a fresh
 secret or explicit `scheme: none`; otherwise PATCH fails with
 `400 upstream_credential_rebind_required` and preserves the existing version
 and ciphertext.
 
-## NuGet Hosted preview
+## NuGet Hosted, Proxy and Group preview
 
 The opt-in [NuGet Hosted preview](nuget-hosted-preview.md) has its own
 `/api/v2/previews/nuget` management contract and `/nuget/<repository>` native
 root. It supports immutable nupkg publication, atomic session commit, native
 service index/flat container/registration/search, quota reservation and expired
-upload collection. `make native-nuget-e2e` verifies official .NET SDK 10.0.100
-push and transitive restore, restart recovery, and offline execution. It remains
-absent from the formal format catalog and Console selector. NuGet Proxy/Group
-and governance admission remain separate work under #288/#289.
+upload collection. The [Proxy/Group preview](nuget-proxy-group-preview.md)
+discovers V3 resources from the configured service index, isolates Basic/Bearer
+source credentials and versioned caches, and persists canonical package/version
+authorities across Group reordering. Source changes require explicit same-owner
+byte revalidation before advancing an existing Group authority. Upstream
+unlisted exact versions remain readable; search/autocomplete omit them.
+`make native-nuget-e2e` verifies official .NET SDK 10.0.100 push and target-only
+transitive restore, complete package identities, cold/hot/source-stopped reads,
+and Gateway/PostgreSQL/RustFS restart recovery and offline execution. The preview
+remains absent from the formal format catalog and Console selector. Local
+Hosted unlist/governance and formal admission remain under #289.
 
 ## Contract alignment
 

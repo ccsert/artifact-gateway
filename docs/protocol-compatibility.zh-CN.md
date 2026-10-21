@@ -56,19 +56,25 @@ Nexus 发现仍作为只读迁移输入；导入数据与切换生产客户端 U
 
 轮换、清除、重定向边界及 Console 设置详见[Proxy 出站与上游认证](proxy-egress-design.zh-CN.md#maven-与-oci-受保护上游)
 和[新增六格式](proxy-egress-design.zh-CN.md#npmpypicargoaptraw-与-conan-私有上游)。
-Maven/OCI 真实客户端隔离门禁为 `make private-upstream-auth-e2e`，新增六格式为
-`make private-upstream-formats-e2e`。修改凭据绑定的 endpoint 或 OCI issuer realm/service，
+Maven/OCI 及固定官方 Gradle 私有 Maven Proxy/Group 读取的真实客户端隔离门禁为
+`make private-upstream-auth-e2e`，新增六格式为 `make private-upstream-formats-e2e`。
+Gradle 的 Gateway 客户端身份与上游凭据相互独立。修改凭据绑定的 endpoint 或 OCI issuer realm/service，
 须提交新密钥或显式选择 `scheme: none`；否则 PATCH 返回
 `400 upstream_credential_rebind_required`，旧版本与密文不变。
 
-## NuGet Hosted 预览
+## NuGet Hosted、Proxy 与 Group 预览
 
 显式启用的 [NuGet Hosted 预览](nuget-hosted-preview.zh-CN.md) 使用独立的
 `/api/v2/previews/nuget` 管理契约和 `/nuget/<repository>` 原生入口，支持不可变 nupkg
 发布、Session 原子提交、service index/flat container/registration/search、配额预留和
-过期上传回收。`make native-nuget-e2e` 验证官方 .NET SDK 10.0.100 push、传递依赖
-restore、重启恢复及离线执行。它不进入正式格式目录与 Console 格式选择器；NuGet
-Proxy/Group 和治理准入仍由 #288/#289 独立推进。
+过期上传回收。[Proxy/Group 预览](nuget-proxy-group-preview.zh-CN.md) 从配置的 V3
+service index 发现资源，隔离 Basic/Bearer 源凭据与版本化缓存，并持久保存规范包
+ID/版本的来源绑定，Group 重排不能换源。源配置变化后，必须显式核验同一成员的
+完整字节才能前移既有 Group 来源版本。上游 unlisted 精确版本仍可读取，搜索与
+自动补全不展示它。`make native-nuget-e2e` 验证官方 .NET SDK 10.0.100 push、仅以
+目标源恢复传递依赖、完整包身份、冷/热/断源读取，以及 Gateway/PostgreSQL/RustFS
+重启恢复和离线执行。预览不进入正式格式目录与 Console 格式选择器；本地 Hosted
+unlist、治理和正式准入仍由 #289 推进。
 
 ## 契约对齐
 

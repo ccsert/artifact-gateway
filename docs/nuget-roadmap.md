@@ -18,8 +18,10 @@ or archive paths, normalize NuGet versions, and derive a case-insensitive
 canonical identity. The preview adds independent OpenAPI management and native
 contracts, durable publication sessions, quota reservation and V3 Hosted reads.
 NuGet remains absent from the formal format catalog, Console selector and formal
-repository creation until the #289 governance and admission gates pass. Proxy
-and Group are still future work under #288.
+repository creation until the #289 governance and admission gates pass. The
+[Proxy/Group preview](nuget-proxy-group-preview.md) implements #288 on the same
+default-off boundary, with verified source-versioned caches and durable
+canonical package/version ownership.
 
 Normative implementation references are Microsoft's
 [NuGet Server API overview](https://learn.microsoft.com/nuget/api/overview),
@@ -64,10 +66,17 @@ and never observes a staged or partially indexed version.
 
 ## N3: Proxy and ordered Group
 
+The opt-in [Proxy/Group preview](nuget-proxy-group-preview.md) provides the V3
+discovery and identity boundaries below. Its pinned official-client gate covers
+private Basic/Bearer sources, complete transitive packages, upstream-unlisted
+exact versions and replay after source shutdown and storage restart. Search
+checks the full package ID before persisting a Group authority. This stage does
+not admit the format publicly or implement local Hosted unlist/governance.
+
 - Discover upstream resources from each V3 service index rather than assuming
   nuget.org URL shapes.
 - Bound metadata/package caching, negative caching, redirects, upstream
-  authentication, circuit breaking, and egress allowlists.
+  authentication, and egress allowlists.
 - Resolve Groups by normalized package ID and version with deterministic member
   ownership; a higher-priority identity claims the request before asset
   fallback is considered.
@@ -96,7 +105,7 @@ the format catalog advertise NuGet as a supported repository type.
 
 ## Delivery order
 
-Keep the #287 Hosted preview behind its explicit enablement flag, then implement
-Proxy/Group under #288 and lifecycle, Console and public admission under #289. APT Hosted
+Keep the #287 Hosted and #288 Proxy/Group previews behind explicit enablement;
+lifecycle, Console and public admission remain under #289. APT Hosted
 admission continues on its own roadmap. The existing parser stays covered;
 capability discovery must not advertise unfinished NuGet repository behavior.
