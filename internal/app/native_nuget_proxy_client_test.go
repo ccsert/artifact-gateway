@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -60,12 +61,20 @@ func startNuGetProxyGatewayContainer(t *testing.T, c nugetOfficialClient, bucket
 		u.Host = net.JoinHostPort("host.docker.internal", u.Port())
 		return u.String()
 	}
-	env := []string{"GATEWAY_DATABASE_URL=" + hostURL(os.Getenv("TEST_DATABASE_URL")), "GATEWAY_RUSTFS_ENDPOINT=" + hostURL(os.Getenv("TEST_RUSTFS_ENDPOINT")), "GATEWAY_RUSTFS_ACCESS_KEY=" + os.Getenv("TEST_RUSTFS_ACCESS_KEY"), "GATEWAY_RUSTFS_SECRET_KEY=" + os.Getenv("TEST_RUSTFS_SECRET_KEY"), "GATEWAY_RUSTFS_BUCKET=" + bucket, "GATEWAY_ADMIN_TOKEN=" + c.admin, "GATEWAY_ADMIN_ACTOR=nuget-gate-operator", "GATEWAY_RESOLVER_TOKEN=" + c.reader, "GATEWAY_RESOLVER_ACTOR=nuget-gate-reader", "GATEWAY_NUGET_PREVIEW_ENABLED=true", "GATEWAY_NODE_ROLES=api", "GATEWAY_LISTEN_ADDRESS=0.0.0.0:" + port, "GATEWAY_ACCESS_LOG=limited", "HOME=/work/gateway-home", "HTTP_PROXY=", "http_proxy="}
+	listenHost := "0.0.0.0"
+	if c.sharedHostNetwork {
+		listenHost = "127.0.0.1"
+	}
+	env := []string{"GATEWAY_DATABASE_URL=" + hostURL(os.Getenv("TEST_DATABASE_URL")), "GATEWAY_RUSTFS_ENDPOINT=" + hostURL(os.Getenv("TEST_RUSTFS_ENDPOINT")), "GATEWAY_RUSTFS_ACCESS_KEY=" + os.Getenv("TEST_RUSTFS_ACCESS_KEY"), "GATEWAY_RUSTFS_SECRET_KEY=" + os.Getenv("TEST_RUSTFS_SECRET_KEY"), "GATEWAY_RUSTFS_BUCKET=" + bucket, "GATEWAY_ADMIN_TOKEN=" + c.admin, "GATEWAY_ADMIN_ACTOR=nuget-gate-operator", "GATEWAY_RESOLVER_TOKEN=" + c.reader, "GATEWAY_RESOLVER_ACTOR=nuget-gate-reader", "GATEWAY_NUGET_PREVIEW_ENABLED=true", "GATEWAY_NODE_ROLES=api", "GATEWAY_LISTEN_ADDRESS=" + net.JoinHostPort(listenHost, port), "GATEWAY_ACCESS_LOG=limited", "HOME=/work/gateway-home", "HTTP_PROXY=", "http_proxy="}
 	env = append(env, extraEnv...)
 	if err = os.MkdirAll(filepath.Join(c.work, "gateway-home"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"run", "--rm", "--name", name, "--label", "com.docker.compose.project=" + c.project, "--label", "artifact-gateway.nuget-fixture-owner=" + owner, "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()), "--add-host", "host.docker.internal:host-gateway", "--mount", "type=bind,src=" + c.work + ",dst=/work", "--publish", "127.0.0.1:" + port + ":" + port}
+	args := []string{"run", "--rm", "--name", name, "--label", "com.docker.compose.project=" + c.project, "--label", "artifact-gateway.nuget-fixture-owner=" + owner, "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()), "--mount", "type=bind,src=" + c.work + ",dst=/work"}
+	args = append(args, c.networkArgs(false)...)
+	if !c.sharedHostNetwork {
+		args = append(args, "--publish", "127.0.0.1:"+port+":"+port)
+	}
 	for _, value := range env {
 		args = append(args, "--env", value)
 	}
@@ -364,7 +373,7 @@ func TestNativeNuGetRealDotnetPrivateProxyGroupRestore(t *testing.T) {
 			t.Skip("owned native-nuget-e2e fixture is required")
 		}
 	}
-	c := nugetOfficialClient{work: t.TempDir(), image: os.Getenv("NUGET_DOTNET_IMAGE"), project: os.Getenv("NUGET_COMPOSE_PROJECT"), evidence: os.Getenv("NUGET_EVIDENCE_DIR"), admin: "nuget-proxy-admin-" + uuid.NewString(), reader: "nuget-proxy-reader-" + uuid.NewString()}
+	c := nugetOfficialClient{work: t.TempDir(), image: os.Getenv("NUGET_DOTNET_IMAGE"), project: os.Getenv("NUGET_COMPOSE_PROJECT"), evidence: os.Getenv("NUGET_EVIDENCE_DIR"), admin: "nuget-proxy-admin-" + uuid.NewString(), reader: "nuget-proxy-reader-" + uuid.NewString(), sharedHostNetwork: runtime.GOOS == "linux"}
 	if out := c.succeeds(t, "proxy-tools", "sdk-version", true, "--version"); strings.TrimSpace(out) != "10.0.100" {
 		t.Fatalf("unapproved SDK: %q", out)
 	}
