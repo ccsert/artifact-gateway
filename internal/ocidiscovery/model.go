@@ -91,6 +91,7 @@ type Binding struct {
 	SourceID      string       `json:"sourceId"`
 	SourceVersion string       `json:"sourceVersion"`
 	Actor         string       `json:"actor"`
+	Anonymous     bool         `json:"anonymous,omitempty"`
 	Guards        []Guard      `json:"guards"`
 	Objects       []Object     `json:"objects"`
 	Referrers     []Descriptor `json:"referrers"`
@@ -107,11 +108,17 @@ type Store interface {
 	GetOCIBoundObject(context.Context, string, string, string, string) (Binding, Object, error)
 }
 
-// OwnerForActor partitions authority by the stable subject, independently of
-// credentials or role claims. A caller who can only see a lower Group member
-// cannot prime another caller's subject/referrer authority.
+// OwnerForActor partitions authenticated authority by the stable subject,
+// independently of credential kind or role claims. The namespace is distinct
+// from unauthenticated access, even when an actor is literally named anonymous.
 func OwnerForActor(actor string) string {
-	digest := sha256.Sum256([]byte(actor))
+	return ownerDigest("authenticated\x00" + actor)
+}
+
+func OwnerForAnonymous() string { return ownerDigest("unauthenticated") }
+
+func ownerDigest(identity string) string {
+	digest := sha256.Sum256([]byte(identity))
 	return hex.EncodeToString(digest[:])
 }
 

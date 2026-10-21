@@ -71,7 +71,11 @@ func ValidateBinding(b Binding) error {
 	kind, id, found := strings.Cut(b.Scope, ":")
 	_, idErr := uuid.Parse(id)
 	_, sourceErr := uuid.Parse(b.SourceID)
-	if !found || idErr != nil || sourceErr != nil || b.Actor == "" || b.Owner != OwnerForActor(b.Actor) || b.FetchedAt.IsZero() || kind != "repository" && kind != "group" || !ocigraph.ValidName(b.Image) || !ocigraph.ValidDigest(b.Subject) || len(b.Objects) == 0 || len(b.Objects) > ocigraph.MaxObjects || len(b.Referrers) > MaxReferrers {
+	owner := OwnerForActor(b.Actor)
+	if b.Anonymous {
+		owner = OwnerForAnonymous()
+	}
+	if !found || idErr != nil || sourceErr != nil || b.Actor == "" || b.Owner != owner || b.FetchedAt.IsZero() || kind != "repository" && kind != "group" || !ocigraph.ValidName(b.Image) || !ocigraph.ValidDigest(b.Subject) || len(b.Objects) == 0 || len(b.Objects) > ocigraph.MaxObjects || len(b.Referrers) > MaxReferrers {
 		return ErrInvalid
 	}
 	if err := ValidateGuards(b.Guards); err != nil {

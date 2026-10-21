@@ -80,14 +80,22 @@ case "$(uname -s)/$(uname -m)" in
   Darwin/arm64) oras_platform=darwin_arm64; oras_sha=f33fc12753c54172b0d0d19eaa0318d3f90fe9b094d96e8b259c881713c92e1c ;;
   *) printf 'Unsupported official ORAS platform\n' >&2; exit 1 ;;
 esac
-curl "${curl_args[@]}" "https://github.com/oras-project/oras/releases/download/v1.3.3/oras_1.3.3_${oras_platform}.tar.gz" --output "$work/oras.tar.gz"
+oras_bootstrap=official-download
+if [[ -n "${OCI_DISCOVERY_ORAS_ARCHIVE:-}" ]]; then
+  # A local dependency cache supplies only the original archive. The platform's
+  # pinned digest below is still mandatory, and every client HOME remains new.
+  cp -- "$OCI_DISCOVERY_ORAS_ARCHIVE" "$work/oras.tar.gz"
+  oras_bootstrap=verified-local-archive
+else
+  curl "${curl_args[@]}" "https://github.com/oras-project/oras/releases/download/v1.3.3/oras_1.3.3_${oras_platform}.tar.gz" --output "$work/oras.tar.gz"
+fi
 python3 - "$work/oras.tar.gz" "$oras_sha" <<'PY'
 import hashlib,pathlib,sys
 assert hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest()==sys.argv[2], 'official ORAS 1.3.3 archive SHA mismatch'
 PY
 tar -xzf "$work/oras.tar.gz" -C "$work/bin" oras
 platform=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')
-python3 - "$evidence" "$platform" "$oras_platform" "$oras_sha" <<'PY'
+python3 - "$evidence" "$platform" "$oras_platform" "$oras_sha" "$oras_bootstrap" <<'PY'
 import hashlib,json,pathlib,subprocess,sys
 out=pathlib.Path(sys.argv[1]);platform=sys.argv[2]
 children={'linux/amd64':'sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e','linux/arm64':'sha256:1cf1cad2a305cb46c39d4b5d2920508fe8a4b81a8dcd2963cae3d72f7f3c8ae3'}
@@ -101,7 +109,7 @@ assert body==pathlib.Path('internal/app/testdata/oci-discovery-docker-29.7.2-din
 matched=[m for m in json.loads(body)['manifests'] if m['platform']['os']+'/'+m['platform']['architecture']==platform]
 assert len(matched)==1 and matched[0]['digest']==children[platform]
 (out/'docker-index.json').write_bytes(body)
-(out/'tool-provenance.json').write_text(json.dumps({'ORAS':{'version':'1.3.3','platform':sys.argv[3],'archiveSHA256':sys.argv[4]},'Docker':{'version':'29.7.2','platform':platform,'rootDigest':'sha256:'+hashlib.sha256(body).hexdigest(),'childDigest':children[platform],'consumer':'new owned dind daemon and volume per pull'},'Go':subprocess.check_output(['go','version'],text=True).strip()},indent=2)+'\n')
+(out/'tool-provenance.json').write_text(json.dumps({'ORAS':{'version':'1.3.3','platform':sys.argv[3],'archiveSHA256':sys.argv[4],'bootstrap':sys.argv[5]},'Docker':{'version':'29.7.2','platform':platform,'rootDigest':'sha256:'+hashlib.sha256(body).hexdigest(),'childDigest':children[platform],'consumer':'new owned dind daemon and volume per pull'},'Go':subprocess.check_output(['go','version'],text=True).strip()},indent=2)+'\n')
 PY
 child=$(python3 - "$evidence/tool-provenance.json" <<'PY'
 import json,sys
@@ -128,7 +136,7 @@ events=[]
 for line in (evidence/'results.jsonl').read_text().splitlines():
     try:events.append(json.loads(line))
     except ValueError:pass
-required={'TestReferrerManifestSubjectAndDescriptors','TestMemoryOCIDiscoverySnapshotAndBinding','TestPostgresOCIDiscoverySnapshotAndBinding','TestPostgresOCIDiscoverySnapshotReopenAndGrantFence','TestPostgresOCIDiscoveryPublicationGuardsSerialize','TestPostgresRustFSOCIDiscoveryRestartAndOffline','TestPostgresRustFSOCIDiscoveryOfficialORASAndDocker','TestOCICatalogProxyGroupSnapshotAndAuthorization','TestOCICatalogUnsupportedPartialAndPaginationSafety','TestOCICatalogSourceVersionAndMissingPort','TestOCICatalogBearerUsesRegistryScope','TestOCIReferrersVerifiedSourceBindingAndColdReads','TestOCIReferrersRejectIncompleteAndUnsupportedAuthority','TestOCIReferrersStablePaginationAndLocalFilter','TestOCIReferrersRevocationNeverSelectsAnotherSource','TestOCIReferrersPrincipalAuthorityPartition','TestPostgresRustFSOCIDiscoveryPrincipalAuthorityPartition','TestOCICatalogMixedSourcesReturnReadableCanonicalNames','TestOCIReferrersRejectInFlightSourceChange','TestPostgresRustFSOCIDiscoveryRejectInFlightSourceChange','TestOCIReferrersRequireExplicitAuthorityBeforeSourceAccess','TestOCICatalogRejectsConflictingSourceVersionsAcrossViews','TestPostgresRustFSOCIDiscoveryCatalogConflictingVersions','TestOCIReferrersExplicitCredentialsNeverBecomeAnonymous','TestPostgresRustFSOCIDiscoveryExplicitCredentialsNeverBecomeAnonymous','TestOCIReferrersDescriptorAnnotationsFromVerifiedManifest','TestPostgresRustFSOCIDiscoveryDescriptorAnnotationsFromVerifiedManifest'}
+required={'TestReferrerManifestSubjectAndDescriptors','TestMemoryOCIDiscoverySnapshotAndBinding','TestPostgresOCIDiscoverySnapshotAndBinding','TestPostgresOCIDiscoverySnapshotReopenAndGrantFence','TestPostgresOCIDiscoveryPublicationGuardsSerialize','TestPostgresRustFSOCIDiscoveryRestartAndOffline','TestPostgresRustFSOCIDiscoveryOfficialORASAndDocker','TestOCICatalogProxyGroupSnapshotAndAuthorization','TestOCICatalogUnsupportedPartialAndPaginationSafety','TestOCICatalogSourceVersionAndMissingPort','TestOCICatalogBearerUsesRegistryScope','TestOCIReferrersVerifiedSourceBindingAndColdReads','TestOCIReferrersRejectIncompleteAndUnsupportedAuthority','TestOCIReferrersStablePaginationAndLocalFilter','TestOCIReferrersRevocationNeverSelectsAnotherSource','TestOCIReferrersPrincipalAuthorityPartition','TestPostgresRustFSOCIDiscoveryPrincipalAuthorityPartition','TestOCICatalogMixedSourcesReturnReadableCanonicalNames','TestOCIReferrersRejectInFlightSourceChange','TestPostgresRustFSOCIDiscoveryRejectInFlightSourceChange','TestOCIReferrersRequireExplicitAuthorityBeforeSourceAccess','TestOCICatalogRejectsConflictingSourceVersionsAcrossViews','TestPostgresRustFSOCIDiscoveryCatalogConflictingVersions','TestOCIReferrersExplicitCredentialsNeverBecomeAnonymous','TestPostgresRustFSOCIDiscoveryExplicitCredentialsNeverBecomeAnonymous','TestOCIReferrersDescriptorAnnotationsFromVerifiedManifest','TestPostgresRustFSOCIDiscoveryDescriptorAnnotationsFromVerifiedManifest','TestOCIReferrersAnonymousIdentityNeverSharesAuthenticatedAuthority','TestPostgresRustFSOCIDiscoveryAnonymousIdentityNeverSharesAuthenticatedAuthority'}
 run={e.get('Test') for e in events if e.get('Action')=='run'};passed={e.get('Test') for e in events if e.get('Action')=='pass'};bad=[e for e in events if e.get('Action') in ('skip','fail')]
 source=json.loads((evidence/'source.json').read_text());after={name:hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() for name in source['fileHashes']}
 summary={'required':sorted(required),'requiredRun':sorted(required&run),'requiredPassed':sorted(required&passed),'missingRun':sorted(required-run),'missingPass':sorted(required-passed),'actualNamedPassed':len(passed-{None}),'failedOrSkipped':bad,'exitCode':result.returncode,'sourceUnchanged':after==source['fileHashes'],'rawSHA256':hashlib.sha256((evidence/'results.jsonl').read_bytes()).hexdigest()}

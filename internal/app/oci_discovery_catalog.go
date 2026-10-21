@@ -20,8 +20,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func discoveryOwner(p Principal) string {
-	body, _ := json.Marshal([]any{p.Actor, p.Role, p.Admin, p.RepositoryPatterns})
+func discoveryOwner(p Principal, authenticated bool) string {
+	body, _ := json.Marshal([]any{authenticated, p.Actor, p.Role, p.Admin, p.RepositoryPatterns})
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])
 }
@@ -82,7 +82,7 @@ func (h nativeOCIHandler) catalog(w http.ResponseWriter, r *http.Request) {
 	}
 	var snapshot discovery.Snapshot
 	if id := r.URL.Query().Get("snapshot"); id != "" {
-		snapshot, err = h.discovery.GetOCIDiscoverySnapshot(r.Context(), id, discoveryOwner(p))
+		snapshot, err = h.discovery.GetOCIDiscoverySnapshot(r.Context(), id, discoveryOwner(p, true))
 		if err == nil && snapshot.Kind != "catalog" {
 			err = discovery.ErrInvalid
 		}
@@ -331,7 +331,7 @@ func (h nativeOCIHandler) catalogViews(ctx context.Context) ([]ociCatalogView, b
 }
 
 func (h nativeOCIHandler) collectCatalog(ctx context.Context, principal Principal) (discovery.Snapshot, error) {
-	snapshot := discovery.Snapshot{ID: uuid.NewString(), Owner: discoveryOwner(principal), Actor: principal.Actor, Kind: "catalog", Entries: []discovery.CatalogEntry{}, Coverage: []discovery.Coverage{}, ExpiresAt: time.Now().UTC().Add(discovery.SnapshotTTL)}
+	snapshot := discovery.Snapshot{ID: uuid.NewString(), Owner: discoveryOwner(principal, true), Actor: principal.Actor, Kind: "catalog", Entries: []discovery.CatalogEntry{}, Coverage: []discovery.Coverage{}, ExpiresAt: time.Now().UTC().Add(discovery.SnapshotTTL)}
 	views, truncated, err := h.catalogViews(ctx)
 	if err != nil {
 		return snapshot, err

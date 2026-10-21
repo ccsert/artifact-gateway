@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +24,97 @@ func TestOCIReferrersExplicitCredentialsNeverBecomeAnonymous(t *testing.T) {
 	enableAnonymousAccess(t, store)
 	objects := objectstore.NewMemoryStore()
 	testOCIExplicitCredentials(t, store, store, objects, objects)
+}
+
+func TestOCIReferrersAnonymousIdentityNeverSharesAuthenticatedAuthority(t *testing.T) {
+	for _, adminFirst := range []bool{false, true} {
+		t.Run(fmt.Sprint("adminFirst=", adminFirst), func(t *testing.T) {
+			store := repository.NewMemoryStore()
+			enableAnonymousAccess(t, store)
+			objects := objectstore.NewMemoryStore()
+			testOCIAnonymousIdentityPartition(t, store, store, objects, objects, adminFirst)
+		})
+	}
+}
+
+func testOCIAnonymousIdentityPartition(t *testing.T, store GatewayStore, persistence discovery.Store, objects, control ObjectStore, adminFirst bool) {
+	t.Helper()
+	a, b := newDiscoveryArtifactFixture(t, "private authority A"), newDiscoveryArtifactFixture(t, "anonymous authority B")
+	fixture := newProxyRedirectFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/a/") {
+			a.serve(w, r)
+		} else {
+			b.serve(w, r)
+		}
+	})
+	ra, rb := catalogProxy(t, store, "identity-a-"+uuid.NewString()[:8]), catalogProxy(t, store, "identity-b-"+uuid.NewString()[:8])
+	var err error
+	ra.Endpoint += "/a"
+	ra, err = store.UpdateHostedRepository(t.Context(), ra, ra.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb.Endpoint += "/b"
+	rb.AnonymousRead = true
+	rb, err = store.UpdateHostedRepository(t.Context(), rb, rb.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogReader(t, store, ra, anonymousActor, "team/")
+	group, _, err := store.CreateHostedGroupIdempotently(t.Context(), repository.HostedGroup{ID: uuid.NewString(), Name: "identity-group-" + uuid.NewString()[:8], Format: repository.FormatOCI, AnonymousRead: true, Members: []repository.GroupMember{{RepositoryID: ra.ID}, {RepositoryID: rb.ID, Position: 1}}}, "fixture-admin", uuid.NewString(), "fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := testAuthenticator()
+	auth.AdminActor = anonymousActor
+	principal, authenticated := auth.Authenticate("Bearer " + auth.AdminToken)
+	if !authenticated || !principal.Admin || principal.AuthenticationKind == "" {
+		t.Fatal("the configured same-name administrator did not really authenticate")
+	}
+	gateway := func(auth Authenticator) http.Handler {
+		return newTestGateway(t, GatewayOptions{Store: store, OCIDiscoveryStore: persistence, Adapter: TestAdapter{}, Authenticator: auth, Storage: ObjectStores{repository.FormatOCI: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(control, []string{redirectOrigin, redirectCDN})}, Upstream: fixture.client})
+	}
+	handler := gateway(auth)
+	path := "/v2/" + group.Name + "/team/app/referrers/" + a.subject.Digest
+	check := func(h http.Handler, token string, expected, absent discoveryArtifactFixture) {
+		t.Helper()
+		response := discoveryRequest(t, h, path, token)
+		if response.Code != 200 || !strings.Contains(response.Body.String(), expected.refs[0].Digest) || strings.Contains(response.Body.String(), absent.refs[0].Digest) {
+			t.Fatalf("anonymous and authenticated authority collided: authenticated=%t status=%d body=%s", token != "", response.Code, response.Body.String())
+		}
+		for _, digest := range []string{expected.subject.Digest, expected.refs[0].Digest} {
+			original := discoveryRequest(t, h, "/v2/"+group.Name+"/team/app/manifests/"+digest, token)
+			if original.Code != 200 || !bytes.Equal(original.Body.Bytes(), expected.objects[digest].body) {
+				t.Fatalf("bound original bytes crossed authentication namespaces: status=%d body=%s", original.Code, original.Body.String())
+			}
+		}
+	}
+	if adminFirst {
+		check(handler, auth.AdminToken, a, b)
+		check(handler, "", b, a)
+	} else {
+		check(handler, "", b, a)
+		check(handler, auth.AdminToken, a, b)
+	}
+	private := discoveryRequest(t, handler, "/v2/"+ra.Name+"/team/app/referrers/"+a.subject.Digest, auth.AdminToken)
+	if private.Code != 200 || !strings.Contains(private.Body.String(), a.refs[0].Digest) {
+		t.Fatalf("real same-name authenticated administrator was treated as anonymous: %d %s", private.Code, private.Body.String())
+	}
+	group.Members[0].Position, group.Members[1].Position = 1, 0
+	if _, err := store.ReplaceHostedGroup(t.Context(), group, group.Version); err != nil {
+		t.Fatal(err)
+	}
+	resolver := testAuthenticator()
+	resolver.ResolverActor = anonymousActor
+	resolver.AdminToken = "different-admin-credential"
+	check(gateway(resolver), resolver.ResolverToken, a, b)
+	check(handler, "", b, a)
+	catalogReader(t, store, ra, "other-actor", "team/")
+	denied := discoveryRequest(t, gateway(resolver), path, resolver.ResolverToken)
+	if denied.Code != 403 {
+		t.Fatalf("credential kind change or grant revocation replaced authority: %d %s", denied.Code, denied.Body.String())
+	}
+	check(handler, "", b, a)
 }
 
 func testOCIExplicitCredentials(t *testing.T, store GatewayStore, persistence discovery.Store, objects, control ObjectStore) {

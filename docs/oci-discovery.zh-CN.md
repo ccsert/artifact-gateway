@@ -46,7 +46,9 @@ Gateway 逐项获取制品 manifest，核对 subject 完整描述符、媒体类
 替换过滤条件或 subject。不支持 Referrers API 的上游返回 501，不采用标签回退。
 
 成功来源按稳定身份、作用域、镜像和 subject 持久绑定。受限身份不能抢先改变
-另一身份的来源选择；角色或下游凭据轮换不改变这个稳定 owner。Group 重排仍
+另一身份的来源选择。真正匿名访问使用独立命名空间，即使合法认证主体的名称
+恰为 `anonymous` 也不会共用；同一认证主体的凭据种类、角色或下游凭据轮换
+不改变稳定 owner。Group 重排仍
 保留原来源。删除该来源、撤销授权、修改源仓库配置或版本，会拒绝既有绑定，
 不会自动改选其它来源。当前没有对同一 subject 的隐式重绑操作；确需替换上游
 时，应使用新的仓库身份。后续通过同一名称读取 manifest/blob 也遵守此边界。
@@ -90,7 +92,10 @@ Basic/Bearer 私有源、Proxy/Group、Catalog、递归发现、原始 SBOM 字�
 OCI-layout 闭包、Docker 镜像字节、重启离线、来源 fence 与受限前缀都必须真实
 执行并通过，必需测试禁止跳过。`output/native-oci-discovery-e2e/<project>/`
 保留精确源码摘要、工具来源、原始结果及自有资源清理回读。本机验收、合并后
-CI 与生产运行是不同事实。
+CI 与生产运行是不同事实。可以用可选的 `OCI_DISCOVERY_ORAS_ARCHIVE` 提供
+已下载的官方原始 archive，仍强制核对当前平台的固定 SHA，并在工具回执中明确
+标记本地依赖缓存；未设置时仍直接下载。两种方式都使用全新的客户端 HOME 和
+目标夹具。
 
 协议参考：[OCI Distribution 1.1.1](https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md)、
 [Registry Catalog](https://distribution.github.io/distribution/spec/api/#catalog)、

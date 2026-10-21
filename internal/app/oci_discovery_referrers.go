@@ -16,6 +16,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// Authentication is a request fact, independent of a principal's display or
+// stable actor name. In particular, a configured actor may be named anonymous.
+type ociDiscoveryPrincipal struct {
+	Principal
+	authenticated bool
+}
+
+func (p ociDiscoveryPrincipal) bindingOwner() string {
+	if !p.authenticated {
+		return discovery.OwnerForAnonymous()
+	}
+	return discovery.OwnerForActor(p.Actor)
+}
+
 type ociDiscoveryScope struct {
 	id, name     string
 	group        *repository.HostedGroup
@@ -26,16 +40,16 @@ func repositoryDiscoveryScope(repo repository.HostedRepository) ociDiscoveryScop
 	return ociDiscoveryScope{id: "repository:" + repo.ID, name: repo.Name, repositories: []repository.HostedRepository{repo}}
 }
 
-func (h nativeOCIHandler) discoveryGuards(ctx context.Context, scope ociDiscoveryScope, p Principal, repo repository.HostedRepository, image string) ([]discovery.Guard, error) {
+func (h nativeOCIHandler) discoveryGuards(ctx context.Context, scope ociDiscoveryScope, p ociDiscoveryPrincipal, repo repository.HostedRepository, image string) ([]discovery.Guard, error) {
 	if repo.Format != repository.FormatOCI || repo.State != repository.RepositoryActive || p.AccountStateReason() != "" {
 		return nil, discovery.ErrChanged
 	}
-	if isAnonymous(p) {
+	if !p.authenticated {
 		if !repo.AnonymousRead || !anonymousAccessAllowed(ctx, h.store) {
 			return nil, &ociFetchError{status: 403, code: "DENIED", message: "requested source access is denied"}
 		}
 	} else {
-		decision, managed := h.authorizer.ManagedResourceDecision(ctx, p, repo, RepositoryRead, image)
+		decision, managed := h.authorizer.ManagedResourceDecision(ctx, p.Principal, repo, RepositoryRead, image)
 		if !managed || !decision.Allowed {
 			return nil, &ociFetchError{status: 403, code: "DENIED", message: "requested source access is denied"}
 		}
@@ -54,7 +68,10 @@ func (h nativeOCIHandler) discoveryGuards(ctx context.Context, scope ociDiscover
 	return guards, nil
 }
 
-func (h nativeOCIHandler) boundDiscoverySource(ctx context.Context, scope ociDiscoveryScope, p Principal, image string, binding discovery.Binding) (repository.HostedRepository, []discovery.Guard, error) {
+func (h nativeOCIHandler) boundDiscoverySource(ctx context.Context, scope ociDiscoveryScope, p ociDiscoveryPrincipal, image string, binding discovery.Binding) (repository.HostedRepository, []discovery.Guard, error) {
+	if binding.Owner != p.bindingOwner() || binding.Actor != p.Actor || binding.Anonymous == p.authenticated {
+		return repository.HostedRepository{}, nil, discovery.ErrChanged
+	}
 	present := false
 	if scope.group != nil {
 		for _, member := range scope.group.Members {
@@ -94,8 +111,8 @@ func uniqueDiscoveryGuards(items []discovery.Guard) []discovery.Guard {
 	return items
 }
 
-func (h nativeOCIHandler) discoverSubject(ctx context.Context, scope ociDiscoveryScope, p Principal, image, subject string) (discovery.Binding, []discovery.Guard, error) {
-	binding, err := h.discovery.GetOCISubjectBinding(ctx, scope.id, discovery.OwnerForActor(p.Actor), image, subject)
+func (h nativeOCIHandler) discoverSubject(ctx context.Context, scope ociDiscoveryScope, p ociDiscoveryPrincipal, image, subject string) (discovery.Binding, []discovery.Guard, error) {
+	binding, err := h.discovery.GetOCISubjectBinding(ctx, scope.id, p.bindingOwner(), image, subject)
 	var source repository.HostedRepository
 	var guards []discovery.Guard
 	var graph *discoveryGraph
@@ -174,14 +191,14 @@ func (h nativeOCIHandler) discoverSubject(ctx context.Context, scope ociDiscover
 		refs[i].Annotations = metadata.Annotations
 	}
 	guards = uniqueDiscoveryGuards(guards)
-	binding = discovery.Binding{Scope: scope.id, Owner: discovery.OwnerForActor(p.Actor), Image: image, Subject: subject, SourceID: source.ID, SourceVersion: source.Version, Actor: p.Actor, Guards: guards, Objects: graph.objects(), Referrers: refs, FetchedAt: time.Now().UTC()}
+	binding = discovery.Binding{Scope: scope.id, Owner: p.bindingOwner(), Image: image, Subject: subject, SourceID: source.ID, SourceVersion: source.Version, Actor: p.Actor, Anonymous: !p.authenticated, Guards: guards, Objects: graph.objects(), Referrers: refs, FetchedAt: time.Now().UTC()}
 	if err = h.discovery.PublishOCISubjectBinding(ctx, binding); err != nil {
 		return discovery.Binding{}, nil, err
 	}
 	return binding, guards, nil
 }
 
-func (h nativeOCIHandler) discoveryReferrers(w http.ResponseWriter, r *http.Request, scope ociDiscoveryScope, image, subject string, p Principal) {
+func (h nativeOCIHandler) discoveryReferrers(w http.ResponseWriter, r *http.Request, scope ociDiscoveryScope, image, subject string, p ociDiscoveryPrincipal) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeOCIError(w, 405, "UNSUPPORTED", "method not allowed")
 		return
@@ -203,7 +220,7 @@ func (h nativeOCIHandler) discoveryReferrers(w http.ResponseWriter, r *http.Requ
 	defer cancel()
 	var snapshot discovery.Snapshot
 	if id := r.URL.Query().Get("snapshot"); id != "" {
-		snapshot, err = h.discovery.GetOCIDiscoverySnapshot(ctx, id, discoveryOwner(p))
+		snapshot, err = h.discovery.GetOCIDiscoverySnapshot(ctx, id, discoveryOwner(p.Principal, p.authenticated))
 		if err == nil && (snapshot.Kind != "referrers" || snapshot.Scope != scope.id || snapshot.Image != image || snapshot.Subject != subject || snapshot.ArtifactType != filter) {
 			writeDiscoveryFailure(w, discovery.ErrInvalid)
 			return
@@ -213,7 +230,7 @@ func (h nativeOCIHandler) discoveryReferrers(w http.ResponseWriter, r *http.Requ
 		var guards []discovery.Guard
 		binding, guards, err = h.discoverSubject(ctx, scope, p, image, subject)
 		if err == nil {
-			snapshot = discovery.Snapshot{ID: uuid.NewString(), Owner: discoveryOwner(p), Actor: p.Actor, Kind: "referrers", Scope: scope.id, Image: image, Subject: subject, ArtifactType: filter, Guards: guards, Coverage: []discovery.Coverage{{Namespace: scope.name, State: "complete"}}, Referrers: []discovery.Descriptor{}, ExpiresAt: time.Now().UTC().Add(discovery.SnapshotTTL)}
+			snapshot = discovery.Snapshot{ID: uuid.NewString(), Owner: discoveryOwner(p.Principal, p.authenticated), Actor: p.Actor, Kind: "referrers", Scope: scope.id, Image: image, Subject: subject, ArtifactType: filter, Guards: guards, Coverage: []discovery.Coverage{{Namespace: scope.name, State: "complete"}}, Referrers: []discovery.Descriptor{}, ExpiresAt: time.Now().UTC().Add(discovery.SnapshotTTL)}
 			for _, ref := range binding.Referrers {
 				if filter == "" || ref.ArtifactType == filter {
 					snapshot.Referrers = append(snapshot.Referrers, ref)
@@ -262,14 +279,14 @@ func (h nativeOCIHandler) discoveryReferrers(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(map[string]any{"schemaVersion": 2, "mediaType": ocigraph.OCIIndex, "manifests": refs})
 }
 
-func (h nativeOCIHandler) serveOCIBoundObject(w http.ResponseWriter, r *http.Request, scope ociDiscoveryScope, image, resource, digest string, p Principal) bool {
+func (h nativeOCIHandler) serveOCIBoundObject(w http.ResponseWriter, r *http.Request, scope ociDiscoveryScope, image, resource, digest string, p ociDiscoveryPrincipal) bool {
 	if h.discovery == nil || !ocigraph.ValidDigest(digest) {
 		return false
 	}
 	if rejectFailedOCIDiscoveryAuthentication(w, r, p) {
 		return true
 	}
-	binding, object, err := h.discovery.GetOCIBoundObject(r.Context(), scope.id, discovery.OwnerForActor(p.Actor), image, digest)
+	binding, object, err := h.discovery.GetOCIBoundObject(r.Context(), scope.id, p.bindingOwner(), image, digest)
 	if errors.Is(err, discovery.ErrNotFound) {
 		return false
 	}
@@ -301,8 +318,8 @@ func (h nativeOCIHandler) serveOCIBoundObject(w http.ResponseWriter, r *http.Req
 
 // The surrounding protocol can admit unauthenticated public reads. A supplied
 // credential that failed authentication must never inherit that anonymous view.
-func rejectFailedOCIDiscoveryAuthentication(w http.ResponseWriter, r *http.Request, p Principal) bool {
-	if !isAnonymous(p) || r.Header.Get("Authorization") == "" {
+func rejectFailedOCIDiscoveryAuthentication(w http.ResponseWriter, r *http.Request, p ociDiscoveryPrincipal) bool {
+	if p.authenticated || r.Header.Get("Authorization") == "" {
 		return false
 	}
 	writeOCIChallenge(w, r)

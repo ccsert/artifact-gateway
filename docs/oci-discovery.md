@@ -61,7 +61,9 @@ Referrers APIs return 501; there is no referrers-tag fallback.
 
 The successful source binding is persisted per stable principal, scope, image
 and subject. One restricted principal cannot prime another principal's source
-choice. Role or downstream credential changes do not change that stable owner.
+choice. The unauthenticated view has a separate namespace even if an authenticated
+actor is named `anonymous`. Credential kind, role or downstream credential
+changes do not change an authenticated subject's stable owner.
 Reordering a Group preserves the existing authority. Removing its source,
 revoking access or changing that repository's configuration/version rejects
 the existing binding; it never switches sources. No implicit rebind operation
@@ -116,7 +118,11 @@ Docker image bytes, restart/offline consumption, source fencing and restricted
 prefixes must actually run and pass. All mandatory tests reject skips.
 `output/native-oci-discovery-e2e/<project>/` retains exact source hashes, tool
 provenance, raw results and owned-resource cleanup. Local acceptance, merged CI
-and production operation are separate facts.
+and production operation are separate facts. An optional
+`OCI_DISCOVERY_ORAS_ARCHIVE` can supply a previously downloaded original
+official archive; the platform's pinned SHA is still checked and provenance
+marks this local dependency cache. Without it, the gate downloads the archive.
+Every client HOME and target fixture remains fresh in either case.
 
 Protocol references: [OCI Distribution 1.1.1](https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md),
 [Registry Catalog](https://distribution.github.io/distribution/spec/api/#catalog),

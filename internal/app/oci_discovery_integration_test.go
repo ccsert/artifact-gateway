@@ -37,6 +37,15 @@ func TestPostgresRustFSOCIDiscoveryExplicitCredentialsNeverBecomeAnonymous(t *te
 	testOCIExplicitCredentials(t, &ociAnonymousPostgresFixture{f.store}, f.store, f.objects, f.control)
 }
 
+func TestPostgresRustFSOCIDiscoveryAnonymousIdentityNeverSharesAuthenticatedAuthority(t *testing.T) {
+	for _, adminFirst := range []bool{false, true} {
+		t.Run(fmt.Sprint("adminFirst=", adminFirst), func(t *testing.T) {
+			f := newPostgresDiscoveryFixture(t)
+			testOCIAnonymousIdentityPartition(t, &ociAnonymousPostgresFixture{f.store}, f.store, f.objects, f.control, adminFirst)
+		})
+	}
+}
+
 func TestPostgresRustFSOCIDiscoveryDescriptorAnnotationsFromVerifiedManifest(t *testing.T) {
 	f := newPostgresDiscoveryFixture(t)
 	testOCIReferrerAnnotations(t, f.store, f.store, f.objects, f.control)

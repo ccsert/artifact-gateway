@@ -27,7 +27,7 @@ func sortedOCIGuards(guards []discovery.Guard) []discovery.Guard {
 }
 
 func mergeOCIBinding(old, next discovery.Binding) (discovery.Binding, error) {
-	if old.Owner != next.Owner || old.SourceID != next.SourceID || old.SourceVersion != next.SourceVersion {
+	if old.Owner != next.Owner || old.Actor != next.Actor || old.Anonymous != next.Anonymous || old.SourceID != next.SourceID || old.SourceVersion != next.SourceVersion {
 		return discovery.Binding{}, discovery.ErrChanged
 	}
 	byDigest := map[string]discovery.Object{}

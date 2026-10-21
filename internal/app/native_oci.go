@@ -108,10 +108,10 @@ func (h nativeOCIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	}
 	if repo.Type == repository.RepositoryTypeProxy {
 		if resource == "referrers" {
-			h.discoveryReferrers(w, r, repositoryDiscoveryScope(repo), imageName, reference, p)
+			h.discoveryReferrers(w, r, repositoryDiscoveryScope(repo), imageName, reference, ociDiscoveryPrincipal{Principal: p, authenticated: authenticated})
 			return true
 		}
-		if (resource == "manifest" || resource == "blob") && h.serveOCIBoundObject(w, r, repositoryDiscoveryScope(repo), imageName, map[string]string{"manifest": "manifests", "blob": "blobs"}[resource], reference, p) {
+		if (resource == "manifest" || resource == "blob") && h.serveOCIBoundObject(w, r, repositoryDiscoveryScope(repo), imageName, map[string]string{"manifest": "manifests", "blob": "blobs"}[resource], reference, ociDiscoveryPrincipal{Principal: p, authenticated: authenticated}) {
 			return true
 		}
 		h.proxyRead(w, r, repo, resource, imageName, reference, p.Actor)
