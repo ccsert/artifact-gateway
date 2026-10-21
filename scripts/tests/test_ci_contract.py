@@ -789,5 +789,91 @@ class ContractGateTests(unittest.TestCase):
         self.assertEqual(workflow.count('--benchmark-only'), 2)
 
 
+class ColdCacheCleanupTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(prefix='ag-cold-cleanup-controls-')
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.work = self.root / 'owned-work'
+        self.work.mkdir()
+        self.output = self.root / 'evidence'
+        self.foreign = self.root / 'outside-sentinel'
+        self.foreign.mkdir()
+        (self.foreign / 'content').write_text('must remain unchanged')
+        self.foreign.chmod(0o555)
+
+    def lane(self, setup, producer_status='success'):
+        source = {'head': 'a' * 40, 'tree': 'b' * 40, 'businessDigest': 'c' * 64}
+        plan = {'lanes': {'cold-probe': {'rawDirectories': [], 'steps': [
+            {'name': 'owned cold module cache', 'command': ['owned-probe'], 'timeoutSeconds': 2}]}}}
+        args = argparse.Namespace(lane='cold-probe', output=self.output, prefix='control',
+                                  cold_cache=True, local=True, keep_going=False)
+        def producer(_command, log, environment, _timeout):
+            self.assertEqual(environment['GOMODCACHE'], str(self.work / 'go-mod'))
+            setup()
+            log.write_text('owned cold-cache permissions probe\n')
+            return {'status': producer_status, 'exitCode': 0 if producer_status == 'success' else 7}
+        with patch.object(ci, 'PLAN', plan), patch.object(ci, 'business_source', return_value=source), \
+                patch.object(ci.tempfile, 'mkdtemp', return_value=str(self.work)), \
+                patch.object(ci, 'run_command', side_effect=producer), \
+                patch.dict(os.environ, {'GITHUB_ACTIONS': 'false'}):
+            result = ci.run_lane(args)
+        return result, json.loads((self.output / 'report.json').read_text())
+
+    def readonly_module_cache(self):
+        module = self.work / 'go-mod' / 'example.test' / 'module@v1.0.0'
+        nested = module / 'nested'
+        nested.mkdir(parents=True)
+        (nested / 'module.go').write_text('package fixture\n')
+        (nested / 'module.go').chmod(0o444)
+        nested.chmod(0o555)
+        module.chmod(0o555)
+
+    def assert_foreign_preserved(self):
+        self.assertEqual((self.foreign / 'content').read_text(), 'must remain unchanged')
+        self.assertEqual(self.foreign.stat().st_mode & 0o777, 0o555)
+
+    def test_cold_readonly_go_modules_are_removed_before_success(self):
+        result, report = self.lane(self.readonly_module_cache)
+        self.assertEqual(result, 0)
+        self.assertEqual(report['cleanup']['errors'], [])
+        self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+        self.assertFalse(self.work.exists())
+        self.assert_foreign_preserved()
+
+    def test_readonly_cache_cleanup_does_not_hide_producer_failure(self):
+        result, report = self.lane(self.readonly_module_cache, 'failure')
+        self.assertEqual(result, 1)
+        self.assertEqual(report['steps'][0]['exitCode'], 7)
+        self.assertEqual(report['cleanup']['errors'], [])
+        self.assertTrue(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+        self.assert_foreign_preserved()
+
+    def test_directory_symlinks_never_change_external_permissions(self):
+        def setup():
+            (self.work / 'go-mod').mkdir()
+            (self.work / 'go-mod' / 'outside').symlink_to(self.foreign, target_is_directory=True)
+        result, report = self.lane(setup)
+        self.assertEqual(result, 0)
+        self.assertEqual(report['cleanup']['errors'], [])
+        self.assert_foreign_preserved()
+
+    def test_permission_repair_failure_still_fails_closed(self):
+        with patch.object(ci.os, 'fchmod', side_effect=PermissionError('owned permission denied')):
+            result, report = self.lane(self.readonly_module_cache)
+        self.assertEqual(result, 1)
+        self.assertTrue(report['cleanup']['errors'])
+        self.assertFalse(report['cleanup']['ownedTemporaryDirectoryRemoved'])
+        self.assert_foreign_preserved()
+
+    def test_replaced_work_root_is_rejected_without_touching_target(self):
+        self.work.rmdir()
+        self.work.symlink_to(self.foreign, target_is_directory=True)
+        result, report = self.lane(lambda: None)
+        self.assertEqual(result, 1)
+        self.assertTrue(report['cleanup']['errors'])
+        self.assert_foreign_preserved()
+
+
 if __name__ == '__main__':
     unittest.main()

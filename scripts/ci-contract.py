@@ -10,6 +10,7 @@ import re
 import selectors
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -310,6 +311,21 @@ def case_summary(directory):
     return {k: sorted(v) for k, v in events.items()}
 
 
+def remove_owned_work(work):
+    # Go downloads module directories read-only. Restore owner write access
+    # only within this lane's fresh temporary tree before unlinking it. Directory
+    # descriptors never follow a replaced root or any directory symlink.
+    for directory, _, _ in os.walk(work, followlinks=False):
+        descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            mode = stat.S_IMODE(os.fstat(descriptor).st_mode)
+            if not mode & stat.S_IWUSR:
+                os.fchmod(descriptor, mode | stat.S_IWUSR)
+        finally:
+            os.close(descriptor)
+    shutil.rmtree(work)
+
+
 def run_lane(args):
     lane = PLAN['lanes'][args.lane]
     output = args.output.resolve()
@@ -398,7 +414,7 @@ def run_lane(args):
             except Exception as error:
                 cleanup['errors'].append({'stage': 'raw-evidence', 'error': type(error).__name__})
             try:
-                shutil.rmtree(work)
+                remove_owned_work(work)
             except Exception as error:
                 cleanup['errors'].append({'stage': 'temporary-directory', 'error': type(error).__name__})
             cleanup['ownedTemporaryDirectoryRemoved'] = not work.exists()
