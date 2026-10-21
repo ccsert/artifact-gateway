@@ -20,6 +20,298 @@ ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
 
+class CoreCacheOwnershipTests(unittest.TestCase):
+    def setUp(self):
+        self.work = tempfile.TemporaryDirectory()
+        self.addCleanup(self.work.cleanup)
+        self.output = Path(self.work.name)
+        self.volumes = {'unrelated-sentinel': self.volume('unrelated-sentinel', {'foreign': 'preserve'})}
+        self.calls = []
+        self.fail_create_ack = False
+        self.fail_rm = None
+        self.ignore_rm = False
+        self.fail_inventory = False
+        self.containers = {}
+        self.patch = patch.object(ci.subprocess, 'run', side_effect=self.docker)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+    @staticmethod
+    def volume(name, labels):
+        return {'Name': name, 'Driver': 'local', 'Scope': 'local',
+                'CreatedAt': '2026-10-21T00:00:00Z', 'Labels': labels, 'Options': None}
+
+    def docker(self, command, **kwargs):
+        self.calls.append(command)
+        args = command[1:]
+        if args in (['ps', '-aq'], ['volume', 'ls', '-q'], ['network', 'ls', '-q']):
+            if self.fail_inventory:
+                return subprocess.CompletedProcess(command, 1, '', 'inventory unavailable')
+            names = self.containers if args[0] == 'ps' else self.volumes if args[0] == 'volume' else {}
+            return subprocess.CompletedProcess(command, 0, '\n'.join(names) + '\n', '')
+        if args[:2] == ['container', 'inspect']:
+            return subprocess.CompletedProcess(command, 0, json.dumps([self.containers[args[-1]]]), '')
+        if args[:2] == ['volume', 'create']:
+            name = args[-1]
+            labels = dict(args[i + 1].split('=', 1) for i, arg in enumerate(args) if arg == '--label')
+            self.volumes.setdefault(name, self.volume(name, labels))
+            if self.fail_create_ack:
+                raise subprocess.TimeoutExpired(command, 30)
+            return subprocess.CompletedProcess(command, 0, name + '\n', '')
+        if args[:2] == ['volume', 'inspect']:
+            name = args[-1]
+            if name not in self.volumes:
+                return subprocess.CompletedProcess(command, 1, '', 'not found')
+            return subprocess.CompletedProcess(command, 0, json.dumps([self.volumes[name]]), '')
+        if args[:2] == ['volume', 'rm']:
+            name = args[-1]
+            if name == self.fail_rm:
+                return subprocess.CompletedProcess(command, 1, '', 'volume remains in use')
+            if not self.ignore_rm:
+                del self.volumes[name]
+            return subprocess.CompletedProcess(command, 0, name + '\n', '')
+        raise AssertionError('unexpected Docker operation: ' + repr(command))
+
+    def test_claims_and_removes_only_two_new_core_caches(self):
+        caches = ci.CoreGoCacheVolumes(self.output, 'run-123', '2')
+        caches.claim({'volumes': ['unrelated-sentinel']})
+        for name in ('artifact-gateway-go-mod', 'artifact-gateway-go-build'):
+            self.assertEqual(self.volumes[name]['Labels']['artifact-gateway.ci-run'], 'run-123')
+            self.assertEqual(self.volumes[name]['Labels']['artifact-gateway.ci-attempt'], '2')
+            self.assertEqual(self.volumes[name]['Labels']['artifact-gateway.ci-lane'], 'core')
+        result = caches.cleanup()
+        self.assertEqual(set(result['removed']), {'artifact-gateway-go-mod', 'artifact-gateway-go-build'})
+        self.assertEqual(result['remaining'], [])
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel'})
+        proof = json.loads((self.output / 'docker-cache-claims.json').read_text())
+        self.assertEqual(proof['removed'], result['removed'])
+
+
+    def test_preexisting_core_cache_is_never_consumed_or_removed(self):
+        for name in ci.CORE_GO_CACHE_VOLUMES:
+            with self.subTest(name=name):
+                self.volumes[name] = self.volume(name, {'foreign': 'preserve'})
+                original = copy.deepcopy(self.volumes)
+                self.calls.clear()
+                caches = ci.CoreGoCacheVolumes(self.output, 'run-123', '2')
+                with self.assertRaisesRegex(RuntimeError, 'pre-existing'):
+                    caches.claim({'volumes': list(self.volumes)})
+                self.assertEqual(caches.cleanup()['removed'], [])
+                self.assertEqual(self.volumes, original)
+                self.assertEqual(self.calls, [])
+                del self.volumes[name]
+
+    def test_changed_owner_or_creation_receipt_prevents_removal(self):
+        for field, value in [('Labels', {'foreign': 'preserve'}),
+                             ('CreatedAt', '2026-10-22T00:00:00Z'), ('Driver', 'foreign'),
+                             ('Scope', 'global'), ('Options', {'device': '/foreign'})]:
+            with self.subTest(field=field):
+                self.volumes = {'unrelated-sentinel': self.volume('unrelated-sentinel', {})}
+                caches = ci.CoreGoCacheVolumes(self.output, 'run-123', '2')
+                caches.claim({'volumes': ['unrelated-sentinel']})
+                name = 'artifact-gateway-go-mod'
+                self.volumes[name][field] = value
+                self.calls.clear()
+                result = caches.cleanup()
+                self.assertEqual(result['remaining'], [name])
+                self.assertTrue(result['errors'])
+                self.assertIn(name, self.volumes)
+                self.assertNotIn(['docker', 'volume', 'rm', name], self.calls)
+                self.assertIn('unrelated-sentinel', self.volumes)
+
+    def test_lost_create_ack_recovers_only_our_receipt_for_cleanup(self):
+        self.fail_create_ack = True
+        caches = ci.CoreGoCacheVolumes(self.output, 'run-123', '2')
+        with self.assertRaises(subprocess.TimeoutExpired):
+            caches.claim({'volumes': ['unrelated-sentinel']})
+        self.assertEqual(caches.state['receipts'], {})
+        result = caches.cleanup()
+        self.assertEqual(result['removed'], ['artifact-gateway-go-mod'])
+        self.assertEqual(result['remaining'], [])
+        self.assertEqual(result['errors'][0]['stage'], 'claim')
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel'})
+
+    def test_lost_create_ack_does_not_adopt_replaced_foreign_volume(self):
+        self.fail_create_ack = True
+        caches = ci.CoreGoCacheVolumes(self.output, 'run-123', '2')
+        with self.assertRaises(subprocess.TimeoutExpired):
+            caches.claim({'volumes': ['unrelated-sentinel']})
+        name = 'artifact-gateway-go-mod'
+        self.volumes[name] = self.volume(name, {'foreign': 'preserve'})
+        self.calls.clear()
+        result = caches.cleanup()
+        self.assertEqual(result['removed'], [])
+        self.assertEqual(result['remaining'], [name])
+        self.assertNotIn(['docker', 'volume', 'rm', name], self.calls)
+        self.assertIn('unrelated-sentinel', self.volumes)
+
+    def test_removal_failure_remains_failed_and_preserves_volume(self):
+        caches = ci.CoreGoCacheVolumes(self.output, 'run-123', '2')
+        caches.claim({'volumes': ['unrelated-sentinel']})
+        self.fail_rm = 'artifact-gateway-go-mod'
+        result = caches.cleanup()
+        self.assertEqual(result['remaining'], [self.fail_rm])
+        self.assertEqual(result['removed'], ['artifact-gateway-go-build'])
+        self.assertTrue(result['errors'])
+        self.assertIn(self.fail_rm, self.volumes)
+        self.assertIn('unrelated-sentinel', self.volumes)
+
+    def test_diagnostics_never_store_environment_commands_or_arguments(self):
+        self.containers['owned-id'] = {
+            'Id': 'owned-id', 'Name': '/owned-container', 'Image': 'immutable-image-id',
+            'Config': {'Labels': {'com.docker.compose.project': 'owned'},
+                       'Env': ['PRIVATE_TOKEN=never-write-this-secret'],
+                       'Cmd': ['never-write-this-command']},
+            'Args': ['never-write-these-arguments'],
+            'Mounts': [{'Type': 'volume', 'Name': 'unrelated-sentinel',
+                        'Destination': '/data', 'RW': True, 'Private': 'never-write-this-mount-field'}]}
+        path = self.output / 'snapshot.json'
+        ci.docker_step_snapshot(path)
+        data = path.read_text()
+        self.assertNotIn('never-write-', data)
+        snapshot = json.loads(data)
+        self.assertEqual(set(snapshot['volumes'][0]), {'Name', 'Driver', 'Scope', 'CreatedAt', 'Labels', 'Options'})
+        container = snapshot['containers'][0]
+        self.assertEqual(set(container), {'ID', 'Name', 'Image', 'Config', 'Mounts'})
+        self.assertEqual(set(container['Config']), {'Labels'})
+        self.assertEqual(container['Mounts'][0]['Name'], 'unrelated-sentinel')
+
+    def run_lane(self, action=None, local=False, result_status='success', raw_directories=None):
+        root = self.output / 'repository'
+        root.mkdir(exist_ok=True)
+        output = self.output / 'lane'
+        args = argparse.Namespace(lane='core', output=output, prefix='contract',
+                                  cold_cache=False, local=local, keep_going=False)
+        step = {'name': 'unchanged target', 'command': ['make', 'original-target'], 'timeoutSeconds': 600}
+        source = {'head': '1' * 40, 'tree': '2' * 40, 'businessDigest': 'unchanged-business'}
+        def command(command, log, env, timeout):
+            if action:
+                action()
+            log.write_text('original producer result\n')
+            return {'command': command, 'status': result_status,
+                    'exitCode': 0 if result_status == 'success' else 7,
+                    'timeoutSeconds': timeout, 'processGroup': 123, 'remainingLiveGroupMembers': []}
+        with patch.dict(os.environ, {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2'}):
+            with patch.object(ci, 'ROOT', root), patch.object(ci, 'business_source', return_value=source):
+                with patch.object(ci, 'PLAN', {'lanes': {'core': {'steps': [step], 'rawDirectories': raw_directories or []}}}):
+                    with patch.object(ci, 'run_command', side_effect=command) as ran:
+                        try:
+                            status = ci.run_lane(args)
+                        except Exception:
+                            self.last_business_calls = ran.call_count
+                            raise
+                        self.last_business_calls = ran.call_count
+        return status, json.loads((output / 'report.json').read_text())
+
+    def test_local_core_never_claims_or_deletes_caches(self):
+        self.volumes['artifact-gateway-go-mod'] = self.volume('artifact-gateway-go-mod', {'foreign': 'preserve'})
+        original = copy.deepcopy(self.volumes)
+        with patch.object(ci, 'CoreGoCacheVolumes') as caches:
+            status, report = self.run_lane(local=True)
+            caches.assert_not_called()
+        self.assertEqual(status, 0)
+        self.assertEqual(report['status'], 'success')
+        self.assertEqual(self.volumes, original)
+        self.assertFalse(any(c[1:3] in (['volume', 'create'], ['volume', 'rm']) for c in self.calls))
+
+    def test_dedicated_core_preserves_unknown_volume_and_fails(self):
+        anonymous = 'a' * 64
+        def producer():
+            self.volumes[anonymous] = self.volume(anonymous, {})
+        status, report = self.run_lane(action=producer)
+        self.assertEqual(status, 1)
+        self.assertEqual(report['status'], 'failure')
+        self.assertEqual(report['cleanup']['remainingNewResources']['volumes'], [anonymous])
+        self.assertEqual(set(report['cleanup']['coreGoCaches']['removed']), set(ci.CORE_GO_CACHE_VOLUMES))
+        self.assertEqual(report['cleanup']['coreGoCaches']['errors'], [])
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel', anonymous})
+        self.assertEqual(report['steps'][0]['timeoutSeconds'], 600)
+        for path, digest in report['filesSHA256'].items():
+            self.assertEqual(ci.sha(self.output / 'lane' / path), digest)
+        self.assertIn('docker/00-before.json', report['filesSHA256'])
+        self.assertIn('docker/00-after.json', report['filesSHA256'])
+        self.assertIn('docker-cache-claims.json', report['filesSHA256'])
+
+    def test_dedicated_step_failure_is_not_hidden_by_successful_cleanup(self):
+        status, report = self.run_lane(result_status='failure')
+        self.assertEqual(status, 1)
+        self.assertEqual(report['steps'][0]['exitCode'], 7)
+        self.assertEqual(report['cleanup']['coreGoCaches']['remaining'], [])
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel'})
+
+    def test_dedicated_lost_ack_runs_no_business_target_and_stays_failed(self):
+        self.fail_create_ack = True
+        with self.assertRaises(subprocess.TimeoutExpired):
+            self.run_lane()
+        report = json.loads((self.output / 'lane/report.json').read_text())
+        self.assertEqual(report['status'], 'failure')
+        self.assertEqual(self.last_business_calls, 0)
+        self.assertEqual(report['cleanup']['coreGoCaches']['removed'], ['artifact-gateway-go-mod'])
+        self.assertTrue(report['cleanup']['coreGoCaches']['errors'])
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel'})
+
+    def test_failed_diagnostics_stay_failed_and_still_clean_owned_caches(self):
+        def producer():
+            self.fail_inventory = True
+        with self.assertRaisesRegex(RuntimeError, 'inventory'):
+            self.run_lane(action=producer)
+        report = json.loads((self.output / 'lane/report.json').read_text())
+        self.assertEqual(report['status'], 'failure')
+        self.assertEqual(report['cleanup']['coreGoCaches']['removed'], [])
+        self.assertEqual(set(report['cleanup']['coreGoCaches']['remaining']), set(ci.CORE_GO_CACHE_VOLUMES))
+        self.assertTrue(report['cleanup']['coreGoCaches']['errors'])
+        self.assertTrue(report['cleanup']['errors'])
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel'})
+
+    def test_raw_evidence_copy_failure_still_cleans_and_fails(self):
+        def producer():
+            (self.output / 'repository/output/raw/new-evidence').mkdir(parents=True)
+        with patch.object(ci.shutil, 'copytree', side_effect=OSError('retain failure')):
+            status, report = self.run_lane(action=producer, raw_directories=['output/raw'])
+        self.assertEqual(status, 1)
+        self.assertEqual(report['status'], 'failure')
+        self.assertEqual(report['cleanup']['errors'][0]['stage'], 'raw-evidence')
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel'})
+
+
+    def test_acknowledged_removal_without_readback_stays_failed(self):
+        caches = ci.CoreGoCacheVolumes(self.output, 'run-123', '2')
+        caches.claim({'volumes': ['unrelated-sentinel']})
+        self.ignore_rm = True
+        result = caches.cleanup()
+        self.assertEqual(result['removed'], [])
+        self.assertEqual(set(result['remaining']), set(ci.CORE_GO_CACHE_VOLUMES))
+        self.assertTrue(result['errors'])
+        self.assertIn('unrelated-sentinel', self.volumes)
+
+    def test_dedicated_preexisting_cache_runs_no_business_target(self):
+        self.volumes['artifact-gateway-go-mod'] = self.volume('artifact-gateway-go-mod', {'foreign': 'preserve'})
+        original = copy.deepcopy(self.volumes)
+        with self.assertRaisesRegex(RuntimeError, 'pre-existing'):
+            self.run_lane()
+        report = json.loads((self.output / 'lane/report.json').read_text())
+        self.assertEqual(report['status'], 'failure')
+        self.assertEqual(self.last_business_calls, 0)
+        self.assertEqual(self.volumes, original)
+        self.assertFalse(any(c[1:3] == ['volume', 'rm'] for c in self.calls))
+
+
+    def test_cancellation_between_commands_still_cleans_owned_caches(self):
+        previous = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
+        def cancelled():
+            signal.raise_signal(signal.SIGTERM)
+        with self.assertRaises(SystemExit) as raised:
+            self.run_lane(action=cancelled)
+        self.assertEqual(raised.exception.code, 128 + signal.SIGTERM)
+        report = json.loads((self.output / 'lane/report.json').read_text())
+        self.assertEqual(report['status'], 'failure')
+        self.assertEqual(report['cancelledBySignal'], signal.SIGTERM)
+        self.assertEqual(set(report['cleanup']['coreGoCaches']['removed']), set(ci.CORE_GO_CACHE_VOLUMES))
+        self.assertEqual(set(self.volumes), {'unrelated-sentinel'})
+        self.assertEqual({sig: signal.getsignal(sig) for sig in previous}, previous)
+
+
 class ContractGateTests(unittest.TestCase):
     def setUp(self):
         self.work = tempfile.TemporaryDirectory()

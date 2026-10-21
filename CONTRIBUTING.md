@@ -238,6 +238,16 @@ concurrent developers' resources. `contract-aggregate-<attempt>` also preserves
 complete GitHub job logs including setup. Only that collector gains read-only
 `actions: read`; publication write permissions are unchanged.
 
+Only the dedicated GitHub core lane creates the two absent integration Go
+cache volumes before running targets. It refuses existing caches and records
+random owner/run/attempt labels and creation receipts. Finally it rechecks
+those receipts and removes only its own two volumes; a lost create reply or
+cleanup error still fails the lane. Local runs never claim or delete these
+caches. Unknown new volumes, including anonymous volumes, remain failures.
+Each core step records before/after inventories and only volume identity,
+labels/options and container identity, labels/mounts for attribution; container
+environment, commands and arguments are excluded from diagnostic artifacts.
+
 Once `contract-benchmark.yml` is on the default branch, run
 `gh workflow run contract-benchmark.yml --ref main`. It invokes the same six
 lanes twice on the same commit: a one-slot serial matrix and a matrix capped at

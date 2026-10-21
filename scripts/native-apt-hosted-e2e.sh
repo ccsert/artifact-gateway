@@ -32,7 +32,20 @@ chmod 0700 "$workdir"
 } >"$env_file"
 chmod 0600 "$env_file"
 
-compose=(docker compose --env-file "$env_file" -p "$project" --profile apt-signer)
+# Compose inherits an image's anonymous volumes by name during recreation.
+# Name the unused TLS volume in this disposable project so down -v owns it.
+signer_volume_override="$workdir/signer-volumes.compose.yml"
+cat >"$signer_volume_override" <<'YAML'
+services:
+  reference-apt-signer:
+    volumes:
+      - gateway-apt-signer-tls:/var/lib/reference-apt-signer-tls
+volumes:
+  gateway-apt-signer-tls:
+YAML
+chmod 0600 "$signer_volume_override"
+compose=(docker compose --env-file "$env_file" -p "$project" --profile apt-signer \
+  -f "$root/compose.yml" -f "$signer_volume_override")
 curl_request=(curl --noproxy '*' --connect-timeout 2 --max-time 45 --silent --show-error)
 cleanup() {
   local status=$?
@@ -441,7 +454,7 @@ Path(sys.argv[1]).write_text(json.dumps({"services":{"gateway":{
         "GATEWAY_APT_RESTORE_TRUSTED_PUBLIC_KEYS_FILE":"/run/apt-restore.asc"},
     "volumes":[sys.argv[2]+":/run/apt-restore.asc:ro"]}}}))
 PYRESTORECONFIG
-compose+=( -f "$root/compose.yml" -f "$restore_override" )
+compose+=( -f "$restore_override" )
 "${compose[@]}" up -d --no-deps --force-recreate --wait gateway
 wait_gateway_ready
 empty_state="$workdir/empty-signing-state.json"

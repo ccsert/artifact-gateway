@@ -200,6 +200,13 @@ fixture 自有清理报告，不把其它并行开发者资源当作自己所有
 `contract-aggregate-<attempt>` 另保存包含准备阶段的完整 GitHub job 日志。
 只有该采集器增加只读 `actions: read`，发布写权限保持原样。
 
+仅专用 GitHub core lane 在执行原目标前创建两个原本不存在的集成 Go 缓存卷；
+已有缓存会被拒绝使用。它记录随机 owner、run、attempt 标签和创建凭据，finally
+重新核对凭据后仅删除自己创建的两个卷；create 应答丢失或清理错误仍使 lane
+失败。本机运行不认领、不删除这些缓存。未知新增卷（含匿名卷）继续报错。
+每个 core step 保存前后资源清单，以及用于归属的卷标识、标签/选项和容器标识、
+标签/挂载白名单字段；诊断工件不包含容器环境变量、命令或参数。
+
 `contract-benchmark.yml` 进入默认分支后，执行
 `gh workflow run contract-benchmark.yml --ref main`。它在同一提交调用两组相同
 的六条 lane：串行 matrix 限一槽，并行 matrix 最多三槽；两组均使用全新私有
