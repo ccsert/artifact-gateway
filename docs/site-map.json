@@ -53,6 +53,7 @@
       "title": { "en": "Protocols and formats", "zh-CN": "协议与仓库格式" },
       "items": [
         { "id": "protocol-compatibility", "title": { "en": "Protocol compatibility", "zh-CN": "协议兼容性" }, "en": "docs/protocol-compatibility.md", "zh-CN": "docs/protocol-compatibility.zh-CN.md" },
+        { "id": "oci-discovery", "title": { "en": "OCI Catalog and Referrers", "zh-CN": "OCI Catalog 与 Referrers" }, "en": "docs/oci-discovery.md", "zh-CN": "docs/oci-discovery.zh-CN.md" },
         { "id": "conan-native-publication", "title": { "en": "Conan 2 native publication", "zh-CN": "Conan 2 原生发布" }, "en": "docs/conan-native-publication.md", "zh-CN": "docs/conan-native-publication.zh-CN.md" },
         { "id": "pypi-yank", "title": { "en": "PyPI file yanking", "zh-CN": "PyPI 文件撤回" }, "en": "docs/pypi-yank.md", "zh-CN": "docs/pypi-yank.zh-CN.md" },
         { "id": "raw-http-ranges", "title": { "en": "Raw HTTP ranges", "zh-CN": "Raw HTTP Range" }, "en": "docs/raw-http-ranges.md", "zh-CN": "docs/raw-http-ranges.zh-CN.md" },

@@ -194,10 +194,10 @@ class ContractGateTests(unittest.TestCase):
         with patch.dict(os.environ, env), patch.object(ci.urllib.request, 'build_opener', return_value=Opener()):
             with self.assertRaises(ValueError):
                 ci.collect_job_logs(destination)
-        self.assertEqual(len(json.loads((destination / 'job-log-manifest.json').read_text())['missing']), 7)
+        self.assertEqual(len(json.loads((destination / 'job-log-manifest.json').read_text())['missing']), len(ci.LANES))
 
     def test_failed_artifact_or_log_collection_rejects_aggregate(self):
-        args = argparse.Namespace(native_only=False, needs_job=None, input=self.root,
+        args = argparse.Namespace(benchmark_only=False, needs_job=None, input=self.root,
                                   output=self.root / 'aggregate', prefix='contract')
         for artifact, logs in [('failure', 'success'), ('success', 'failure'),
                                ('skipped', 'success'), ('success', 'cancelled'), ('', '')]:
@@ -232,7 +232,7 @@ class ContractGateTests(unittest.TestCase):
 
         for mode in ('serial', 'parallel'):
             prefix = 'benchmark-' + mode
-            for index, lane in enumerate(ci.PLAN['nativeOrder']):
+            for index, lane in enumerate(ci.BENCHMARK_LANES):
                 directory = self.root / prefix / lane
                 shutil.copytree(self.root / lane, directory)
                 item = {**self.reports[lane], 'prefix': prefix, 'attempt': lane_attempt,
@@ -254,7 +254,7 @@ class ContractGateTests(unittest.TestCase):
             ci.write(self.root / (prefix + '-gate') / 'aggregate.json',
                      {'status': 'success', 'head': self.head, 'runId': '1234',
                       'attempt': gate_attempt, 'prefix': prefix,
-                      'lanes': sorted(ci.PLAN['nativeOrder']), 'completedAt': stamp(end + 10)})
+                      'lanes': sorted(ci.BENCHMARK_LANES), 'completedAt': stamp(end + 10)})
         return jobs
 
     def measured_benchmark(self, jobs):
@@ -292,7 +292,7 @@ class ContractGateTests(unittest.TestCase):
         jobs = self.benchmark_sample()
         for mode in ('serial', 'parallel'):
             args = argparse.Namespace(input=self.root, output=self.root / ('benchmark-' + mode + '-gate'),
-                                      prefix='benchmark-' + mode, needs_job=mode, native_only=True)
+                                      prefix='benchmark-' + mode, needs_job=mode, benchmark_only=True)
             env = {'GITHUB_ACTIONS': 'true', 'CI_CONTRACT_ARTIFACT_RESULT': 'success',
                    'GITHUB_SHA': self.head, 'GITHUB_RUN_ID': '1234', 'GITHUB_RUN_ATTEMPT': '2',
                    'CI_CONTRACT_NEEDS': json.dumps({mode: {'result': 'success'}})}
@@ -415,7 +415,10 @@ class ContractGateTests(unittest.TestCase):
         original = baseline.split('  contract-and-test:', 1)[1].split('  quality:', 1)[0]
         expected = re.findall(r'^\s+(?:run:\s+)?make ([a-z0-9-]+)\s*$', original, re.M)
         actual = [s['command'][1] for lane in ci.PLAN['lanes'].values() for s in lane['steps'] if s['command'][0] == 'make']
-        self.assertCountEqual(actual, expected)
+        # The new discovery gate extends the matrix without removing any of
+        # the original targets used by the fixed six-lane performance scope.
+        self.assertCountEqual(actual, [*expected, 'native-oci-discovery-e2e'])
+        self.assertEqual(ci.PLAN['lanes']['oci-discovery']['steps'][-1]['timeoutSeconds'], 900)
         self.assertEqual(ci.PLAN['lanes']['nuget']['steps'][-1]['timeoutSeconds'], 900)
         self.assertEqual(ci.PLAN['lanes']['six-format-auth']['steps'][-1]['timeoutSeconds'], 900)
         for lane in ('migration-clients', 'inventory', 'oci-migration', 'maven-oci-auth'):
@@ -439,6 +442,17 @@ class ContractGateTests(unittest.TestCase):
         self.assertNotIn('continue-on-error', workflow)
         mapped = re.search(r'lane: \[([^]]+)\]', native).group(1).split(', ')
         self.assertEqual(mapped, ci.PLAN['nativeOrder'])
+
+    def test_new_discovery_lane_is_required_without_changing_benchmark_scope(self):
+        self.assertIn('oci-discovery', ci.LANES)
+        self.assertIn('oci-discovery', ci.PLAN['nativeOrder'])
+        self.assertNotIn('oci-discovery', ci.BENCHMARK_LANES)
+        workflow = (ROOT / '.github/workflows/contract-benchmark.yml').read_text()
+        matrices = re.findall(r'lane: \[([^]]+)\]', workflow)
+        self.assertEqual(len(matrices), 2)
+        for matrix in matrices:
+            self.assertEqual(matrix.split(', '), list(ci.BENCHMARK_LANES))
+        self.assertEqual(workflow.count('--benchmark-only'), 2)
 
 
 if __name__ == '__main__':

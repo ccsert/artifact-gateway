@@ -43,7 +43,7 @@ jobs:
         env:
           CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}
           CI_CONTRACT_ARTIFACT_RESULT: ${{ steps.lane-artifacts.outcome }}
-        run: python3 scripts/ci-contract.py aggregate --native-only --prefix benchmark-serial --needs-job serial --input "$RUNNER_TEMP/benchmark-input" --output "$RUNNER_TEMP/benchmark-gate"
+        run: python3 scripts/ci-contract.py aggregate --benchmark-only --prefix benchmark-serial --needs-job serial --input "$RUNNER_TEMP/benchmark-input" --output "$RUNNER_TEMP/benchmark-gate"
       - name: Preserve aggregate on all outcomes
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -84,7 +84,7 @@ jobs:
         env:
           CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}
           CI_CONTRACT_ARTIFACT_RESULT: ${{ steps.lane-artifacts.outcome }}
-        run: python3 scripts/ci-contract.py aggregate --native-only --prefix benchmark-parallel --needs-job parallel --input "$RUNNER_TEMP/benchmark-input" --output "$RUNNER_TEMP/benchmark-gate"
+        run: python3 scripts/ci-contract.py aggregate --benchmark-only --prefix benchmark-parallel --needs-job parallel --input "$RUNNER_TEMP/benchmark-input" --output "$RUNNER_TEMP/benchmark-gate"
       - name: Preserve aggregate on all outcomes
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

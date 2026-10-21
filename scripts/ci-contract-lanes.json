@@ -7,7 +7,8 @@
     "nuget",
     "oci-migration",
     "maven-oci-auth",
-    "six-format-auth"
+    "six-format-auth",
+    "oci-discovery"
   ],
   "lanes": {
     "core": {
@@ -364,6 +365,39 @@
       "rawDirectories": [
         "output/private-upstream-formats-e2e"
       ]
+    },
+    "oci-discovery": {
+      "timeoutMinutes": 15,
+      "steps": [
+        {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
+        {
+          "name": "native-oci-discovery-e2e",
+          "command": [
+            "make",
+            "native-oci-discovery-e2e"
+          ],
+          "timeoutSeconds": 900
+        }
+      ],
+      "rawDirectories": [
+        "output/native-oci-discovery-e2e"
+      ]
     }
-  }
+  },
+  "benchmarkOrder": [
+    "migration-clients",
+    "inventory",
+    "nuget",
+    "oci-migration",
+    "maven-oci-auth",
+    "six-format-auth"
+  ]
 }

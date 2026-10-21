@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- OCI Hosted、Proxy 与 Group 新增经授权的 [Catalog 与 OCI 1.1 Referrers 发现](docs/oci-discovery.zh-CN.md)（#315、#316）。覆盖报告区分完整、部分和不支持的源；绑定主体的不可变分页与持久来源绑定防止权限变化、Group 重排后替换内容。Referrers 校验原始 Manifest、annotations 和完整 Blob 闭包，匿名与认证身份的 owner 独立，错误凭据明确拒绝。固定官方 ORAS/Docker 验收作为第七条原生必需门禁；签名信任与 referrers-tag fallback 尚不支持。
+
 - 默认关闭的 [NuGet 预览](docs/nuget-proxy-group-preview.zh-CN.md) 新增只读 Proxy 与有序 Group（#288）：V3 资源发现、按源版本隔离的可验证缓存、包 ID/版本持久来源绑定、私有上游凭据及完整资源授权。上游 unlisted 精确版本仍可读取，搜索不展示它；被过滤的结果不能建立 Group 来源绑定。正式准入和本地 Hosted 治理仍由 #289 跟踪。
 
 - 受保护的 Maven Proxy/Group 新增固定官方 Gradle 9.3.1 验证（#286），覆盖三层依赖闭包、管理 API 配置的 Basic/Bearer 源凭据、每轮空客户端 HOME、原始完整 JAR/POM 身份校验、凭据轮换/清除及物理断源后的读取。

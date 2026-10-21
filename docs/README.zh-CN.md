@@ -49,6 +49,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 ## 协议与仓库格式
 
 - [协议兼容性](protocol-compatibility.zh-CN.md) — 各格式已实现行为和明确限制。
+- [OCI Catalog 与 Referrers](oci-discovery.zh-CN.md) — 授权枚举、覆盖范围、完整闭包与稳定来源绑定。
 - [Conan 2 原生发布](conan-native-publication.zh-CN.md) — canonical remote, manifest visibility and client acceptance.
 - [PyPI 文件撤回](pypi-yank.zh-CN.md) — 文件选择、原子管理、pip 与恢复证据。
 - [Raw HTTP Range](raw-http-ranges.zh-CN.md) — 有界多段读取与不可变 validator。
@@ -62,7 +63,9 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [APT Hosted 路线图](apt-hosted-roadmap.zh-CN.md) — H1-H4 有序验收门禁。
 - [Cargo 客户端配置](cargo-usage.zh-CN.md) — Hosted、Proxy、Group 的仓库配置与命令。
 - [Cargo 仓库研究](cargo-repository-research.zh-CN.md) — Sparse Registry 设计决策与 C0-C4 实施记录。
-- [NuGet 路线图](nuget-roadmap.zh-CN.md) — 已延期的协议与生命周期计划。
+- [NuGet Hosted 预览](nuget-hosted-preview.zh-CN.md) — 默认关闭的原生发布与可验证恢复。
+- [NuGet Proxy 与 Group 预览](nuget-proxy-group-preview.zh-CN.md) — V3 源发现、持久来源绑定和私有可信缓存。
+- [NuGet 路线图](nuget-roadmap.zh-CN.md) — 预览验收与剩余生命周期、格式准入工作。
 - [旧 Group 迁移](legacy-group-migration.zh-CN.md) — 兼容行为与迁移指引。
 - [Gitea 后端参考](gitea-backend-reference.zh-CN.md) — Preflight 和证据闭环设计参考。
 

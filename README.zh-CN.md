@@ -64,7 +64,11 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 | Cargo | ✓ | ✓ | ✓ | Sparse Registry；Hosted 发布与 yank、可信 Proxy 缓存、有序 Group owner；[客户端配置](docs/cargo-usage.zh-CN.md) |
 | APT | 仅预览 | ✓ | ✓ | 生产密钥托管门禁通过前不公开声明 Hosted 能力 |
 
-NuGet 仍属于路线图工作。准确且受测试约束的说明以
+NuGet 提供默认关闭的 [Hosted](docs/nuget-hosted-preview.zh-CN.md) 与
+[Proxy/Group](docs/nuget-proxy-group-preview.zh-CN.md) 预览；正式格式准入与本地
+Hosted 治理继续由 #289 推进。OCI 支持经授权的
+[Catalog 与 Referrers 发现](docs/oci-discovery.zh-CN.md)，显式报告上游覆盖范围并
+校验完整内容闭包。准确且受测试约束的说明以
 [协议兼容性基线](docs/protocol-compatibility.zh-CN.md)为准。
 
 Maven Hosted 默认采用标准直接发布，普通 `mvn deploy` 和 Gradle `publish`

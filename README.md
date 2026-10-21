@@ -68,7 +68,11 @@ byte plane, and Gateway connects the two without adding a middleware fleet.
 | Cargo | ✓ | ✓ | ✓ | Sparse registry; Hosted publish/yank, verified Proxy cache, ordered Group ownership; [client setup](docs/cargo-usage.md) |
 | APT | Preview only | ✓ | ✓ | Hosted signing remains unadvertised until production custody gates pass |
 
-NuGet remains roadmap work. The detailed, test-bound compatibility statement lives in the
+NuGet offers default-off [Hosted](docs/nuget-hosted-preview.md) and
+[Proxy/Group](docs/nuget-proxy-group-preview.md) previews; formal format admission
+and local Hosted governance remain under #289. OCI supports authorized
+[Catalog and Referrers discovery](docs/oci-discovery.md), with explicit upstream
+coverage and verified content closures. The detailed, test-bound statement lives in the
 [protocol compatibility baseline](docs/protocol-compatibility.md).
 
 Maven Hosted defaults to standard direct publication, so ordinary

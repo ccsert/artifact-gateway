@@ -21,6 +21,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent.parent
 PLAN = json.loads((ROOT / 'scripts/ci-contract-lanes.json').read_text())
 LANES = tuple(PLAN['lanes'])
+BENCHMARK_LANES = tuple(PLAN['benchmarkOrder'])
 RAW_DIRS = sorted({p for lane in PLAN['lanes'].values() for p in lane['rawDirectories']})
 
 
@@ -412,11 +413,11 @@ def aggregate(args):
     if os.environ.get('GITHUB_ACTIONS') == 'true':
         if os.environ.get('CI_CONTRACT_ARTIFACT_RESULT') != 'success':
             raise ValueError('lane artifact download did not succeed')
-        if not args.native_only and os.environ.get('CI_CONTRACT_JOB_LOG_RESULT') != 'success':
+        if not args.benchmark_only and os.environ.get('CI_CONTRACT_JOB_LOG_RESULT') != 'success':
             raise ValueError('complete job log collection did not succeed')
     required_jobs = [args.needs_job] if args.needs_job else ['contract-core', 'contract-native']
     validate_needs(json.loads(os.environ['CI_CONTRACT_NEEDS']), required_jobs)
-    expected = PLAN['nativeOrder'] if args.native_only else LANES
+    expected = BENCHMARK_LANES if args.benchmark_only else LANES
     found = validate_evidence(args.input, args.prefix, expected, os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     write(args.output / 'aggregate.json', {'status': 'success', 'head': os.environ['GITHUB_SHA'],
                                         'runId': os.environ['GITHUB_RUN_ID'],
@@ -444,7 +445,7 @@ def validate_benchmark_aggregates(root, head, run, attempt):
             candidates[observed] = item
         item = candidates.get(int(attempt))
         if (not item or item.get('status') != 'success' or item.get('head') != head
-                or item.get('runId') != run or item.get('lanes') != sorted(PLAN['nativeOrder'])):
+                or item.get('runId') != run or item.get('lanes') != sorted(BENCHMARK_LANES)):
             raise ValueError('benchmark aggregate must succeed in the current execution attempt: ' + prefix)
         found[prefix] = item
     return found
@@ -454,8 +455,8 @@ def benchmark(args):
     if os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('CI_CONTRACT_ARTIFACT_RESULT') != 'success':
         raise ValueError('benchmark artifact download did not succeed')
     validate_needs(json.loads(os.environ['CI_CONTRACT_NEEDS']), ['serial-gate', 'parallel-gate'])
-    serial = validate_evidence(args.input, 'benchmark-serial', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
-    parallel = validate_evidence(args.input, 'benchmark-parallel', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
+    serial = validate_evidence(args.input, 'benchmark-serial', BENCHMARK_LANES, os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
+    parallel = validate_evidence(args.input, 'benchmark-parallel', BENCHMARK_LANES, os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     reports = [*serial.values(), *parallel.values()]
     # GitHub gives retained successful jobs new IDs/run_attempt values while
     # preserving their old timestamps. Artifact provenance is the execution
@@ -471,12 +472,12 @@ def benchmark(args):
                     r['runner']['imageVersion']) for r in reports}
     if len(constraints) != 1:
         raise ValueError('benchmark runner constraints differ')
-    jobs = collect_job_logs(args.output, ('benchmark-serial', 'benchmark-parallel'), PLAN['nativeOrder'])
+    jobs = collect_job_logs(args.output, ('benchmark-serial', 'benchmark-parallel'), BENCHMARK_LANES)
     results = {}
     for mode, prefix in [('serial', 'benchmark-serial'), ('parallel', 'benchmark-parallel')]:
-        lanes = [j for j in jobs if any(j['name'].endswith(prefix + '/' + lane) for lane in PLAN['nativeOrder'])]
+        lanes = [j for j in jobs if any(j['name'].endswith(prefix + '/' + lane) for lane in BENCHMARK_LANES)]
         gates = [j for j in jobs if j['name'] == mode + '-gate']
-        if len(lanes) != 6 or len(gates) != 1 or any(j['conclusion'] != 'success' for j in [*lanes, *gates]):
+        if len(lanes) != len(BENCHMARK_LANES) or len(gates) != 1 or any(j['conclusion'] != 'success' for j in [*lanes, *gates]):
             raise ValueError('missing successful benchmark jobs: ' + mode)
         start = min(timestamp(j['started_at']) for j in lanes)
         end = timestamp(gates[0]['completed_at'])
@@ -519,7 +520,7 @@ def main():
     agg.add_argument('--input', required=True, type=Path)
     agg.add_argument('--output', required=True, type=Path)
     agg.add_argument('--prefix', default='contract', choices=['contract', 'benchmark-serial', 'benchmark-parallel'])
-    agg.add_argument('--native-only', action='store_true')
+    agg.add_argument('--benchmark-only', action='store_true')
     agg.add_argument('--needs-job', choices=['serial', 'parallel'])
     logs = commands.add_parser('collect-job-logs')
     logs.add_argument('--output', required=True, type=Path)

@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- OCI Hosted, Proxy and Group now support authorized [Catalog and OCI 1.1 Referrers discovery](docs/oci-discovery.md) (#315, #316). Coverage reports distinguish complete, partial and unsupported sources; immutable principal-bound pages and persistent source bindings prevent permission changes or Group reordering from substituting content. Referrers validate original manifests, annotations and complete blob closures. Anonymous and authenticated identities have separate owners, and invalid credentials fail closed. Official ORAS/Docker acceptance runs as a required seventh native lane; signature trust and referrers-tag fallback remain unsupported.
+
 - The default-off [NuGet preview](docs/nuget-proxy-group-preview.md) now supports read-only Proxy and ordered Group (#288): V3 resource discovery, verified source-versioned caches, persistent package/version authorities, private upstream credentials and full-resource authorization. Upstream-unlisted exact versions remain readable while search omits them; filtered results cannot establish a Group authority. Formal admission and local Hosted governance remain under #289.
 
 - Protected Maven Proxy/Group reads now have pinned official Gradle 9.3.1 coverage (#286), including a three-level dependency closure, API-configured Basic/Bearer source credentials, per-invocation empty client homes, complete original JAR/POM identity checks, credential rotation/removal and reads after physical source shutdown.
