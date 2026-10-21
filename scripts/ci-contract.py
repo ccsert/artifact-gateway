@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timezone
 import urllib.error
 import urllib.request
+import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
 PLAN = json.loads((ROOT / 'scripts/ci-contract-lanes.json').read_text())
@@ -75,6 +76,119 @@ def docker_inventory():
             raise RuntimeError('Docker inventory unavailable: ' + kind)
         inventory[kind] = sorted(result.stdout.split())
     return inventory
+
+
+CORE_GO_CACHE_VOLUMES = ('artifact-gateway-go-mod', 'artifact-gateway-go-build')
+VOLUME_RECEIPT_FIELDS = ('Name', 'Driver', 'Scope', 'CreatedAt', 'Labels', 'Options')
+
+
+def docker_inspect(kind, name):
+    result = subprocess.run(['docker', kind, 'inspect', name], capture_output=True,
+                            text=True, timeout=30)
+    if result.returncode:
+        raise RuntimeError('Docker inspection unavailable: ' + kind + ' ' + name)
+    values = json.loads(result.stdout)
+    if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], dict):
+        raise RuntimeError('invalid Docker inspection: ' + kind + ' ' + name)
+    return values[0]
+
+
+def docker_step_snapshot(path):
+    """Persist attribution fields only; container environment/commands are private."""
+    snapshot = {'recordedAt': now(), 'inventory': {}, 'volumes': [], 'containers': []}
+    try:
+        snapshot['inventory'] = docker_inventory()
+        for name in snapshot['inventory']['volumes']:
+            item = docker_inspect('volume', name)
+            snapshot['volumes'].append({key: item.get(key) for key in VOLUME_RECEIPT_FIELDS})
+        for identity in snapshot['inventory']['containers']:
+            item = docker_inspect('container', identity)
+            snapshot['containers'].append({
+                'ID': item.get('Id'), 'Name': item.get('Name'), 'Image': item.get('Image'),
+                'Config': {'Labels': item.get('Config', {}).get('Labels')},
+                'Mounts': [{key: mount.get(key) for key in ('Type', 'Name', 'Destination', 'Driver', 'RW')}
+                           for mount in item.get('Mounts', [])]})
+    except Exception as error:
+        snapshot['error'] = type(error).__name__
+        raise
+    finally:
+        write(path, snapshot)
+
+
+class CoreGoCacheVolumes:
+    """Own only two caches absent before this dedicated core lane started."""
+    def __init__(self, output, run_id, attempt):
+        self.path = output / 'docker-cache-claims.json'
+        self.labels = {'artifact-gateway.ci-owner': uuid.uuid4().hex,
+                       'artifact-gateway.ci-run': run_id,
+                       'artifact-gateway.ci-attempt': attempt,
+                       'artifact-gateway.ci-lane': 'core'}
+        self.names = CORE_GO_CACHE_VOLUMES
+        self.state = {'schemaVersion': 1, 'labels': self.labels, 'attempted': [],
+                      'receipts': {}, 'removed': [], 'remaining': [], 'errors': []}
+        write(self.path, self.state)
+
+    def error(self, stage, name, error):
+        self.state['errors'].append({'stage': stage, 'name': name, 'error': str(error)})
+        write(self.path, self.state)
+
+    def receipt(self, name):
+        item = docker_inspect('volume', name)
+        if (item.get('Name') != name or item.get('Driver') != 'local'
+                or item.get('Scope') != 'local' or not item.get('CreatedAt')
+                or item.get('Labels') != self.labels or item.get('Options') not in (None, {})):
+            raise RuntimeError('core cache ownership or creation receipt changed: ' + name)
+        return {key: item.get(key) for key in VOLUME_RECEIPT_FIELDS}
+
+    def claim(self, before):
+        existing = sorted(set(self.names) & set(before['volumes']))
+        if existing:
+            error = RuntimeError('refusing pre-existing core Go caches: ' + ', '.join(existing))
+            self.error('claim', ', '.join(existing), error)
+            raise error
+        for name in self.names:
+            self.state['attempted'].append(name)
+            write(self.path, self.state)
+            command = ['docker', 'volume', 'create', '--driver', 'local']
+            for key, value in self.labels.items():
+                command.extend(['--label', key + '=' + value])
+            command.append(name)
+            try:
+                result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+                if result.returncode or result.stdout.strip() != name:
+                    raise RuntimeError('core cache create acknowledgement failed: ' + name)
+                self.state['receipts'][name] = self.receipt(name)
+                write(self.path, self.state)
+            except Exception as error:
+                # A lost CLI reply can follow a successful daemon-side create.
+                # Cleanup re-inspects this exact attempted name with our random owner.
+                self.error('claim', name, error)
+                raise
+
+    def cleanup(self):
+        for name in reversed(self.state['attempted']):
+            try:
+                receipt = self.receipt(name)
+                original = self.state['receipts'].get(name)
+                if original is not None and original != receipt:
+                    raise RuntimeError('core cache creation receipt changed: ' + name)
+                self.state['receipts'][name] = receipt
+                write(self.path, self.state)
+                result = subprocess.run(['docker', 'volume', 'rm', name], capture_output=True,
+                                        text=True, timeout=30)
+                if result.returncode or result.stdout.strip() != name:
+                    raise RuntimeError('owned core cache removal failed: ' + name)
+                observed = subprocess.run(['docker', 'volume', 'ls', '-q'], capture_output=True,
+                                          text=True, timeout=30)
+                if observed.returncode or name in observed.stdout.split():
+                    raise RuntimeError('owned core cache removal was not verified: ' + name)
+                self.state['removed'].append(name)
+            except Exception as error:
+                self.state['remaining'].append(name)
+                self.error('cleanup', name, error)
+            finally:
+                write(self.path, self.state)
+        return self.state
 
 
 TERMINATION_GRACE_SECONDS = 45
@@ -221,7 +335,24 @@ def run_lane(args):
     env = dict(os.environ, TMPDIR=str(work))
     if args.cold_cache:
         env.update(GOCACHE=str(work / 'go-build'), GOMODCACHE=str(work / 'go-mod'))
+    dedicated_core = dedicated and args.lane == 'core' and not args.local
+    caches = None
+    def stop_lane(signum, _frame):
+        report['status'] = 'failure'
+        report['cancelledBySignal'] = signum
+        raise SystemExit(128 + signum)
+
+    def stop_during_cleanup(signum, _frame):
+        # Finish bounded cleanup even when cancellation arrives between targets.
+        report['status'] = 'failure'
+        report['cancelledBySignal'] = signum
+
+    previous_lane_signals = {sig: signal.signal(sig, stop_lane)
+                             for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
+        if dedicated_core:
+            caches = CoreGoCacheVolumes(output, report['runId'], report['attempt'])
+            caches.claim(before_docker)
         for index, step in enumerate(lane['steps']):
             command = step['command']
             if args.local and command == ['make', 'openapi-check']:
@@ -232,42 +363,73 @@ def run_lane(args):
                 env.update(MAVEN_ARGS='--global-settings ' + str(settings),
                            MAVEN_POM_COMPAT_UPSTREAM='https://maven-central.storage-download.googleapis.com/maven2')
             print('Contract lane ' + args.lane + ': ' + step['name'], flush=True)
-            result = run_command(command, output / 'logs' / f'{index:02d}.log', env,
-                                 step['timeoutSeconds'])
-            result['name'] = step['name']
-            result['plannedCommand'] = step['command']
-            report['steps'].append(result)
+            if dedicated_core:
+                docker_step_snapshot(output / 'docker' / f'{index:02d}-before.json')
+            try:
+                result = run_command(command, output / 'logs' / f'{index:02d}.log', env,
+                                     step['timeoutSeconds'])
+                result['name'] = step['name']
+                result['plannedCommand'] = step['command']
+                report['steps'].append(result)
+            finally:
+                if dedicated_core:
+                    docker_step_snapshot(output / 'docker' / f'{index:02d}-after.json')
             if result['status'] != 'success' and not args.keep_going:
                 break
         if len(report['steps']) == len(lane['steps']) and all(s['status'] == 'success' for s in report['steps']):
             report['status'] = 'success'
     finally:
-        for directory in lane['rawDirectories']:
-            for path in (ROOT / directory).glob('*'):
-                if str(path) not in before_raw:
-                    target = output / 'raw' / Path(directory).name / path.name
-                    if path.is_dir():
-                        shutil.copytree(path, target)
-                    else:
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(path, target)
-        shutil.rmtree(work)
-        cleanup = {'ownedTemporaryDirectoryRemoved': not work.exists(),
-                   'dockerAuditScope': 'dedicated GitHub runner' if dedicated else 'fixture-owned reports only'}
-        if dedicated:
-            after = docker_inventory()
-            cleanup['before'] = before_docker
-            cleanup['remainingNewResources'] = {k: sorted(set(v) - set(before_docker[k])) for k, v in after.items()}
-            if any(cleanup['remainingNewResources'].values()):
+        for sig in previous_lane_signals:
+            signal.signal(sig, stop_during_cleanup)
+        try:
+            cleanup = {'dockerAuditScope': 'dedicated GitHub runner' if dedicated else 'fixture-owned reports only',
+                       'errors': []}
+            try:
+                for directory in lane['rawDirectories']:
+                    for path in (ROOT / directory).glob('*'):
+                        if str(path) not in before_raw:
+                            target = output / 'raw' / Path(directory).name / path.name
+                            if path.is_dir():
+                                shutil.copytree(path, target)
+                            else:
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(path, target)
+            except Exception as error:
+                cleanup['errors'].append({'stage': 'raw-evidence', 'error': type(error).__name__})
+            try:
+                shutil.rmtree(work)
+            except Exception as error:
+                cleanup['errors'].append({'stage': 'temporary-directory', 'error': type(error).__name__})
+            cleanup['ownedTemporaryDirectoryRemoved'] = not work.exists()
+            if caches is not None:
+                try:
+                    cleanup['coreGoCaches'] = caches.cleanup()
+                    if cleanup['coreGoCaches']['errors'] or cleanup['coreGoCaches']['remaining']:
+                        report['status'] = 'failure'
+                except Exception as error:
+                    cleanup['errors'].append({'stage': 'core-go-caches', 'error': type(error).__name__})
+            if dedicated:
+                try:
+                    after = docker_inventory()
+                    cleanup['before'] = before_docker
+                    cleanup['remainingNewResources'] = {k: sorted(set(v) - set(before_docker[k])) for k, v in after.items()}
+                    if any(cleanup['remainingNewResources'].values()):
+                        report['status'] = 'failure'
+                except Exception as error:
+                    cleanup['errors'].append({'stage': 'docker-inventory', 'error': type(error).__name__})
+            if cleanup['errors'] or not cleanup['ownedTemporaryDirectoryRemoved']:
                 report['status'] = 'failure'
-        report['cleanup'] = cleanup
-        report['cases'] = case_summary(output)
-        if business_source()['businessDigest'] != source['businessDigest']:
-            report['status'] = 'failure'
-            report['sourceChangedDuringExecution'] = True
-        report['completedAt'] = now()
-        report['filesSHA256'] = {str(p.relative_to(output)): sha(p) for p in output.rglob('*') if p.is_file() and p.name != 'report.json'}
-        write(output / 'report.json', report)
+            report['cleanup'] = cleanup
+            report['cases'] = case_summary(output)
+            if business_source()['businessDigest'] != source['businessDigest']:
+                report['status'] = 'failure'
+                report['sourceChangedDuringExecution'] = True
+            report['completedAt'] = now()
+            report['filesSHA256'] = {str(p.relative_to(output)): sha(p) for p in output.rglob('*') if p.is_file() and p.name != 'report.json'}
+            write(output / 'report.json', report)
+        finally:
+            for sig, handler in previous_lane_signals.items():
+                signal.signal(sig, handler)
     return 0 if report['status'] == 'success' else 1
 
 
