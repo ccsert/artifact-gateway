@@ -410,6 +410,48 @@ class ContractGateTests(unittest.TestCase):
                                 proc.kill()
                                 proc.communicate(timeout=3)
 
+    def test_owned_zombie_group_does_not_block_cleanup(self):
+        proc = subprocess.Popen([sys.executable, '-B', '-c', 'pass'], start_new_session=True)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                state = subprocess.check_output(['ps', '-p', str(proc.pid), '-o', 'stat='], text=True).strip()
+                if state.startswith('Z'):
+                    break
+                time.sleep(.01)
+            self.assertTrue(state.startswith('Z'), 'owned child did not reach zombie state: ' + state)
+            self.assertEqual(ci.live_group_members(proc.pid), [])
+            for sig in (0, signal.SIGTERM, signal.SIGKILL):
+                ci.signal_group(proc.pid, sig)
+        finally:
+            proc.wait(timeout=5)
+
+    def test_kernel_permission_error_for_empty_group_settles(self):
+        observed = subprocess.CompletedProcess([], 0, stdout='123 456 Z\n124 456 X\n')
+        with patch.object(ci.os, 'killpg', side_effect=PermissionError('owned zombie group')):
+            with patch.object(ci.subprocess, 'run', return_value=observed):
+                self.assertEqual(ci.live_group_members(456), [])
+                for sig in (0, signal.SIGTERM, signal.SIGKILL):
+                    ci.signal_group(456, sig)
+
+    def test_kernel_permission_error_with_live_group_fails_cleanup(self):
+        observed = subprocess.CompletedProcess([], 0, stdout='123 456 S\n124 456 Z\n')
+        with patch.object(ci.os, 'killpg', side_effect=PermissionError('live group denied')):
+            with patch.object(ci.subprocess, 'run', return_value=observed):
+                self.assertEqual(ci.live_group_members(456), [123])
+                for sig in (signal.SIGTERM, signal.SIGKILL):
+                    with self.assertRaises(PermissionError):
+                        ci.signal_group(456, sig)
+
+    def test_failed_inventory_cannot_prove_empty_group(self):
+        failure = subprocess.CalledProcessError(1, ['ps'])
+        with patch.object(ci.os, 'killpg', side_effect=PermissionError('unverified group')):
+            with patch.object(ci.subprocess, 'run', side_effect=failure):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    ci.live_group_members(456)
+                with self.assertRaises(subprocess.CalledProcessError):
+                    ci.signal_group(456, signal.SIGKILL)
+
     def test_mapping_preserves_original_make_targets_and_timeouts(self):
         baseline = subprocess.check_output(['git', 'show', ci.PLAN['baseline'] + ':.github/workflows/ci.yml'], cwd=ROOT, text=True)
         original = baseline.split('  contract-and-test:', 1)[1].split('  quality:', 1)[0]

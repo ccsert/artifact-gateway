@@ -83,10 +83,6 @@ TERMINATION_GRACE_SECONDS = 45
 
 def live_group_members(pgid):
     """Only inspect the group created by this supervisor; zombies cannot run."""
-    try:
-        os.killpg(pgid, 0)
-    except ProcessLookupError:
-        return []
     result = subprocess.run(['ps', '-A', '-o', 'pid=,pgid=,stat='],
                             capture_output=True, text=True, check=True, timeout=5)
     members = []
@@ -102,6 +98,11 @@ def signal_group(pgid, sig):
         os.killpg(pgid, sig)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        # Darwin returns EPERM for groups containing only zombies. A denied
+        # signal is harmless only when a fresh inventory proves none can run.
+        if live_group_members(pgid):
+            raise
 
 
 def run_command(command, log, env, timeout=None):
