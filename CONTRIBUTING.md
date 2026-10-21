@@ -245,7 +245,12 @@ Each mode has its own strict aggregate. The final report reads completed job
 metadata and includes checkout/setup, execution, artifact upload, cleanup,
 aggregate duration, queue time and actual allocated concurrency. It rejects
 different business-file hashes, cache conditions, runner architecture or
-CPU/memory class. At least two observed concurrent runners and a 25% reduction
+CPU/memory class. All lane and aggregate artifacts must originate from the
+current run attempt; retained successful jobs in a targeted rerun cannot prove
+performance because the rerun waiting interval is not execution time. Rerun all
+jobs to collect a new comparable sample. Normal correctness aggregates may
+still reuse earlier successful artifacts with their original provenance.
+At least two observed concurrent runners and a 25% reduction
 in the six-lane critical path are required for a successful performance proof.
 No comparable sample or one observed slot leaves performance unproven; normal
 contract correctness does not imply a speedup. The old full contract wall time

@@ -419,12 +419,35 @@ def aggregate(args):
     expected = PLAN['nativeOrder'] if args.native_only else LANES
     found = validate_evidence(args.input, args.prefix, expected, os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     write(args.output / 'aggregate.json', {'status': 'success', 'head': os.environ['GITHUB_SHA'],
+                                        'runId': os.environ['GITHUB_RUN_ID'],
+                                        'attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+                                        'prefix': args.prefix,
                                         'lanes': sorted(found), 'completedAt': now()})
     return 0
 
 
 def timestamp(value):
     return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
+
+
+def validate_benchmark_aggregates(root, head, run, attempt):
+    found = {}
+    for prefix in ('benchmark-serial', 'benchmark-parallel'):
+        candidates = {}
+        for path in root.rglob('aggregate.json'):
+            item = json.loads(path.read_text())
+            if item.get('prefix') != prefix:
+                continue
+            observed = int(item['attempt'])
+            if observed < 1 or observed > int(attempt) or observed in candidates:
+                raise ValueError('invalid benchmark aggregate attempt: ' + prefix)
+            candidates[observed] = item
+        item = candidates.get(int(attempt))
+        if (not item or item.get('status') != 'success' or item.get('head') != head
+                or item.get('runId') != run or item.get('lanes') != sorted(PLAN['nativeOrder'])):
+            raise ValueError('benchmark aggregate must succeed in the current execution attempt: ' + prefix)
+        found[prefix] = item
+    return found
 
 
 def benchmark(args):
@@ -434,6 +457,13 @@ def benchmark(args):
     serial = validate_evidence(args.input, 'benchmark-serial', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     parallel = validate_evidence(args.input, 'benchmark-parallel', PLAN['nativeOrder'], os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ATTEMPT'])
     reports = [*serial.values(), *parallel.values()]
+    # GitHub gives retained successful jobs new IDs/run_attempt values while
+    # preserving their old timestamps. Artifact provenance is the execution
+    # authority; targeted reruns remain valid for correctness, not performance.
+    if any(int(r['attempt']) != int(os.environ['GITHUB_RUN_ATTEMPT']) for r in reports):
+        raise ValueError('benchmark lanes must use the current execution attempt; rerun all jobs for a comparable sample')
+    aggregates = validate_benchmark_aggregates(args.input, os.environ['GITHUB_SHA'],
+                                               os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT'])
     if not all(r['coldCache'] for r in reports) or len({r['businessDigest'] for r in reports}) != 1:
         raise ValueError('benchmark business inputs or cache conditions differ')
     constraints = {(r['runner']['os'], r['runner']['architecture'], r['runner']['cpuCount'],
@@ -466,6 +496,7 @@ def benchmark(args):
     passed = results['parallel']['peakAllocatedRunners'] >= 2 and improvement >= 0.25
     write(args.output / 'benchmark.json', {'status': 'success' if passed else 'performance_unproven',
           'businessDigest': reports[0]['businessDigest'], 'coldCache': True,
+          'executionAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'aggregateEvidence': aggregates,
           'runnerConstraints': list(next(iter(constraints))), 'modes': results,
           'improvementFraction': improvement, 'thresholdFraction': 0.25,
           'note': 'Critical paths end after the corresponding aggregate job, including its artifact upload. Performance auditing is separate from the contract gate.'})

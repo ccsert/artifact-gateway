@@ -222,6 +222,96 @@ class ContractGateTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'benchmark artifact download did not succeed'):
                     ci.benchmark(argparse.Namespace())
 
+    def benchmark_sample(self, lane_attempt='2', gate_attempt='2', parallel_span=200, serial_gate_delay=0):
+        import shutil
+        jobs = []
+        origin = 1770000000
+
+        def stamp(offset):
+            return ci.datetime.fromtimestamp(origin + offset, ci.timezone.utc).isoformat()
+
+        for mode in ('serial', 'parallel'):
+            prefix = 'benchmark-' + mode
+            for index, lane in enumerate(ci.PLAN['nativeOrder']):
+                directory = self.root / prefix / lane
+                shutil.copytree(self.root / lane, directory)
+                item = {**self.reports[lane], 'prefix': prefix, 'attempt': lane_attempt,
+                        'runId': '1234', 'coldCache': True,
+                        'runner': {'os': 'Linux', 'architecture': 'x86_64', 'cpuCount': 4,
+                                   'memoryBytes': 16 * 1024**3, 'imageOS': 'ubuntu24',
+                                   'imageVersion': 'same-reviewed-image'}}
+                ci.write(directory / 'report.json', item)
+                start = index * 100 if mode == 'serial' else (index // 3) * parallel_span / 2
+                duration = 100 if mode == 'serial' else parallel_span / 2
+                jobs.append({'id': len(jobs) + 1, 'name': 'matrix / ' + prefix + '/' + lane,
+                             'status': 'completed', 'conclusion': 'success', 'run_attempt': 2,
+                             'created_at': stamp(0), 'started_at': stamp(start),
+                             'completed_at': stamp(start + duration)})
+            end = 600 + serial_gate_delay if mode == 'serial' else parallel_span
+            jobs.append({'id': len(jobs) + 1, 'name': mode + '-gate', 'status': 'completed',
+                         'conclusion': 'success', 'run_attempt': 2, 'created_at': stamp(end),
+                         'started_at': stamp(end), 'completed_at': stamp(end + 20)})
+            ci.write(self.root / (prefix + '-gate') / 'aggregate.json',
+                     {'status': 'success', 'head': self.head, 'runId': '1234',
+                      'attempt': gate_attempt, 'prefix': prefix,
+                      'lanes': sorted(ci.PLAN['nativeOrder']), 'completedAt': stamp(end + 10)})
+        return jobs
+
+    def measured_benchmark(self, jobs):
+        env = {'GITHUB_ACTIONS': 'true', 'CI_CONTRACT_ARTIFACT_RESULT': 'success',
+               'GITHUB_SHA': self.head, 'GITHUB_RUN_ID': '1234', 'GITHUB_RUN_ATTEMPT': '2',
+               'CI_CONTRACT_NEEDS': json.dumps({name: {'result': 'success'}
+                                               for name in ('serial-gate', 'parallel-gate')})}
+        args = argparse.Namespace(input=self.root, output=self.root / 'measurement')
+        with patch.dict(os.environ, env), patch.object(ci, 'collect_job_logs', return_value=jobs):
+            return ci.benchmark(args)
+
+    def test_benchmark_rejects_retained_lane_timestamps_after_gate_rerun(self):
+        # GitHub clones retained successful jobs with the new run_attempt and
+        # job IDs, while keeping their original execution timestamps.
+        jobs = self.benchmark_sample(lane_attempt='1', parallel_span=600, serial_gate_delay=600)
+        with self.assertRaisesRegex(ValueError, 'current execution attempt'):
+            self.measured_benchmark(jobs)
+
+    def test_benchmark_rejects_retained_aggregate_after_lane_rerun(self):
+        jobs = self.benchmark_sample(gate_attempt='1', parallel_span=600, serial_gate_delay=600)
+        with self.assertRaisesRegex(ValueError, 'benchmark aggregate'):
+            self.measured_benchmark(jobs)
+
+    def test_benchmark_checks_original_aggregate_identity_and_success(self):
+        jobs = self.benchmark_sample()
+        path = self.root / 'benchmark-serial-gate' / 'aggregate.json'
+        original = json.loads(path.read_text())
+        for change in ({'status': 'failure'}, {'head': '0' * 40}, {'runId': 'another-run'},
+                       {'attempt': '3'}, {'lanes': []}):
+            ci.write(path, {**original, **change})
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'benchmark aggregate'):
+                self.measured_benchmark(jobs)
+
+    def test_benchmark_accepts_a_complete_current_attempt_sample(self):
+        jobs = self.benchmark_sample()
+        for mode in ('serial', 'parallel'):
+            args = argparse.Namespace(input=self.root, output=self.root / ('benchmark-' + mode + '-gate'),
+                                      prefix='benchmark-' + mode, needs_job=mode, native_only=True)
+            env = {'GITHUB_ACTIONS': 'true', 'CI_CONTRACT_ARTIFACT_RESULT': 'success',
+                   'GITHUB_SHA': self.head, 'GITHUB_RUN_ID': '1234', 'GITHUB_RUN_ATTEMPT': '2',
+                   'CI_CONTRACT_NEEDS': json.dumps({mode: {'result': 'success'}})}
+            with patch.dict(os.environ, env):
+                self.assertEqual(ci.aggregate(args), 0)
+        self.assertEqual(self.measured_benchmark(jobs), 0)
+        measured = json.loads((self.root / 'measurement' / 'benchmark.json').read_text())
+        self.assertEqual(measured['status'], 'success')
+        self.assertEqual(measured['executionAttempt'], '2')
+        self.assertEqual(measured['aggregateEvidence']['benchmark-serial']['attempt'], '2')
+        self.assertEqual(measured['modes']['serial']['criticalPathSecondsIncludingSetupArtifactsCleanupAndAggregate'], 620)
+        self.assertEqual(measured['modes']['parallel']['criticalPathSecondsIncludingSetupArtifactsCleanupAndAggregate'], 220)
+
+    def test_benchmark_without_actual_speedup_remains_unproven(self):
+        self.assertEqual(self.measured_benchmark(self.benchmark_sample(parallel_span=600)), 1)
+        measured = json.loads((self.root / 'measurement' / 'benchmark.json').read_text())
+        self.assertEqual(measured['status'], 'performance_unproven')
+        self.assertEqual(measured['improvementFraction'], 0)
+
     def test_actual_cancellation_waits_for_its_owned_child(self):
         source = str(ROOT / 'scripts/ci-contract.py')
         code = ('import importlib.util,json,os,sys; from pathlib import Path; '
