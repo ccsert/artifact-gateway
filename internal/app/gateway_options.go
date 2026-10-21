@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
@@ -49,10 +50,12 @@ type GatewayOptions struct {
 	NPMMetadata       repository.NPMMetadataStore
 	NPMRestore        repository.NPMRestoreStore
 	Storage           ObjectStores
-	// NuGet is an opt-in Hosted preview, outside the admitted format catalog.
+	// NuGet is an opt-in preview, outside the admitted format catalog.
 	// Its persistent ports are supplied explicitly, never inferred from Store.
 	NuGetPreviewEnabled bool
 	NuGetStore          repository.NativeNuGetStore
+	NuGetSources        repository.NuGetSourceStore
+	NuGetUpstream       nugetformat.Upstream
 	NuGetObjects        ObjectStore
 	Adapter             Adapter
 	Authenticator       Authenticator
@@ -69,10 +72,16 @@ func (o GatewayOptions) validate() error {
 		if nilDependency(o.NuGetStore) {
 			failures = append(failures, errors.New("NuGet preview publication store is required"))
 		}
+		if nilDependency(o.NuGetSources) {
+			failures = append(failures, errors.New("NuGet preview source store is required"))
+		}
+		if o.NuGetUpstream != nil && nilDependency(o.NuGetUpstream) {
+			failures = append(failures, errors.New("NuGet preview upstream client is typed nil"))
+		}
 		if err := objectstore.Validate(o.NuGetObjects); err != nil {
 			failures = append(failures, fmt.Errorf("NuGet preview %w", err))
 		}
-	} else if o.NuGetStore != nil || o.NuGetObjects != nil {
+	} else if o.NuGetStore != nil || o.NuGetObjects != nil || o.NuGetSources != nil || o.NuGetUpstream != nil {
 		failures = append(failures, errors.New("NuGet preview dependencies require explicit enablement"))
 	}
 	if nilDependency(o.Store) {

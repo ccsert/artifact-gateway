@@ -4,8 +4,9 @@
 
 NuGet Hosted 必须显式开启。它在 `/api/v2/previews/nuget` 下使用独立的仓库和
 发布 DTO，原生协议入口为 `/nuget/{name}`。正式格式目录、正式仓库创建与公开
-目录、Console 格式选择器仍不公开 NuGet。Proxy、Group、symbols 发布、签名
-校验、晋级、软删除/恢复、保留策略与完整治理准入分别由 #288/#289 跟踪。
+目录、Console 格式选择器仍不公开 NuGet。独立启用的
+[Proxy/Group 预览](nuget-proxy-group-preview.zh-CN.md) 扩展原生读取。
+symbols 发布、签名校验、晋级、软删除/恢复、保留策略与完整治理准入仍由 #289 跟踪。
 预览 API 暂无 `agctl` 命令。
 
 ## 开启与建仓

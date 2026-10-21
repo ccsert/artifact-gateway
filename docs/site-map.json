@@ -67,6 +67,7 @@
         { "id": "cargo-usage", "title": { "en": "Cargo client setup", "zh-CN": "Cargo 客户端配置" }, "en": "docs/cargo-usage.md", "zh-CN": "docs/cargo-usage.zh-CN.md" },
         { "id": "cargo-research", "title": { "en": "Cargo repository research", "zh-CN": "Cargo 仓库研究" }, "en": "docs/cargo-repository-research.md", "zh-CN": "docs/cargo-repository-research.zh-CN.md" },
         { "id": "nuget-hosted-preview", "title": { "en": "NuGet Hosted preview", "zh-CN": "NuGet Hosted 预览" }, "en": "docs/nuget-hosted-preview.md", "zh-CN": "docs/nuget-hosted-preview.zh-CN.md" },
+        { "id": "nuget-proxy-group-preview", "title": { "en": "NuGet Proxy and Group preview", "zh-CN": "NuGet Proxy 与 Group 预览" }, "en": "docs/nuget-proxy-group-preview.md", "zh-CN": "docs/nuget-proxy-group-preview.zh-CN.md" },
         { "id": "nuget-roadmap", "title": { "en": "NuGet roadmap", "zh-CN": "NuGet 路线图" }, "en": "docs/nuget-roadmap.md", "zh-CN": "docs/nuget-roadmap.zh-CN.md" },
         { "id": "legacy-group-migration", "title": { "en": "Legacy Group migration", "zh-CN": "旧 Group 迁移" }, "en": "docs/legacy-group-migration.md", "zh-CN": "docs/legacy-group-migration.zh-CN.md" },
         { "id": "gitea-backend", "title": { "en": "Gitea backend reference", "zh-CN": "Gitea 后端参考" }, "en": "docs/gitea-backend-reference.md", "zh-CN": "docs/gitea-backend-reference.zh-CN.md" }

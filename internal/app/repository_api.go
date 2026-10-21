@@ -258,7 +258,13 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	modules := []formatmodule.Module{rawModule}
 	var nugetPreview http.Handler
 	if options.NuGetPreviewEnabled {
-		nugetModule, err := nugetformat.New(nugetformat.Options{Store: options.NuGetStore, Repositories: store, Objects: options.NuGetObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		client := nugetformat.Upstream(UpstreamClient{})
+		if options.NuGetUpstream != nil {
+			client = options.NuGetUpstream
+		} else if configured, ok := upstreamClient.(nugetformat.Upstream); ok {
+			client = configured
+		}
+		nugetModule, err := nugetformat.New(nugetformat.Options{Store: options.NuGetStore, Sources: options.NuGetSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.NuGetObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
 		if err != nil {
 			return nil, err
 		}

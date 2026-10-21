@@ -18,7 +18,7 @@ nuget_read:
     operationId: readNuGetHostedRepresentation
     description: >-
       NuGet V3 index.json, flat container, original nuspec, SemVer2 gzip registrations, search and
-      autocomplete. Hosted preview only.
+      autocomplete. preview only.
     security:
       - protocolBasicAuth: []
       - protocolBearerAuth: []
@@ -38,6 +38,8 @@ nuget_read:
         description: Repository resource permission or account state prevents this read
       '404':
         description: Package or version not found
+      '410':
+        description: Cache publication reservation expired before verification completed
       '412':
         description: Conditional precondition failed for an original nuspec or SHA-512 sidecar
       '416':
@@ -46,6 +48,10 @@ nuget_read:
         description: Registration, version list or search exceeds the bounded preview metadata inventory
       '500':
         description: Published package object is unavailable
+      '409':
+        description: Immutable identity, source binding or quota conflict
+      '502':
+        description: Upstream authentication or integrity failure
       '503':
         description: Preview metadata storage or representation is unavailable
   head:
@@ -69,6 +75,8 @@ nuget_read:
         description: Repository resource permission or account state prevents this read
       '404':
         description: Package or version not found
+      '410':
+        description: Cache publication reservation expired before verification completed
       '412':
         description: Conditional precondition failed for an original nuspec or SHA-512 sidecar
       '416':
@@ -77,6 +85,10 @@ nuget_read:
         description: Registration, version list or search exceeds the bounded preview metadata inventory
       '500':
         description: Published package object is unavailable
+      '409':
+        description: Immutable identity, source binding or quota conflict
+      '502':
+        description: Upstream authentication or integrity failure
       '503':
         description: Preview metadata storage or representation is unavailable
 nuget_publish:
@@ -121,7 +133,9 @@ nuget_publish:
       '403':
         description: Write permission required
       '404':
-        description: NuGet Hosted preview repository not found
+        description: NuGet preview repository not found
+      '405':
+        description: Proxy and Group sources do not accept publication
       '409':
         description: Canonical version contains different bytes
       '410':

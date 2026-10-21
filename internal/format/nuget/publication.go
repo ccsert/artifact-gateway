@@ -25,6 +25,7 @@ type packageMetadata struct {
 	Description      string                          `json:"description,omitempty"`
 	DependencyGroups []nugetprotocol.DependencyGroup `json:"dependencyGroups"`
 	PackageHash      string                          `json:"packageHash"`
+	Listed           *bool                           `json:"listed,omitempty"`
 }
 type publicationRequest struct {
 	PackageID string `json:"packageId"`
@@ -47,6 +48,9 @@ func (m *Module) reserve(ctx context.Context, repo repository.HostedRepository, 
 		sessionID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(repo.ID+"\x00nuget\x00"+actor+"\x00"+key)).String()
 	}
 	inSession := repository.NuGetSession{ID: sessionID, RepositoryID: repo.ID, PackageID: id, Version: strings.ToLower(version), Digest: in.Digest, Size: in.Size, Actor: actor, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	if repo.Type == repository.RepositoryTypeProxy {
+		inSession.SourceVersion = repo.Version
+	}
 	session, _, err := m.store.ReserveNuGetPublication(ctx, inSession)
 	return session, err
 }

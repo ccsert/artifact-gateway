@@ -22,11 +22,17 @@ import (
 func (m *Module) Preview() http.Handler { return http.HandlerFunc(m.servePreview) }
 
 type previewRepository struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Format    string `json:"format"`
-	Preview   bool   `json:"preview"`
-	SourceURL string `json:"sourceUrl"`
+	ID           string                     `json:"id"`
+	Name         string                     `json:"name"`
+	Format       string                     `json:"format"`
+	Preview      bool                       `json:"preview"`
+	SourceURL    string                     `json:"sourceUrl"`
+	Type         repository.RepositoryType  `json:"type"`
+	Version      string                     `json:"version"`
+	Endpoint     string                     `json:"endpoint,omitempty"`
+	AllowedHosts []string                   `json:"allowedHosts,omitempty"`
+	UpstreamAuth *upstreamStatus            `json:"upstreamAuth,omitempty"`
+	EgressMode   repository.EgressProxyMode `json:"egressMode,omitempty"`
 }
 type previewSession struct {
 	ID           string     `json:"id"`
@@ -41,18 +47,31 @@ type previewSession struct {
 	CommittedAt  *time.Time `json:"committedAt,omitempty"`
 }
 type previewPackage struct {
-	RepositoryID    string    `json:"repositoryId"`
-	PackageID       string    `json:"packageId"`
-	Version         string    `json:"version"`
-	Digest          string    `json:"digest"`
-	Size            int64     `json:"size"`
-	PublishedAt     time.Time `json:"publishedAt"`
-	PackageURL      string    `json:"packageUrl"`
-	RegistrationURL string    `json:"registrationUrl"`
+	RepositoryID            string    `json:"repositoryId"`
+	PackageID               string    `json:"packageId"`
+	Version                 string    `json:"version"`
+	Digest                  string    `json:"digest"`
+	Size                    int64     `json:"size"`
+	PublishedAt             time.Time `json:"publishedAt"`
+	PackageURL              string    `json:"packageUrl"`
+	RegistrationURL         string    `json:"registrationUrl"`
+	SourceVersion           string    `json:"sourceVersion,omitempty"`
+	UpstreamPackageURL      string    `json:"upstreamPackageUrl,omitempty"`
+	UpstreamRegistrationURL string    `json:"upstreamRegistrationUrl,omitempty"`
 }
 
 func repositoryDTO(r *http.Request, repo repository.HostedRepository) previewRepository {
-	return previewRepository{ID: repo.ID, Name: repo.Name, Format: "nuget", Preview: true, SourceURL: sourceBase(r, repo) + "index.json"}
+	out := previewRepository{ID: repo.ID, Name: repo.Name, Format: "nuget", Preview: true, SourceURL: sourceBase(r, repo) + "index.json", Type: repo.Type, Version: repo.Version, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts}
+	if repo.Type == repository.RepositoryTypeProxy {
+		out.UpstreamAuth = &upstreamStatus{Scheme: repository.UpstreamAuthSchemeNone}
+		if repo.UpstreamAuth != nil {
+			out.UpstreamAuth = &upstreamStatus{Scheme: repo.UpstreamAuth.Scheme, Username: repo.UpstreamAuth.Username, CredentialsConfigured: repo.UpstreamAuth.Secret != ""}
+		}
+		if repo.EgressProxy != nil {
+			out.EgressMode = repo.EgressProxy.Mode
+		}
+	}
+	return out
 }
 func sessionDTO(in repository.NuGetSession) previewSession {
 	out := previewSession{ID: in.ID, RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, Size: in.Size, State: in.State, CreatedAt: in.CreatedAt, ExpiresAt: in.ExpiresAt}
@@ -62,7 +81,7 @@ func sessionDTO(in repository.NuGetSession) previewSession {
 	return out
 }
 func packageDTO(r *http.Request, repo repository.HostedRepository, in repository.NuGetPublication) previewPackage {
-	return previewPackage{RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, Size: in.Size, PublishedAt: in.PublishedAt, PackageURL: packageURL(r, repo, in.PackageID, in.Version), RegistrationURL: sourceBase(r, repo) + "registration/" + in.PackageID + "/" + in.Version + ".json"}
+	return previewPackage{RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, Size: in.Size, PublishedAt: in.PublishedAt, PackageURL: packageURL(r, repo, in.PackageID, in.Version), RegistrationURL: sourceBase(r, repo) + "registration/" + in.PackageID + "/" + in.Version + ".json", SourceVersion: in.SourceVersion, UpstreamPackageURL: in.SourceURL, UpstreamRegistrationURL: in.RegistrationURL}
 }
 func decodeBody(w http.ResponseWriter, r *http.Request, target any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -91,6 +110,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		m.problem(w, 403, reason)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/v2/previews/nuget/groups") {
+		m.previewGroups(w, r, p)
+		return
+	}
 	const prefix = "/api/v2/previews/nuget/repositories"
 	if !strings.HasPrefix(r.URL.Path, prefix) {
 		m.problem(w, 404, "not_found")
@@ -106,10 +129,7 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 			m.problem(w, 403, "access_denied")
 			return
 		}
-		var input struct {
-			Name          string `json:"name"`
-			AnonymousRead bool   `json:"anonymousRead"`
-		}
+		var input repositoryInput
 		if !decodeBody(w, r, &input) || !previewRepositoryName.MatchString(input.Name) {
 			m.problem(w, 400, "invalid_repository")
 			return
@@ -122,9 +142,21 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 			}
 			key = uuid.NewString()
 		}
+		configured, err := m.configureRepository(input, repository.HostedRepository{})
+		if err != nil {
+			m.problem(w, 400, "invalid_source_configuration")
+			return
+		}
+		ctx, release, err := m.nameLock(r.Context(), input.Name, "repository")
+		if err != nil {
+			m.failure(w, err)
+			return
+		}
+		defer release()
 		body, _ := json.Marshal(input)
 		sum := sha256.Sum256(body)
-		repo, replay, err := m.repos.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: input.Name, Format: repository.FormatNuGet, Type: repository.RepositoryTypeHosted, AnonymousRead: input.AnonymousRead}, p.Actor, "nuget-preview:"+key, hex.EncodeToString(sum[:]))
+		configured.ID = uuid.NewString()
+		repo, replay, err := m.repos.CreateHostedRepositoryIdempotently(ctx, configured, p.Actor, "nuget-preview:"+key, hex.EncodeToString(sum[:]))
 		if err != nil {
 			m.failure(w, err)
 			return
@@ -151,6 +183,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 1 {
+		if r.Method == http.MethodPut {
+			m.replacePreviewRepository(w, r, repo, p)
+			return
+		}
 		if r.Method != http.MethodGet {
 			w.WriteHeader(405)
 			return
@@ -171,6 +207,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	if parts[1] != "publication-sessions" {
 		m.problem(w, 404, "not_found")
+		return
+	}
+	if repo.Type != repository.RepositoryTypeHosted {
+		m.problem(w, 405, "read_only_source")
 		return
 	}
 	if len(parts) == 2 {

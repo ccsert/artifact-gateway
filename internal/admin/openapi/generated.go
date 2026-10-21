@@ -2146,6 +2146,54 @@ func (e NexusMigrationStartPolicyVersion) Valid() bool {
 	}
 }
 
+// Defines values for NuGetPreviewGroupFormat.
+const (
+	NuGetPreviewGroupFormatNuget NuGetPreviewGroupFormat = "nuget"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewGroupFormat enum.
+func (e NuGetPreviewGroupFormat) Valid() bool {
+	switch e {
+	case NuGetPreviewGroupFormatNuget:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewGroupPreview.
+const (
+	NuGetPreviewGroupPreviewTrue NuGetPreviewGroupPreview = true
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewGroupPreview enum.
+func (e NuGetPreviewGroupPreview) Valid() bool {
+	switch e {
+	case NuGetPreviewGroupPreviewTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewRepositoryEgressMode.
+const (
+	NuGetPreviewRepositoryEgressModeDirect      NuGetPreviewRepositoryEgressMode = "direct"
+	NuGetPreviewRepositoryEgressModeEnvironment NuGetPreviewRepositoryEgressMode = "environment"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryEgressMode enum.
+func (e NuGetPreviewRepositoryEgressMode) Valid() bool {
+	switch e {
+	case NuGetPreviewRepositoryEgressModeDirect:
+		return true
+	case NuGetPreviewRepositoryEgressModeEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NuGetPreviewRepositoryFormat.
 const (
 	NuGetPreviewRepositoryFormatNuget NuGetPreviewRepositoryFormat = "nuget"
@@ -2163,13 +2211,145 @@ func (e NuGetPreviewRepositoryFormat) Valid() bool {
 
 // Defines values for NuGetPreviewRepositoryPreview.
 const (
-	True NuGetPreviewRepositoryPreview = true
+	NuGetPreviewRepositoryPreviewTrue NuGetPreviewRepositoryPreview = true
 )
 
 // Valid indicates whether the value is a known member of the NuGetPreviewRepositoryPreview enum.
 func (e NuGetPreviewRepositoryPreview) Valid() bool {
 	switch e {
-	case True:
+	case NuGetPreviewRepositoryPreviewTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewRepositoryType.
+const (
+	NuGetPreviewRepositoryTypeHosted NuGetPreviewRepositoryType = "hosted"
+	NuGetPreviewRepositoryTypeProxy  NuGetPreviewRepositoryType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryType enum.
+func (e NuGetPreviewRepositoryType) Valid() bool {
+	switch e {
+	case NuGetPreviewRepositoryTypeHosted:
+		return true
+	case NuGetPreviewRepositoryTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewRepositoryCreateEgressMode.
+const (
+	NuGetPreviewRepositoryCreateEgressModeDirect      NuGetPreviewRepositoryCreateEgressMode = "direct"
+	NuGetPreviewRepositoryCreateEgressModeEnvironment NuGetPreviewRepositoryCreateEgressMode = "environment"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryCreateEgressMode enum.
+func (e NuGetPreviewRepositoryCreateEgressMode) Valid() bool {
+	switch e {
+	case NuGetPreviewRepositoryCreateEgressModeDirect:
+		return true
+	case NuGetPreviewRepositoryCreateEgressModeEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewRepositoryCreateType.
+const (
+	NuGetPreviewRepositoryCreateTypeHosted NuGetPreviewRepositoryCreateType = "hosted"
+	NuGetPreviewRepositoryCreateTypeProxy  NuGetPreviewRepositoryCreateType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryCreateType enum.
+func (e NuGetPreviewRepositoryCreateType) Valid() bool {
+	switch e {
+	case NuGetPreviewRepositoryCreateTypeHosted:
+		return true
+	case NuGetPreviewRepositoryCreateTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewRepositoryReplaceEgressMode.
+const (
+	NuGetPreviewRepositoryReplaceEgressModeDirect      NuGetPreviewRepositoryReplaceEgressMode = "direct"
+	NuGetPreviewRepositoryReplaceEgressModeEnvironment NuGetPreviewRepositoryReplaceEgressMode = "environment"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryReplaceEgressMode enum.
+func (e NuGetPreviewRepositoryReplaceEgressMode) Valid() bool {
+	switch e {
+	case NuGetPreviewRepositoryReplaceEgressModeDirect:
+		return true
+	case NuGetPreviewRepositoryReplaceEgressModeEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewRepositoryReplaceType.
+const (
+	NuGetPreviewRepositoryReplaceTypeHosted NuGetPreviewRepositoryReplaceType = "hosted"
+	NuGetPreviewRepositoryReplaceTypeProxy  NuGetPreviewRepositoryReplaceType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewRepositoryReplaceType enum.
+func (e NuGetPreviewRepositoryReplaceType) Valid() bool {
+	switch e {
+	case NuGetPreviewRepositoryReplaceTypeHosted:
+		return true
+	case NuGetPreviewRepositoryReplaceTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewUpstreamAuthScheme.
+const (
+	NuGetPreviewUpstreamAuthSchemeBasic  NuGetPreviewUpstreamAuthScheme = "basic"
+	NuGetPreviewUpstreamAuthSchemeBearer NuGetPreviewUpstreamAuthScheme = "bearer"
+	NuGetPreviewUpstreamAuthSchemeNone   NuGetPreviewUpstreamAuthScheme = "none"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewUpstreamAuthScheme enum.
+func (e NuGetPreviewUpstreamAuthScheme) Valid() bool {
+	switch e {
+	case NuGetPreviewUpstreamAuthSchemeBasic:
+		return true
+	case NuGetPreviewUpstreamAuthSchemeBearer:
+		return true
+	case NuGetPreviewUpstreamAuthSchemeNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NuGetPreviewUpstreamAuthStatusScheme.
+const (
+	NuGetPreviewUpstreamAuthStatusSchemeBasic  NuGetPreviewUpstreamAuthStatusScheme = "basic"
+	NuGetPreviewUpstreamAuthStatusSchemeBearer NuGetPreviewUpstreamAuthStatusScheme = "bearer"
+	NuGetPreviewUpstreamAuthStatusSchemeNone   NuGetPreviewUpstreamAuthStatusScheme = "none"
+)
+
+// Valid indicates whether the value is a known member of the NuGetPreviewUpstreamAuthStatusScheme enum.
+func (e NuGetPreviewUpstreamAuthStatusScheme) Valid() bool {
+	switch e {
+	case NuGetPreviewUpstreamAuthStatusSchemeBasic:
+		return true
+	case NuGetPreviewUpstreamAuthStatusSchemeBearer:
+		return true
+	case NuGetPreviewUpstreamAuthStatusSchemeNone:
 		return true
 	default:
 		return false
@@ -5777,6 +5957,34 @@ type NuGetPreviewCapacity struct {
 	UsedBytes    int64              `json:"usedBytes"`
 }
 
+// NuGetPreviewGroup defines model for NuGetPreviewGroup.
+type NuGetPreviewGroup struct {
+	AnonymousRead *bool                    `json:"anonymousRead,omitempty"`
+	Format        NuGetPreviewGroupFormat  `json:"format"`
+	Id            openapi_types.UUID       `json:"id"`
+	Members       []openapi_types.UUID     `json:"members"`
+	Name          string                   `json:"name"`
+	Preview       NuGetPreviewGroupPreview `json:"preview"`
+	SourceUrl     string                   `json:"sourceUrl"`
+	Version       string                   `json:"version"`
+}
+
+// NuGetPreviewGroupFormat defines model for NuGetPreviewGroup.Format.
+type NuGetPreviewGroupFormat string
+
+// NuGetPreviewGroupPreview defines model for NuGetPreviewGroup.Preview.
+type NuGetPreviewGroupPreview bool
+
+// NuGetPreviewGroupInput defines model for NuGetPreviewGroupInput.
+type NuGetPreviewGroupInput struct {
+	AnonymousRead *bool                `json:"anonymousRead,omitempty"`
+	Members       []openapi_types.UUID `json:"members"`
+	Name          string               `json:"name"`
+
+	// Version Required when replacing an existing Group. Compared atomically.
+	Version *string `json:"version,omitempty"`
+}
+
 // NuGetPreviewPackage defines model for NuGetPreviewPackage.
 type NuGetPreviewPackage struct {
 	Digest          string             `json:"digest"`
@@ -5786,7 +5994,12 @@ type NuGetPreviewPackage struct {
 	RegistrationUrl string             `json:"registrationUrl"`
 	RepositoryId    openapi_types.UUID `json:"repositoryId"`
 	Size            int64              `json:"size"`
-	Version         string             `json:"version"`
+
+	// SourceVersion Source configuration namespace of a fully verified Proxy cache publication.
+	SourceVersion           *string `json:"sourceVersion,omitempty"`
+	UpstreamPackageUrl      *string `json:"upstreamPackageUrl,omitempty"`
+	UpstreamRegistrationUrl *string `json:"upstreamRegistrationUrl,omitempty"`
+	Version                 string  `json:"version"`
 }
 
 // NuGetPreviewPackageList defines model for NuGetPreviewPackageList.
@@ -5802,12 +6015,21 @@ type NuGetPreviewQuota struct {
 
 // NuGetPreviewRepository defines model for NuGetPreviewRepository.
 type NuGetPreviewRepository struct {
-	Format    NuGetPreviewRepositoryFormat  `json:"format"`
-	Id        openapi_types.UUID            `json:"id"`
-	Name      string                        `json:"name"`
-	Preview   NuGetPreviewRepositoryPreview `json:"preview"`
-	SourceUrl string                        `json:"sourceUrl"`
+	AllowedHosts *[]string                         `json:"allowedHosts,omitempty"`
+	EgressMode   *NuGetPreviewRepositoryEgressMode `json:"egressMode,omitempty"`
+	Endpoint     *string                           `json:"endpoint,omitempty"`
+	Format       NuGetPreviewRepositoryFormat      `json:"format"`
+	Id           openapi_types.UUID                `json:"id"`
+	Name         string                            `json:"name"`
+	Preview      NuGetPreviewRepositoryPreview     `json:"preview"`
+	SourceUrl    string                            `json:"sourceUrl"`
+	Type         NuGetPreviewRepositoryType        `json:"type"`
+	UpstreamAuth *NuGetPreviewUpstreamAuthStatus   `json:"upstreamAuth,omitempty"`
+	Version      string                            `json:"version"`
 }
+
+// NuGetPreviewRepositoryEgressMode defines model for NuGetPreviewRepository.EgressMode.
+type NuGetPreviewRepositoryEgressMode string
 
 // NuGetPreviewRepositoryFormat defines model for NuGetPreviewRepository.Format.
 type NuGetPreviewRepositoryFormat string
@@ -5815,11 +6037,92 @@ type NuGetPreviewRepositoryFormat string
 // NuGetPreviewRepositoryPreview defines model for NuGetPreviewRepository.Preview.
 type NuGetPreviewRepositoryPreview bool
 
+// NuGetPreviewRepositoryType defines model for NuGetPreviewRepository.Type.
+type NuGetPreviewRepositoryType string
+
 // NuGetPreviewRepositoryCreate defines model for NuGetPreviewRepositoryCreate.
 type NuGetPreviewRepositoryCreate struct {
-	AnonymousRead *bool  `json:"anonymousRead,omitempty"`
-	Name          string `json:"name"`
+	// AllowedHosts Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins.
+	AllowedHosts  *[]string                               `json:"allowedHosts,omitempty"`
+	AnonymousRead *bool                                   `json:"anonymousRead,omitempty"`
+	EgressMode    *NuGetPreviewRepositoryCreateEgressMode `json:"egressMode,omitempty"`
+
+	// Endpoint Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index.
+	Endpoint *string                           `json:"endpoint,omitempty"`
+	Name     string                            `json:"name"`
+	Type     *NuGetPreviewRepositoryCreateType `json:"type,omitempty"`
+
+	// UpstreamAuth Write-only source credential, sealed separately from local client credentials. A changed source binding requires a fresh secret or explicit none.
+	UpstreamAuth *NuGetPreviewUpstreamAuth `json:"upstreamAuth,omitempty"`
 }
+
+// NuGetPreviewRepositoryCreateEgressMode defines model for NuGetPreviewRepositoryCreate.EgressMode.
+type NuGetPreviewRepositoryCreateEgressMode string
+
+// NuGetPreviewRepositoryCreateType defines model for NuGetPreviewRepositoryCreate.Type.
+type NuGetPreviewRepositoryCreateType string
+
+// NuGetPreviewRepositoryReplace defines model for NuGetPreviewRepositoryReplace.
+type NuGetPreviewRepositoryReplace struct {
+	// AllowedHosts Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins.
+	AllowedHosts  *[]string                                `json:"allowedHosts,omitempty"`
+	AnonymousRead *bool                                    `json:"anonymousRead,omitempty"`
+	EgressMode    *NuGetPreviewRepositoryReplaceEgressMode `json:"egressMode,omitempty"`
+
+	// Endpoint Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index.
+	Endpoint *string                            `json:"endpoint,omitempty"`
+	Name     string                             `json:"name"`
+	Type     *NuGetPreviewRepositoryReplaceType `json:"type,omitempty"`
+
+	// UpstreamAuth Write-only source credential, sealed separately from local client credentials. A changed source binding requires a fresh secret or explicit none.
+	UpstreamAuth *NuGetPreviewUpstreamAuth `json:"upstreamAuth,omitempty"`
+	Version      string                    `json:"version"`
+}
+
+// NuGetPreviewRepositoryReplaceEgressMode defines model for NuGetPreviewRepositoryReplace.EgressMode.
+type NuGetPreviewRepositoryReplaceEgressMode string
+
+// NuGetPreviewRepositoryReplaceType defines model for NuGetPreviewRepositoryReplace.Type.
+type NuGetPreviewRepositoryReplaceType string
+
+// NuGetPreviewSource Durable authority for the canonical package version. A reorder never changes this owner; a missing or changed owner fails closed.
+type NuGetPreviewSource struct {
+	Digest            string             `json:"digest"`
+	GroupId           openapi_types.UUID `json:"groupId"`
+	PackageId         string             `json:"packageId"`
+	RepositoryId      openapi_types.UUID `json:"repositoryId"`
+	RepositoryVersion string             `json:"repositoryVersion"`
+	Size              int64              `json:"size"`
+	Version           string             `json:"version"`
+}
+
+// NuGetPreviewSourceRevalidation defines model for NuGetPreviewSourceRevalidation.
+type NuGetPreviewSourceRevalidation struct {
+	GroupVersion string `json:"groupVersion"`
+
+	// RepositoryVersion Previously bound source configuration version. Only the same member and complete immutable digest/size can be confirmed after a new source configuration.
+	RepositoryVersion string `json:"repositoryVersion"`
+}
+
+// NuGetPreviewUpstreamAuth Write-only source credential, sealed separately from local client credentials. A changed source binding requires a fresh secret or explicit none.
+type NuGetPreviewUpstreamAuth struct {
+	Scheme   NuGetPreviewUpstreamAuthScheme `json:"scheme"`
+	Secret   *string                        `json:"secret,omitempty"`
+	Username *string                        `json:"username,omitempty"`
+}
+
+// NuGetPreviewUpstreamAuthScheme defines model for NuGetPreviewUpstreamAuth.Scheme.
+type NuGetPreviewUpstreamAuthScheme string
+
+// NuGetPreviewUpstreamAuthStatus defines model for NuGetPreviewUpstreamAuthStatus.
+type NuGetPreviewUpstreamAuthStatus struct {
+	CredentialsConfigured bool                                 `json:"credentialsConfigured"`
+	Scheme                NuGetPreviewUpstreamAuthStatusScheme `json:"scheme"`
+	Username              *string                              `json:"username,omitempty"`
+}
+
+// NuGetPreviewUpstreamAuthStatusScheme defines model for NuGetPreviewUpstreamAuthStatus.Scheme.
+type NuGetPreviewUpstreamAuthStatusScheme string
 
 // NuGetPreviewWorkerFormat Opt-in NuGet Hosted upload cleanup; does not admit NuGet to the formal format catalog.
 type NuGetPreviewWorkerFormat string
@@ -7892,8 +8195,20 @@ type ResumeNexusMigrationBatchJSONRequestBody = NexusMigrationResume
 // RetryNexusMigrationBatchJSONRequestBody defines body for RetryNexusMigrationBatch for application/json ContentType.
 type RetryNexusMigrationBatchJSONRequestBody = NexusMigrationResume
 
+// CreateNuGetPreviewGroupJSONRequestBody defines body for CreateNuGetPreviewGroup for application/json ContentType.
+type CreateNuGetPreviewGroupJSONRequestBody = NuGetPreviewGroupInput
+
+// ReplaceNuGetPreviewGroupJSONRequestBody defines body for ReplaceNuGetPreviewGroup for application/json ContentType.
+type ReplaceNuGetPreviewGroupJSONRequestBody = NuGetPreviewGroupInput
+
+// RevalidateNuGetPreviewGroupSourceJSONRequestBody defines body for RevalidateNuGetPreviewGroupSource for application/json ContentType.
+type RevalidateNuGetPreviewGroupSourceJSONRequestBody = NuGetPreviewSourceRevalidation
+
 // CreateNuGetPreviewRepositoryJSONRequestBody defines body for CreateNuGetPreviewRepository for application/json ContentType.
 type CreateNuGetPreviewRepositoryJSONRequestBody = NuGetPreviewRepositoryCreate
+
+// ReplaceNuGetPreviewRepositoryJSONRequestBody defines body for ReplaceNuGetPreviewRepository for application/json ContentType.
+type ReplaceNuGetPreviewRepositoryJSONRequestBody = NuGetPreviewRepositoryReplace
 
 // ReplaceNuGetPreviewQuotaJSONRequestBody defines body for ReplaceNuGetPreviewQuota for application/json ContentType.
 type ReplaceNuGetPreviewQuotaJSONRequestBody = NuGetPreviewQuota
@@ -8288,11 +8603,29 @@ type ServerInterface interface {
 	// (GET /overview-statistics)
 	GetOverviewStatistics(w http.ResponseWriter, r *http.Request)
 
+	// (POST /previews/nuget/groups)
+	CreateNuGetPreviewGroup(w http.ResponseWriter, r *http.Request)
+
+	// (GET /previews/nuget/groups/{groupId})
+	GetNuGetPreviewGroup(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID)
+
+	// (PUT /previews/nuget/groups/{groupId})
+	ReplaceNuGetPreviewGroup(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID)
+
+	// (GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version})
+	GetNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID, packageId string, version string)
+
+	// (POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate)
+	RevalidateNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID, packageId string, version string)
+
 	// (POST /previews/nuget/repositories)
 	CreateNuGetPreviewRepository(w http.ResponseWriter, r *http.Request)
 
 	// (GET /previews/nuget/repositories/{repositoryId})
 	GetNuGetPreviewRepository(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (PUT /previews/nuget/repositories/{repositoryId})
+	ReplaceNuGetPreviewRepository(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
 
 	// (GET /previews/nuget/repositories/{repositoryId}/capacity)
 	GetNuGetPreviewCapacity(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
@@ -11467,6 +11800,160 @@ func (siw *ServerInterfaceWrapper) GetOverviewStatistics(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// CreateNuGetPreviewGroup operation middleware
+func (siw *ServerInterfaceWrapper) CreateNuGetPreviewGroup(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNuGetPreviewGroup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNuGetPreviewGroup operation middleware
+func (siw *ServerInterfaceWrapper) GetNuGetPreviewGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", r.PathValue("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNuGetPreviewGroup(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceNuGetPreviewGroup operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceNuGetPreviewGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", r.PathValue("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceNuGetPreviewGroup(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNuGetPreviewGroupSource operation middleware
+func (siw *ServerInterfaceWrapper) GetNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", r.PathValue("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "packageId" -------------
+	var packageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "packageId", r.PathValue("packageId"), &packageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNuGetPreviewGroupSource(w, r, groupId, packageId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevalidateNuGetPreviewGroupSource operation middleware
+func (siw *ServerInterfaceWrapper) RevalidateNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", r.PathValue("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "packageId" -------------
+	var packageId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "packageId", r.PathValue("packageId"), &packageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevalidateNuGetPreviewGroupSource(w, r, groupId, packageId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateNuGetPreviewRepository operation middleware
 func (siw *ServerInterfaceWrapper) CreateNuGetPreviewRepository(w http.ResponseWriter, r *http.Request) {
 
@@ -11498,6 +11985,32 @@ func (siw *ServerInterfaceWrapper) GetNuGetPreviewRepository(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetNuGetPreviewRepository(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceNuGetPreviewRepository operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceNuGetPreviewRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceNuGetPreviewRepository(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17341,8 +17854,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/retry", wrapper.RetryNexusMigrationBatch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/capabilities", wrapper.GetNexusMigrationCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/overview-statistics", wrapper.GetOverviewStatistics)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/nuget/groups", wrapper.CreateNuGetPreviewGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/groups/{groupId}", wrapper.GetNuGetPreviewGroup)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/groups/{groupId}", wrapper.ReplaceNuGetPreviewGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/groups/{groupId}/sources/{packageId}/{version}", wrapper.GetNuGetPreviewGroupSource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate", wrapper.RevalidateNuGetPreviewGroupSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/nuget/repositories", wrapper.CreateNuGetPreviewRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}", wrapper.GetNuGetPreviewRepository)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}", wrapper.ReplaceNuGetPreviewRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/capacity", wrapper.GetNuGetPreviewCapacity)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/capacity", wrapper.ReplaceNuGetPreviewQuota)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/packages", wrapper.ListNuGetPreviewPackages)
@@ -23981,6 +24500,394 @@ func (response GetOverviewStatistics403ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type CreateNuGetPreviewGroupRequestObject struct {
+	Body *CreateNuGetPreviewGroupJSONRequestBody
+}
+
+type CreateNuGetPreviewGroupResponseObject interface {
+	VisitCreateNuGetPreviewGroupResponse(w http.ResponseWriter) error
+}
+
+type CreateNuGetPreviewGroup201JSONResponse NuGetPreviewGroup
+
+func (response CreateNuGetPreviewGroup201JSONResponse) VisitCreateNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNuGetPreviewGroup400Response struct {
+}
+
+func (response CreateNuGetPreviewGroup400Response) VisitCreateNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateNuGetPreviewGroup401Response struct {
+}
+
+func (response CreateNuGetPreviewGroup401Response) VisitCreateNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateNuGetPreviewGroup403Response struct {
+}
+
+func (response CreateNuGetPreviewGroup403Response) VisitCreateNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type CreateNuGetPreviewGroup409Response struct {
+}
+
+func (response CreateNuGetPreviewGroup409Response) VisitCreateNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type CreateNuGetPreviewGroup503Response struct {
+}
+
+func (response CreateNuGetPreviewGroup503Response) VisitCreateNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetNuGetPreviewGroupRequestObject struct {
+	GroupId openapi_types.UUID `json:"groupId"`
+}
+
+type GetNuGetPreviewGroupResponseObject interface {
+	VisitGetNuGetPreviewGroupResponse(w http.ResponseWriter) error
+}
+
+type GetNuGetPreviewGroup200JSONResponse NuGetPreviewGroup
+
+func (response GetNuGetPreviewGroup200JSONResponse) VisitGetNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNuGetPreviewGroup401Response struct {
+}
+
+func (response GetNuGetPreviewGroup401Response) VisitGetNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetNuGetPreviewGroup403Response struct {
+}
+
+func (response GetNuGetPreviewGroup403Response) VisitGetNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetNuGetPreviewGroup404Response struct {
+}
+
+func (response GetNuGetPreviewGroup404Response) VisitGetNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetNuGetPreviewGroup409Response struct {
+}
+
+func (response GetNuGetPreviewGroup409Response) VisitGetNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type GetNuGetPreviewGroup503Response struct {
+}
+
+func (response GetNuGetPreviewGroup503Response) VisitGetNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type ReplaceNuGetPreviewGroupRequestObject struct {
+	GroupId openapi_types.UUID `json:"groupId"`
+	Body    *ReplaceNuGetPreviewGroupJSONRequestBody
+}
+
+type ReplaceNuGetPreviewGroupResponseObject interface {
+	VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error
+}
+
+type ReplaceNuGetPreviewGroup200JSONResponse NuGetPreviewGroup
+
+func (response ReplaceNuGetPreviewGroup200JSONResponse) VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceNuGetPreviewGroup400Response struct {
+}
+
+func (response ReplaceNuGetPreviewGroup400Response) VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type ReplaceNuGetPreviewGroup401Response struct {
+}
+
+func (response ReplaceNuGetPreviewGroup401Response) VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type ReplaceNuGetPreviewGroup403Response struct {
+}
+
+func (response ReplaceNuGetPreviewGroup403Response) VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type ReplaceNuGetPreviewGroup404Response struct {
+}
+
+func (response ReplaceNuGetPreviewGroup404Response) VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ReplaceNuGetPreviewGroup409Response struct {
+}
+
+func (response ReplaceNuGetPreviewGroup409Response) VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type ReplaceNuGetPreviewGroup503Response struct {
+}
+
+func (response ReplaceNuGetPreviewGroup503Response) VisitReplaceNuGetPreviewGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetNuGetPreviewGroupSourceRequestObject struct {
+	GroupId   openapi_types.UUID `json:"groupId"`
+	PackageId string             `json:"packageId"`
+	Version   string             `json:"version"`
+}
+
+type GetNuGetPreviewGroupSourceResponseObject interface {
+	VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error
+}
+
+type GetNuGetPreviewGroupSource200JSONResponse NuGetPreviewSource
+
+func (response GetNuGetPreviewGroupSource200JSONResponse) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNuGetPreviewGroupSource400Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource400Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource401Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource401Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource403Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource403Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource404Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource404Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource409Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource409Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource410Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource410Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(410)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource422Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource422Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(422)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource502Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource502Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(502)
+	return nil
+}
+
+type GetNuGetPreviewGroupSource503Response struct {
+}
+
+func (response GetNuGetPreviewGroupSource503Response) VisitGetNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSourceRequestObject struct {
+	GroupId   openapi_types.UUID `json:"groupId"`
+	PackageId string             `json:"packageId"`
+	Version   string             `json:"version"`
+	Body      *RevalidateNuGetPreviewGroupSourceJSONRequestBody
+}
+
+type RevalidateNuGetPreviewGroupSourceResponseObject interface {
+	VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error
+}
+
+type RevalidateNuGetPreviewGroupSource200JSONResponse NuGetPreviewSource
+
+func (response RevalidateNuGetPreviewGroupSource200JSONResponse) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevalidateNuGetPreviewGroupSource400Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource400Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource401Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource401Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource403Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource403Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource404Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource404Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource409Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource409Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource410Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource410Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(410)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource422Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource422Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(422)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource502Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource502Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(502)
+	return nil
+}
+
+type RevalidateNuGetPreviewGroupSource503Response struct {
+}
+
+func (response RevalidateNuGetPreviewGroupSource503Response) VisitRevalidateNuGetPreviewGroupSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
 type CreateNuGetPreviewRepositoryRequestObject struct {
 	Body *CreateNuGetPreviewRepositoryJSONRequestBody
 }
@@ -24101,6 +25008,77 @@ type GetNuGetPreviewRepository503Response struct {
 }
 
 func (response GetNuGetPreviewRepository503Response) VisitGetNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type ReplaceNuGetPreviewRepositoryRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	Body         *ReplaceNuGetPreviewRepositoryJSONRequestBody
+}
+
+type ReplaceNuGetPreviewRepositoryResponseObject interface {
+	VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error
+}
+
+type ReplaceNuGetPreviewRepository200JSONResponse NuGetPreviewRepository
+
+func (response ReplaceNuGetPreviewRepository200JSONResponse) VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceNuGetPreviewRepository400Response struct {
+}
+
+func (response ReplaceNuGetPreviewRepository400Response) VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type ReplaceNuGetPreviewRepository401Response struct {
+}
+
+func (response ReplaceNuGetPreviewRepository401Response) VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type ReplaceNuGetPreviewRepository403Response struct {
+}
+
+func (response ReplaceNuGetPreviewRepository403Response) VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type ReplaceNuGetPreviewRepository404Response struct {
+}
+
+func (response ReplaceNuGetPreviewRepository404Response) VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ReplaceNuGetPreviewRepository409Response struct {
+}
+
+func (response ReplaceNuGetPreviewRepository409Response) VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type ReplaceNuGetPreviewRepository503Response struct {
+}
+
+func (response ReplaceNuGetPreviewRepository503Response) VisitReplaceNuGetPreviewRepositoryResponse(w http.ResponseWriter) error {
 	w.WriteHeader(503)
 	return nil
 }
@@ -24421,6 +25399,14 @@ func (response CreateNuGetPublicationSession404Response) VisitCreateNuGetPublica
 	return nil
 }
 
+type CreateNuGetPublicationSession405Response struct {
+}
+
+func (response CreateNuGetPublicationSession405Response) VisitCreateNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(405)
+	return nil
+}
+
 type CreateNuGetPublicationSession409Response struct {
 }
 
@@ -24500,6 +25486,14 @@ func (response GetNuGetPublicationSession404Response) VisitGetNuGetPublicationSe
 	return nil
 }
 
+type GetNuGetPublicationSession405Response struct {
+}
+
+func (response GetNuGetPublicationSession405Response) VisitGetNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(405)
+	return nil
+}
+
 type GetNuGetPublicationSession503Response struct {
 }
 
@@ -24560,6 +25554,14 @@ type CommitNuGetPublicationSession404Response struct {
 
 func (response CommitNuGetPublicationSession404Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(404)
+	return nil
+}
+
+type CommitNuGetPublicationSession405Response struct {
+}
+
+func (response CommitNuGetPublicationSession405Response) VisitCommitNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(405)
 	return nil
 }
 
@@ -24640,6 +25642,14 @@ type StageNuGetPublicationSession404Response struct {
 
 func (response StageNuGetPublicationSession404Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
 	w.WriteHeader(404)
+	return nil
+}
+
+type StageNuGetPublicationSession405Response struct {
+}
+
+func (response StageNuGetPublicationSession405Response) VisitStageNuGetPublicationSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(405)
 	return nil
 }
 
@@ -33987,11 +34997,29 @@ type StrictServerInterface interface {
 	// (GET /overview-statistics)
 	GetOverviewStatistics(ctx context.Context, request GetOverviewStatisticsRequestObject) (GetOverviewStatisticsResponseObject, error)
 
+	// (POST /previews/nuget/groups)
+	CreateNuGetPreviewGroup(ctx context.Context, request CreateNuGetPreviewGroupRequestObject) (CreateNuGetPreviewGroupResponseObject, error)
+
+	// (GET /previews/nuget/groups/{groupId})
+	GetNuGetPreviewGroup(ctx context.Context, request GetNuGetPreviewGroupRequestObject) (GetNuGetPreviewGroupResponseObject, error)
+
+	// (PUT /previews/nuget/groups/{groupId})
+	ReplaceNuGetPreviewGroup(ctx context.Context, request ReplaceNuGetPreviewGroupRequestObject) (ReplaceNuGetPreviewGroupResponseObject, error)
+
+	// (GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version})
+	GetNuGetPreviewGroupSource(ctx context.Context, request GetNuGetPreviewGroupSourceRequestObject) (GetNuGetPreviewGroupSourceResponseObject, error)
+
+	// (POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate)
+	RevalidateNuGetPreviewGroupSource(ctx context.Context, request RevalidateNuGetPreviewGroupSourceRequestObject) (RevalidateNuGetPreviewGroupSourceResponseObject, error)
+
 	// (POST /previews/nuget/repositories)
 	CreateNuGetPreviewRepository(ctx context.Context, request CreateNuGetPreviewRepositoryRequestObject) (CreateNuGetPreviewRepositoryResponseObject, error)
 
 	// (GET /previews/nuget/repositories/{repositoryId})
 	GetNuGetPreviewRepository(ctx context.Context, request GetNuGetPreviewRepositoryRequestObject) (GetNuGetPreviewRepositoryResponseObject, error)
+
+	// (PUT /previews/nuget/repositories/{repositoryId})
+	ReplaceNuGetPreviewRepository(ctx context.Context, request ReplaceNuGetPreviewRepositoryRequestObject) (ReplaceNuGetPreviewRepositoryResponseObject, error)
 
 	// (GET /previews/nuget/repositories/{repositoryId}/capacity)
 	GetNuGetPreviewCapacity(ctx context.Context, request GetNuGetPreviewCapacityRequestObject) (GetNuGetPreviewCapacityResponseObject, error)
@@ -36538,6 +37566,159 @@ func (sh *strictHandler) GetOverviewStatistics(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// CreateNuGetPreviewGroup operation middleware
+func (sh *strictHandler) CreateNuGetPreviewGroup(w http.ResponseWriter, r *http.Request) {
+	var request CreateNuGetPreviewGroupRequestObject
+
+	var body CreateNuGetPreviewGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNuGetPreviewGroup(ctx, request.(CreateNuGetPreviewGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNuGetPreviewGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNuGetPreviewGroupResponseObject); ok {
+		if err := validResponse.VisitCreateNuGetPreviewGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNuGetPreviewGroup operation middleware
+func (sh *strictHandler) GetNuGetPreviewGroup(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID) {
+	var request GetNuGetPreviewGroupRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNuGetPreviewGroup(ctx, request.(GetNuGetPreviewGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNuGetPreviewGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNuGetPreviewGroupResponseObject); ok {
+		if err := validResponse.VisitGetNuGetPreviewGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceNuGetPreviewGroup operation middleware
+func (sh *strictHandler) ReplaceNuGetPreviewGroup(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID) {
+	var request ReplaceNuGetPreviewGroupRequestObject
+
+	request.GroupId = groupId
+
+	var body ReplaceNuGetPreviewGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceNuGetPreviewGroup(ctx, request.(ReplaceNuGetPreviewGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceNuGetPreviewGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceNuGetPreviewGroupResponseObject); ok {
+		if err := validResponse.VisitReplaceNuGetPreviewGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNuGetPreviewGroupSource operation middleware
+func (sh *strictHandler) GetNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID, packageId string, version string) {
+	var request GetNuGetPreviewGroupSourceRequestObject
+
+	request.GroupId = groupId
+	request.PackageId = packageId
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNuGetPreviewGroupSource(ctx, request.(GetNuGetPreviewGroupSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNuGetPreviewGroupSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNuGetPreviewGroupSourceResponseObject); ok {
+		if err := validResponse.VisitGetNuGetPreviewGroupSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevalidateNuGetPreviewGroupSource operation middleware
+func (sh *strictHandler) RevalidateNuGetPreviewGroupSource(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID, packageId string, version string) {
+	var request RevalidateNuGetPreviewGroupSourceRequestObject
+
+	request.GroupId = groupId
+	request.PackageId = packageId
+	request.Version = version
+
+	var body RevalidateNuGetPreviewGroupSourceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevalidateNuGetPreviewGroupSource(ctx, request.(RevalidateNuGetPreviewGroupSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevalidateNuGetPreviewGroupSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevalidateNuGetPreviewGroupSourceResponseObject); ok {
+		if err := validResponse.VisitRevalidateNuGetPreviewGroupSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateNuGetPreviewRepository operation middleware
 func (sh *strictHandler) CreateNuGetPreviewRepository(w http.ResponseWriter, r *http.Request) {
 	var request CreateNuGetPreviewRepositoryRequestObject
@@ -36588,6 +37769,39 @@ func (sh *strictHandler) GetNuGetPreviewRepository(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetNuGetPreviewRepositoryResponseObject); ok {
 		if err := validResponse.VisitGetNuGetPreviewRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceNuGetPreviewRepository operation middleware
+func (sh *strictHandler) ReplaceNuGetPreviewRepository(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID) {
+	var request ReplaceNuGetPreviewRepositoryRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body ReplaceNuGetPreviewRepositoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceNuGetPreviewRepository(ctx, request.(ReplaceNuGetPreviewRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceNuGetPreviewRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceNuGetPreviewRepositoryResponseObject); ok {
+		if err := validResponse.VisitReplaceNuGetPreviewRepositoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

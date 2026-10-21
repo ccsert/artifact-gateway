@@ -345,6 +345,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		if cfg.NuGetPreviewEnabled {
 			gatewayOptions.NuGetPreviewEnabled = true
 			gatewayOptions.NuGetStore = store
+			gatewayOptions.NuGetSources = store
 			gatewayOptions.NuGetObjects = objectStore
 		}
 		handler, err = app.NewGatewayHandler(gatewayOptions)

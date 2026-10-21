@@ -38,14 +38,13 @@ func (m *Module) read(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		return
 	}
 	if len(path) == 1 && path[0] == "index.json" {
-		base := sourceBase(r, repo)
-		writeJSON(w, r, 200, map[string]any{"version": "3.0.0", "resources": []map[string]string{
-			{"@id": base + "flat/", "@type": "PackageBaseAddress/3.0.0"},
-			{"@id": base + "registration/", "@type": "RegistrationsBaseUrl/3.6.0"},
-			{"@id": base + "query", "@type": "SearchQueryService/3.5.0"},
-			{"@id": base + "autocomplete", "@type": "SearchAutocompleteService/3.5.0"},
-			{"@id": origin(r) + "/nuget/" + repo.Name + "/api/v2/package/", "@type": "PackagePublish/2.0.0"},
-		}})
+		if repo.Type == repository.RepositoryTypeProxy {
+			if _, err := m.resources(r.Context(), repo); err != nil {
+				m.failure(w, err)
+				return
+			}
+		}
+		m.serviceIndex(w, r, repo)
 		return
 	}
 	if path[0] == "flat" {
@@ -61,6 +60,19 @@ func (m *Module) read(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		return
 	}
 	m.problem(w, 404, "not_found")
+}
+func (m *Module) serviceIndex(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository) {
+	base := sourceBase(r, repo)
+	resources := []map[string]string{
+		{"@id": base + "flat/", "@type": "PackageBaseAddress/3.0.0"},
+		{"@id": base + "registration/", "@type": "RegistrationsBaseUrl/3.6.0"},
+		{"@id": base + "query", "@type": "SearchQueryService/3.5.0"},
+		{"@id": base + "autocomplete", "@type": "SearchAutocompleteService/3.5.0"},
+	}
+	if repo.Type == repository.RepositoryTypeHosted {
+		resources = append(resources, map[string]string{"@id": origin(r) + "/nuget/" + repo.Name + "/api/v2/package/", "@type": "PackagePublish/2.0.0"})
+	}
+	writeJSON(w, r, 200, map[string]any{"version": "3.0.0", "resources": resources})
 }
 
 func (m *Module) all(ctx context.Context, repo, id string) ([]repository.NuGetPublication, error) {
@@ -106,6 +118,15 @@ func (m *Module) flat(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		return
 	}
 	if len(parts) == 2 && parts[1] == "index.json" {
+		if repo.Type == repository.RepositoryTypeProxy {
+			versions, err := m.proxyVersions(r.Context(), repo, id)
+			if err != nil {
+				m.failure(w, err)
+				return
+			}
+			m.metadataJSON(w, r, map[string]any{"versions": versions})
+			return
+		}
 		items, err := m.all(r.Context(), repo.ID, id)
 		if err != nil {
 			m.failure(w, err)
@@ -133,21 +154,35 @@ func (m *Module) flat(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		return
 	}
 	version = strings.ToLower(version)
+	if parts[2] != id+"."+version+".nupkg" && parts[2] != id+".nuspec" && parts[2] != id+"."+version+".nupkg.sha512" {
+		m.problem(w, 404, "not_found")
+		return
+	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		if _, err = m.proxyPackage(r.Context(), repo, id, version); err != nil {
+			m.failure(w, err)
+			return
+		}
+	}
 	p, err := m.store.GetNuGetPublication(r.Context(), repo.ID, id, version)
 	if err != nil {
 		m.failure(w, err)
 		return
 	}
-	switch parts[2] {
+	m.packageFile(w, r, repo, p, parts[2], actor)
+}
+func (m *Module) packageFile(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, p repository.NuGetPublication, file, actor string) {
+	id, version := p.PackageID, p.Version
+	switch file {
 	case id + "." + version + ".nupkg":
-		result := artifacthttp.ServeObject(w, r, parts[2], artifacthttp.Object{Digest: p.Digest, ObjectKey: p.ObjectKey, ContentType: "application/octet-stream", Size: p.Size}, m.objects)
+		result := artifacthttp.ServeObject(w, r, file, artifacthttp.Object{Digest: p.Digest, ObjectKey: p.ObjectKey, ContentType: "application/octet-stream", Size: p.Size}, m.objects)
 		if result.Status == 200 || result.Status == 206 {
 			_ = m.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: actor, Format: string(repository.FormatNuGet), Resource: id + "@" + version, Representation: "nupkg", Operation: "download", Outcome: repository.AuditResolved, Status: result.Status, Bytes: result.Bytes, OccurredAt: time.Now().UTC()})
 		}
 	case id + ".nuspec":
 		w.Header().Set("Content-Type", "application/xml")
 		inlineHeaders(w, p.Nuspec)
-		http.ServeContent(w, r, parts[2], p.PublishedAt, bytes.NewReader(p.Nuspec))
+		http.ServeContent(w, r, file, p.PublishedAt, bytes.NewReader(p.Nuspec))
 	case id + "." + version + ".nupkg.sha512":
 		meta, err := metadata(p)
 		if err != nil {
@@ -156,7 +191,7 @@ func (m *Module) flat(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		inlineHeaders(w, []byte(meta.PackageHash))
-		http.ServeContent(w, r, parts[2], p.PublishedAt, strings.NewReader(meta.PackageHash))
+		http.ServeContent(w, r, file, p.PublishedAt, strings.NewReader(meta.PackageHash))
 	default:
 		m.problem(w, 404, "not_found")
 	}
@@ -176,6 +211,7 @@ func (m *Module) leaf(r *http.Request, repo repository.HostedRepository, p repos
 	base := sourceBase(r, repo)
 	leafURL := base + "registration/" + p.PackageID + "/" + p.Version + ".json"
 	content := packageURL(r, repo, p.PackageID, p.Version)
+	listed := meta.Listed == nil || *meta.Listed
 	groups := make([]map[string]any, 0, len(meta.DependencyGroups))
 	for _, g := range meta.DependencyGroups {
 		deps := make([]map[string]any, 0, len(g.Dependencies))
@@ -192,7 +228,7 @@ func (m *Module) leaf(r *http.Request, repo repository.HostedRepository, p repos
 		}
 		groups = append(groups, group)
 	}
-	return map[string]any{"@id": leafURL, "listed": true, "packageContent": content, "published": p.PublishedAt.UTC().Format(time.RFC3339Nano), "registration": base + "registration/" + p.PackageID + "/index.json", "catalogEntry": map[string]any{"@id": leafURL + "#catalogEntry", "id": meta.ID, "version": p.Version, "authors": meta.Authors, "description": meta.Description, "listed": true, "published": p.PublishedAt.UTC().Format(time.RFC3339Nano), "dependencyGroups": groups, "packageContent": content, "packageHash": meta.PackageHash, "packageHashAlgorithm": "SHA512"}}, nil
+	return map[string]any{"@id": leafURL, "listed": listed, "packageContent": content, "published": p.PublishedAt.UTC().Format(time.RFC3339Nano), "registration": base + "registration/" + p.PackageID + "/index.json", "catalogEntry": map[string]any{"@id": leafURL + "#catalogEntry", "id": meta.ID, "version": p.Version, "authors": meta.Authors, "description": meta.Description, "listed": listed, "published": p.PublishedAt.UTC().Format(time.RFC3339Nano), "dependencyGroups": groups, "packageContent": content, "packageHash": meta.PackageHash, "packageHashAlgorithm": "SHA512"}}, nil
 }
 func (m *Module) registration(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, parts []string) {
 	if len(parts) < 2 {
@@ -204,7 +240,7 @@ func (m *Module) registration(w http.ResponseWriter, r *http.Request, repo repos
 		m.problem(w, 404, "not_found")
 		return
 	}
-	items, err := m.all(r.Context(), repo.ID, id)
+	items, err := m.packageMetadata(r.Context(), repo, id)
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -213,6 +249,10 @@ func (m *Module) registration(w http.ResponseWriter, r *http.Request, repo repos
 		m.problem(w, 404, "not_found")
 		return
 	}
+	m.registrationItems(w, r, repo, parts, items)
+}
+func (m *Module) registrationItems(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, parts []string, items []repository.NuGetPublication) {
+	id := items[0].PackageID
 	sortedVersions(items)
 	if len(parts) == 2 && parts[1] != "index.json" {
 		version := strings.TrimSuffix(parts[1], ".json")
@@ -267,6 +307,17 @@ func (m *Module) registration(w http.ResponseWriter, r *http.Request, repo repos
 	}
 	m.gzipJSON(w, r, map[string]any{"@id": indexURL, "count": len(pages), "items": pages})
 }
+
+func (m *Module) metadataJSON(w http.ResponseWriter, r *http.Request, value any) {
+	body, err := json.Marshal(value)
+	if err != nil || len(body) > 8<<20 {
+		m.failure(w, errMetadataLimit)
+		return
+	}
+	inlineHeaders(w, body)
+	w.Header().Set("Content-Type", "application/json")
+	http.ServeContent(w, r, "metadata.json", time.Time{}, bytes.NewReader(body))
+}
 func (m *Module) gzipJSON(w http.ResponseWriter, r *http.Request, value any) {
 	body, err := json.Marshal(value)
 	if err != nil || len(body) > 8<<20 {
@@ -285,6 +336,12 @@ func (m *Module) gzipJSON(w http.ResponseWriter, r *http.Request, value any) {
 	w.Header().Set("Content-Encoding", "gzip")
 	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("Content-Length", strconv.Itoa(encoded.Len()))
+	inlineHeaders(w, encoded.Bytes())
+	if r.Header.Get("If-None-Match") == w.Header().Get("ETag") {
+		w.Header().Del("Content-Length")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	w.WriteHeader(200)
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(encoded.Bytes())
@@ -292,37 +349,26 @@ func (m *Module) gzipJSON(w http.ResponseWriter, r *http.Request, value any) {
 }
 
 func (m *Module) search(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, principal authorization.Principal, autocomplete bool) {
-	query := r.URL.Query()
-	if len(query.Get("q")) > 512 || len(query.Get("id")) > 100 || query.Get("prerelease") != "" && query.Get("prerelease") != "true" && query.Get("prerelease") != "false" {
+	skip, take, err := searchParameters(r)
+	if err != nil {
 		m.problem(w, 400, "invalid_search_query")
 		return
 	}
-	skip, take := 0, 20
-	for _, entry := range []struct {
-		name   string
-		target *int
-		max    int
-	}{{"skip", &skip, 10000}, {"take", &take, 100}} {
-		if raw := query.Get(entry.name); raw != "" {
-			n, err := strconv.Atoi(raw)
-			if err != nil || n < 0 || n > entry.max {
-				m.problem(w, 400, "invalid_page")
-				return
-			}
-			*entry.target = n
-		}
-	}
-	items, err := m.all(r.Context(), repo.ID, "")
+	items, err := m.searchMetadata(r.Context(), repo, r.URL.Query(), autocomplete)
 	if err != nil {
 		m.failure(w, err)
 		return
 	}
+	m.searchItems(w, r, repo, principal, autocomplete, items, skip, take, true)
+}
+func (m *Module) searchItems(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, principal authorization.Principal, autocomplete bool, items []repository.NuGetPublication, skip, take int, filterAuthorization bool) {
+	query := r.URL.Query()
 	all := map[string][]repository.NuGetPublication{}
 	pre := strings.EqualFold(query.Get("prerelease"), "true")
 	q := strings.ToLower(query.Get("q"))
 	filterID := strings.ToLower(query.Get("id"))
 	for _, p := range items {
-		if principal.Actor != "anonymous" && !m.access.AuthorizeResource(r.Context(), principal, repo, authorization.RepositoryRead, p.PackageID).Allowed {
+		if filterAuthorization && principal.Actor != "anonymous" && !m.access.AuthorizeResource(r.Context(), principal, repo, authorization.RepositoryRead, p.PackageID).Allowed {
 			continue
 		}
 		if !pre && strings.Contains(p.Version, "-") {
@@ -335,6 +381,9 @@ func (m *Module) search(w http.ResponseWriter, r *http.Request, repo repository.
 		if err != nil {
 			m.failure(w, err)
 			return
+		}
+		if meta.Listed != nil && !*meta.Listed {
+			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(meta.ID+" "+meta.Description), q) {
 			continue
@@ -361,7 +410,7 @@ func (m *Module) search(w http.ResponseWriter, r *http.Request, repo repository.
 		total = len(data)
 		start := min(skip, total)
 		end := min(start+take, total)
-		writeJSON(w, r, 200, map[string]any{"totalHits": total, "data": data[start:end]})
+		m.metadataJSON(w, r, map[string]any{"totalHits": total, "data": data[start:end]})
 		return
 	}
 	data := []map[string]any{}
@@ -380,5 +429,5 @@ func (m *Module) search(w http.ResponseWriter, r *http.Request, repo repository.
 		}
 		data = append(data, map[string]any{"id": meta.ID, "version": latest.Version, "description": meta.Description, "authors": []string{meta.Authors}, "registration": sourceBase(r, repo) + "registration/" + id + "/index.json", "versions": vs})
 	}
-	writeJSON(w, r, 200, map[string]any{"totalHits": total, "data": data})
+	m.metadataJSON(w, r, map[string]any{"totalHits": total, "data": data})
 }

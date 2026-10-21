@@ -9,10 +9,21 @@ import (
 
 func (s *MemoryStore) activeNuGetRepositoryLocked(id string) (HostedRepository, error) {
 	repo, ok := s.hostedRepositories[id]
-	if !ok || repo.State != RepositoryActive || repo.Type != RepositoryTypeHosted || repo.Format != FormatNuGet {
+	if !ok || repo.State != RepositoryActive || (repo.Type != RepositoryTypeHosted && repo.Type != RepositoryTypeProxy) || repo.Format != FormatNuGet {
 		return HostedRepository{}, ErrNotFound
 	}
 	return repo, nil
+}
+
+func (s *MemoryStore) nuGetSessionSourceLocked(in NuGetSession) error {
+	r, err := s.activeNuGetRepositoryLocked(in.RepositoryID)
+	if err != nil {
+		return err
+	}
+	if r.Type == RepositoryTypeHosted && in.SourceVersion != "" || r.Type == RepositoryTypeProxy && r.Version != in.SourceVersion {
+		return ErrNuGetSourceChanged
+	}
+	return nil
 }
 
 func (s *MemoryStore) ReserveNuGetPublication(ctx context.Context, in NuGetSession) (NuGetSession, bool, error) {
@@ -24,7 +35,7 @@ func (s *MemoryStore) ReserveNuGetPublication(ctx context.Context, in NuGetSessi
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := s.activeNuGetRepositoryLocked(in.RepositoryID); err != nil {
+	if err := s.nuGetSessionSourceLocked(in); err != nil {
 		return NuGetSession{}, false, err
 	}
 	if prior, found := s.nugetSessions[in.ID]; found {
@@ -37,7 +48,7 @@ func (s *MemoryStore) ReserveNuGetPublication(ctx context.Context, in NuGetSessi
 		return cloneNuGetSession(prior), true, nil
 	}
 	for _, prior := range s.nugetSessions {
-		if prior.RepositoryID != in.RepositoryID || prior.PackageID != in.PackageID || prior.Version != in.Version {
+		if prior.RepositoryID != in.RepositoryID || prior.PackageID != in.PackageID || prior.Version != in.Version || prior.SourceVersion != in.SourceVersion {
 			continue
 		}
 		if (prior.State == "reserved" || prior.State == "staged") && !prior.ExpiresAt.After(time.Now()) {
@@ -104,7 +115,7 @@ func (s *MemoryStore) StageNuGetPublication(ctx context.Context, in NuGetSession
 	if !ok {
 		return NuGetSession{}, ErrNotFound
 	}
-	if _, err := s.activeNuGetRepositoryLocked(in.RepositoryID); err != nil {
+	if err := s.nuGetSessionSourceLocked(in); err != nil {
 		return NuGetSession{}, err
 	}
 	if !nuGetSessionSame(prior, in) || prior.Actor != in.Actor {
@@ -116,11 +127,12 @@ func (s *MemoryStore) StageNuGetPublication(ctx context.Context, in NuGetSession
 	if prior.State != "reserved" && prior.State != "staged" {
 		return NuGetSession{}, ErrNuGetSessionState
 	}
-	if prior.State == "staged" && (!bytes.Equal(prior.Nuspec, in.Nuspec) || !bytes.Equal(prior.MetadataJSON, in.MetadataJSON)) {
+	if prior.State == "staged" && (!bytes.Equal(prior.Nuspec, in.Nuspec) || !bytes.Equal(prior.MetadataJSON, in.MetadataJSON) || prior.SourceURL != in.SourceURL || prior.RegistrationURL != in.RegistrationURL) {
 		return NuGetSession{}, ErrNuGetPublicationConflict
 	}
 	prior.Nuspec = append([]byte(nil), in.Nuspec...)
 	prior.MetadataJSON = append([]byte(nil), in.MetadataJSON...)
+	prior.SourceURL, prior.RegistrationURL = in.SourceURL, in.RegistrationURL
 	prior.State = "staged"
 	s.nugetSessions[in.ID] = prior
 	return cloneNuGetSession(prior), nil
@@ -140,10 +152,13 @@ func (s *MemoryStore) CommitNuGetPublication(ctx context.Context, id, actor stri
 	if err != nil {
 		return NuGetPublication{}, false, err
 	}
+	if err = s.nuGetSessionSourceLocked(session); err != nil {
+		return NuGetPublication{}, false, err
+	}
 	if session.Actor != actor {
 		return NuGetPublication{}, false, ErrNuGetPublicationConflict
 	}
-	key := nuGetPublicationKey(session.RepositoryID, session.PackageID, session.Version)
+	key := nuGetPublicationKey(session.RepositoryID, session.PackageID, session.Version, session.SourceVersion)
 	if session.State == "committed" {
 		return cloneNuGetPublication(s.nugetPublications[key]), true, nil
 	}
@@ -181,10 +196,15 @@ func (s *MemoryStore) GetNuGetPublication(ctx context.Context, repo, id, version
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if _, err := s.activeNuGetRepositoryLocked(repo); err != nil {
+	r, err := s.activeNuGetRepositoryLocked(repo)
+	if err != nil {
 		return NuGetPublication{}, err
 	}
-	in, ok := s.nugetPublications[nuGetPublicationKey(repo, id, version)]
+	binding := ""
+	if r.Type == RepositoryTypeProxy {
+		binding = r.Version
+	}
+	in, ok := s.nugetPublications[nuGetPublicationKey(repo, id, version, binding)]
 	if !ok {
 		return NuGetPublication{}, ErrNotFound
 	}
@@ -197,15 +217,20 @@ func (s *MemoryStore) ListNuGetPublications(ctx context.Context, repo, id string
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if _, err := s.activeNuGetRepositoryLocked(repo); err != nil {
+	r, err := s.activeNuGetRepositoryLocked(repo)
+	if err != nil {
 		return nil, err
 	}
 	if limit <= 0 || limit > 1000 {
 		limit = 64
 	}
 	out := []NuGetPublication{}
+	binding := ""
+	if r.Type == RepositoryTypeProxy {
+		binding = r.Version
+	}
 	for _, p := range s.nugetPublications {
-		if p.RepositoryID == repo && (id == "" || id == p.PackageID) && p.PackageID+"@"+p.Version > after {
+		if p.RepositoryID == repo && p.SourceVersion == binding && (id == "" || id == p.PackageID) && p.PackageID+"@"+p.Version > after {
 			p = cloneNuGetPublication(p)
 			p.Nuspec = nil
 			out = append(out, p)

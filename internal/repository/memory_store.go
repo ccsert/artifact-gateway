@@ -85,6 +85,8 @@ type MemoryStore struct {
 	nugetSessions          map[string]NuGetSession
 	nugetPublications      map[string]NuGetPublication
 	nugetPublicationLocks  map[string]chan struct{}
+	nugetDocuments         map[string]NuGetSourceDocument
+	nugetAuthorities       map[string]NuGetGroupAuthority
 	aptAssets              map[string]APTAsset
 	aptObjectLocks         map[string]*sync.Mutex
 	aptPublicationSessions map[string]APTPublicationSession

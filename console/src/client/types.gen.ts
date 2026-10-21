@@ -4,9 +4,93 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+export type NuGetPreviewSourceRevalidation = {
+  groupVersion: string;
+  /**
+   * Previously bound source configuration version. Only the same member and complete immutable digest/size can be confirmed after a new source configuration.
+   */
+  repositoryVersion: string;
+};
+
+export type NuGetPreviewRepositoryReplace = {
+  name: string;
+  anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index.
+   */
+  endpoint?: string;
+  /**
+   * Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins.
+   */
+  allowedHosts?: Array<string>;
+  upstreamAuth?: NuGetPreviewUpstreamAuth;
+  egressMode?: "direct" | "environment";
+  version: string;
+};
+
+/**
+ * Write-only source credential, sealed separately from local client credentials. A changed source binding requires a fresh secret or explicit none.
+ */
+export type NuGetPreviewUpstreamAuth = {
+  scheme: "none" | "basic" | "bearer";
+  username?: string;
+};
+
+export type NuGetPreviewUpstreamAuthStatus = {
+  scheme: "none" | "basic" | "bearer";
+  username?: string;
+  credentialsConfigured: boolean;
+};
+
+export type NuGetPreviewGroupInput = {
+  name: string;
+  anonymousRead?: boolean;
+  members: Array<string>;
+  /**
+   * Required when replacing an existing Group. Compared atomically.
+   */
+  version?: string;
+};
+
+export type NuGetPreviewGroup = {
+  id: string;
+  name: string;
+  format: "nuget";
+  preview: true;
+  version: string;
+  anonymousRead?: boolean;
+  members: Array<string>;
+  sourceUrl: string;
+};
+
+/**
+ * Durable authority for the canonical package version. A reorder never changes this owner; a missing or changed owner fails closed.
+ */
+export type NuGetPreviewSource = {
+  groupId: string;
+  packageId: string;
+  version: string;
+  repositoryId: string;
+  repositoryVersion: string;
+  digest: string;
+  size: number;
+};
+
 export type NuGetPreviewRepositoryCreate = {
   name: string;
   anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index.
+   */
+  endpoint?: string;
+  /**
+   * Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins.
+   */
+  allowedHosts?: Array<string>;
+  upstreamAuth?: NuGetPreviewUpstreamAuth;
+  egressMode?: "direct" | "environment";
 };
 
 export type NuGetPreviewRepository = {
@@ -15,6 +99,12 @@ export type NuGetPreviewRepository = {
   format: "nuget";
   preview: true;
   sourceUrl: string;
+  type: "hosted" | "proxy";
+  version: string;
+  endpoint?: string;
+  allowedHosts?: Array<string>;
+  upstreamAuth?: NuGetPreviewUpstreamAuthStatus;
+  egressMode?: "direct" | "environment";
 };
 
 export type NuGetPublicationRequest = {
@@ -46,6 +136,12 @@ export type NuGetPreviewPackage = {
   publishedAt: string;
   packageUrl: string;
   registrationUrl: string;
+  /**
+   * Source configuration namespace of a fully verified Proxy cache publication.
+   */
+  sourceVersion?: string;
+  upstreamPackageUrl?: string;
+  upstreamRegistrationUrl?: string;
 };
 
 export type NuGetPreviewPackageList = {
@@ -2937,6 +3033,48 @@ export type ProxyCacheBrowseItem = {
   assets?: Array<ProxyCacheAsset>;
 };
 
+export type NuGetPreviewRepositoryReplaceWritable = {
+  name: string;
+  anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index.
+   */
+  endpoint?: string;
+  /**
+   * Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins.
+   */
+  allowedHosts?: Array<string>;
+  upstreamAuth?: NuGetPreviewUpstreamAuthWritable;
+  egressMode?: "direct" | "environment";
+  version: string;
+};
+
+/**
+ * Write-only source credential, sealed separately from local client credentials. A changed source binding requires a fresh secret or explicit none.
+ */
+export type NuGetPreviewUpstreamAuthWritable = {
+  scheme: "none" | "basic" | "bearer";
+  username?: string;
+  secret?: string;
+};
+
+export type NuGetPreviewRepositoryCreateWritable = {
+  name: string;
+  anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS V3 service-index URL for a Proxy. Resources are discovered from this index.
+   */
+  endpoint?: string;
+  /**
+   * Explicit additional HTTPS authorities (host and optional port). Permission to fetch does not permit credentials to cross origins.
+   */
+  allowedHosts?: Array<string>;
+  upstreamAuth?: NuGetPreviewUpstreamAuthWritable;
+  egressMode?: "direct" | "environment";
+};
+
 export type RepositoryWritable = {
   id: string;
   name: string;
@@ -3198,6 +3336,254 @@ export type SnapshotId = string;
  */
 export type ConanRevisionQuery = string;
 
+export type RevalidateNuGetPreviewGroupSourceData = {
+  body: NuGetPreviewSourceRevalidation;
+  path: {
+    groupId: string;
+    packageId: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate";
+};
+
+export type RevalidateNuGetPreviewGroupSourceErrors = {
+  /**
+   * Invalid revalidation input
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Canonical version or authority not found
+   */
+  404: unknown;
+  /**
+   * Group/source version or immutable identity conflict
+   */
+  409: unknown;
+  /**
+   * Cache publication reservation expired before verification completed
+   */
+  410: unknown;
+  /**
+   * Unsupported upstream metadata
+   */
+  422: unknown;
+  /**
+   * Upstream authentication or integrity failure
+   */
+  502: unknown;
+  /**
+   * Current source or verified local bytes unavailable
+   */
+  503: unknown;
+};
+
+export type RevalidateNuGetPreviewGroupSourceResponses = {
+  /**
+   * Same immutable identity confirmed against the current source configuration
+   */
+  200: NuGetPreviewSource;
+};
+
+export type RevalidateNuGetPreviewGroupSourceResponse =
+  RevalidateNuGetPreviewGroupSourceResponses[keyof RevalidateNuGetPreviewGroupSourceResponses];
+
+export type CreateNuGetPreviewGroupData = {
+  body: NuGetPreviewGroupInput;
+  path?: never;
+  query?: never;
+  url: "/previews/nuget/groups";
+};
+
+export type CreateNuGetPreviewGroupErrors = {
+  /**
+   * Invalid Group or members
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Name or idempotency conflict
+   */
+  409: unknown;
+  /**
+   * Preview unavailable
+   */
+  503: unknown;
+};
+
+export type CreateNuGetPreviewGroupResponses = {
+  /**
+   * Preview Group
+   */
+  201: NuGetPreviewGroup;
+};
+
+export type CreateNuGetPreviewGroupResponse =
+  CreateNuGetPreviewGroupResponses[keyof CreateNuGetPreviewGroupResponses];
+
+export type GetNuGetPreviewGroupData = {
+  body?: never;
+  path: {
+    groupId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/groups/{groupId}";
+};
+
+export type GetNuGetPreviewGroupErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Group permission required
+   */
+  403: unknown;
+  /**
+   * Preview Group not found
+   */
+  404: unknown;
+  /**
+   * Configured member source changed or became unavailable
+   */
+  409: unknown;
+  /**
+   * Preview unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewGroupResponses = {
+  /**
+   * Preview Group
+   */
+  200: NuGetPreviewGroup;
+};
+
+export type GetNuGetPreviewGroupResponse =
+  GetNuGetPreviewGroupResponses[keyof GetNuGetPreviewGroupResponses];
+
+export type ReplaceNuGetPreviewGroupData = {
+  body: NuGetPreviewGroupInput;
+  path: {
+    groupId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/groups/{groupId}";
+};
+
+export type ReplaceNuGetPreviewGroupErrors = {
+  /**
+   * Invalid Group or members
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Preview Group not found
+   */
+  404: unknown;
+  /**
+   * Group version or name conflict
+   */
+  409: unknown;
+  /**
+   * Preview unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceNuGetPreviewGroupResponses = {
+  /**
+   * Preview Group
+   */
+  200: NuGetPreviewGroup;
+};
+
+export type ReplaceNuGetPreviewGroupResponse =
+  ReplaceNuGetPreviewGroupResponses[keyof ReplaceNuGetPreviewGroupResponses];
+
+export type GetNuGetPreviewGroupSourceData = {
+  body?: never;
+  path: {
+    groupId: string;
+    packageId: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}";
+};
+
+export type GetNuGetPreviewGroupSourceErrors = {
+  /**
+   * Invalid identity
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Group and member permission required
+   */
+  403: unknown;
+  /**
+   * Package not found
+   */
+  404: unknown;
+  /**
+   * Source binding, package or quota conflict
+   */
+  409: unknown;
+  /**
+   * Cache publication reservation expired before verification completed
+   */
+  410: unknown;
+  /**
+   * Unsupported or invalid upstream metadata
+   */
+  422: unknown;
+  /**
+   * Upstream refused authentication or returned invalid content
+   */
+  502: unknown;
+  /**
+   * Required source or verified local bytes unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewGroupSourceResponses = {
+  /**
+   * Verified authority
+   */
+  200: NuGetPreviewSource;
+};
+
+export type GetNuGetPreviewGroupSourceResponse =
+  GetNuGetPreviewGroupSourceResponses[keyof GetNuGetPreviewGroupSourceResponses];
+
 export type GetNuGetPreviewCapacityData = {
   body?: never;
   path: {
@@ -3287,7 +3673,7 @@ export type ReplaceNuGetPreviewQuotaResponse =
   ReplaceNuGetPreviewQuotaResponses[keyof ReplaceNuGetPreviewQuotaResponses];
 
 export type CreateNuGetPreviewRepositoryData = {
-  body: NuGetPreviewRepositoryCreate;
+  body: NuGetPreviewRepositoryCreateWritable;
   path?: never;
   query?: never;
   url: "/previews/nuget/repositories";
@@ -3367,6 +3753,52 @@ export type GetNuGetPreviewRepositoryResponses = {
 
 export type GetNuGetPreviewRepositoryResponse =
   GetNuGetPreviewRepositoryResponses[keyof GetNuGetPreviewRepositoryResponses];
+
+export type ReplaceNuGetPreviewRepositoryData = {
+  body: NuGetPreviewRepositoryReplaceWritable;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}";
+};
+
+export type ReplaceNuGetPreviewRepositoryErrors = {
+  /**
+   * Invalid source or missing fresh credential
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Source configuration version conflict
+   */
+  409: unknown;
+  /**
+   * Preview unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceNuGetPreviewRepositoryResponses = {
+  /**
+   * Updated preview source
+   */
+  200: NuGetPreviewRepository;
+};
+
+export type ReplaceNuGetPreviewRepositoryResponse =
+  ReplaceNuGetPreviewRepositoryResponses[keyof ReplaceNuGetPreviewRepositoryResponses];
 
 export type ListNuGetPreviewPackagesData = {
   body?: never;
@@ -3487,6 +3919,10 @@ export type CreateNuGetPublicationSessionErrors = {
    */
   404: unknown;
   /**
+   * Publication sessions are available only on Hosted repositories
+   */
+  405: unknown;
+  /**
    * Identity, session or quota conflict
    */
   409: unknown;
@@ -3538,6 +3974,10 @@ export type GetNuGetPublicationSessionErrors = {
    */
   404: unknown;
   /**
+   * Publication sessions are available only on Hosted repositories
+   */
+  405: unknown;
+  /**
    * Preview capability unavailable
    */
   503: unknown;
@@ -3580,6 +4020,10 @@ export type StageNuGetPublicationSessionErrors = {
    * Preview resource not found
    */
   404: unknown;
+  /**
+   * Publication sessions are available only on Hosted repositories
+   */
+  405: unknown;
   /**
    * Identity, session or quota conflict
    */
@@ -3635,6 +4079,10 @@ export type CommitNuGetPublicationSessionErrors = {
    * Preview resource not found
    */
   404: unknown;
+  /**
+   * Publication sessions are available only on Hosted repositories
+   */
+  405: unknown;
   /**
    * Identity, session or quota conflict
    */

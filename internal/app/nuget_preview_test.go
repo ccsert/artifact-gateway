@@ -42,7 +42,7 @@ func TestNuGetPreviewExplicitCompositionAndFormalDiscoveryBoundary(t *testing.T)
 	if w := nugetGatewayRequest(t, disabled, "POST", "/api/v2/previews/nuget/repositories", `{"name":"preview"}`, true); w.Code != 503 {
 		t.Fatalf("disabled management=%d %s", w.Code, w.Body.String())
 	}
-	o.NuGetPreviewEnabled, o.NuGetStore, o.NuGetObjects = true, store, objectstore.NewMemoryStore()
+	o.NuGetPreviewEnabled, o.NuGetStore, o.NuGetObjects, o.NuGetSources = true, store, objectstore.NewMemoryStore(), store
 	h, err := NewGatewayHandler(o)
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestNuGetPreviewRejectsIncompleteExplicitDependencies(t *testing.T) {
 func TestNuGetPreviewWorkerDiagnosticsRemainOutsideFormalFormatEnum(t *testing.T) {
 	o := explicitGatewayOptions()
 	store := o.Store.(*repository.MemoryStore)
-	o.NuGetPreviewEnabled, o.NuGetStore, o.NuGetObjects = true, store, objectstore.NewMemoryStore()
+	o.NuGetPreviewEnabled, o.NuGetStore, o.NuGetObjects, o.NuGetSources = true, store, objectstore.NewMemoryStore(), store
 	o.Dependencies.Runtime = DiagnosticRuntime{InstanceID: "preview-worker", WorkerFormats: []repository.Format{repository.FormatMaven, repository.FormatNuGet}, WorkerKinds: []string{"retention"}}
 	now := time.Now().UTC()
 	if err := store.UpsertRuntimeNodeHeartbeat(context.Background(), repository.RuntimeNode{

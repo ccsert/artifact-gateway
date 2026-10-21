@@ -405,3 +405,16 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /nuget/{repository}/v3/{path}`<br>`readNuGetHostedRepresentation` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
 | `HEAD /nuget/{repository}/v3/{path}`<br>`headNuGetHostedRepresentation` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
 | `PUT /nuget/{repository}/api/v2/package/`<br>`publishNuGetHostedPackage` | preview API 暂无 CLI 命令 | #287 | N/A | native-format or preview authorization | N: 独立 opt-in 预览，不注册或发送该 CLI 操作 |
+
+## NuGet Proxy/Group 预览（#288）
+
+以下显式启用的预览操作暂无 agctl 命令，不会将 NuGet 加入正式格式目录或 Console；治理和正式准入仍属 #289。
+
+| Operation | CLI applicability | Owner | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `PUT /previews/nuget/repositories/{repositoryId}`<br>`replaceNuGetPreviewRepository` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/groups`<br>`createNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/groups/{groupId}`<br>`getNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/nuget/groups/{groupId}`<br>`replaceNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version}`<br>`getNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate`<br>`revalidateNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
