@@ -5327,12 +5327,15 @@ type Format string
 
 // FormatProfile defines model for FormatProfile.
 type FormatProfile struct {
-	AnonymousRead    bool                           `json:"anonymousRead"`
-	Format           Format                         `json:"format"`
-	GroupSupported   bool                           `json:"groupSupported"`
-	HostedOperations []RepositoryOperation          `json:"hostedOperations"`
-	ProxyOperations  []RepositoryOperation          `json:"proxyOperations"`
-	RepositoryTypes  []FormatProfileRepositoryTypes `json:"repositoryTypes"`
+	AnonymousRead    bool                  `json:"anonymousRead"`
+	Format           Format                `json:"format"`
+	GroupSupported   bool                  `json:"groupSupported"`
+	HostedOperations []RepositoryOperation `json:"hostedOperations"`
+
+	// OciDiscovery Gateway OCI discovery API support, independent of any upstream's enumeration coverage. Each Catalog/Referrers response reports its actual coverage or an explicit unsupported/error response. Verified content digests do not establish signer trust.
+	OciDiscovery    *OCIDiscoveryProfile           `json:"ociDiscovery,omitempty"`
+	ProxyOperations []RepositoryOperation          `json:"proxyOperations"`
+	RepositoryTypes []FormatProfileRepositoryTypes `json:"repositoryTypes"`
 }
 
 // FormatProfileRepositoryTypes defines model for FormatProfile.RepositoryTypes.
@@ -6159,6 +6162,21 @@ type OCIBearer struct {
 
 	// Service Exact challenge audience. At most 256 UTF-8 bytes; no whitespace or control characters.
 	Service string `json:"service"`
+}
+
+// OCIDiscoveryProfile Gateway OCI discovery API support, independent of any upstream's enumeration coverage. Each Catalog/Referrers response reports its actual coverage or an explicit unsupported/error response. Verified content digests do not establish signer trust.
+type OCIDiscoveryProfile struct {
+	// Catalog Supports authorized, bounded Catalog snapshots, including Proxy and Group sources.
+	Catalog bool `json:"catalog"`
+
+	// Referrers Supports OCI 1.1 Referrers API discovery and validated subject/artifact content from one bound source.
+	Referrers bool `json:"referrers"`
+
+	// SignatureVerification Verifies signature identity and trust policy. Currently false; digest/subject validation alone does not verify the signer.
+	SignatureVerification bool `json:"signatureVerification"`
+
+	// TagFallback Supports the referrers tag schema fallback. Currently false.
+	TagFallback bool `json:"tagFallback"`
 }
 
 // OCIImage defines model for OCIImage.

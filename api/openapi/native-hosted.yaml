@@ -217,6 +217,10 @@ paths:
     "$ref": "./protocols/oci.yaml#/v2_name_manifests_reference"
   "/v2/{name}/tags/list":
     "$ref": "./protocols/oci.yaml#/v2_name_tags_list"
+  "/v2/_catalog":
+    "$ref": "./protocols/oci.yaml#/v2_catalog"
+  "/v2/{name}/referrers/{digest}":
+    "$ref": "./protocols/oci.yaml#/v2_name_referrers_digest"
   "/repository/maven/{repository}/{assetPath}":
     "$ref": "./protocols/maven.yaml#/repository_maven_repository_assetPath"
   "/repository/maven/{repository}/coordinates/{coordinate}:commit":

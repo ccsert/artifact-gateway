@@ -350,16 +350,16 @@ func TestNativeOCIReferrersPaginateAndExcludeDeletedManifests(t *testing.T) {
 
 func TestNativeOCICatalogPaginatesAndFiltersRepositoryGrants(t *testing.T) {
 	store := repository.NewMemoryStore()
-	visible, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "visible", Name: "catalog-visible", Format: repository.FormatOCI})
+	visible, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "catalog-visible", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
 	}
-	hidden, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "hidden", Name: "catalog-hidden", Format: repository.FormatOCI})
+	hidden, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "catalog-hidden", Format: repository.FormatOCI})
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw", Name: "catalog-raw", Format: repository.FormatRaw})
-	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
+	handler := newTestGateway(t, GatewayOptions{OCIDiscoveryStore: store, Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	publish := func(repositoryName, image string) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPut, "/v2/"+repositoryName+"/"+image+"/manifests/latest", strings.NewReader(`{"schemaVersion":2}`))

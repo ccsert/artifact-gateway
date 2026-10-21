@@ -227,6 +227,7 @@ export type FormatProfile = {
   anonymousRead: boolean;
   hostedOperations: Array<RepositoryOperation>;
   proxyOperations: Array<RepositoryOperation>;
+  ociDiscovery?: OciDiscoveryProfile;
 };
 
 export type FormatProfileList = {
@@ -1802,6 +1803,28 @@ export type EmailPreview = {
   html: string;
   text: string;
   templateVersion: string;
+};
+
+/**
+ * Gateway OCI discovery API support, independent of any upstream's enumeration coverage. Each Catalog/Referrers response reports its actual coverage or an explicit unsupported/error response. Verified content digests do not establish signer trust.
+ */
+export type OciDiscoveryProfile = {
+  /**
+   * Supports authorized, bounded Catalog snapshots, including Proxy and Group sources.
+   */
+  catalog: boolean;
+  /**
+   * Supports OCI 1.1 Referrers API discovery and validated subject/artifact content from one bound source.
+   */
+  referrers: boolean;
+  /**
+   * Supports the referrers tag schema fallback. Currently false.
+   */
+  tagFallback: boolean;
+  /**
+   * Verifies signature identity and trust policy. Currently false; digest/subject validation alone does not verify the signer.
+   */
+  signatureVerification: boolean;
 };
 
 export type AuthenticationKind =

@@ -2,6 +2,29 @@ package repository
 
 import "testing"
 
+func TestOCIDiscoveryProfileIsExplicitAndDefensivelyCopied(t *testing.T) {
+	profile, ok := FormatProfileFor(FormatOCI)
+	if !ok || profile.OCIDiscovery == nil || !profile.OCIDiscovery.Catalog || !profile.OCIDiscovery.Referrers || profile.OCIDiscovery.TagFallback || profile.OCIDiscovery.SignatureVerification {
+		t.Fatalf("OCI discovery=%+v", profile.OCIDiscovery)
+	}
+	profile.OCIDiscovery.Catalog = false
+	profiles := SupportedFormatProfiles()
+	for _, candidate := range profiles {
+		if candidate.Format == FormatOCI {
+			if candidate.OCIDiscovery == nil || !candidate.OCIDiscovery.Catalog {
+				t.Fatal("profile caller mutated shared OCI discovery capabilities")
+			}
+			candidate.OCIDiscovery.Referrers = false
+		} else if candidate.OCIDiscovery != nil {
+			t.Fatalf("OCI discovery leaked into %s", candidate.Format)
+		}
+	}
+	again, _ := FormatProfileFor(FormatOCI)
+	if !again.OCIDiscovery.Referrers {
+		t.Fatal("list caller mutated shared OCI discovery capabilities")
+	}
+}
+
 func TestPyPIYankCapabilityBelongsToHosted(t *testing.T) {
 	if !FormatSupportsOperation(FormatPyPI, RepositoryTypeHosted, RepositoryOperationYank) || FormatSupportsOperation(FormatPyPI, RepositoryTypeProxy, RepositoryOperationYank) {
 		t.Fatal("PyPI yank mutation capability does not match repository types")

@@ -766,7 +766,7 @@ func publishNPMGroupTestVersion(t *testing.T, store *repository.MemoryStore, rep
 // createV2Group wires a V2 HostedGroup with the given members in the store.
 func createV2Group(t *testing.T, store *repository.MemoryStore, name string, format repository.Format, members ...repository.GroupMember) repository.HostedGroup {
 	t.Helper()
-	group, _, err := store.CreateHostedGroupIdempotently(context.Background(), repository.HostedGroup{ID: "group-" + name, Name: name, Format: format, Members: members}, "test", "key-"+name, "payload")
+	group, _, err := store.CreateHostedGroupIdempotently(context.Background(), repository.HostedGroup{ID: uuid.NewString(), Name: name, Format: format, Members: members}, "test", "key-"+name, "payload")
 	if err != nil {
 		t.Fatal(err)
 	}

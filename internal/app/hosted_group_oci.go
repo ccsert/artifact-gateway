@@ -33,7 +33,7 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		return
 	}
 	name, resource, reference, _, ok := parseNativeOCIPath(r.URL.Path)
-	if !ok || (resource != "manifest" && resource != "blob" && resource != "tags") {
+	if !ok || (resource != "manifest" && resource != "blob" && resource != "tags" && resource != "referrers") {
 		writeOCIError(w, http.StatusNotFound, "NAME_UNKNOWN", "repository name not known to registry")
 		return
 	}
@@ -75,6 +75,22 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		writeOCIChallenge(w, r)
 		return
 	}
+	scope := ociDiscoveryScope{id: "group:" + group.ID, name: group.Name, group: &group}
+	for _, member := range members {
+		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
+		if err != nil {
+			writeReferrerFailure(w, err)
+			return
+		}
+		scope.repositories = append(scope.repositories, repo)
+	}
+	if resource == "referrers" {
+		h.native.discoveryReferrers(w, r, scope, imageName, reference, principal)
+		return
+	}
+	if (resource == "manifest" || resource == "blob") && h.native.serveOCIBoundObject(w, r, scope, imageName, map[string]string{"manifest": "manifests", "blob": "blobs"}[resource], reference, principal) {
+		return
+	}
 	if resource == "tags" {
 		h.tags(w, r, resolver, group, imageName, principal, members)
 		return
@@ -97,8 +113,9 @@ func (h v2GroupOCIHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			}
 			continue
 		}
-		h.proxy.serveV2GroupProxy(w, r, group.Name, member, imageName, upstreamResource, reference, principal.Actor)
-		return
+		if h.proxy.serveV2GroupProxy(w, r, group.Name, member, imageName, upstreamResource, reference, principal.Actor) {
+			return
+		}
 	}
 	resolver.auditResolution(r.Context(), group, repository.FormatOCI, r.URL.Path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 	writeOCIError(w, http.StatusNotFound, map[string]string{"manifest": "MANIFEST_UNKNOWN", "blob": "BLOB_UNKNOWN"}[resource], "resource unknown to registry")

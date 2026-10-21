@@ -247,6 +247,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: upstreamClient, Authenticator: authenticator, Cache: cache}
 	publicationScanner := NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
 	nativeOCI := newNativeOCIHandler(store, options.Storage[repository.FormatOCI], authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
+	nativeOCI.discovery, nativeOCI.groups = options.OCIDiscoveryStore, store
 	rawLegacy := RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}
 	rawModule := rawformat.New(rawformat.Options{Store: store, Repositories: store, Groups: store, Objects: options.Storage[repository.FormatRaw], Authenticator: authenticator,
 		Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {

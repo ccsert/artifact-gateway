@@ -1,4 +1,13 @@
 export const formatsZhCN = {
+  "formats.ociDiscovery": "OCI 目录与关联制品",
+  "formats.ociCatalogCoverage":
+    "原生 Catalog 按权限列出镜像名称与来源，并注明上游目录是否完整。下方缓存列表不代表完整库存。",
+  "formats.ociReferrerAuthority":
+    "关联制品跟随镜像摘要的来源。Group 成员调整后仍保持原来源；来源配置变化时需重新核查。",
+  "formats.ociDiscoveryTrust":
+    "发现 SBOM 或签名只确认内容关联，尚未验证签名者身份与信任策略。",
+  "formats.ociReferrersApiRequired":
+    "上游须支持 Referrers API；不支持时会明确报错，不使用标签回退。",
   "formats.name": "名称",
   "formats.filterByImageNamePrefix": "按镜像名前缀过滤…",
   "formats.artifact": "制品",

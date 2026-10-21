@@ -6963,6 +6963,481 @@
       },
       "x-gateway-visibility": "committed_only"
     },
+    "/v2/_catalog": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "n",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 100
+          }
+        },
+        {
+          "name": "last",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "snapshot",
+          "in": "query",
+          "description": "Server-issued principal-bound snapshot returned in Link. Configuration or authorization changes reject this cursor.",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listOCICatalog",
+        "description": "Names use the directly readable repository-or-group/image prefix. Coverage describes only the authorized view; cached image names never substitute for upstream enumeration. Catalog supports bounded complete or partial results; entirely unsupported sources return 501.",
+        "security": [
+          {
+            "ociBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized immutable catalog page with explicit coverage",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "OCI-Gateway-Discovery-Coverage": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "repositories",
+                    "gateway"
+                  ],
+                  "properties": {
+                    "repositories": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "gateway": {
+                      "type": "object",
+                      "required": [
+                        "coverage",
+                        "sources",
+                        "entries",
+                        "snapshot"
+                      ],
+                      "properties": {
+                        "coverage": {
+                          "type": "string",
+                          "enum": [
+                            "complete",
+                            "partial",
+                            "unsupported"
+                          ]
+                        },
+                        "snapshot": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "sources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "namespace",
+                              "state"
+                            ],
+                            "properties": {
+                              "namespace": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "complete",
+                                  "partial",
+                                  "unsupported"
+                                ]
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "unavailable",
+                                  "upstream_authorization",
+                                  "client_unavailable",
+                                  "catalog_unsupported",
+                                  "invalid_response",
+                                  "invalid_pagination",
+                                  "pagination_loop",
+                                  "invalid_name",
+                                  "name_budget",
+                                  "page_budget",
+                                  "safety_budget"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "entries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "name",
+                              "sources"
+                            ],
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "sources": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "409": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "429": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "501": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "502": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "503": {
+            "$ref": "#/components/responses/OCIError"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headOCICatalog",
+        "description": "Catalog page metadata with the same principal-bound snapshot and coverage rules as GET.",
+        "security": [
+          {
+            "ociBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated discovery page headers without a response body",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "OCI-Gateway-Discovery-Coverage": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "409": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "429": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "501": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "502": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "503": {
+            "$ref": "#/components/responses/OCIError"
+          }
+        }
+      }
+    },
+    "/v2/{name}/referrers/{digest}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OCIName"
+        },
+        {
+          "name": "digest",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        },
+        {
+          "name": "artifactType",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        {
+          "name": "n",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 100
+          }
+        },
+        {
+          "name": "last",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "snapshot",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listOCIReferrers",
+        "description": "Verified OCI 1.1 Referrers API discovery. The subject, artifacts and their complete content closure stay with one persistent authority; Group reordering cannot inject another member's artifact. Missing subject/children, invalid subject/media/digest, source changes and unsupported upstream APIs fail explicitly. Referrers tag fallback and signer trust verification are not implemented.",
+        "security": [
+          {
+            "ociBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified and optionally artifactType-filtered OCI image index",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "OCI-Filters-Applied": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "OCI-Gateway-Discovery-Coverage": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "complete"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/vnd.oci.image.index.v1+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schemaVersion",
+                    "manifests"
+                  ],
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer",
+                      "const": 2
+                    },
+                    "mediaType": {
+                      "type": "string"
+                    },
+                    "manifests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "mediaType",
+                          "digest",
+                          "size"
+                        ],
+                        "properties": {
+                          "mediaType": {
+                            "type": "string"
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "artifactType": {
+                            "type": "string"
+                          },
+                          "annotations": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "409": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "429": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "501": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "502": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "503": {
+            "$ref": "#/components/responses/OCIError"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headOCIReferrers",
+        "description": "Referrers page metadata with the same subject authority and full validation rules as GET.",
+        "security": [
+          {
+            "ociBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated discovery page headers without a response body",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "OCI-Gateway-Discovery-Coverage": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "complete"
+                  ]
+                }
+              },
+              "OCI-Filters-Applied": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OCIUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "409": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "429": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "501": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "502": {
+            "$ref": "#/components/responses/OCIError"
+          },
+          "503": {
+            "$ref": "#/components/responses/OCIError"
+          }
+        }
+      }
+    },
     "/repository/maven/{repository}/{assetPath}": {
       "servers": [
         {
@@ -8487,6 +8962,9 @@
             "items": {
               "$ref": "#/components/schemas/RepositoryOperation"
             }
+          },
+          "ociDiscovery": {
+            "$ref": "#/components/schemas/OCIDiscoveryProfile"
           }
         }
       },
@@ -11616,6 +12094,34 @@
           },
           "templateVersion": {
             "type": "string"
+          }
+        }
+      },
+      "OCIDiscoveryProfile": {
+        "type": "object",
+        "description": "Gateway OCI discovery API support, independent of any upstream's enumeration coverage. Each Catalog/Referrers response reports its actual coverage or an explicit unsupported/error response. Verified content digests do not establish signer trust.",
+        "required": [
+          "catalog",
+          "referrers",
+          "tagFallback",
+          "signatureVerification"
+        ],
+        "properties": {
+          "catalog": {
+            "type": "boolean",
+            "description": "Supports authorized, bounded Catalog snapshots, including Proxy and Group sources."
+          },
+          "referrers": {
+            "type": "boolean",
+            "description": "Supports OCI 1.1 Referrers API discovery and validated subject/artifact content from one bound source."
+          },
+          "tagFallback": {
+            "type": "boolean",
+            "description": "Supports the referrers tag schema fallback. Currently false."
+          },
+          "signatureVerification": {
+            "type": "boolean",
+            "description": "Verifies signature identity and trust policy. Currently false; digest/subject validation alone does not verify the signer."
           }
         }
       },

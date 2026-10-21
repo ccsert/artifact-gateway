@@ -28,6 +28,16 @@ type FormatProfile struct {
 	PublicationScanning bool
 	HostedOperations    []RepositoryOperation
 	ProxyOperations     []RepositoryOperation
+	OCIDiscovery        *OCIDiscoveryProfile
+}
+
+// OCIDiscoveryProfile describes Gateway API support. Upstream enumeration
+// coverage is reported by each Catalog/Referrers response, not this profile.
+type OCIDiscoveryProfile struct {
+	Catalog               bool
+	Referrers             bool
+	TagFallback           bool
+	SignatureVerification bool
 }
 
 var supportedFormatProfiles = []FormatProfile{
@@ -140,7 +150,7 @@ var supportedFormatProfiles = []FormatProfile{
 }
 
 func formatProfile(format Format) FormatProfile {
-	return FormatProfile{
+	profile := FormatProfile{
 		Format:              format,
 		RepositoryTypes:     []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
 		GroupSupported:      true,
@@ -163,6 +173,10 @@ func formatProfile(format Format) FormatProfile {
 			RepositoryOperationReclaim,
 		},
 	}
+	if format == FormatOCI {
+		profile.OCIDiscovery = &OCIDiscoveryProfile{Catalog: true, Referrers: true}
+	}
+	return profile
 }
 
 // SupportedFormatProfiles returns a defensive copy in display order.
@@ -273,5 +287,9 @@ func cloneFormatProfile(profile FormatProfile) FormatProfile {
 	profile.RepositoryTypes = append([]RepositoryType(nil), profile.RepositoryTypes...)
 	profile.HostedOperations = append([]RepositoryOperation(nil), profile.HostedOperations...)
 	profile.ProxyOperations = append([]RepositoryOperation(nil), profile.ProxyOperations...)
+	if profile.OCIDiscovery != nil {
+		discovery := *profile.OCIDiscovery
+		profile.OCIDiscovery = &discovery
+	}
 	return profile
 }

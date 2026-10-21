@@ -65,6 +65,13 @@ export function formatViews(format: string | undefined): FormatViews {
   let views = cache.get(descriptor.format);
   if (!views) {
     views = {
+      BrowserNotice:
+        descriptor.format === "oci"
+          ? deferredSlot<Record<string, never>>(
+              descriptor.format,
+              "BrowserNotice",
+            )
+          : undefined,
       ArtifactDetail: deferredSlot<ArtifactDetailProps>(
         descriptor.format,
         "ArtifactDetail",

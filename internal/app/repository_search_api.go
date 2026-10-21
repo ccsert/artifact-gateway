@@ -276,6 +276,15 @@ func formatProfileResponse(profile repository.FormatProfile) adminopenapi.Format
 	for _, operation := range profile.ProxyOperations {
 		proxyOperations = append(proxyOperations, adminopenapi.RepositoryOperation(operation))
 	}
+	var discovery *adminopenapi.OCIDiscoveryProfile
+	if profile.OCIDiscovery != nil {
+		discovery = &adminopenapi.OCIDiscoveryProfile{
+			Catalog:               profile.OCIDiscovery.Catalog,
+			Referrers:             profile.OCIDiscovery.Referrers,
+			TagFallback:           profile.OCIDiscovery.TagFallback,
+			SignatureVerification: profile.OCIDiscovery.SignatureVerification,
+		}
+	}
 	return adminopenapi.FormatProfile{
 		Format:           adminopenapi.Format(profile.Format),
 		RepositoryTypes:  repositoryTypes,
@@ -283,6 +292,7 @@ func formatProfileResponse(profile repository.FormatProfile) adminopenapi.Format
 		AnonymousRead:    profile.AnonymousRead,
 		HostedOperations: hostedOperations,
 		ProxyOperations:  proxyOperations,
+		OciDiscovery:     discovery,
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -49,6 +50,7 @@ type GatewayOptions struct {
 	ConanPublications repository.ConanPublicationStore
 	NPMMetadata       repository.NPMMetadataStore
 	NPMRestore        repository.NPMRestoreStore
+	OCIDiscoveryStore ocidiscovery.Store
 	Storage           ObjectStores
 	// NuGet is an opt-in preview, outside the admitted format catalog.
 	// Its persistent ports are supplied explicitly, never inferred from Store.
@@ -108,6 +110,9 @@ func (o GatewayOptions) validate() error {
 	}
 	if o.Upstream != nil && nilDependency(o.Upstream) {
 		failures = append(failures, errors.New("upstream client is nil"))
+	}
+	if o.OCIDiscoveryStore != nil && nilDependency(o.OCIDiscoveryStore) {
+		failures = append(failures, errors.New("OCI discovery store is nil"))
 	}
 	if o.ConanPublications != nil && nilDependency(o.ConanPublications) {
 		failures = append(failures, errors.New("conan publication capability is nil"))

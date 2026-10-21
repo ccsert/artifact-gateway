@@ -64,6 +64,25 @@ FormatProfile:
       uniqueItems: true
       items:
         "$ref": "#/RepositoryOperation"
+    ociDiscovery:
+      "$ref": "#/OCIDiscoveryProfile"
+OCIDiscoveryProfile:
+  type: object
+  description: Gateway OCI discovery API support, independent of any upstream's enumeration coverage. Each Catalog/Referrers response reports its actual coverage or an explicit unsupported/error response. Verified content digests do not establish signer trust.
+  required: [catalog, referrers, tagFallback, signatureVerification]
+  properties:
+    catalog:
+      type: boolean
+      description: Supports authorized, bounded Catalog snapshots, including Proxy and Group sources.
+    referrers:
+      type: boolean
+      description: Supports OCI 1.1 Referrers API discovery and validated subject/artifact content from one bound source.
+    tagFallback:
+      type: boolean
+      description: Supports the referrers tag schema fallback. Currently false.
+    signatureVerification:
+      type: boolean
+      description: Verifies signature identity and trust policy. Currently false; digest/subject validation alone does not verify the signer.
 FormatProfileList:
   type: object
   required:
