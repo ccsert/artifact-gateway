@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console now requires Vite 7.3.7, the patched 7.x release for the launch-editor advisories GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm (#439). The generated lockfile retains every other package version, and dependency audit gains no exception.
+
 - Gateway, agctl and the Go sidecars now build with Go 1.26.10 to address GO-2026-6809 in `crypto/x509` (#438). Build and integration images share the verified official multi-architecture digest; dependency audit remains strict without a new exception.
 
 - Private upstream authentication now covers npm, PyPI, Cargo, APT, Raw and Conan (#432–#434), alongside Go/Maven/OCI. Basic/Bearer credentials stay sealed, Groups resolve the current member binding, cache publication rejects stale source versions, and unknown old cache bindings require a fresh read. Conan Basic performs the native token handshake. Console supports rotation and clearing for every admitted Proxy format. The isolated gate verifies 48 official-client cold/hot Proxy/Group consumptions; see [Proxy egress](docs/proxy-egress-design.md#private-npm-pypi-cargo-apt-raw-and-conan-upstreams).

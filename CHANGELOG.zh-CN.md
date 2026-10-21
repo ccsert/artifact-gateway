@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Console 将 Vite 最低版本提升到已修复 launch-editor 公告 GHSA-698v-4r3x-3vcv、GHSA-r825-w8mm-5pxw 与 GHSA-587h-7wmj-h5pm 的 7.3.7（#439）。生成的锁文件保持其余包版本，依赖审计不增加例外。
+
 - Gateway、agctl 与 Go sidecar 升级为 Go 1.26.10，修复 `crypto/x509` 的 GO-2026-6809（#438）。构建与集成镜像共用已核验的官方多架构摘要，依赖审计继续严格执行，不增加例外。
 
 - npm、PyPI、Cargo、APT、Raw 与 Conan 补齐私有上游认证，与 Go/Maven/OCI 共用加密凭据配置（#432–#434）。Group 逐请求使用成员当前绑定，持久缓存写入拒绝陈旧源版本，未知历史缓存须重新抓取；Conan Basic 执行原生 token 握手。Console 为全部已准入 Proxy 格式提供轮换与清除；隔离门禁验证 48 次官方客户端冷/热 Proxy/Group 消费，见[Proxy 出站设计](docs/proxy-egress-design.zh-CN.md#npmpypicargoaptraw-与-conan-私有上游)。
