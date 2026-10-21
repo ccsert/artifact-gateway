@@ -215,6 +215,8 @@ The editable target/timeout inventory is `scripts/ci-contract-lanes.json`:
 | maven-oci-auth | `private-upstream-auth-e2e` | 10 minutes |
 | six-format-auth | `private-upstream-formats-e2e` | 15 minutes |
 
+Every native lane first runs `go mod download` with a five-minute preparation limit. Its log is separate from the unchanged target: first-download Go diagnostics must not enter the existing strict producer JSONL stream. Both cold benchmark modes start with empty private Go caches and include this preparation in the measured critical path; build and protocol-client caches retain their original behavior.
+
 Core retains the other existing targets, including the 15-minute published
 backup and 10-minute upgrade checks. Run one lane with
 `./scripts/ci-local.sh --lane inventory`; `--job contract` runs core and all six

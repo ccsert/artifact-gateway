@@ -113,7 +113,7 @@ run_contract_lane() {
   local evidence="output/ci-contract-local/${lane}-${BASHPID}-${RANDOM}"
   local args=(run "$lane" --local --output "$evidence")
   if [[ $keep_going -eq 1 ]]; then args+=(--keep-going); fi
-  run "contract lane: $lane" python3 scripts/ci-contract.py "${args[@]}"
+  run "contract lane: $lane" python3 scripts/ci-contract.py "${args[@]}" </dev/null
 }
 
 run_contract() {

@@ -221,6 +221,15 @@
       "timeoutMinutes": 10,
       "steps": [
         {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
+        {
           "name": "nexus-migration-client-e2e",
           "command": [
             "make",
@@ -234,6 +243,15 @@
     "inventory": {
       "timeoutMinutes": 10,
       "steps": [
+        {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
         {
           "name": "nexus-inventory-scan-e2e",
           "command": [
@@ -251,6 +269,15 @@
       "timeoutMinutes": 15,
       "steps": [
         {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
+        {
           "name": "native-nuget-e2e",
           "command": [
             "make",
@@ -266,6 +293,15 @@
     "oci-migration": {
       "timeoutMinutes": 10,
       "steps": [
+        {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
         {
           "name": "nexus-oci-migration-e2e",
           "command": [
@@ -283,6 +319,15 @@
       "timeoutMinutes": 10,
       "steps": [
         {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
+        {
           "name": "private-upstream-auth-e2e",
           "command": [
             "make",
@@ -298,6 +343,15 @@
     "six-format-auth": {
       "timeoutMinutes": 15,
       "steps": [
+        {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
         {
           "name": "private-upstream-formats-e2e",
           "command": [

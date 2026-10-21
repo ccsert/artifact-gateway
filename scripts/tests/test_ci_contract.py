@@ -240,6 +240,27 @@ class ContractGateTests(unittest.TestCase):
                 proc.terminate()
                 proc.communicate(timeout=50)
 
+    def test_local_all_lane_entrypoint_survives_a_stdin_reader(self):
+        binary = self.root / 'fake-bin'
+        binary.mkdir()
+        trace = self.root / 'invoked-lanes.txt'
+        worker = binary / 'python3'
+        worker.write_text(f'#!{sys.executable}\n'
+                          'import os,sys\n'
+                          "if sys.argv[1:2] == ['-c']:\n"
+                          f'    os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])\n'
+                          f'with open({str(trace)!r}, "a") as output: output.write(sys.argv[3]+"\\n")\n'
+                          'sys.stdin.read()\n')
+        worker.chmod(0o700)
+        make = binary / 'make'
+        make.write_text('#!/bin/sh\nexit 0\n')
+        make.chmod(0o700)
+        env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'])
+        result = subprocess.run([str(ROOT / 'scripts/ci-local.sh'), '--job', 'contract'], cwd=ROOT,
+                                env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(trace.read_text().splitlines(), ['core', *ci.PLAN['nativeOrder']])
+
     def test_deadline_and_resistant_descendants_survive_neither_pipe_shape(self):
         for mode in ('leader-eof', 'descendant-eof', 'descendant-inherit'):
             for trigger in ('timed_out', 'cancelled'):
@@ -298,10 +319,13 @@ class ContractGateTests(unittest.TestCase):
         expected = re.findall(r'^\s+(?:run:\s+)?make ([a-z0-9-]+)\s*$', original, re.M)
         actual = [s['command'][1] for lane in ci.PLAN['lanes'].values() for s in lane['steps'] if s['command'][0] == 'make']
         self.assertCountEqual(actual, expected)
-        self.assertEqual(ci.PLAN['lanes']['nuget']['steps'][0]['timeoutSeconds'], 900)
-        self.assertEqual(ci.PLAN['lanes']['six-format-auth']['steps'][0]['timeoutSeconds'], 900)
+        self.assertEqual(ci.PLAN['lanes']['nuget']['steps'][-1]['timeoutSeconds'], 900)
+        self.assertEqual(ci.PLAN['lanes']['six-format-auth']['steps'][-1]['timeoutSeconds'], 900)
         for lane in ('migration-clients', 'inventory', 'oci-migration', 'maven-oci-auth'):
-            self.assertEqual(ci.PLAN['lanes'][lane]['steps'][0]['timeoutSeconds'], 600)
+            self.assertEqual(ci.PLAN['lanes'][lane]['steps'][-1]['timeoutSeconds'], 600)
+        for lane in ci.PLAN['nativeOrder']:
+            self.assertEqual(ci.PLAN['lanes'][lane]['steps'][0]['command'], ['go', 'mod', 'download'])
+            self.assertEqual(ci.PLAN['lanes'][lane]['steps'][0]['timeoutSeconds'], 300)
         steps = {s['name']: s for s in ci.PLAN['lanes']['core']['steps']}
         self.assertEqual(steps['published-native-backup-test']['timeoutSeconds'], 900)
         self.assertEqual(steps['upgrade-readiness']['timeoutSeconds'], 600)

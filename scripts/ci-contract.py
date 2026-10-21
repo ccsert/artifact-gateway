@@ -106,7 +106,7 @@ def signal_group(pgid, sig):
 def run_command(command, log, env, timeout=None):
     """A closed pipe or exited leader cannot end supervision of a live group."""
     started = time.monotonic()
-    proc = subprocess.Popen(command, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+    proc = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, start_new_session=True)
     stopped = killed = None
     reason = None

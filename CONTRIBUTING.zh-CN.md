@@ -182,6 +182,8 @@ lane 独立启动；原生 matrix 使用 `fail-fast: false`，最多同时调度
 | maven-oci-auth | `private-upstream-auth-e2e` | 10 分钟 |
 | six-format-auth | `private-upstream-formats-e2e` | 15 分钟 |
 
+每条原生 lane 先执行限时五分钟的 `go mod download`，单独保存准备日志，防止首次下载诊断混入原脚本严格解析的 JSONL 测试流。两组冷缓存性能对照均从空的私有 Go 缓存开始，并将该准备耗时计入关键路径；构建与协议客户端缓存保留原有行为。
+
 核心保留其它既有目标，包括发布备份 15 分钟、升级 10 分钟的检查。
 `./scripts/ci-local.sh --lane inventory` 单独执行一条 lane；`--job contract`
 执行核心、全部六条 lane，以及原来额外的本地 CLI 栈检查。本地 OpenAPI
