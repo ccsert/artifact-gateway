@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -31,15 +32,26 @@ class ContractGateTests(unittest.TestCase):
             directory.mkdir()
             source = {'head': self.head, 'tree': '2' * 40, 'businessDigest': '3' * 64}
             ci.write(directory / 'source.json', source)
-            (directory / 'log').write_text('original unmodified producer log\n')
+            (directory / 'logs').mkdir()
+            for index in range(len(ci.PLAN['lanes'][lane]['steps'])):
+                (directory / 'logs' / f'{index:02d}.log').write_text('original unmodified producer log\n')
+            for raw in ci.PLAN['lanes'][lane]['rawDirectories']:
+                if lane != 'core':
+                    ci.write(directory / 'raw' / Path(raw).name / 'owned-project' / 'cleanup.json', {'exitCode': 0})
+                    (directory / 'raw' / Path(raw).name / 'owned-project' / 'results.jsonl').write_text('{"Action":"pass","Test":"mandatory-native-case"}\n')
             item = {**source, 'lane': lane, 'prefix': 'contract', 'attempt': '1',
                     'status': 'success', 'runId': os.environ.get('GITHUB_RUN_ID', 'local-test'),
                     'steps': [{'name': step['name'], 'plannedCommand': step['command'],
                                'status': 'success', 'exitCode': 0,
+                               'processGroup': 123, 'remainingLiveGroupMembers': [],
                                'timeoutSeconds': step['timeoutSeconds']}
                               for step in ci.PLAN['lanes'][lane]['steps']],
-                    'cleanup': {'ownedTemporaryDirectoryRemoved': True, 'remainingNewResources': {}},
-                    'filesSHA256': {p.name: ci.sha(p) for p in directory.iterdir()}}
+                    'cleanup': {'ownedTemporaryDirectoryRemoved': True,
+                                'dockerAuditScope': 'dedicated GitHub runner',
+                                'before': {k: [] for k in ('containers', 'volumes', 'networks')},
+                                'remainingNewResources': {k: [] for k in ('containers', 'volumes', 'networks')}},
+                    'cases': {'run': ['mandatory-native-case'], 'pass': ['mandatory-native-case'], 'fail': [], 'skip': []},
+                    'filesSHA256': {str(p.relative_to(directory)): ci.sha(p) for p in directory.rglob('*') if p.is_file()}}
             self.reports[lane] = item
             ci.write(directory / 'report.json', item)
 
@@ -83,16 +95,20 @@ class ContractGateTests(unittest.TestCase):
         original = copy.deepcopy(self.reports['inventory']['steps'])
         for changed in ([], [{**original[0], 'plannedCommand': ['true']}],
                         [{**original[0], 'timeoutSeconds': 601}],
-                        [{**original[0], 'exitCode': 1}]):
+                        [{**original[0], 'exitCode': 1}],
+                        [{**original[0], 'exitCode': False}],
+                        [{**original[0], 'processGroup': None}],
+                        [{**original[0], 'remainingLiveGroupMembers': None}],
+                        [{**original[0], 'remainingLiveGroupMembers': [456]}]):
             self.change(steps=changed)
             with self.subTest(steps=changed), self.assertRaises(ValueError):
                 self.validate()
 
     def test_corrupt_or_missing_raw_logs_reject(self):
-        (self.root / 'inventory/log').write_text('altered')
+        (self.root / 'inventory/logs/00.log').write_text('altered')
         with self.assertRaises(ValueError):
             self.validate()
-        (self.root / 'inventory/log').unlink()
+        (self.root / 'inventory/logs/00.log').unlink()
         with self.assertRaises(ValueError):
             self.validate()
 
@@ -119,6 +135,20 @@ class ContractGateTests(unittest.TestCase):
                         {'ownedTemporaryDirectoryRemoved': True, 'remainingNewResources': {'containers': ['owned-leftover']}}):
             self.change(cleanup=cleanup)
             with self.subTest(cleanup=cleanup), self.assertRaises(ValueError):
+                self.validate()
+
+    def test_missing_cleanup_cases_or_planned_logs_never_passes(self):
+        original = copy.deepcopy(self.reports['inventory'])
+        variants = [
+            {'cleanup': {'ownedTemporaryDirectoryRemoved': True}},
+            {'cases': None},
+            {'cases': {'run': [], 'pass': [], 'fail': [], 'skip': []}},
+            {'cases': {'run': [None], 'pass': ['case'], 'fail': [], 'skip': []}},
+            {'filesSHA256': {'source.json': ci.sha(self.root / 'inventory/source.json')}}]
+        for changes in variants:
+            self.reports['inventory'] = copy.deepcopy(original)
+            self.change(**changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.validate()
 
     def test_duplicate_same_attempt_rejects(self):
@@ -209,6 +239,58 @@ class ContractGateTests(unittest.TestCase):
             if proc.poll() is None:
                 proc.terminate()
                 proc.communicate(timeout=50)
+
+    def test_deadline_and_resistant_descendants_survive_neither_pipe_shape(self):
+        for mode in ('leader-eof', 'descendant-eof', 'descendant-inherit'):
+            for trigger in ('timed_out', 'cancelled'):
+                with self.subTest(mode=mode, trigger=trigger):
+                    name = mode + '-' + trigger
+                    ready = self.root / (name + '.json')
+                    if mode == 'leader-eof':
+                        body = ('import json,os,pathlib,time; '
+                                f'pathlib.Path({str(ready)!r}).write_text(json.dumps({{"pid":os.getpid(),"pgid":os.getpgrp()}})); '
+                                'os.close(1); os.close(2); time.sleep(30)')
+                    else:
+                        child = ('import json,os,pathlib,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); '
+                                 f'pathlib.Path({str(ready)!r}).write_text(json.dumps({{"pid":os.getpid(),"pgid":os.getpgrp()}})); time.sleep(30)')
+                        redirect = ',stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL' if mode == 'descendant-eof' else ''
+                        body = ('import pathlib,subprocess,sys,time; '
+                                f'subprocess.Popen([sys.executable,"-B","-c",{child!r}]{redirect}); '
+                                f'p=pathlib.Path({str(ready)!r});\nwhile not p.exists(): time.sleep(.01)\n'
+                                'print("owned descendant ready",flush=True); time.sleep(30)')
+                    deadline = '.4' if trigger == 'timed_out' else 'None'
+                    driver = ('import importlib.util,json,os,sys; from pathlib import Path; '
+                              f's=importlib.util.spec_from_file_location("c",{str(ROOT / "scripts/ci-contract.py")!r}); '
+                              'c=importlib.util.module_from_spec(s); s.loader.exec_module(c); c.TERMINATION_GRACE_SECONDS=.1; '
+                              f'r=c.run_command([sys.executable,"-B","-c",{body!r}],Path({str(self.root / (name + ".log"))!r}),dict(os.environ),{deadline}); '
+                              'print(json.dumps(r),flush=True)')
+                    proc = subprocess.Popen([sys.executable, '-B', '-c', driver], stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT, start_new_session=True)
+                    try:
+                        if trigger == 'cancelled':
+                            expires = time.monotonic() + 5
+                            while not ready.exists() and time.monotonic() < expires:
+                                time.sleep(.01)
+                            self.assertTrue(ready.exists(), 'owned child did not become ready')
+                            proc.send_signal(signal.SIGTERM)
+                        output = proc.communicate(timeout=8)[0].decode()
+                        self.assertEqual(proc.returncode, 0, output)
+                        result = json.loads(output.splitlines()[-1])
+                        self.assertEqual(result['status'], trigger)
+                        self.assertEqual(result['remainingLiveGroupMembers'], [])
+                        self.assertFalse(ci.live_group_members(result['processGroup']))
+                    finally:
+                        if ready.exists():
+                            owned_group = json.loads(ready.read_text())['pgid']
+                            if ci.live_group_members(owned_group):
+                                ci.signal_group(owned_group, signal.SIGKILL)
+                        if proc.poll() is None:
+                            proc.terminate()
+                            try:
+                                proc.communicate(timeout=3)
+                            except subprocess.TimeoutExpired:
+                                proc.kill()
+                                proc.communicate(timeout=3)
 
     def test_mapping_preserves_original_make_targets_and_timeouts(self):
         baseline = subprocess.check_output(['git', 'show', ci.PLAN['baseline'] + ':.github/workflows/ci.yml'], cwd=ROOT, text=True)

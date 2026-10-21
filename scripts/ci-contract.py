@@ -77,12 +77,38 @@ def docker_inventory():
     return inventory
 
 
+TERMINATION_GRACE_SECONDS = 45
+
+
+def live_group_members(pgid):
+    """Only inspect the group created by this supervisor; zombies cannot run."""
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return []
+    result = subprocess.run(['ps', '-A', '-o', 'pid=,pgid=,stat='],
+                            capture_output=True, text=True, check=True, timeout=5)
+    members = []
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and int(fields[1]) == pgid and not fields[2].startswith(('Z', 'X')):
+            members.append(int(fields[0]))
+    return members
+
+
+def signal_group(pgid, sig):
+    try:
+        os.killpg(pgid, sig)
+    except ProcessLookupError:
+        pass
+
+
 def run_command(command, log, env, timeout=None):
-    """Stream bytes and forward cancellation only to this command's process group."""
+    """A closed pipe or exited leader cannot end supervision of a live group."""
     started = time.monotonic()
     proc = subprocess.Popen(command, cwd=ROOT, env=env, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, start_new_session=True)
-    stopped = None
+    stopped = killed = None
     reason = None
 
     def stop(signum, _frame=None):
@@ -90,23 +116,34 @@ def run_command(command, log, env, timeout=None):
         if stopped is None:
             reason = 'cancelled' if signum else 'timed_out'
             stopped = time.monotonic()
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            signal_group(proc.pid, signal.SIGTERM)
 
     previous = {sig: signal.signal(sig, stop) for sig in (signal.SIGINT, signal.SIGTERM)}
     selector = selectors.DefaultSelector()
     selector.register(proc.stdout, selectors.EVENT_READ)
     try:
         with log.open('wb') as output:
-            while selector.get_map():
-                elapsed = time.monotonic() - started
-                if timeout and elapsed >= timeout and stopped is None:
+            while True:
+                running = proc.poll() is None
+                alive = running or bool(live_group_members(proc.pid))
+                if not selector.get_map() and not alive:
+                    break
+                tick = time.monotonic()
+                if timeout and tick - started >= timeout and stopped is None:
                     stop(0)
-                if stopped and time.monotonic() - stopped > 45 and proc.poll() is None:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                for key, _ in selector.select(1):
+                elif not running and alive and stopped is None:
+                    stopped = tick
+                    reason = 'owned_processes_remaining'
+                    signal_group(proc.pid, signal.SIGTERM)
+                if stopped is not None and tick - stopped >= TERMINATION_GRACE_SECONDS and killed is None:
+                    signal_group(proc.pid, signal.SIGKILL)
+                    killed = tick
+                if killed is not None and tick - killed > 5:
+                    raise RuntimeError('owned command group or output pipe did not settle after SIGKILL')
+                if not selector.get_map():
+                    time.sleep(0.05)
+                    continue
+                for key, _ in selector.select(0.1):
                     data = os.read(key.fileobj.fileno(), 65536)
                     if not data:
                         selector.unregister(key.fileobj)
@@ -119,18 +156,23 @@ def run_command(command, log, env, timeout=None):
     finally:
         selector.close()
         proc.stdout.close()
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
-        if proc.poll() is None:
-            os.killpg(proc.pid, signal.SIGTERM)
-            try:
-                proc.wait(timeout=45)
-            except subprocess.TimeoutExpired:
-                os.killpg(proc.pid, signal.SIGKILL)
-                proc.wait()
+        # Exception paths also terminate descendants after the leader exits.
+        try:
+            if proc.poll() is None or live_group_members(proc.pid):
+                signal_group(proc.pid, signal.SIGKILL)
+            proc.wait()
+            settle_deadline = time.monotonic() + 5
+            while live_group_members(proc.pid):
+                if time.monotonic() >= settle_deadline:
+                    raise RuntimeError('owned process group still contains running descendants')
+                time.sleep(0.05)
+        finally:
+            for sig, handler in previous.items():
+                signal.signal(sig, handler)
     return {'command': command, 'exitCode': code,
             'status': reason or ('success' if code == 0 else 'failure'),
-            'durationSeconds': time.monotonic() - started, 'timeoutSeconds': timeout}
+            'durationSeconds': time.monotonic() - started, 'timeoutSeconds': timeout,
+            'processGroup': proc.pid, 'remainingLiveGroupMembers': []}
 
 
 def case_summary(directory):
@@ -260,18 +302,47 @@ def validate_evidence(root, prefix, expected_lanes, head, attempt):
             raise ValueError('missing steps: ' + lane)
         for observed, planned in zip(item['steps'], steps):
             if (observed.get('plannedCommand') != planned['command'] or observed.get('status') != 'success'
-                    or observed.get('exitCode') != 0 or observed.get('timeoutSeconds') != planned['timeoutSeconds']):
+                    or type(observed.get('exitCode')) is not int or observed['exitCode'] != 0
+                    or observed.get('timeoutSeconds') != planned['timeoutSeconds']
+                    or type(observed.get('processGroup')) is not int or observed['processGroup'] < 1
+                    or observed.get('remainingLiveGroupMembers') != []):
                 raise ValueError('step mismatch: ' + lane)
         cleanup = item.get('cleanup', {})
-        if not cleanup.get('ownedTemporaryDirectoryRemoved') or any(cleanup.get('remainingNewResources', {}).values()):
+        inventories = cleanup.get('remainingNewResources')
+        kinds = {'containers', 'volumes', 'networks'}
+        if (cleanup.get('ownedTemporaryDirectoryRemoved') is not True
+                or cleanup.get('dockerAuditScope') != 'dedicated GitHub runner'
+                or not isinstance(inventories, dict) or set(inventories) != kinds
+                or any(not isinstance(v, list) or v for v in inventories.values())
+                or not isinstance(cleanup.get('before'), dict) or set(cleanup['before']) != kinds
+                or any(not isinstance(v, list) for v in cleanup['before'].values())):
             raise ValueError('owned cleanup failed: ' + lane)
+        cases = item.get('cases')
+        if (not isinstance(cases, dict) or set(cases) != {'run', 'pass', 'fail', 'skip'}
+                or any(not isinstance(v, list) or any(not isinstance(case, str) or not case for case in v)
+                       for v in cases.values())):
+            raise ValueError('case evidence missing: ' + lane)
+        if lane != 'core' and (not cases['run'] or not cases['pass'] or cases['fail'] or cases['skip']):
+            raise ValueError('mandatory native cases missing, failed or skipped: ' + lane)
         files = item.get('filesSHA256', {})
-        if not files or 'source.json' not in files:
+        required_logs = {f'logs/{i:02d}.log' for i in range(len(steps))}
+        if not files or not {'source.json', *required_logs}.issubset(files):
             raise ValueError('missing file manifest: ' + lane)
+        for directory in PLAN['lanes'][lane]['rawDirectories']:
+            if lane != 'core':
+                prefix_path = 'raw/' + Path(directory).name + '/'
+                if not any(name.startswith(prefix_path) and name.endswith('/cleanup.json') for name in files):
+                    raise ValueError('original producer cleanup report missing: ' + lane)
+                if not any(name.startswith(prefix_path) and name.endswith('.jsonl') for name in files):
+                    raise ValueError('original producer case log missing: ' + lane)
         for name, digest in files.items():
             file = path.parent / name
             if not file.resolve().is_relative_to(path.parent.resolve()) or not file.is_file() or sha(file) != digest:
                 raise ValueError('artifact bytes mismatch: ' + lane + '/' + name)
+            if name.startswith('raw/') and name.endswith('/cleanup.json'):
+                producer_cleanup = json.loads(file.read_text())
+                if type(producer_cleanup.get('exitCode')) is not int or producer_cleanup['exitCode'] != 0:
+                    raise ValueError('producer cleanup failed: ' + lane)
         source = json.loads((path.parent / 'source.json').read_text())
         if any(source.get(k) != item.get(k) for k in ('head', 'tree', 'businessDigest')):
             raise ValueError('source manifest differs from report: ' + lane)
