@@ -302,6 +302,10 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /raw/{repository}/`<br>`listRawRootDirectory` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /apt/{repository}/{path}`<br>`getAptAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `HEAD /apt/{repository}/{path}`<br>`headAptAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
+| `GET /v2/_catalog`<br>`listOCICatalog` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #315 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
+| `HEAD /v2/_catalog`<br>`headOCICatalog` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #315 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
+| `GET /v2/{name}/referrers/{digest}`<br>`listOCIReferrers` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #316 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
+| `HEAD /v2/{name}/referrers/{digest}`<br>`headOCIReferrers` | ORAS/OCI 原生发现；不另建 agctl Registry 客户端 | #316 | N/A | 显式仓库资源发现授权 | N：Catalog/Referrers 由官方 OCI 客户端使用；agctl 不注册或发送该协议动作 |
 | `POST /v2/{name}/blobs/uploads/`<br>`startOCIUpload` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /v2/{name}/blobs/uploads/{uuid}`<br>`getOCIUploadStatus` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `PATCH /v2/{name}/blobs/uploads/{uuid}`<br>`appendOCIUpload` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
