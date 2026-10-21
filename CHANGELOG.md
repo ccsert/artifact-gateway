@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Gateway, agctl and the Go sidecars now build with Go 1.26.10 to address GO-2026-6809 in `crypto/x509` (#438). Build and integration images share the verified official multi-architecture digest; dependency audit remains strict without a new exception.
+
 - Private upstream authentication now covers npm, PyPI, Cargo, APT, Raw and Conan (#432–#434), alongside Go/Maven/OCI. Basic/Bearer credentials stay sealed, Groups resolve the current member binding, cache publication rejects stale source versions, and unknown old cache bindings require a fresh read. Conan Basic performs the native token handshake. Console supports rotation and clearing for every admitted Proxy format. The isolated gate verifies 48 official-client cold/hot Proxy/Group consumptions; see [Proxy egress](docs/proxy-egress-design.md#private-npm-pypi-cargo-apt-raw-and-conan-upstreams).
 
 - NuGet Hosted has an explicit, default-disabled [preview](docs/nuget-hosted-preview.md) with independent management and native routes (#287). Verified nupkg staging and commit, dependency metadata, native reads, quota reservations, response-loss recovery and reference-safe expired-upload collection remain separate from formal format admission. The official .NET SDK gate publishes a three-package dependency chain, restores across Gateway/PostgreSQL/RustFS restart and executes offline; Proxy/Group and full governance remain tracked by #288/#289.
