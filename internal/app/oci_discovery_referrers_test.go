@@ -33,6 +33,11 @@ type discoveryArtifactFixture struct {
 
 func newDiscoveryArtifactFixture(t *testing.T, payload string) discoveryArtifactFixture {
 	t.Helper()
+	return newDiscoveryArtifactFixtureWithImageLayer(t, payload, nil)
+}
+
+func newDiscoveryArtifactFixtureWithImageLayer(t *testing.T, payload string, imageLayer []byte) discoveryArtifactFixture {
+	t.Helper()
 	f := discoveryArtifactFixture{objects: map[string]discoveryFixtureObject{}}
 	add := func(media string, body []byte) discovery.Descriptor {
 		d := discovery.Descriptor{MediaType: media, Digest: ocigraph.Digest(body), Size: int64(len(body))}
@@ -46,8 +51,15 @@ func newDiscoveryArtifactFixture(t *testing.T, payload string) discoveryArtifact
 		}
 		return body
 	}
-	config := add("application/vnd.oci.image.config.v1+json", encode(map[string]any{"architecture": runtime.GOARCH, "os": "linux", "rootfs": map[string]any{"type": "layers", "diff_ids": []string{}}}))
-	f.subject = add(ocigraph.OCIManifest, encode(map[string]any{"schemaVersion": 2, "mediaType": ocigraph.OCIManifest, "config": config, "layers": []any{}}))
+	layers := []discovery.Descriptor{}
+	diffIDs := []string{}
+	if len(imageLayer) != 0 {
+		layer := add("application/vnd.oci.image.layer.v1.tar", imageLayer)
+		layers = append(layers, layer)
+		diffIDs = append(diffIDs, layer.Digest)
+	}
+	config := add("application/vnd.oci.image.config.v1+json", encode(map[string]any{"architecture": runtime.GOARCH, "os": "linux", "rootfs": map[string]any{"type": "layers", "diff_ids": diffIDs}}))
+	f.subject = add(ocigraph.OCIManifest, encode(map[string]any{"schemaVersion": 2, "mediaType": ocigraph.OCIManifest, "config": config, "layers": layers}))
 	empty := add("application/vnd.oci.empty.v1+json", []byte("{}"))
 	layer := add("application/spdx+json", []byte(payload))
 	layer.Annotations = map[string]string{"org.opencontainers.image.title": "sbom.spdx.json"}

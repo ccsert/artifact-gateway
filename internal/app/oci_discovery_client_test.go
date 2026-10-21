@@ -45,7 +45,7 @@ func requireDiscoveryClient(t *testing.T, ctx context.Context, environment []str
 
 // Every Docker pull uses a new daemon and volume. The user's daemon only hosts
 // the labelled fixture; it never receives the image under test or credentials.
-func ociDiscoveryDockerPull(t *testing.T, reference, credential string, config []byte, wantSuccess bool) {
+func ociDiscoveryDockerPull(t *testing.T, reference, credential string, config, imageLayer []byte, wantSuccess bool) {
 	t.Helper()
 	project, image := os.Getenv("OCI_DISCOVERY_PROJECT"), os.Getenv("OCI_DISCOVERY_DIND_IMAGE")
 	if project == "" || !strings.HasPrefix(image, "docker.io/library/docker@sha256:") {
@@ -132,6 +132,7 @@ func ociDiscoveryDockerPull(t *testing.T, reference, credential string, config [
 	if inventory := run("exec", name, "docker", "image", "ls", "--all", "--quiet"); len(bytes.TrimSpace(inventory)) != 0 {
 		t.Fatal("Docker target image cache was not empty")
 	}
+	t.Log("official Docker: pinned fresh daemon and empty image cache verified")
 	if out, err := ociDiscoveryClientCommand(ctx, environment, []byte(credential), "docker", "exec", "-i", name, "docker", "--config", "/client", "login", "--username", "owned-client", "--password-stdin", host); err != nil {
 		t.Fatalf("owned Docker credential login: %v %s", err, out)
 	}
@@ -151,14 +152,32 @@ func ociDiscoveryDockerPull(t *testing.T, reference, credential string, config [
 	if inspect := run("exec", name, "docker", "image", "inspect", reference, "--format", "{{.Id}}"); strings.TrimSpace(string(inspect)) != ocigraph.Digest(config) {
 		t.Fatalf("Docker image config identity differs: %s", inspect)
 	}
-	command := exec.CommandContext(ctx, "docker", "exec", name, "docker", "image", "save", reference)
+	var sourceConfig struct {
+		RootFS struct {
+			DiffIDs []string `json:"diff_ids"`
+		} `json:"rootfs"`
+	}
+	var actualDiffIDs []string
+	if json.Unmarshal(config, &sourceConfig) != nil || len(imageLayer) == 0 || len(sourceConfig.RootFS.DiffIDs) != 1 || sourceConfig.RootFS.DiffIDs[0] != ocigraph.Digest(imageLayer) {
+		t.Fatal("owned source image config did not bind its exact original layer")
+	}
+	layers := run("exec", name, "docker", "image", "inspect", reference, "--format", "{{json .RootFS.Layers}}")
+	if json.Unmarshal(layers, &actualDiffIDs) != nil || len(actualDiffIDs) != 1 || actualDiffIDs[0] != sourceConfig.RootFS.DiffIDs[0] {
+		t.Fatalf("Docker image original layer identity differs: %s", layers)
+	}
+	t.Log("official Docker: digest pull and exact config identity verified")
+	// Export only the image ID already proved to equal the original config.
+	command := exec.CommandContext(ctx, "docker", "exec", name, "docker", "image", "save", ocigraph.Digest(config))
 	command.Env = environment
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
 	saved, err := command.Output()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("official Docker image save failed: %v\n%s", err, stderr.Bytes())
 	}
 	archive := tar.NewReader(bytes.NewReader(saved))
 	matched := false
+	layerMatched := false
 	for {
 		header, err := archive.Next()
 		if err == io.EOF {
@@ -177,11 +196,34 @@ func ociDiscoveryDockerPull(t *testing.T, reference, credential string, config [
 		if bytes.Equal(data, config) {
 			matched = true
 		}
+		if bytes.Equal(data, imageLayer) {
+			layerMatched = true
+		}
 	}
 	if !matched {
 		t.Fatal("official Docker archive did not retain the exact source config bytes")
 	}
-	t.Log("official Docker: empty daemon cache, digest pull, exact original config bytes")
+	if !layerMatched {
+		t.Fatal("official Docker archive did not retain the exact source layer tar bytes")
+	}
+	t.Log("official Docker: empty daemon cache, digest pull, exact original config and layer tar bytes")
+}
+
+func ociDiscoveryOriginalImageLayer(t *testing.T) []byte {
+	t.Helper()
+	var body bytes.Buffer
+	archive := tar.NewWriter(&body)
+	payload := []byte("owned OCI discovery image layer\n")
+	if err := archive.WriteHeader(&tar.Header{Name: "oci-discovery-proof.txt", Mode: 0644, Size: int64(len(payload)), ModTime: time.Unix(0, 0), Typeflag: tar.TypeReg, Format: tar.FormatUSTAR}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := archive.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return body.Bytes()
 }
 
 func TestPostgresRustFSOCIDiscoveryOfficialORASAndDocker(t *testing.T) {
@@ -191,7 +233,8 @@ func TestPostgresRustFSOCIDiscoveryOfficialORASAndDocker(t *testing.T) {
 	}
 	for _, scheme := range []repository.UpstreamAuthScheme{repository.UpstreamAuthSchemeBasic, repository.UpstreamAuthSchemeBearer} {
 		t.Run(string(scheme), func(t *testing.T) {
-			artifact := newDiscoveryArtifactFixture(t, `{"SPDXID":"official-discovery-sbom"}`)
+			imageLayer := ociDiscoveryOriginalImageLayer(t)
+			artifact := newDiscoveryArtifactFixtureWithImageLayer(t, `{"SPDXID":"official-discovery-sbom"}`, imageLayer)
 			var requests atomic.Int32
 			var offline atomic.Bool
 			const sourceSecret = "owned-discovery-source-secret"
@@ -316,6 +359,7 @@ func TestPostgresRustFSOCIDiscoveryOfficialORASAndDocker(t *testing.T) {
 							t.Fatalf("official ORAS complete original closure %s differs: %v", digest, err)
 						}
 					}
+					t.Logf("official ORAS %s %s: Catalog/discover/pull and complete original OCI-layout bytes verified", round, name)
 					cancel()
 					root := artifact.objects[artifact.subject.Digest]
 					var manifest struct {
@@ -332,7 +376,7 @@ func TestPostgresRustFSOCIDiscoveryOfficialORASAndDocker(t *testing.T) {
 						server.Close()
 						t.Fatal(err)
 					}
-					ociDiscoveryDockerPull(t, "host.docker.internal:"+port+"/"+name+"/team/app@"+artifact.subject.Digest, credential, artifact.objects[manifest.Config.Digest].body, true)
+					ociDiscoveryDockerPull(t, "host.docker.internal:"+port+"/"+name+"/team/app@"+artifact.subject.Digest, credential, artifact.objects[manifest.Config.Digest].body, imageLayer, true)
 					t.Logf("official ORAS+Docker %s %s: original digest/bytes, empty consumer caches", round, name)
 				}
 				if round != "cold" && requests.Load() != before {
@@ -350,7 +394,7 @@ func TestPostgresRustFSOCIDiscoveryOfficialORASAndDocker(t *testing.T) {
 						server.Close()
 						t.Fatal(err)
 					}
-					ociDiscoveryDockerPull(t, "host.docker.internal:"+port+"/"+group.Name+"/private/secret@"+artifact.subject.Digest, credential, nil, false)
+					ociDiscoveryDockerPull(t, "host.docker.internal:"+port+"/"+group.Name+"/private/secret@"+artifact.subject.Digest, credential, nil, nil, false)
 					if requests.Load() != before {
 						server.Close()
 						t.Fatal("restricted Docker pull contacted the private source")
