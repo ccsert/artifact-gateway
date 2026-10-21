@@ -40,8 +40,9 @@ subject 从第一个有权限且真实持有它的成员解析；根不存在时
 subject 注入自己的签名。
 
 Gateway 逐项获取制品 manifest，核对 subject 完整描述符、媒体类型、原始大小
-与摘要，并检查 config、manifest、blob 的完整依赖闭包。完整核验后才在本地
-应用 `artifactType` 过滤。原样跟随返回的 `Link` 获取稳定分页，不能向已有快照
+与摘要，并检查 config、manifest、blob 的完整依赖闭包。Referrers 注解来自
+已验证的制品 manifest/index；会补齐描述符中遗漏的注解，拒绝冲突或未经验证
+的描述符值。完整核验后才在本地应用 `artifactType` 过滤。原样跟随返回的 `Link` 获取稳定分页，不能向已有快照
 替换过滤条件或 subject。不支持 Referrers API 的上游返回 501，不采用标签回退。
 
 成功来源按稳定身份、作用域、镜像和 subject 持久绑定。受限身份不能抢先改变
@@ -49,6 +50,7 @@ Gateway 逐项获取制品 manifest，核对 subject 完整描述符、媒体类
 保留原来源。删除该来源、撤销授权、修改源仓库配置或版本，会拒绝既有绑定，
 不会自动改选其它来源。当前没有对同一 subject 的隐式重绑操作；确需替换上游
 时，应使用新的仓库身份。后续通过同一名称读取 manifest/blob 也遵守此边界。
+即使仓库允许真实匿名读取，显式提交的错误或已撤销凭据仍返回 401。
 
 使用独立 ORAS registry 配置保存凭据，例如：
 

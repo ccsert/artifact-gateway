@@ -157,14 +157,21 @@ func (h nativeOCIHandler) discoverSubject(ctx context.Context, scope ociDiscover
 	root := graph.nodes[subject].object
 	rootDescriptor := discovery.Descriptor{Digest: root.Digest, MediaType: root.MediaType, Size: root.Size}
 	for i, ref := range refs {
-		_, artifactType, err := graph.visit(ctx, discovery.Requirement{Descriptor: ref, Resource: "manifests"}, &rootDescriptor, 0)
+		_, metadata, err := graph.visit(ctx, discovery.Requirement{Descriptor: ref, Resource: "manifests"}, &rootDescriptor, 0)
 		if errors.Is(err, repository.ErrNotFound) {
 			err = discovery.ErrInvalid
 		}
 		if err != nil {
 			return discovery.Binding{}, nil, err
 		}
-		refs[i].ArtifactType = artifactType
+		for key, value := range ref.Annotations {
+			verified, found := metadata.Annotations[key]
+			if !found || verified != value {
+				return discovery.Binding{}, nil, discovery.ErrInvalid
+			}
+		}
+		refs[i].ArtifactType = metadata.ArtifactType
+		refs[i].Annotations = metadata.Annotations
 	}
 	guards = uniqueDiscoveryGuards(guards)
 	binding = discovery.Binding{Scope: scope.id, Owner: discovery.OwnerForActor(p.Actor), Image: image, Subject: subject, SourceID: source.ID, SourceVersion: source.Version, Actor: p.Actor, Guards: guards, Objects: graph.objects(), Referrers: refs, FetchedAt: time.Now().UTC()}
@@ -177,6 +184,9 @@ func (h nativeOCIHandler) discoverSubject(ctx context.Context, scope ociDiscover
 func (h nativeOCIHandler) discoveryReferrers(w http.ResponseWriter, r *http.Request, scope ociDiscoveryScope, image, subject string, p Principal) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeOCIError(w, 405, "UNSUPPORTED", "method not allowed")
+		return
+	}
+	if rejectFailedOCIDiscoveryAuthentication(w, r, p) {
 		return
 	}
 	if h.discovery == nil || h.proxy == nil || h.proxy.Cache == nil {
@@ -256,6 +266,9 @@ func (h nativeOCIHandler) serveOCIBoundObject(w http.ResponseWriter, r *http.Req
 	if h.discovery == nil || !ocigraph.ValidDigest(digest) {
 		return false
 	}
+	if rejectFailedOCIDiscoveryAuthentication(w, r, p) {
+		return true
+	}
 	binding, object, err := h.discovery.GetOCIBoundObject(r.Context(), scope.id, discovery.OwnerForActor(p.Actor), image, digest)
 	if errors.Is(err, discovery.ErrNotFound) {
 		return false
@@ -283,5 +296,15 @@ func (h nativeOCIHandler) serveOCIBoundObject(w http.ResponseWriter, r *http.Req
 		}
 	}
 	serveCachedOCIContent(w, r, digest, content)
+	return true
+}
+
+// The surrounding protocol can admit unauthenticated public reads. A supplied
+// credential that failed authentication must never inherit that anonymous view.
+func rejectFailedOCIDiscoveryAuthentication(w http.ResponseWriter, r *http.Request, p Principal) bool {
+	if !isAnonymous(p) || r.Header.Get("Authorization") == "" {
+		return false
+	}
+	writeOCIChallenge(w, r)
 	return true
 }

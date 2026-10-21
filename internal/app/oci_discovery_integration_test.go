@@ -23,6 +23,25 @@ type postgresDiscoveryFixture struct {
 	control *PostgresCacheControlStore
 }
 
+// This fixture owns its global policy view; all identity, grants, repositories,
+// bindings and content use the actual PostgreSQL/RustFS ports. No shared global
+// policy row is modified in an integration database used by other packages.
+type ociAnonymousPostgresFixture struct{ *repository.PostgresStore }
+
+func (*ociAnonymousPostgresFixture) GetAnonymousAccessPolicy(context.Context) (repository.AnonymousAccessPolicy, error) {
+	return repository.AnonymousAccessPolicy{Enabled: true, Version: "1"}, nil
+}
+
+func TestPostgresRustFSOCIDiscoveryExplicitCredentialsNeverBecomeAnonymous(t *testing.T) {
+	f := newPostgresDiscoveryFixture(t)
+	testOCIExplicitCredentials(t, &ociAnonymousPostgresFixture{f.store}, f.store, f.objects, f.control)
+}
+
+func TestPostgresRustFSOCIDiscoveryDescriptorAnnotationsFromVerifiedManifest(t *testing.T) {
+	f := newPostgresDiscoveryFixture(t)
+	testOCIReferrerAnnotations(t, f.store, f.store, f.objects, f.control)
+}
+
 type catalogVersionSwitchPostgresStore struct {
 	*repository.PostgresStore
 	afterRepositoryPage func()

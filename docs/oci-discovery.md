@@ -52,8 +52,10 @@ its own signatures to an authoritative subject found elsewhere.
 
 Gateway fetches and checks each advertised artifact manifest, its exact subject
 descriptor, media type, original size and digest, and every config, manifest
-and blob in the content closure. `artifactType` filtering is applied after full
-validation. Follow the returned `Link` for stable local pages; the filter and
+and blob in the content closure. Referrer annotations are copied from the
+verified artifact manifest/index; omitted descriptor annotations are filled in,
+and conflicting or unverified descriptor values are rejected. `artifactType`
+filtering is applied after full validation. Follow the returned `Link` for stable local pages; the filter and
 subject cannot be substituted into another snapshot. Unsupported upstream
 Referrers APIs return 501; there is no referrers-tag fallback.
 
@@ -65,7 +67,8 @@ revoking access or changing that repository's configuration/version rejects
 the existing binding; it never switches sources. No implicit rebind operation
 is provided for an existing subject. Use a new repository identity for an
 intentional upstream replacement. These rules also govern later manifest and
-blob reads through the same name.
+blob reads through the same name. A supplied invalid or revoked credential
+returns 401 even when that repository permits genuine anonymous reads.
 
 For example, with credentials held in an owned ORAS registry configuration:
 

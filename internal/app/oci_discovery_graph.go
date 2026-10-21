@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"maps"
 	"mime"
 	"net/http"
 	"sort"
@@ -144,10 +145,10 @@ func (h nativeOCIHandler) discoveryObjectKey(repo repository.HostedRepository, i
 }
 
 type discoveryGraphNode struct {
-	object       discovery.Object
-	body         []byte
-	height       int
-	artifactType string
+	object   discovery.Object
+	body     []byte
+	height   int
+	metadata discovery.ArtifactMetadata
 }
 type discoveryGraph struct {
 	h                    nativeOCIHandler
@@ -159,33 +160,33 @@ type discoveryGraph struct {
 	rootFound            bool
 }
 
-func (g *discoveryGraph) visit(ctx context.Context, requirement discovery.Requirement, subject *discovery.Descriptor, depth int) (discovery.Object, string, error) {
+func (g *discoveryGraph) visit(ctx context.Context, requirement discovery.Requirement, subject *discovery.Descriptor, depth int) (discovery.Object, discovery.ArtifactMetadata, error) {
 	if depth > ocigraph.MaxDepth {
-		return discovery.Object{}, "", discovery.ErrLimit
+		return discovery.Object{}, discovery.ArtifactMetadata{}, discovery.ErrLimit
 	}
 	if g.active[requirement.Digest] {
-		return discovery.Object{}, "", discovery.ErrInvalid
+		return discovery.Object{}, discovery.ArtifactMetadata{}, discovery.ErrInvalid
 	}
 	if prior, found := g.nodes[requirement.Digest]; found {
 		if depth+prior.height > ocigraph.MaxDepth {
-			return discovery.Object{}, "", discovery.ErrLimit
+			return discovery.Object{}, discovery.ArtifactMetadata{}, discovery.ErrLimit
 		}
 		if prior.object.Resource != requirement.Resource || requirement.Size >= 0 && prior.object.Size != requirement.Size || requirement.Resource == "manifests" && requirement.MediaType != "" && prior.object.MediaType != requirement.MediaType {
-			return discovery.Object{}, "", discovery.ErrInvalid
+			return discovery.Object{}, discovery.ArtifactMetadata{}, discovery.ErrInvalid
 		}
 		if subject != nil {
 			if _, _, err := discovery.DecodeArtifact(prior.body, requirement.Descriptor, subject); err != nil {
-				return discovery.Object{}, "", err
+				return discovery.Object{}, discovery.ArtifactMetadata{}, err
 			}
 		}
-		return prior.object, prior.artifactType, nil
+		return prior.object, prior.metadata, nil
 	}
 	if len(g.nodes)+len(g.active) >= ocigraph.MaxObjects || requirement.Size > discoveryMaxClosureBytes-g.bytes {
-		return discovery.Object{}, "", discovery.ErrLimit
+		return discovery.Object{}, discovery.ArtifactMetadata{}, discovery.ErrLimit
 	}
 	content, err := g.h.discoveryObject(ctx, g.repo, g.image, requirement.Resource, requirement.Descriptor)
 	if err != nil {
-		return discovery.Object{}, "", err
+		return discovery.Object{}, discovery.ArtifactMetadata{}, err
 	}
 	if depth == 0 {
 		g.rootFound = true
@@ -193,40 +194,40 @@ func (g *discoveryGraph) visit(ctx context.Context, requirement discovery.Requir
 	object := discovery.Object{Digest: content.Digest, Size: content.Size, MediaType: content.ContentType, Resource: requirement.Resource, CacheKey: g.h.discoveryObjectKey(g.repo, g.image, requirement.Resource, content.Digest)}
 	g.bytes += object.Size
 	if g.bytes > discoveryMaxClosureBytes {
-		return discovery.Object{}, "", discovery.ErrLimit
+		return discovery.Object{}, discovery.ArtifactMetadata{}, discovery.ErrLimit
 	}
 	node := discoveryGraphNode{object: object}
 	if requirement.Resource == "manifests" {
 		g.manifestBytes += object.Size
 		if g.manifestBytes > ocigraph.MaxInventoryManifestBytes {
-			return discovery.Object{}, "", discovery.ErrLimit
+			return discovery.Object{}, discovery.ArtifactMetadata{}, discovery.ErrLimit
 		}
 		reader, _, err := content.Open(ctx)
 		if err != nil {
-			return discovery.Object{}, "", err
+			return discovery.Object{}, discovery.ArtifactMetadata{}, err
 		}
 		node.body, err = io.ReadAll(io.LimitReader(reader, ocigraph.MaxManifestBytes+1))
 		closeErr := reader.Close()
 		if err != nil || closeErr != nil {
-			return discovery.Object{}, "", errors.Join(err, closeErr)
+			return discovery.Object{}, discovery.ArtifactMetadata{}, errors.Join(err, closeErr)
 		}
 		descriptor := discovery.Descriptor{Digest: object.Digest, Size: object.Size, MediaType: object.MediaType, ArtifactType: requirement.ArtifactType}
-		children, artifactType, err := discovery.DecodeArtifact(node.body, descriptor, subject)
+		children, metadata, err := discovery.DecodeArtifact(node.body, descriptor, subject)
 		if err != nil {
-			return discovery.Object{}, "", err
+			return discovery.Object{}, discovery.ArtifactMetadata{}, err
 		}
-		node.artifactType = artifactType
+		node.metadata = metadata
 		g.active[object.Digest] = true
 		defer delete(g.active, object.Digest)
 		for _, child := range children {
 			if _, _, err := g.visit(ctx, child, nil, depth+1); err != nil {
-				return discovery.Object{}, "", err
+				return discovery.Object{}, discovery.ArtifactMetadata{}, err
 			}
 			node.height = max(node.height, g.nodes[child.Digest].height+1)
 		}
 	}
 	g.nodes[object.Digest] = node
-	return object, node.artifactType, nil
+	return object, node.metadata, nil
 }
 
 func (g *discoveryGraph) objects() []discovery.Object {
@@ -288,7 +289,7 @@ func (h nativeOCIHandler) collectReferrers(ctx context.Context, repo repository.
 		}
 		for _, descriptor := range batch {
 			if old, found := seen[descriptor.Digest]; found {
-				if old.Size != descriptor.Size || old.MediaType != descriptor.MediaType || old.ArtifactType != descriptor.ArtifactType {
+				if old.Size != descriptor.Size || old.MediaType != descriptor.MediaType || old.ArtifactType != descriptor.ArtifactType || !maps.Equal(old.Annotations, descriptor.Annotations) {
 					return nil, discovery.ErrInvalid
 				}
 				continue

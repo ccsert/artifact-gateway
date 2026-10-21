@@ -51,9 +51,10 @@ func newDiscoveryArtifactFixture(t *testing.T, payload string) discoveryArtifact
 	empty := add("application/vnd.oci.empty.v1+json", []byte("{}"))
 	layer := add("application/spdx+json", []byte(payload))
 	layer.Annotations = map[string]string{"org.opencontainers.image.title": "sbom.spdx.json"}
-	ref := add(ocigraph.OCIManifest, encode(map[string]any{"schemaVersion": 2, "mediaType": ocigraph.OCIManifest, "artifactType": "application/spdx+json", "subject": f.subject, "config": empty, "layers": []discovery.Descriptor{layer}}))
+	annotations := map[string]string{"org.opencontainers.image.description": "verified bytes, no signer trust assertion"}
+	ref := add(ocigraph.OCIManifest, encode(map[string]any{"schemaVersion": 2, "mediaType": ocigraph.OCIManifest, "artifactType": "application/spdx+json", "subject": f.subject, "config": empty, "layers": []discovery.Descriptor{layer}, "annotations": annotations}))
 	ref.ArtifactType = "application/spdx+json"
-	ref.Annotations = map[string]string{"org.opencontainers.image.description": "verified bytes, no signer trust assertion"}
+	ref.Annotations = annotations
 	f.refs = []discovery.Descriptor{ref}
 	return f
 }

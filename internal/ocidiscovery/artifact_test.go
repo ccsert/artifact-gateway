@@ -25,10 +25,10 @@ func TestReferrerManifestSubjectAndDescriptors(t *testing.T) {
 			d := Descriptor{Digest: ocigraph.Digest(body), Size: int64(len(body)), MediaType: ocigraph.OCIManifest}
 			children, artifact, err := DecodeArtifact(body, d, &subject)
 			if (err != nil) != tc.bad {
-				t.Fatalf("children=%+v type=%q err=%v", children, artifact, err)
+				t.Fatalf("children=%+v metadata=%+v err=%v", children, artifact, err)
 			}
-			if !tc.bad && (len(children) != 1 || artifact != tc.artifact) {
-				t.Fatalf("artifact=%q children=%+v", artifact, children)
+			if !tc.bad && (len(children) != 1 || artifact.ArtifactType != tc.artifact) {
+				t.Fatalf("metadata=%+v children=%+v", artifact, children)
 			}
 		})
 	}
