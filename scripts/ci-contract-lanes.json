@@ -8,7 +8,9 @@
     "oci-migration",
     "maven-oci-auth",
     "six-format-auth",
-    "oci-discovery"
+    "oci-discovery",
+    "npm-migration",
+    "helm"
   ],
   "lanes": {
     "core": {
@@ -389,6 +391,56 @@
       ],
       "rawDirectories": [
         "output/native-oci-discovery-e2e"
+      ]
+    },
+    "npm-migration": {
+      "timeoutMinutes": 15,
+      "steps": [
+        {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
+        {
+          "name": "nexus-npm-migration-e2e",
+          "command": [
+            "make",
+            "nexus-npm-migration-e2e"
+          ],
+          "timeoutSeconds": 900
+        }
+      ],
+      "rawDirectories": [
+        "output/nexus-npm-migration-e2e"
+      ]
+    },
+    "helm": {
+      "timeoutMinutes": 15,
+      "steps": [
+        {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
+        {
+          "name": "native-helm-e2e",
+          "command": [
+            "make",
+            "native-helm-e2e"
+          ],
+          "timeoutSeconds": 900
+        }
+      ],
+      "rawDirectories": [
+        "output/native-helm-e2e"
       ]
     }
   },

@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var errIntegrity = errors.New("Helm object integrity verification failed")
+var errIntegrity = errors.New("helm object integrity verification failed")
 
 func (m *Module) upload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, version, actor string) {
 	expected := helmprotocol.Filename(name, version)

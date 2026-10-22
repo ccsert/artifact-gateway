@@ -16,6 +16,344 @@
     }
   ],
   "paths": {
+    "/previews/helm/repositories": {
+      "post": {
+        "operationId": "createHelmPreviewRepository",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/helmPreviewIdempotencyKey"
+          }
+        ],
+        "description": "Create an explicitly enabled Helm Hosted preview. Requires administrator permission; excluded from the public format catalog.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created or identical idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewRepository"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name or body"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "409": {
+            "description": "Name or idempotency conflict"
+          },
+          "503": {
+            "description": "Preview disabled or storage unavailable"
+          }
+        }
+      }
+    },
+    "/previews/helm/repositories/{repositoryId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getHelmPreviewRepository",
+        "responses": {
+          "200": {
+            "description": "Helm Hosted preview repository and index URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewRepository"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository read permission required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "503": {
+            "description": "Preview disabled or unavailable"
+          }
+        }
+      }
+    },
+    "/previews/helm/repositories/{repositoryId}/charts": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listHelmPreviewCharts",
+        "description": "Single consistent snapshot of at most 4096 committed charts, filtered by chart resource grants. An inventory exceeding the preview bound fails explicitly.",
+        "responses": {
+          "200": {
+            "description": "Committed chart identities with SHA-256, size, provenance digest and download locations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewChartList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository read permission required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "422": {
+            "description": "Preview inventory exceeds its bound"
+          },
+          "503": {
+            "description": "Preview disabled or unavailable"
+          }
+        }
+      }
+    },
+    "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repositoryId"
+        },
+        {
+          "name": "chartName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getHelmPreviewChart",
+        "responses": {
+          "200": {
+            "description": "Committed chart identity and download locations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewChart"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Chart read permission required"
+          },
+          "404": {
+            "description": "Chart not found"
+          },
+          "503": {
+            "description": "Preview disabled or unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "publishHelmPreviewChart",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/helmPreviewIdempotencyKey"
+          }
+        ],
+        "description": "Gateway-specific publication API, not a native helm push or ChartMuseum endpoint. Upload one chart and optional provenance as a single immutable closure. Chart.yaml name/version must equal the path; chart filename must be name-version.tgz and provenance name-version.tgz.prov. The provenance must contain the same chart metadata and full chart SHA-256; publisher trust is verified separately by Helm using a consumer-owned public keyring. Gateway does not import private keys or assert signature trust. Exact closure replay is idempotent; changing chart, provenance or its absence returns 409. Objects are read back and verified before transaction commit. Pending uploads never appear in the index.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "chart"
+                ],
+                "properties": {
+                  "chart": {
+                    "type": "string",
+                    "contentEncoding": "binary",
+                    "description": "A bounded tar.gz chart; maximum 64 MiB compressed, 256 MiB expanded across packaged dependencies, 10000 total entries and at most 8 nested packaged dependencies"
+                  },
+                  "provenance": {
+                    "type": "string",
+                    "contentEncoding": "binary",
+                    "description": "Optional original OpenPGP clearsigned Helm provenance, maximum 1 MiB"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Complete chart closure committed or identical replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewChart"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid archive, provenance, identity, multipart body or filename"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Chart write permission required"
+          },
+          "404": {
+            "description": "Hosted preview repository not found"
+          },
+          "409": {
+            "description": "Immutable closure, pending owner or quota conflict"
+          },
+          "410": {
+            "description": "Upload reservation expired before publication"
+          },
+          "413": {
+            "description": "Compressed chart or provenance exceeds its bound"
+          },
+          "503": {
+            "description": "Preview disabled, incomplete object read-back or storage unavailable"
+          }
+        }
+      }
+    },
+    "/previews/helm/repositories/{repositoryId}/capacity": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getHelmPreviewCapacity",
+        "responses": {
+          "200": {
+            "description": "Committed chart and provenance size and repository quota",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewCapacity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository read permission required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "503": {
+            "description": "Preview disabled or unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceHelmPreviewQuota",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "quotaBytes"
+                ],
+                "properties": {
+                  "quotaBytes": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated quota, zero means unlimited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewCapacity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid quota"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository admin permission required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "503": {
+            "description": "Preview disabled or unavailable"
+          }
+        }
+      }
+    },
     "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate": {
       "parameters": [
         {
@@ -909,6 +1247,547 @@
           },
           "503": {
             "description": "Preview capability unavailable"
+          }
+        }
+      }
+    },
+    "/migrations/nexus/schedules": {
+      "get": {
+        "operationId": "listNexusMigrationSchedules",
+        "description": "Administrators only. Lists durable schedules; nextRunAt is the next eligible UTC occurrence, not a promise that capacity or a worker is available.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 36
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusMigrationSchedulePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createNexusMigrationSchedule",
+        "description": "Administrators only. Freeze the source version, mappings and native policy from a successfully completed batch. Each occurrence fully re-enumerates using the existing durable batch worker. One pending operator capacity observation is consumed once; missing or expired observations cause waiting_capacity. There is no trusted remote object-pool observer. Restart and missed intervals coalesce to one due occurrence; no backlog or browser timer is used. A stopped plan cannot resume. Genuine unsupported payloads, SNAPSHOT, missing required artifacts and source drift reject a template. Exact regenerated Maven metadata may remain as separately reported unsupported entries.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NexusMigrationScheduleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusMigrationSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/migrations/nexus/schedules/{scheduleId}": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNexusMigrationSchedule",
+        "responses": {
+          "200": {
+            "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusMigrationSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/migrations/nexus/schedules/{scheduleId}/pause": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "pauseNexusMigrationSchedule",
+        "description": "Administrators only. Stop creating future batches. The active batch and already published artifacts are retained. If-Match and actor-scoped idempotency are required.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusMigrationSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/migrations/nexus/schedules/{scheduleId}/resume": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "resumeNexusMigrationSchedule",
+        "description": "Administrators only. Explicitly resume a paused or blocked schedule with a new capacity observation. Frozen source and target bindings are revalidated. If-Match and actor-scoped idempotency are required.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusMigrationSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NexusMigrationResume"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/migrations/nexus/schedules/{scheduleId}/stop": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "stopNexusMigrationSchedule",
+        "description": "Administrators only. Permanently stop creating future batches. The active batch and published artifacts are retained. If-Match and actor-scoped idempotency are required.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusMigrationSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/migrations/nexus/schedules/{scheduleId}/capacity": {
+      "parameters": [
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "refreshNexusMigrationScheduleCapacity",
+        "description": "Administrators only. Store one new operator observation, strictly newer than the prior observation. A waiting_capacity schedule becomes active; paused schedules remain paused. If-Match and actor-scoped idempotency are required.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NexusMigrationSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NexusMigrationResume"
+              }
+            }
           }
         }
       }
@@ -9279,11 +10158,12 @@
           "apt"
         ]
       },
-      "NuGetPreviewWorkerFormat": {
+      "PreviewWorkerFormat": {
         "type": "string",
-        "description": "Opt-in NuGet Hosted upload cleanup; does not admit NuGet to the formal format catalog.",
+        "description": "Opt-in preview upload cleanup formats; these do not enter the formal format catalog.",
         "enum": [
-          "nuget"
+          "nuget",
+          "helm"
         ]
       },
       "FormatProfile": {
@@ -12918,6 +13798,166 @@
           }
         }
       },
+      "HelmPreviewRepository": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "format",
+          "type",
+          "preview",
+          "version",
+          "sourceUrl",
+          "publicationApi",
+          "provenanceTrust"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "helm"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted"
+            ]
+          },
+          "preview": {
+            "type": "boolean",
+            "const": true
+          },
+          "version": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "description": "Gateway-relative traditional index.yaml URL"
+          },
+          "publicationApi": {
+            "type": "string",
+            "description": "Explicit Gateway multipart publication API template"
+          },
+          "provenanceTrust": {
+            "type": "string",
+            "enum": [
+              "consumer-public-keyring"
+            ]
+          }
+        }
+      },
+      "HelmPreviewChart": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "name",
+          "version",
+          "digest",
+          "size",
+          "publishedAt",
+          "chartUrl",
+          "provenanceSize"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "chartUrl": {
+            "type": "string",
+            "description": "Gateway-relative immutable chart download URL"
+          },
+          "provenanceSize": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "provenanceDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "provenanceUrl": {
+            "type": "string",
+            "description": "Present only when the closure contains provenance"
+          }
+        }
+      },
+      "HelmPreviewChartList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 4096,
+            "items": {
+              "$ref": "#/components/schemas/HelmPreviewChart"
+            }
+          }
+        }
+      },
+      "HelmPreviewCapacity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "usedBytes",
+          "objectCount",
+          "quotaBytes"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "NuGetPreviewCapacity": {
         "type": "object",
         "required": [
@@ -12959,42 +13999,6 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
-          }
-        }
-      },
-      "NexusMigrationCapabilities": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "targetId",
-          "poolId",
-          "executionEnabled",
-          "capacityEvidenceSource",
-          "policyVersion",
-          "maxAttempts"
-        ],
-        "properties": {
-          "targetId": {
-            "type": "string"
-          },
-          "poolId": {
-            "type": "string"
-          },
-          "executionEnabled": {
-            "type": "boolean"
-          },
-          "capacityEvidenceSource": {
-            "type": "string",
-            "enum": [
-              "operator-reported"
-            ]
-          },
-          "policyVersion": {
-            "type": "string"
-          },
-          "maxAttempts": {
-            "type": "integer",
-            "minimum": 1
           }
         }
       },
@@ -13101,6 +14105,224 @@
           "headroomBytes"
         ]
       },
+      "NexusMigrationSchedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "state",
+          "templateBatchId",
+          "sourceId",
+          "sourceVersion",
+          "mappings",
+          "policyVersion",
+          "intervalSeconds",
+          "nextRunAt",
+          "lastSuccessfulAt",
+          "consumedObservedAt",
+          "capacityEvidence",
+          "activeBatchId",
+          "lastBatchId",
+          "lastError",
+          "dispatchAttempts",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "waiting_capacity",
+              "paused",
+              "blocked",
+              "stopped"
+            ]
+          },
+          "templateBatchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceVersion": {
+            "type": "string"
+          },
+          "mappings": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/NexusMigrationMapping"
+            }
+          },
+          "policyVersion": {
+            "type": "string",
+            "enum": [
+              "native-v1"
+            ]
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 2592000
+          },
+          "nextRunAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastSuccessfulAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Most recent fully verified batch within the plan-supported native content scope. Exact regenerated Maven metadata remains in original unsupported details and counts; this is not complete-source clearance or client-cutover evidence."
+          },
+          "consumedObservedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "capacityEvidence": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NexusMigrationCapacityEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "activeBatchId": {
+            "type": "string"
+          },
+          "lastBatchId": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "dispatchAttempts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NexusMigrationSchedulePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NexusMigrationSchedule"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "NexusMigrationScheduleCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "templateBatchId",
+          "intervalSeconds"
+        ],
+        "properties": {
+          "templateBatchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 2592000
+          },
+          "capacityEvidence": {
+            "$ref": "#/components/schemas/NexusMigrationCapacityEvidence"
+          }
+        }
+      },
+      "NexusMigrationResume": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "capacityEvidence": {
+            "$ref": "#/components/schemas/NexusMigrationCapacityEvidence"
+          }
+        },
+        "required": [
+          "capacityEvidence"
+        ]
+      },
+      "NexusMigrationCapabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targetId",
+          "poolId",
+          "executionEnabled",
+          "capacityEvidenceSource",
+          "policyVersion",
+          "maxAttempts"
+        ],
+        "properties": {
+          "targetId": {
+            "type": "string"
+          },
+          "poolId": {
+            "type": "string"
+          },
+          "executionEnabled": {
+            "type": "boolean"
+          },
+          "capacityEvidenceSource": {
+            "type": "string",
+            "enum": [
+              "operator-reported"
+            ]
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
       "NexusMigrationCounts": {
         "type": "object",
         "additionalProperties": false,
@@ -13183,7 +14405,8 @@
               "source_verification_read",
               "source_verification_digest",
               "source_version_validation",
-              "oci_graph_validation"
+              "oci_graph_validation",
+              "npm_packument_validation"
             ]
           },
           "sourceRepositories": {
@@ -13481,7 +14704,8 @@
               "maven",
               "raw",
               "oci",
-              "conan"
+              "conan",
+              "npm"
             ]
           },
           "identity": {
@@ -13570,18 +14794,6 @@
         "required": [
           "items",
           "nextCursor"
-        ]
-      },
-      "NexusMigrationResume": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "capacityEvidence": {
-            "$ref": "#/components/schemas/NexusMigrationCapacityEvidence"
-          }
-        },
-        "required": [
-          "capacityEvidence"
         ]
       },
       "MigrationSource": {
@@ -14015,7 +15227,8 @@
               "raw",
               "maven",
               "oci",
-              "conan"
+              "conan",
+              "npm"
             ]
           },
           "type": {
@@ -15348,7 +16561,7 @@
             "type": "array",
             "description": "Separately enabled preview workers; absent when none are configured.",
             "items": {
-              "$ref": "#/components/schemas/NuGetPreviewWorkerFormat"
+              "$ref": "#/components/schemas/PreviewWorkerFormat"
             }
           },
           "workerKinds": {
@@ -15531,7 +16744,7 @@
             "type": "array",
             "description": "Separately enabled preview workers; absent when none are configured.",
             "items": {
-              "$ref": "#/components/schemas/NuGetPreviewWorkerFormat"
+              "$ref": "#/components/schemas/PreviewWorkerFormat"
             }
           },
           "workerKinds": {
@@ -18968,6 +20181,26 @@
         "required": true,
         "schema": {
           "type": "string"
+        }
+      },
+      "helmPreviewIdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "repositoryId": {
+        "name": "repositoryId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
         }
       },
       "ArtifactSearchMatch": {

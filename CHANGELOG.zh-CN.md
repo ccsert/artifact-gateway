@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Nexus 周期迁移计划持久保存 UTC 周期、错过触发合并、源/映射/策略绑定、下次触发与已验证的最近成功状态（#443）。管理员可在 Console 中按版本和幂等键创建、暂停、恢复、停止计划；每次执行原子消费一份新鲜的管理员容量观测，缺失或过期时等待补充。目标映射相交的计划与手动批次不会并发派发。详见[周期计划](docs/nexus-migration-console.zh-CN.md#周期迁移计划)。
+
 - 新安装通过一个事务初始化 8 个 Hosted 仓库、5 个公共上游 Proxy 和 5 个有序 Group（#444）；设置 `GATEWAY_REPOSITORY_PRESETS=none` 可选择空安装。已有目录保留，匿名访问仍关闭，管理员修改或删除后重启不会被覆盖或重新创建。详见[部署初始化](docs/distributed-deployment.zh-CN.md#首次安装仓库)。
 
 - 新增默认关闭的[传统 HTTP Helm Hosted 预览](docs/helm-hosted-preview.zh-CN.md)（#290）：chart/provenance 不可变单请求上传、授权过滤且确定的 `index.yaml`、完整字节校验下载、配额预留和中断发布持久恢复。固定 Helm 3.19.0 冷 pull/verify 与自有只读 discovery 下 dry-run 渲染证据，和 Proxy/Group（#291）、真实集群安装、生命周期正式准入（#292）分别记录。

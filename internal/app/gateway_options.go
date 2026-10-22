@@ -75,13 +75,13 @@ func (o GatewayOptions) validate() error {
 	var failures []error
 	if o.HelmPreviewEnabled {
 		if nilDependency(o.HelmStore) {
-			failures = append(failures, errors.New("Helm preview publication store is required"))
+			failures = append(failures, errors.New("helm preview publication store is required"))
 		}
 		if err := objectstore.Validate(o.HelmObjects); err != nil {
-			failures = append(failures, fmt.Errorf("Helm preview %w", err))
+			failures = append(failures, fmt.Errorf("helm preview %w", err))
 		}
 	} else if o.HelmStore != nil || o.HelmObjects != nil {
-		failures = append(failures, errors.New("Helm preview dependencies require explicit enablement"))
+		failures = append(failures, errors.New("helm preview dependencies require explicit enablement"))
 	}
 	if o.NuGetPreviewEnabled {
 		if nilDependency(o.NuGetStore) {

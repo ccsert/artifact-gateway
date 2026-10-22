@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Nexus migration schedules now persist UTC intervals, coalesced missed runs, source/mapping/policy bindings, next-run and verified last-successful state (#443). Administrators create and control plans in Console with versioned, idempotent operations. Each occurrence atomically consumes fresh operator-reported capacity evidence; missing or expired observations wait for an update. Intersecting target mappings cannot dispatch concurrent plan/manual batches. See [recurring plans](docs/nexus-migration-console.md#recurring-migration-plans).
+
 - New installations initialize eight Hosted repositories, five public-upstream Proxies and five ordered Groups in one transaction (#444). `GATEWAY_REPOSITORY_PRESETS=none` selects an empty installation. Existing catalogs are preserved, anonymous access stays disabled, and administrator changes or deletions survive restart. See [deployment setup](docs/distributed-deployment.md#repositories-on-first-installation).
 
 - Add a default-off [traditional HTTP Helm Hosted preview](docs/helm-hosted-preview.md) (#290): immutable chart/provenance upload, authorized deterministic `index.yaml`, full-byte verified downloads, quota reservations and durable interrupted-publication recovery. Fixed Helm 3.19.0 cold pull/verify and read-only discovery-backed dry-run rendering remain separate from Proxy/Group (#291), real-cluster installation and formal lifecycle admission (#292).

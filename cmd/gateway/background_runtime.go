@@ -259,7 +259,7 @@ func (r backgroundRuntime) startConanWorkers(ctx context.Context, cfg config.Con
 
 func migrationWorkerFormats(cfg config.Config) []string {
 	formats := []string{}
-	for _, format := range []string{"maven", "raw", "oci", "conan"} {
+	for _, format := range []string{"maven", "raw", "oci", "conan", "npm"} {
 		if cfg.WorkerFormatEnabled(format) {
 			formats = append(formats, format)
 		}

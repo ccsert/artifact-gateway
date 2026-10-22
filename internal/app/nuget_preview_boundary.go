@@ -17,15 +17,15 @@ func rejectPreviewFormalProjection(w http.ResponseWriter, repo repository.Hosted
 	return true
 }
 
-func runtimeWorkerFormatProjection(input []repository.Format) ([]adminopenapi.Format, *[]adminopenapi.NuGetPreviewWorkerFormat) {
+func runtimeWorkerFormatProjection(input []repository.Format) ([]adminopenapi.Format, *[]adminopenapi.PreviewWorkerFormat) {
 	formal := make([]adminopenapi.Format, 0, len(input))
-	var previews *[]adminopenapi.NuGetPreviewWorkerFormat
+	var previews *[]adminopenapi.PreviewWorkerFormat
 	for _, format := range input {
 		if format == repository.FormatNuGet || format == repository.FormatHelm {
 			if previews == nil {
-				previews = &[]adminopenapi.NuGetPreviewWorkerFormat{}
+				previews = &[]adminopenapi.PreviewWorkerFormat{}
 			}
-			*previews = append(*previews, adminopenapi.NuGetPreviewWorkerFormat(format))
+			*previews = append(*previews, adminopenapi.PreviewWorkerFormat(format))
 			continue
 		}
 		if repository.IsSupportedFormat(format) {

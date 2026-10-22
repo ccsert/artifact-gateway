@@ -20,14 +20,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"github.com/ccsert/artifact-gateway/internal/authorization"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	helmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/helm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/clearsign"
-	"golang.org/x/crypto/openpgp/packet"
 )
 
 type fixture struct {

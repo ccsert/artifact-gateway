@@ -429,3 +429,21 @@ server base）。计划命令省略前导 `agctl`。
 | `PUT /previews/nuget/groups/{groupId}`<br>`replaceNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version}`<br>`getNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate`<br>`revalidateNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+
+## Helm Hosted 预览 (#290)
+
+默认关闭；管理操作使用预览 API，原生读取使用官方 Helm 客户端。未提供 agctl Helm 命令。
+
+| API / operationId | 计划命令 | 承接 | 阶段 | 权限 | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| `POST /previews/helm/repositories`<br>`createHelmPreviewRepository` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | A | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}`<br>`getHelmPreviewRepository` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}/charts`<br>`listHelmPreviewCharts` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`getHelmPreviewChart` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `PUT /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`publishHelmPreviewChart` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | W | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}/capacity`<br>`getHelmPreviewCapacity` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `PUT /previews/helm/repositories/{repositoryId}/capacity`<br>`replaceHelmPreviewQuota` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | RA | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /helm/{repository}/index.yaml`<br>`readHelmHostedIndex` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `HEAD /helm/{repository}/index.yaml`<br>`headHelmHostedIndex` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`readHelmHostedAsset` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `HEAD /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`headHelmHostedAsset` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |

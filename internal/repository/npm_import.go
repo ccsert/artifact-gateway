@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+
+	"github.com/ccsert/artifact-gateway/internal/protocol/identity"
 )
 
 // NPMImportStore is the narrow atomic publication port for a complete, verified
@@ -46,28 +48,9 @@ func NPMImportVersionMatches(old, incoming NPMVersion) bool {
 	if old.State != "" && old.State != "visible" || old.Digest != incoming.Digest || old.Size != incoming.Size || old.Integrity != incoming.Integrity || old.Shasum != incoming.Shasum || old.TarballName != incoming.TarballName || old.Deprecated != incoming.Deprecated {
 		return false
 	}
-	a, ae := npmImportManifest(old.Manifest)
-	b, be := npmImportManifest(incoming.Manifest)
+	a, ae := identity.NPMImportManifest(old.Manifest)
+	b, be := identity.NPMImportManifest(incoming.Manifest)
 	return ae == nil && be == nil && bytes.Equal(a, b)
-}
-func npmImportManifest(raw []byte) ([]byte, error) {
-	var m map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(&m); err != nil {
-		return nil, err
-	}
-	if m == nil {
-		return nil, ErrInvalidNPMMetadata
-	}
-	dist, ok := m["dist"].(map[string]any)
-	if !ok {
-		return nil, ErrInvalidNPMMetadata
-	}
-	delete(dist, "tarball")
-	delete(dist, "integrity")
-	delete(dist, "shasum")
-	return json.Marshal(m)
 }
 func npmImportAudit(c NPMImportClosure, repoName string) AuditRecord {
 	record := c.Audit

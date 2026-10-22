@@ -15,6 +15,9 @@ OCI chart 存储属于另一协议。Proxy/Group 仍由 #291 跟踪，生命周�
 若限制了 `GATEWAY_WORKER_FORMATS`，其中必须包含 `helm`。API-only 节点不启动上传回收。
 运行诊断把该回收器放在 `previewWorkerFormats:["helm"]`，不会加入正式 `workerFormats` 枚举。
 
+随附 Compose 从 `.env` 转发 `GATEWAY_HELM_PREVIEW_ENABLED`，默认值为 `false`。
+如需提供或维护此预览，先设为 `true`，再重建相应的 API 和 worker 服务。
+
 管理员通过 `POST /api/v2/previews/helm/repositories` 提交
 `{"name":"charts-internal"}` 创建私有 Hosted 预览。保存返回的 ID 及 Gateway 相对路径
 `sourceUrl`；正式仓库目录不会列出预览。可选的 `Idempotency-Key` 按调用者隔离，同一创建
@@ -22,7 +25,10 @@ OCI chart 存储属于另一协议。Proxy/Group 仍由 #291 跟踪，生命周�
 `GET /api/v2/previews/helm/repositories/{id}` 读回创建结果。Proxy 配置会被拒绝。
 
 既有仓库授权 API 可绑定该 ID。资源前缀匹配区分大小写的 chart 名称；同一 chart 的所有
-版本使用该名称作为资源。索引和预览浏览接受有效的前缀授权，再逐项过滤 chart；下载与
+版本使用该名称作为资源。全量替换、单条写入与模板应用接受空前缀（整个仓库），或以
+小写 ASCII 字母或数字开头、最长 63 字符且只含小写字母、数字和连字符的前缀；版本与
+URL 路径被拒绝。此授权不会将 Helm 开放到正式制品搜索。
+索引和预览浏览接受有效的前缀授权，再逐项过滤 chart；下载与
 上传检查完整 chart 名称。读取接受 Bearer 或 HTTP Basic，Basic 的密码使用 Gateway 凭据，
 用户名不能选择身份。管理上传使用 Bearer。显式无效或已撤销凭据始终被拒绝。创建结果为
 私有仓库，启用全局匿名策略也不会自动公开新的预览。
@@ -81,7 +87,7 @@ chart；超过上限返回 422，不静默截断。`GET .../charts/{name}/{versi
 
 ## 可重复验收与剩余范围
 
-执行 `bash scripts/native-helm-e2e.sh`。验收下载官方 Helm 3.19.0 对应平台归档，验证代码中
+执行 `make native-helm-e2e`。验收下载官方 Helm 3.19.0 对应平台归档，验证代码中
 固定的 SHA-256；只使用独占、默认 bridge 网络上的 PostgreSQL/RustFS 容器、空 Docker 凭据、
 空且只指向目标的 Helm 配置/缓存、合成签名 chart 及消费者独占公钥环。场景经过完整 Gateway
 路由，覆盖带签名 `helm package`、声明的上传/重放、数据库和 handler 重启、`repo add/update`、

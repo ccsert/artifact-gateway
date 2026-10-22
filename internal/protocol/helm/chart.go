@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"go.yaml.in/yaml/v3"
-	"golang.org/x/crypto/openpgp/clearsign"
-	"golang.org/x/crypto/openpgp/packet"
 )
 
 const (
@@ -77,6 +77,13 @@ func ValidIdentity(name, version string) bool {
 	_, err := semver.StrictNewVersion(version)
 	return err == nil
 }
+
+// ValidNamePrefix accepts an empty repository-wide grant or a canonical chart
+// name prefix. Versions and protocol paths are not authorization resources.
+func ValidNamePrefix(prefix string) bool {
+	return prefix == "" || namePattern.MatchString(prefix)
+}
+
 func Filename(name, version string) string { return name + "-" + version + ".tgz" }
 
 // DecodeYAML rejects aliases, duplicate or non-string mapping keys, excessive
@@ -221,7 +228,7 @@ func inspect(reader io.Reader, budget *archiveBudget, depth int) (Inspection, er
 		if first != root {
 			return out, ErrInvalidChart
 		}
-		if h.Typeflag != tar.TypeReg && h.Typeflag != tar.TypeRegA && h.Typeflag != tar.TypeDir {
+		if h.Typeflag != tar.TypeReg && h.Typeflag != tar.TypeDir {
 			return out, ErrInvalidChart
 		}
 		if h.Typeflag != tar.TypeDir && !strings.Contains(entry, "/") {

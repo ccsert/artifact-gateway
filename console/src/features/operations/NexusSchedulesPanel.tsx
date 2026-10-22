@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, InputNumber, Popconfirm, Select, Tag } from "antd";
+import { Button, InputNumber, Popconfirm, Select } from "antd";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,6 +18,7 @@ import {
   Notice,
 } from "../../components/ui/Feedback";
 import { Card, Field, Pagination } from "../../components/ui/Layout";
+import { Badge } from "../../components/ui/Badge";
 import { usePreferences } from "../../lib/preferences";
 import {
   batchReadDenied,
@@ -339,19 +340,19 @@ function ScheduleCard({
             })}
           </p>
         </div>
-        <Tag
-          color={
+        <Badge
+          tone={
             plan.state === "active"
-              ? "blue"
+              ? "info"
               : plan.state === "blocked"
-                ? "red"
+                ? "danger"
                 : plan.state === "waiting_capacity"
-                  ? "orange"
-                  : "default"
+                  ? "warning"
+                  : "neutral"
           }
         >
           {t(`nexusSchedule.${plan.state}`)}
-        </Tag>
+        </Badge>
       </div>
       <div className="ag-migration-content" data-testid="nexus-schedule-card">
         {command.error !== null && <ErrorBanner error={command.error} />}

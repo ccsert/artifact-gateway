@@ -25,6 +25,7 @@ required={
  'TestHelmIndexFiltersChartScopedGrantsAndWrites',
  'TestHelmConcurrentPublicationsKeepIndexAndObjectIdentity',
  'TestHelmPreviewGatewayCompositionAndFormalCapabilitiesStayConsistent',
+ 'TestHelmGrantManagementAcceptsChartPrefixesWithoutFormalSearch',
  'TestHelmMemoryStoreContract',
  'TestPostgresHelmStoreContract',
  'TestPostgresRustFSHelmInterruptedClosureRestartAndCorruptObject',

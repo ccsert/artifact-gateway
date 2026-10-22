@@ -19,6 +19,10 @@ expired upload objects. A restrictive `GATEWAY_WORKER_FORMATS` filter must inclu
 `helm`. API-only nodes do not collect uploads. Diagnostics place the collector in
 `previewWorkerFormats:["helm"]`, outside the admitted `workerFormats` enum.
 
+The supplied Compose stack forwards `GATEWAY_HELM_PREVIEW_ENABLED` from `.env`,
+defaulting to `false`. Set it to `true` before recreating the API and worker
+services that should serve or maintain this preview.
+
 An administrator creates a private Hosted preview with
 `POST /api/v2/previews/helm/repositories` and `{"name":"charts-internal"}`. Keep
 the returned ID and Gateway-relative `sourceUrl`; the formal repository catalog
@@ -28,7 +32,11 @@ same create request, while a changed body returns 409. Read the receipt through
 
 Existing repository grant APIs can bind this ID. Resource prefixes match the
 case-sensitive chart name; every version of a chart uses that name as its
-resource. Index and preview browse requests accept an applicable prefix grant,
+resource. Replace, single-row upsert and template application accept an empty
+prefix for the whole repository or up to 63 lowercase ASCII letters, digits and
+hyphens beginning with a letter or digit. Versions and URL paths are rejected.
+This permission does not expose Helm through formal artifact search.
+Index and preview browse requests accept an applicable prefix grant,
 then filter each chart. Downloads and uploads check the full chart name.
 Read credentials support Bearer or HTTP Basic with the Gateway credential as
 password. The Basic username cannot select an actor. Management uploads use
@@ -104,7 +112,7 @@ Zero means unlimited. Concurrent pending reservations count toward the same quot
 
 ## Reproducible acceptance and remaining scope
 
-Run `bash scripts/native-helm-e2e.sh`. The gate downloads the official Helm 3.19.0
+Run `make native-helm-e2e`. The gate downloads the official Helm 3.19.0
 archive for a supported platform and verifies a checked-in fixed SHA-256. It uses
 only owned default-bridge PostgreSQL/RustFS containers, empty Docker credentials,
 empty target-only Helm configuration/cache, a synthetic signed chart and a

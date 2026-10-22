@@ -421,7 +421,7 @@ func (s *Store) ClaimDueSchedule(ctx context.Context, now time.Time) (m.Schedule
 	return scanSchedule(s.db.QueryRowContext(ctx, `WITH due AS (SELECT id FROM nexus_migration_schedules WHERE state='active' AND active_batch_id IS NULL AND next_run_at<=$1 AND (lease_token='' OR lease_expires_at<=clock_timestamp()) ORDER BY next_run_at,id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE nexus_migration_schedules s SET lease_token=$2,lease_epoch=s.lease_epoch+1,lease_expires_at=clock_timestamp()+interval '30 seconds',version=s.version+1,updated_at=clock_timestamp() FROM due WHERE s.id=due.id RETURNING `+scheduleColumns, now, uuid.NewString()))
 }
 
-func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batch, now time.Time) error {
+func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batch, _ time.Time) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -465,7 +465,7 @@ func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batc
 	if err = activeMigrationTargets(ctx, tx, p.Mappings, false, ""); err != nil {
 		return err
 	}
-	now, err = freshScheduleEvidence(ctx, tx, p.CapacityEvidence)
+	now, err := freshScheduleEvidence(ctx, tx, p.CapacityEvidence)
 	if err != nil {
 		return err
 	}

@@ -19,7 +19,7 @@ type Maintenance struct {
 
 func NewMaintenance(store repository.NativeHelmStore, objects objectstore.Store) (*Maintenance, error) {
 	if nilPort(store) {
-		return nil, errors.New("Helm maintenance publication store is required")
+		return nil, errors.New("helm maintenance publication store is required")
 	}
 	if err := objectstore.Validate(objects); err != nil {
 		return nil, err

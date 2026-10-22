@@ -381,8 +381,8 @@ components:
       "$ref": "./components/schemas.yaml#/BrowseNodePage"
     Format:
       "$ref": "./components/schemas.yaml#/Format"
-    NuGetPreviewWorkerFormat:
-      "$ref": "./components/schemas.yaml#/NuGetPreviewWorkerFormat"
+    PreviewWorkerFormat:
+      "$ref": "./components/schemas.yaml#/PreviewWorkerFormat"
     FormatProfile:
       "$ref": "./components/schemas.yaml#/FormatProfile"
     FormatProfileList:

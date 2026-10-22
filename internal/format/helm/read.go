@@ -19,7 +19,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-var errInventoryLimit = errors.New("Helm preview inventory exceeds its bound")
+var errInventoryLimit = errors.New("helm preview inventory exceeds its bound")
 
 func assetRelative(name, version string, provenance bool) string {
 	filename := helmprotocol.Filename(name, version)

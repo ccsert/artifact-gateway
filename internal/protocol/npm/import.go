@@ -1,7 +1,6 @@
 package npm
 
 import (
-	"bytes"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -11,6 +10,8 @@ import (
 	"errors"
 	"hash"
 	"strings"
+
+	"github.com/ccsert/artifact-gateway/internal/protocol/identity"
 )
 
 const ImportPackumentLimit = 64 << 20
@@ -59,20 +60,11 @@ func DecodeImportPackument(body []byte, name string) (ImportPackument, error) {
 // CanonicalImportManifest compares protocol metadata independently of registry
 // URLs and integrity encodings. Those fields are authoritative byte facts.
 func CanonicalImportManifest(raw []byte) ([]byte, error) {
-	var doc map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if decoder.Decode(&doc) != nil || doc == nil {
+	canonical, err := identity.NPMImportManifest(raw)
+	if err != nil {
 		return nil, ErrImportPackument
 	}
-	dist, ok := doc["dist"].(map[string]any)
-	if !ok {
-		return nil, ErrImportPackument
-	}
-	delete(dist, "tarball")
-	delete(dist, "integrity")
-	delete(dist, "shasum")
-	return json.Marshal(doc)
+	return canonical, nil
 }
 
 // ImportIntegrity verifies shasum and the strongest supported SRI algorithm.

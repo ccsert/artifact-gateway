@@ -490,3 +490,21 @@ These opt-in preview operations have no agctl command. They do not admit NuGet i
 | `PUT /previews/nuget/groups/{groupId}`<br>`replaceNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version}`<br>`getNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate`<br>`revalidateNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+
+## Helm Hosted preview (#290)
+
+Default-off. Management operations use the preview API; official Helm owns native reads. No agctl Helm command is registered.
+
+| API / operationId | Planned command | Owning issue | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `POST /previews/helm/repositories`<br>`createHelmPreviewRepository` | N: Helm preview API or official client; CLI deferred | #290 | N/A | A | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}`<br>`getHelmPreviewRepository` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}/charts`<br>`listHelmPreviewCharts` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`getHelmPreviewChart` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`publishHelmPreviewChart` | N: Helm preview API or official client; CLI deferred | #290 | N/A | W | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}/capacity`<br>`getHelmPreviewCapacity` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/helm/repositories/{repositoryId}/capacity`<br>`replaceHelmPreviewQuota` | N: Helm preview API or official client; CLI deferred | #290 | N/A | RA | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /helm/{repository}/index.yaml`<br>`readHelmHostedIndex` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `HEAD /helm/{repository}/index.yaml`<br>`headHelmHostedIndex` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`readHelmHostedAsset` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `HEAD /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`headHelmHostedAsset` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |

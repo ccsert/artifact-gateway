@@ -14,6 +14,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,7 +204,7 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 		return server
 	}
 	server := newServer()
-	send := func(method, path, credential, contentType string, body []byte, want int) []byte {
+	send := func(method, path, credential, contentType string, body []byte, want int, versions ...string) []byte {
 		t.Helper()
 		r, e := http.NewRequestWithContext(t.Context(), method, server.URL+path, bytes.NewReader(body))
 		if e != nil {
@@ -216,6 +217,9 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 			r.Header.Set("Content-Type", contentType)
 		}
 		r.Header.Set("Idempotency-Key", "owned-helm-publication")
+		if len(versions) > 0 {
+			r.Header.Set("If-Match", versions[0])
+		}
 		response, e := server.Client().Do(r)
 		if e != nil {
 			t.Fatal(e)
@@ -236,31 +240,85 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 	if json.Unmarshal(created, &repo) != nil || repo.ID == "" {
 		t.Fatal("repository create response missing identity")
 	}
-	var payload bytes.Buffer
-	multipartWriter := multipart.NewWriter(&payload)
-	for _, asset := range []struct {
-		field, filename string
-		data            []byte
-	}{{"chart", "owned-1.2.3.tgz", chartBytes}, {"provenance", "owned-1.2.3.tgz.prov", provBytes}} {
-		part, e := multipartWriter.CreateFormFile(asset.field, asset.filename)
+	account, err := store.CreateServiceAccount(t.Context(), repository.ServiceAccount{ID: uuid.NewString(), Name: "helm-rotation-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createKey := func(label string) (string, repository.APIKey) {
+		secret := "agc_helm_" + uuid.NewString()
+		expires := time.Now().Add(time.Hour)
+		key, e := store.CreateServiceAccountCredential(t.Context(), repository.APIKey{ID: uuid.NewString(), ServiceAccountID: account.ID, Name: label, SecretHash: authorization.HashAPIKey(secret), Roles: []string{}, ExpiresAt: &expires})
 		if e != nil {
 			t.Fatal(e)
 		}
-		if _, e = part.Write(asset.data); e != nil {
-			t.Fatal(e)
-		}
+		return secret, key
 	}
-	if err = multipartWriter.Close(); err != nil {
+	blue, blueKey := createKey("blue")
+	green, _ := createKey("green")
+	grantPath := "/api/v2/repositories/" + repo.ID + "/grants"
+	grantPrincipal := "service-account:" + account.ID
+	grant := repository.RepositoryGrant{Principal: grantPrincipal, Scopes: []string{"repositories:read", "repositories:write"}, ResourcePrefix: "owned"}
+	grantJSON, err := json.Marshal([]repository.RepositoryGrant{grant})
+	if err != nil {
 		t.Fatal(err)
 	}
 	publishPath := "/api/v2/previews/helm/repositories/" + repo.ID + "/charts/owned/1.2.3"
-	for range 2 {
-		send("PUT", publishPath, token, multipartWriter.FormDataContentType(), payload.Bytes(), 201)
+	send("PUT", publishPath, blue, "application/octet-stream", nil, 403)
+	send("PUT", grantPath, token, "application/json", grantJSON, 200, "1")
+	formData := func(chartName string, chart, provenance []byte) ([]byte, string) {
+		t.Helper()
+		var payload bytes.Buffer
+		writer := multipart.NewWriter(&payload)
+		for _, asset := range []struct {
+			field, filename string
+			data            []byte
+		}{{"chart", chartName + "-1.2.3.tgz", chart}, {"provenance", chartName + "-1.2.3.tgz.prov", provenance}} {
+			if asset.data == nil {
+				continue
+			}
+			part, e := writer.CreateFormFile(asset.field, asset.filename)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, e = part.Write(asset.data); e != nil {
+				t.Fatal(e)
+			}
+		}
+		if e := writer.Close(); e != nil {
+			t.Fatal(e)
+		}
+		return payload.Bytes(), writer.FormDataContentType()
 	}
+	payload, contentType := formData("owned", chartBytes, provBytes)
+	for range 2 {
+		send("PUT", publishPath, blue, contentType, payload, 201)
+	}
+	outsideDir := filepath.Join(work, "outside")
+	if err = os.Mkdir(outsideDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeOwned(t, filepath.Join(outsideDir, "Chart.yaml"), []byte("apiVersion: v2\nname: outside\nversion: 1.2.3\n"))
+	run(packageEnv, true, "package", outsideDir, "--destination", work)
+	outside, err := os.ReadFile(filepath.Join(work, "outside-1.2.3.tgz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	outsideBody, outsideType := formData("outside", outside, nil)
+	outsidePublish := "/api/v2/previews/helm/repositories/" + repo.ID + "/charts/outside/1.2.3"
+	send("PUT", outsidePublish, blue, outsideType, outsideBody, 403)
+	send("PUT", outsidePublish, token, outsideType, outsideBody, 201)
 	indexPath := "/helm/" + name + "/index.yaml"
 	indexBefore := send("GET", indexPath, token, "", nil, 200)
 	if !bytes.Contains(indexBefore, []byte(strings.TrimPrefix(chartSHA, "sha256:"))) || bytes.Contains(indexBefore, []byte("http://")) || bytes.Contains(indexBefore, []byte("https://")) {
 		t.Fatal("index digest or target-only relative URL mismatch")
+	}
+	filtered := send("GET", indexPath, blue, "", nil, 200)
+	if !bytes.Contains(filtered, []byte("owned:")) || bytes.Contains(filtered, []byte("outside:")) {
+		t.Fatalf("HTTP-created chart grant did not filter index: %s", filtered)
+	}
+	send("GET", "/helm/"+name+"/charts/outside/1.2.3/outside-1.2.3.tgz", blue, "", nil, 403)
+	if body := send("GET", "/api/v2/previews/helm/repositories/"+repo.ID+"/charts", blue, "", nil, 200); bytes.Contains(body, []byte(`"outside"`)) || !bytes.Contains(body, []byte(`"owned"`)) {
+		t.Fatalf("preview browse ignored HTTP-created chart grant: %s", body)
 	}
 	send("GET", indexPath, "", "", nil, 401)
 	expected := map[string]any{"chartSha256": chartSHA, "chartSize": chartSize, "provenanceSha256": provSHA, "provenanceSize": provSize}
@@ -293,7 +351,7 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 		t.Fatal("index changed across restart without publication")
 	}
 	consumer := clientEnv("cold-consumer")
-	run(consumer, true, "repo", "add", "owned", server.URL+"/helm/"+name, "--username", "owned", "--password", token)
+	run(consumer, true, "repo", "add", "owned", server.URL+"/helm/"+name, "--username", "owned", "--password", blue)
 	run(consumer, true, "repo", "update")
 	configured := run(consumer, true, "repo", "list", "--output", "json")
 	var config []struct{ Name, URL string }
@@ -352,24 +410,8 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 	run(clientEnv("unauthorized-cold"), false, "repo", "add", "owned", server.URL+"/helm/"+name)
 	// Rotate and revoke real service credentials. No local credential is reused
 	// as a signing key or an upstream secret; Hosted performs no upstream fetch.
-	account, err := store.CreateServiceAccount(t.Context(), repository.ServiceAccount{ID: uuid.NewString(), Name: "helm-rotation-" + uuid.NewString()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = store.ReplaceRepositoryGrants(t.Context(), repo.ID, []repository.RepositoryGrant{{Principal: "service-account:" + account.ID, Scopes: []string{"repositories:read"}, ResourcePrefix: "owned"}}, "1"); err != nil {
-		t.Fatal(err)
-	}
-	createKey := func(label string) (string, repository.APIKey) {
-		secret := "agc_helm_" + uuid.NewString()
-		expires := time.Now().Add(time.Hour)
-		key, e := store.CreateServiceAccountCredential(t.Context(), repository.APIKey{ID: uuid.NewString(), ServiceAccountID: account.ID, Name: label, SecretHash: authorization.HashAPIKey(secret), Roles: []string{}, ExpiresAt: &expires})
-		if e != nil {
-			t.Fatal(e)
-		}
-		return secret, key
-	}
-	blue, blueKey := createKey("blue")
-	green, _ := createKey("green")
+	greenConsumer := clientEnv("rotated-cold-consumer")
+	run(greenConsumer, true, "repo", "add", "owned", server.URL+"/helm/"+name, "--username", "owned", "--password", green)
 	send("GET", indexPath, blue, "", nil, 200)
 	send("GET", indexPath, green, "", nil, 200)
 	if _, err = store.RevokeServiceAccountCredential(t.Context(), account.ID, blueKey.ID); err != nil {
@@ -377,21 +419,33 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 	}
 	send("GET", indexPath, blue, "", nil, 401)
 	send("GET", indexPath, green, "", nil, 200)
+	run(consumer, false, "pull", "owned/owned", "--version", "1.2.3", "--destination", filepath.Join(work, "revoked-credential-download"))
+	send("DELETE", grantPath+"?principal="+url.QueryEscape(grantPrincipal)+"&resourcePrefix=owned", token, "", nil, 204)
+	send("GET", indexPath, green, "", nil, 403)
+	run(greenConsumer, false, "repo", "add", "owned", server.URL+"/helm/"+name, "--username", "owned", "--password", green, "--force-update")
+	run(greenConsumer, false, "pull", "owned/owned", "--version", "1.2.3", "--destination", filepath.Join(work, "revoked-grant-download"))
 	audit, err := store.ListAudits(t.Context(), repository.AuditQuery{Repository: name, Format: "helm", Operation: "helm.publish", Limit: 100})
-	if err != nil || len(audit) != 1 {
+	if err != nil || len(audit) != 2 {
 		t.Fatalf("idempotent publication audit=%d %v", len(audit), err)
 	}
+	nonAdminPublished := false
 	for _, record := range audit {
+		if record.Actor == grantPrincipal && record.Resource == "owned@1.2.3" {
+			nonAdminPublished = true
+		}
 		encoded, _ := json.Marshal(record)
 		if bytes.Contains(encoded, []byte(token)) || bytes.Contains(encoded, []byte(blue)) || bytes.Contains(encoded, []byte("PRIVATE KEY")) {
 			t.Fatal("secret leaked into audit")
 		}
 	}
+	if !nonAdminPublished {
+		t.Fatal("non-administrator publication was not attributed to the HTTP-granted service account")
+	}
 	if dir := os.Getenv("HELM_OWNED_EVIDENCE_DIR"); dir != "" {
 		requestsMu.Lock()
 		paths := append([]string(nil), requests...)
 		requestsMu.Unlock()
-		report := map[string]any{"client": "Helm", "version": "v3.19.0", "gatewayComposition": "full", "postgresRustFS": true, "targetOnly": true, "restartReadBack": true, "signatureVerifiedWithOwnedPublicKey": true, "dryRunInstallAgainstOwnedReadOnlyDiscoveryFixture": true, "kubernetesClusterInstallVerified": false, "kubernetesDiscoveryRequests": kubeRequests, "commandOutputs": commandOutputs, "credentialRotationAndRevocation": true, "publicationAuditCount": len(audit), "expected": expected, "commands": commands, "gatewayRequestPaths": paths}
+		report := map[string]any{"client": "Helm", "version": "v3.19.0", "gatewayComposition": "full", "postgresRustFS": true, "targetOnly": true, "restartReadBack": true, "signatureVerifiedWithOwnedPublicKey": true, "dryRunInstallAgainstOwnedReadOnlyDiscoveryFixture": true, "kubernetesClusterInstallVerified": false, "kubernetesDiscoveryRequests": kubeRequests, "commandOutputs": commandOutputs, "credentialRotationAndRevocation": true, "grantCreatedAndRevokedThroughHTTP": true, "nonAdministratorPublishAndColdConsumer": true, "chartPrefixFilteredIndexBrowseAndDownloads": true, "revokedCredentialAndGrantRejectedByOfficialCLI": true, "publicationAuditCount": len(audit), "expected": expected, "commands": commands, "gatewayRequestPaths": paths}
 		encoded, e := json.MarshalIndent(report, "", "  ")
 		if e != nil {
 			t.Fatal(e)

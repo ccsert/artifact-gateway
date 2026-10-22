@@ -68,7 +68,7 @@ func nilPort(v any) bool {
 func New(o Options) (*Module, error) {
 	for _, port := range []any{o.Store, o.Repositories, o.Audit, o.Anonymous, o.Capacities, o.Authorizer.Grants} {
 		if nilPort(port) {
-			return nil, errors.New("Helm preview requires explicit publication, repository, authorization, audit, anonymous policy and capacity ports")
+			return nil, errors.New("helm preview requires explicit publication, repository, authorization, audit, anonymous policy and capacity ports")
 		}
 	}
 	if err := objectstore.Validate(o.Objects); err != nil {
@@ -78,7 +78,7 @@ func New(o Options) (*Module, error) {
 		o.MaxChartBytes = helmprotocol.MaxChartBytes
 	}
 	if o.MaxChartBytes < 1 || o.MaxChartBytes > helmprotocol.MaxChartBytes {
-		return nil, errors.New("Helm compressed chart limit must be between 1 and 64 MiB")
+		return nil, errors.New("helm compressed chart limit must be between 1 and 64 MiB")
 	}
 	return &Module{store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxChartBytes}, nil
 }
