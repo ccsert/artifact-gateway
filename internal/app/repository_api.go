@@ -264,7 +264,13 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	modules := []formatmodule.Module{rawModule}
 	var helmPreview http.Handler
 	if options.HelmPreviewEnabled {
-		helmModule, err := helmformat.New(helmformat.Options{Store: options.HelmStore, Repositories: store, Objects: options.HelmObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		client := helmformat.Upstream(UpstreamClient{})
+		if options.HelmUpstream != nil {
+			client = options.HelmUpstream
+		} else if configured, ok := upstreamClient.(helmformat.Upstream); ok {
+			client = configured
+		}
+		helmModule, err := helmformat.New(helmformat.Options{Store: options.HelmStore, Sources: options.HelmSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.HelmObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
 		if err != nil {
 			return nil, err
 		}

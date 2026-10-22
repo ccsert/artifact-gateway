@@ -27,6 +27,7 @@ func TestHelmPreviewGatewayCompositionAndFormalCapabilitiesStayConsistent(t *tes
 	}
 	o.HelmPreviewEnabled = true
 	o.HelmStore = store
+	o.HelmSources = store
 	o.HelmObjects = objectstore.NewMemoryStore()
 	h, err := NewGatewayHandler(o)
 	if err != nil {
@@ -69,28 +70,33 @@ func TestHelmPreviewGatewayCompositionAndFormalCapabilitiesStayConsistent(t *tes
 		t.Fatalf("formal create=%d %s", w.Code, w.Body.String())
 	}
 	if w = nugetGatewayRequest(t, h, "POST", "/api/v2/previews/helm/repositories", `{"name":"proxy","type":"proxy"}`, true); w.Code != 400 {
-		t.Fatalf("unimplemented proxy=%d", w.Code)
+		t.Fatalf("proxy missing explicit source=%d", w.Code)
 	}
 }
 
 func TestHelmPreviewGatewayRejectsImplicitOrIncompletePorts(t *testing.T) {
-	for _, mutate := range []func(*GatewayOptions){func(o *GatewayOptions) { o.HelmPreviewEnabled = true }, func(o *GatewayOptions) {
-		o.HelmPreviewEnabled = true
-		o.HelmStore = (*repository.PostgresStore)(nil)
-		o.HelmObjects = objectstore.NewMemoryStore()
-	}, func(o *GatewayOptions) {
-		o.HelmPreviewEnabled = true
-		o.HelmStore = repository.NewMemoryStore()
-		o.HelmObjects = (*objectstore.MemoryStore)(nil)
-	}, func(o *GatewayOptions) {
-		o.HelmStore = repository.NewMemoryStore()
-		o.HelmObjects = objectstore.NewMemoryStore()
-	}} {
-		o := explicitGatewayOptions()
-		mutate(&o)
-		if h, err := NewGatewayHandler(o); err == nil || h != nil {
-			t.Fatalf("incomplete ports=%v %v", h, err)
-		}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*GatewayOptions)
+	}{
+		{"missing publication store", func(o *GatewayOptions) { o.HelmStore = nil }},
+		{"typed nil publication store", func(o *GatewayOptions) { o.HelmStore = (*repository.PostgresStore)(nil) }},
+		{"missing source store", func(o *GatewayOptions) { o.HelmSources = nil }},
+		{"typed nil source store", func(o *GatewayOptions) { o.HelmSources = (*repository.PostgresStore)(nil) }},
+		{"missing object store", func(o *GatewayOptions) { o.HelmObjects = nil }},
+		{"typed nil object store", func(o *GatewayOptions) { o.HelmObjects = (*objectstore.MemoryStore)(nil) }},
+		{"typed nil upstream", func(o *GatewayOptions) { o.HelmUpstream = (*UpstreamClient)(nil) }},
+		{"disabled with injected ports", func(o *GatewayOptions) { o.HelmPreviewEnabled = false }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := explicitGatewayOptions()
+			store := o.Store.(*repository.MemoryStore)
+			o.HelmPreviewEnabled, o.HelmStore, o.HelmSources, o.HelmObjects = true, store, store, objectstore.NewMemoryStore()
+			tc.mutate(&o)
+			if h, err := NewGatewayHandler(o); err == nil || h != nil {
+				t.Fatalf("incomplete ports=%v %v", h, err)
+			}
+		})
 	}
 }
 
@@ -100,7 +106,7 @@ func TestHelmGrantManagementAcceptsChartPrefixesWithoutFormalSearch(t *testing.T
 			t.Run(method+"/"+prefix, func(t *testing.T) {
 				o := explicitGatewayOptions()
 				store := o.Store.(*repository.MemoryStore)
-				o.HelmPreviewEnabled, o.HelmStore, o.HelmObjects = true, store, objectstore.NewMemoryStore()
+				o.HelmPreviewEnabled, o.HelmStore, o.HelmSources, o.HelmObjects = true, store, store, objectstore.NewMemoryStore()
 				h, err := NewGatewayHandler(o)
 				if err != nil {
 					t.Fatal(err)

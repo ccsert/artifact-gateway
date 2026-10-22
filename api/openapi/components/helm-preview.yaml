@@ -1,16 +1,122 @@
-HelmPreviewRepository:
+HelmPreviewRepositoryCreate:
   type: object
   additionalProperties: false
-  required: [id, name, format, type, preview, version, sourceUrl, publicationApi, provenanceTrust]
+  required: [name]
+  properties:
+    name: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
+    anonymousRead: {type: boolean, default: false}
+    type: {type: string, enum: [hosted, proxy], default: hosted}
+    endpoint: {type: string, format: uri, description: "Explicit HTTPS index.yaml URL required for a Proxy"}
+    allowedHosts:
+      type: array
+      maxItems: 32
+      uniqueItems: true
+      items: {type: string}
+      description: Additional allowed HTTPS authorities; allowlisting never permits credentials to cross origins
+    upstreamAuth: {$ref: '#/HelmPreviewUpstreamAuth'}
+    egressMode: {type: string, enum: [direct, environment], default: direct}
+HelmPreviewRepositoryReplace:
+  type: object
+  additionalProperties: false
+  required: [name, version]
+  properties:
+    name: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
+    version: {type: string, minLength: 1}
+    anonymousRead: {type: boolean, default: false}
+    type: {type: string, enum: [hosted, proxy], default: hosted}
+    endpoint: {type: string, format: uri, description: "Explicit HTTPS index.yaml URL required for a Proxy"}
+    allowedHosts:
+      type: array
+      maxItems: 32
+      uniqueItems: true
+      items: {type: string}
+    upstreamAuth: {$ref: '#/HelmPreviewUpstreamAuth'}
+    egressMode: {type: string, enum: [direct, environment], default: direct}
+HelmPreviewUpstreamAuth:
+  type: object
+  additionalProperties: false
+  required: [scheme]
+  description: Write-only source credential sealed independently of local client credentials; a changed source binding requires a fresh secret or explicit none
+  properties:
+    scheme: {type: string, enum: [none, basic, bearer]}
+    username: {type: string, maxLength: 512}
+    secret: {type: string, maxLength: 16384, writeOnly: true}
+HelmPreviewUpstreamAuthStatus:
+  type: object
+  additionalProperties: false
+  required: [scheme, credentialsConfigured]
+  properties:
+    scheme: {type: string, enum: [none, basic, bearer]}
+    username: {type: string}
+    credentialsConfigured: {type: boolean}
+HelmPreviewGroupInput:
+  type: object
+  additionalProperties: false
+  required: [name, members]
+  properties:
+    name: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
+    anonymousRead: {type: boolean, default: false}
+    version: {type: string, minLength: 1, description: "Required for replacement and compared atomically"}
+    members:
+      type: array
+      minItems: 1
+      maxItems: 32
+      uniqueItems: true
+      items: {type: string, format: uuid}
+      description: Ordered direct Hosted or Proxy members; nested Groups are rejected
+HelmPreviewGroupReplace:
+  allOf:
+    - {$ref: '#/HelmPreviewGroupInput'}
+    - type: object
+      required: [version]
+HelmPreviewGroup:
+  type: object
+  additionalProperties: false
+  required: [id, name, format, preview, version, anonymousRead, members, sourceUrl]
   properties:
     id: {type: string, format: uuid}
     name: {type: string}
     format: {type: string, enum: [helm]}
-    type: {type: string, enum: [hosted]}
     preview: {type: boolean, const: true}
     version: {type: string}
-    sourceUrl: {type: string, description: Gateway-relative traditional index.yaml URL}
-    publicationApi: {type: string, description: Explicit Gateway multipart publication API template}
+    anonymousRead: {type: boolean}
+    members:
+      type: array
+      items: {type: string, format: uuid}
+    sourceUrl: {type: string}
+HelmPreviewSource:
+  type: object
+  additionalProperties: false
+  required: [groupId, chartName, version, repositoryId, repositoryVersion, digest, cached]
+  properties:
+    groupId: {type: string, format: uuid}
+    chartName: {type: string}
+    version: {type: string}
+    repositoryId: {type: string, format: uuid}
+    repositoryVersion: {type: string}
+    digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    upstreamUrl: {type: string, format: uri}
+    cached: {type: boolean, description: "Only a complete verified chart/provenance closure is cached"}
+HelmPreviewRepository:
+  type: object
+  additionalProperties: false
+  required: [id, name, format, type, preview, version, anonymousRead, sourceUrl, provenanceTrust, upstreamAuth]
+  properties:
+    id: {type: string, format: uuid}
+    name: {type: string}
+    format: {type: string, enum: [helm]}
+    type: {type: string, enum: [hosted, proxy]}
+    preview: {type: boolean, const: true}
+    version: {type: string}
+    anonymousRead: {type: boolean}
+    endpoint: {type: string, format: uri}
+    allowedHosts:
+      type: array
+      items: {type: string}
+    egressMode: {type: string, enum: [direct, environment]}
+    upstreamAuth: {$ref: '#/HelmPreviewUpstreamAuthStatus'}
+    sourceUrl: {type: string, description: "Gateway-relative traditional index.yaml URL"}
+    publicationApi: {type: string, description: "Explicit Gateway multipart publication API template, present only for Hosted"}
     provenanceTrust: {type: string, enum: [consumer-public-keyring]}
 HelmPreviewChart:
   type: object
@@ -23,10 +129,10 @@ HelmPreviewChart:
     digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
     size: {type: integer, format: int64, minimum: 1}
     publishedAt: {type: string, format: date-time}
-    chartUrl: {type: string, description: Gateway-relative immutable chart download URL}
+    chartUrl: {type: string, description: "Gateway-relative immutable chart download URL"}
     provenanceSize: {type: integer, format: int64, minimum: 0}
     provenanceDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
-    provenanceUrl: {type: string, description: Present only when the closure contains provenance}
+    provenanceUrl: {type: string, description: "Present only when the closure contains provenance"}
 HelmPreviewChartList:
   type: object
   additionalProperties: false

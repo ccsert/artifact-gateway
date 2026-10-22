@@ -9,6 +9,12 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/helm/groups":
+    "$ref": "./management/helm-preview.yaml#/groups"
+  "/previews/helm/groups/{groupId}":
+    "$ref": "./management/helm-preview.yaml#/group"
+  "/previews/helm/groups/{groupId}/sources/{chartName}/{version}":
+    "$ref": "./management/helm-preview.yaml#/source"
   "/previews/helm/repositories":
     "$ref": "./management/helm-preview.yaml#/repositories"
   "/previews/helm/repositories/{repositoryId}":
@@ -23,6 +29,12 @@ paths:
     "$ref": "./protocols/helm.yaml#/index"
   "/helm/{repository}/charts/{chartName}/{version}/{filename}":
     "$ref": "./protocols/helm.yaml#/asset"
+  "/helm/{repository}/snapshots/{snapshotId}/charts/{chartName}/{version}/{filename}":
+    "$ref": "./protocols/helm.yaml#/snapshot_asset"
+  "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance":
+    "$ref": "./management/nuget-preview.yaml#/governance"
+  "/previews/nuget/repositories/{repositoryId}/quarantine-read-policy":
+    "$ref": "./management/nuget-preview.yaml#/quarantine_read_policy"
   "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate":
     "$ref": "./management/nuget-preview.yaml#/source_revalidation"
   "/previews/nuget/groups":
@@ -53,6 +65,8 @@ paths:
     "$ref": "./protocols/nuget.yaml#/nuget_read"
   "/nuget/{repository}/api/v2/package/":
     "$ref": "./protocols/nuget.yaml#/nuget_publish"
+  "/nuget/{repository}/api/v2/package/{packageId}/{version}":
+    "$ref": "./protocols/nuget.yaml#/nuget_listing"
   "/conan/{repository}/v1/ping":
     "$ref": "./protocols/conan.yaml#/conan_ping"
   "/conan/{repository}/v2/users/authenticate":
@@ -267,6 +281,26 @@ paths:
     "$ref": "./protocols/npm.yaml#/npm_repository_tarball_revision"
 components:
   schemas:
+    HelmPreviewRepositoryCreate:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewRepositoryCreate"
+    HelmPreviewRepositoryReplace:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewRepositoryReplace"
+    HelmPreviewGroupInput:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGroupInput"
+    HelmPreviewGroupReplace:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGroupReplace"
+    HelmPreviewGroup:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGroup"
+    HelmPreviewSource:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewSource"
+    NuGetPreviewGovernance:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewGovernance"
+    NuGetPreviewGovernanceRequest:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewGovernanceRequest"
+    NuGetPreviewQuarantineReadPolicy:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewQuarantineReadPolicy"
+    NuGetPreviewQuarantineReadPolicyRequest:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewQuarantineReadPolicyRequest"
     NuGetPreviewSourceRevalidation:
       "$ref": "./components/nuget-preview.yaml#/NuGetPreviewSourceRevalidation"
     NuGetPreviewRepositoryReplace:

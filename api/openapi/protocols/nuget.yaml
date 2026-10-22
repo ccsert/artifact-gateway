@@ -91,6 +91,46 @@ nuget_read:
         description: Upstream authentication or integrity failure
       '503':
         description: Preview metadata storage or representation is unavailable
+nuget_listing:
+  servers:
+    - url: https://gateway.example.com
+  parameters:
+    - {name: repository, in: path, required: true, schema: {type: string, minLength: 1}}
+    - {name: packageId, in: path, required: true, schema: {type: string, minLength: 1}}
+    - {name: version, in: path, required: true, schema: {type: string, minLength: 1}}
+  delete:
+    operationId: unlistNuGetHostedPackage
+    description: >-
+      Standard PackagePublish/2.0.0 unlist for Hosted preview packages. Removes search and
+      autocomplete visibility; registration lists listed=false and the flat-container versions
+      and exact-version download remain available. This does not tombstone or reclaim the package.
+    security:
+      - nuGetApiKey: []
+      - protocolBasicAuth: []
+      - protocolBearerAuth: []
+    responses:
+      '204': {description: "Package unlisted or identical state replay"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Package write permission required"}
+      '404': {description: "Package not found or tombstoned"}
+      '405': {description: "Proxy and Group are read-only"}
+      '409': {description: "Package identity or governance changed"}
+      '503': {description: "Preview disabled or governance unavailable"}
+  post:
+    operationId: relistNuGetHostedPackage
+    description: Standard PackagePublish/2.0.0 relist; does not remove a tombstone or release quarantine.
+    security:
+      - nuGetApiKey: []
+      - protocolBasicAuth: []
+      - protocolBearerAuth: []
+    responses:
+      '204': {description: "Package relisted or identical state replay"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Package write permission required"}
+      '404': {description: "Package not found or tombstoned"}
+      '405': {description: "Proxy and Group are read-only"}
+      '409': {description: "Package identity or governance changed"}
+      '503': {description: "Preview disabled or governance unavailable"}
 nuget_publish:
   servers:
     - url: https://gateway.example.com

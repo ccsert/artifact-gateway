@@ -364,6 +364,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		if cfg.HelmPreviewEnabled {
 			gatewayOptions.HelmPreviewEnabled = true
 			gatewayOptions.HelmStore = store
+			gatewayOptions.HelmSources = store
 			gatewayOptions.HelmObjects = objectStore
 		}
 		if cfg.NuGetPreviewEnabled {

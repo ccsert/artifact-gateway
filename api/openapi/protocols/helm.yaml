@@ -4,7 +4,12 @@ index:
     - {$ref: '#/repository'}
   get:
     operationId: readHelmHostedIndex
-    description: Opt-in traditional HTTP Helm repository index. A deterministic snapshot contains only committed charts the caller may read. All chart/provenance URLs resolve against this Gateway. No Proxy or Group support is advertised.
+    description: >-
+      Opt-in traditional HTTP Helm Hosted/Proxy/Group index. Every chart and provenance URL points
+      to this Gateway and one fixed source snapshot. Proxy indexes are bounded and conditionally
+      revalidated; only transport unavailability permits a previous cached index. Authorization,
+      malformed data and identity/digest conflicts fail explicitly. Group authority never changes
+      because of member reordering or fallback. This preview is outside the admitted format catalog.
     security: [{protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
     responses:
       '200':
@@ -22,6 +27,8 @@ index:
       '404':
         description: >-
           Preview disabled or repository not found
+      '409': {description: "Immutable chart or source binding conflict"}
+      '502': {description: "Upstream authentication, index or integrity failure"}
       '422':
         description: >-
           Preview inventory exceeds its bound
@@ -47,6 +54,8 @@ index:
       '404':
         description: >-
           Preview disabled or repository not found
+      '409': {description: "Immutable chart or source binding conflict"}
+      '502': {description: "Upstream authentication, index or integrity failure"}
       '422':
         description: >-
           Preview inventory exceeds its bound
@@ -123,6 +132,51 @@ asset:
       '503':
         description: >-
           Published object unavailable or integrity verification failed
+snapshot_asset:
+  servers: [{url: https://gateway.example.com}]
+  parameters:
+    - {$ref: '#/repository'}
+    - {name: snapshotId, in: path, required: true, schema: {type: string, minLength: 1}}
+    - {name: chartName, in: path, required: true, schema: {type: string}}
+    - {name: version, in: path, required: true, schema: {type: string}}
+    - {name: filename, in: path, required: true, schema: {type: string}}
+  get:
+    operationId: readHelmSnapshotAsset
+    description: >-
+      Reads one chart or .prov from the exact authorized index snapshot. Index changes never alter
+      this URL's source identity. Chart metadata, full SHA-256 and the complete optional provenance
+      closure are checked before cached bytes become visible. A bound source failure is not retried
+      against a different Group member. Private upstream credentials never cross origins.
+    security: [{protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: "Complete verified original chart or provenance"}
+      '206': {description: "Requested byte range"}
+      '304': {description: "Same immutable object"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Chart and source read permission required"}
+      '404': {description: "Snapshot, chart or optional provenance not found"}
+      '409': {description: "Immutable chart identity or source configuration conflict"}
+      '410': {description: "Upload reservation expired before verification"}
+      '412': {description: "Conditional precondition failed"}
+      '416': {description: "Unsatisfiable byte range"}
+      '502': {description: "Upstream authentication, missing chart or integrity failure"}
+      '503': {description: "Cached object or source unavailable"}
+  head:
+    operationId: headHelmSnapshotAsset
+    security: [{protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: "Same verified headers as GET without body"}
+      '206': {description: "Requested byte range headers"}
+      '304': {description: "Same immutable object"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Chart and source read permission required"}
+      '404': {description: "Snapshot, chart or optional provenance not found"}
+      '409': {description: "Immutable chart identity or source configuration conflict"}
+      '410': {description: "Upload reservation expired before verification"}
+      '412': {description: "Conditional precondition failed"}
+      '416': {description: "Unsatisfiable byte range"}
+      '502': {description: "Upstream authentication, missing chart or integrity failure"}
+      '503': {description: "Cached object or source unavailable"}
 repository:
   name: repository
   in: path

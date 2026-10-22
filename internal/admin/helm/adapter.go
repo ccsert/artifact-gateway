@@ -1,5 +1,5 @@
 // Package helm binds generated management routes to the explicitly injected
-// Hosted preview boundary. It constructs neither storage nor protocol routes.
+// Helm preview boundary. It constructs neither storage nor protocol routes.
 package helm
 
 import (
@@ -36,6 +36,21 @@ func (a *Boundary) CreateHelmPreviewRepository(w http.ResponseWriter, r *http.Re
 	a.serve(w, r)
 }
 func (a *Boundary) GetHelmPreviewRepository(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Boundary) ReplaceHelmPreviewRepository(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Boundary) CreateHelmPreviewGroup(w http.ResponseWriter, r *http.Request) {
+	a.serve(w, r)
+}
+func (a *Boundary) GetHelmPreviewGroup(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Boundary) ReplaceHelmPreviewGroup(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Boundary) GetHelmPreviewSource(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
 	a.serve(w, r)
 }
 func (a *Boundary) ListHelmPreviewCharts(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {

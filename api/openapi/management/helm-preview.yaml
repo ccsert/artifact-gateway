@@ -1,22 +1,90 @@
-# Opt-in Hosted preview. Not a public format admission or a Helm push protocol.
+# Opt-in Hosted/Proxy/Group preview, outside the public format catalog.
+groups:
+  post:
+    operationId: createHelmPreviewGroup
+    description: Administrator-only ordered Hosted/Proxy view. Direct members only; nested Groups and cycles are rejected. The first selected chart identity is durably bound to one source.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGroupInput'}
+    responses:
+      '201':
+        description: Created preview Group
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGroup'}
+      '400': {description: "Invalid name, members, nested Group or cycle"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Administrator required"}
+      '409': {description: "Name or member configuration conflict"}
+      '503': {description: "Preview disabled or Group storage unavailable"}
+group:
+  parameters:
+    - {name: groupId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    operationId: getHelmPreviewGroup
+    responses:
+      '200':
+        description: Current ordered preview Group
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGroup'}
+      '401': {description: "Authentication required"}
+      '403': {description: "Group read permission required"}
+      '404': {description: "Preview Group not found"}
+      '503': {description: "Preview disabled or Group storage unavailable"}
+  put:
+    operationId: replaceHelmPreviewGroup
+    description: Atomically replaces direct members using the current Group version. Reordering does not change existing chart source authorities or bypass an unavailable bound source.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGroupReplace'}
+    responses:
+      '200':
+        description: Updated ordered preview Group
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGroup'}
+      '400': {description: "Invalid members or missing version"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Administrator required"}
+      '404': {description: "Preview Group not found"}
+      '409': {description: "Group version or member configuration conflict"}
+      '503': {description: "Preview disabled or Group storage unavailable"}
+source:
+  parameters:
+    - {name: groupId, in: path, required: true, schema: {type: string, format: uuid}}
+    - {name: chartName, in: path, required: true, schema: {type: string}}
+    - {name: version, in: path, required: true, schema: {type: string}}
+  get:
+    operationId: getHelmPreviewSource
+    description: Explains the existing immutable chart authority without fetching an index or downloading assets. Resource read authorization applies to the Group and its bound Repository.
+    responses:
+      '200':
+        description: Fixed source and verified cache status
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewSource'}
+      '401': {description: "Authentication required"}
+      '403': {description: "Source read permission required"}
+      '404': {description: "Chart authority not bound"}
+      '409': {description: "Bound source configuration changed"}
+      '503': {description: "Preview disabled or source state unavailable"}
 repositories:
   post:
     operationId: createHelmPreviewRepository
     parameters:
       - {$ref: '#/helmPreviewIdempotencyKey'}
-    description: Create an explicitly enabled Helm Hosted preview. Requires administrator permission; excluded from the public format catalog.
+    description: Create an explicitly enabled Helm Hosted or Proxy preview. Requires administrator permission; excluded from the public format catalog. Proxy sources require an explicit HTTPS index URL, allowlisted assets and independently sealed upstream credentials.
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            type: object
-            additionalProperties: false
-            required: [name]
-            properties:
-              name:
-                type: string
-                pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+            $ref: ../components/helm-preview.yaml#/HelmPreviewRepositoryCreate
     responses:
       '201':
         description: Created or identical idempotent replay
@@ -46,7 +114,7 @@ repository:
     operationId: getHelmPreviewRepository
     responses:
       '200':
-        description: Helm Hosted preview repository and index URL
+        description: Helm preview repository, redacted source configuration and index URL
         content:
           application/json:
             schema:
@@ -63,6 +131,26 @@ repository:
       '503':
         description: >-
           Preview disabled or unavailable
+  put:
+    operationId: replaceHelmPreviewRepository
+    description: Replace explicit source configuration using its current version. A changed source requires fresh credentials or explicit none; old immutable source bindings are never silently reused.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewRepositoryReplace'}
+    responses:
+      '200':
+        description: Updated preview repository
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewRepository'}
+      '400': {description: "Invalid source or missing fresh credential"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Administrator required"}
+      '404': {description: "Preview repository not found"}
+      '409': {description: "Repository configuration version changed"}
+      '503': {description: "Preview disabled or storage unavailable"}
 charts:
   parameters:
     - {$ref: '#/repositoryId'}
@@ -166,6 +254,8 @@ chart:
       '404':
         description: >-
           Hosted preview repository not found
+      '405':
+        description: Proxy and Group do not accept publication
       '409':
         description: >-
           Immutable closure, pending owner or quota conflict

@@ -16,6 +16,383 @@
     }
   ],
   "paths": {
+    "/previews/helm/groups": {
+      "post": {
+        "operationId": "createHelmPreviewGroup",
+        "description": "Administrator-only ordered Hosted/Proxy view. Direct members only; nested Groups and cycles are rejected. The first selected chart identity is durably bound to one source.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelmPreviewGroupInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created preview Group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name, members, nested Group or cycle"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "409": {
+            "description": "Name or member configuration conflict"
+          },
+          "503": {
+            "description": "Preview disabled or Group storage unavailable"
+          }
+        }
+      }
+    },
+    "/previews/helm/groups/{groupId}": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getHelmPreviewGroup",
+        "responses": {
+          "200": {
+            "description": "Current ordered preview Group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewGroup"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Group read permission required"
+          },
+          "404": {
+            "description": "Preview Group not found"
+          },
+          "503": {
+            "description": "Preview disabled or Group storage unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceHelmPreviewGroup",
+        "description": "Atomically replaces direct members using the current Group version. Reordering does not change existing chart source authorities or bypass an unavailable bound source.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelmPreviewGroupReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated ordered preview Group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid members or missing version"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "404": {
+            "description": "Preview Group not found"
+          },
+          "409": {
+            "description": "Group version or member configuration conflict"
+          },
+          "503": {
+            "description": "Preview disabled or Group storage unavailable"
+          }
+        }
+      }
+    },
+    "/previews/helm/groups/{groupId}/sources/{chartName}/{version}": {
+      "parameters": [
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "chartName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getHelmPreviewSource",
+        "description": "Explains the existing immutable chart authority without fetching an index or downloading assets. Resource read authorization applies to the Group and its bound Repository.",
+        "responses": {
+          "200": {
+            "description": "Fixed source and verified cache status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewSource"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Source read permission required"
+          },
+          "404": {
+            "description": "Chart authority not bound"
+          },
+          "409": {
+            "description": "Bound source configuration changed"
+          },
+          "503": {
+            "description": "Preview disabled or source state unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "packageId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewGovernance",
+        "description": "Administrator-only governance evidence for a published or tombstoned cached package. Default-disabled preview; not a formal format admission.",
+        "responses": {
+          "200": {
+            "description": "Current immutable identity and governance version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewGovernance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "Preview repository or package not found"
+          },
+          "503": {
+            "description": "Preview disabled or governance unavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "applyNuGetPreviewGovernance",
+        "description": "Changes one exact package identity using its digest and governance compare-and-swap version. Unlist affects search visibility while exact-version reads remain available. Tombstones hide all native representations and retain bytes for restoration. Quarantine is independent and hides reads only when the repository quarantine read policy is enabled. A Group never selects a different authority to bypass governance. No physical objects are reclaimed by this operation. Proxy operations require an already verified cached package; only Hosted accepts unlist/relist.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewGovernanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated governance evidence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewGovernance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid governance request or action"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "Preview repository or package not found"
+          },
+          "405": {
+            "description": "Proxy sources do not permit local unlist or relist"
+          },
+          "409": {
+            "description": "Package identity or governance version changed"
+          },
+          "503": {
+            "description": "Preview disabled or governance unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/repositories/{repositoryId}/quarantine-read-policy": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewQuarantineReadPolicy",
+        "description": "Administrator-only preview policy; disabled by default and independent of package quarantine state.",
+        "responses": {
+          "200": {
+            "description": "Versioned quarantine read policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewQuarantineReadPolicy"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "503": {
+            "description": "Preview disabled or policy unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceNuGetPreviewQuarantineReadPolicy",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewQuarantineReadPolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated quarantine read policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewQuarantineReadPolicy"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid policy request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "409": {
+            "description": "Policy version changed"
+          },
+          "503": {
+            "description": "Preview disabled or policy unavailable"
+          }
+        }
+      }
+    },
     "/previews/helm/repositories": {
       "post": {
         "operationId": "createHelmPreviewRepository",
@@ -24,23 +401,13 @@
             "$ref": "#/components/parameters/helmPreviewIdempotencyKey"
           }
         ],
-        "description": "Create an explicitly enabled Helm Hosted preview. Requires administrator permission; excluded from the public format catalog.",
+        "description": "Create an explicitly enabled Helm Hosted or Proxy preview. Requires administrator permission; excluded from the public format catalog. Proxy sources require an explicit HTTPS index URL, allowlisted assets and independently sealed upstream credentials.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "name"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
-                  }
-                }
+                "$ref": "#/components/schemas/HelmPreviewRepositoryCreate"
               }
             }
           }
@@ -84,7 +451,7 @@
         "operationId": "getHelmPreviewRepository",
         "responses": {
           "200": {
-            "description": "Helm Hosted preview repository and index URL",
+            "description": "Helm preview repository, redacted source configuration and index URL",
             "content": {
               "application/json": {
                 "schema": {
@@ -104,6 +471,50 @@
           },
           "503": {
             "description": "Preview disabled or unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceHelmPreviewRepository",
+        "description": "Replace explicit source configuration using its current version. A changed source requires fresh credentials or explicit none; old immutable source bindings are never silently reused.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelmPreviewRepositoryReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated preview repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewRepository"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source or missing fresh credential"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "404": {
+            "description": "Preview repository not found"
+          },
+          "409": {
+            "description": "Repository configuration version changed"
+          },
+          "503": {
+            "description": "Preview disabled or storage unavailable"
           }
         }
       }
@@ -255,6 +666,9 @@
           },
           "404": {
             "description": "Hosted preview repository not found"
+          },
+          "405": {
+            "description": "Proxy and Group do not accept publication"
           },
           "409": {
             "description": "Immutable closure, pending owner or quota conflict"
@@ -9507,6 +9921,375 @@
   },
   "components": {
     "schemas": {
+      "HelmPreviewRepositoryCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ],
+            "default": "hosted"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "description": "Explicit HTTPS index.yaml URL required for a Proxy"
+          },
+          "allowedHosts": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional allowed HTTPS authorities; allowlisting never permits credentials to cross origins"
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/HelmPreviewUpstreamAuth"
+          },
+          "egressMode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment"
+            ],
+            "default": "direct"
+          }
+        }
+      },
+      "HelmPreviewRepositoryReplace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ],
+            "default": "hosted"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "description": "Explicit HTTPS index.yaml URL required for a Proxy"
+          },
+          "allowedHosts": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/HelmPreviewUpstreamAuth"
+          },
+          "egressMode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment"
+            ],
+            "default": "direct"
+          }
+        }
+      },
+      "HelmPreviewGroupInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "members"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Required for replacement and compared atomically"
+          },
+          "members": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ordered direct Hosted or Proxy members; nested Groups are rejected"
+          }
+        }
+      },
+      "HelmPreviewGroupReplace": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/HelmPreviewGroupInput"
+          },
+          {
+            "type": "object",
+            "required": [
+              "version"
+            ]
+          }
+        ]
+      },
+      "HelmPreviewGroup": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "format",
+          "preview",
+          "version",
+          "anonymousRead",
+          "members",
+          "sourceUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "helm"
+            ]
+          },
+          "preview": {
+            "type": "boolean",
+            "const": true
+          },
+          "version": {
+            "type": "string"
+          },
+          "anonymousRead": {
+            "type": "boolean"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "sourceUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "HelmPreviewSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "groupId",
+          "chartName",
+          "version",
+          "repositoryId",
+          "repositoryVersion",
+          "digest",
+          "cached"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chartName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryVersion": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "upstreamUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "cached": {
+            "type": "boolean",
+            "description": "Only a complete verified chart/provenance closure is cached"
+          }
+        }
+      },
+      "NuGetPreviewGovernance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "packageId",
+          "version",
+          "digest",
+          "governanceVersion",
+          "listed",
+          "tombstoned",
+          "quarantined"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "governanceVersion": {
+            "type": "string",
+            "description": "Opaque compare-and-swap version independent of repository configuration"
+          },
+          "listed": {
+            "type": "boolean",
+            "description": "Unlisted packages remain in registration and flat-container version lists and permit exact-version downloads"
+          },
+          "tombstoned": {
+            "type": "boolean"
+          },
+          "quarantined": {
+            "type": "boolean",
+            "description": "Native reads are hidden only while the separate quarantine read policy is enabled"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "NuGetPreviewGovernanceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedDigest",
+          "expectedGovernanceVersion",
+          "action",
+          "reason"
+        ],
+        "properties": {
+          "expectedDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "expectedGovernanceVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "unlist",
+              "relist",
+              "delete",
+              "restore",
+              "quarantine",
+              "release"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        }
+      },
+      "NuGetPreviewQuarantineReadPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "enabled"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "NuGetPreviewQuarantineReadPolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "enabled"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
       "NuGetPreviewSourceRevalidation": {
         "type": "object",
         "additionalProperties": false,
@@ -13800,6 +14583,57 @@
           }
         }
       },
+      "HelmPreviewUpstreamAuth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scheme"
+        ],
+        "description": "Write-only source credential sealed independently of local client credentials; a changed source binding requires a fresh secret or explicit none",
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "none",
+              "basic",
+              "bearer"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 16384,
+            "writeOnly": true
+          }
+        }
+      },
+      "HelmPreviewUpstreamAuthStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scheme",
+          "credentialsConfigured"
+        ],
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "none",
+              "basic",
+              "bearer"
+            ]
+          },
+          "username": {
+            "type": "string"
+          },
+          "credentialsConfigured": {
+            "type": "boolean"
+          }
+        }
+      },
       "HelmPreviewRepository": {
         "type": "object",
         "additionalProperties": false,
@@ -13810,9 +14644,10 @@
           "type",
           "preview",
           "version",
+          "anonymousRead",
           "sourceUrl",
-          "publicationApi",
-          "provenanceTrust"
+          "provenanceTrust",
+          "upstreamAuth"
         ],
         "properties": {
           "id": {
@@ -13831,7 +14666,8 @@
           "type": {
             "type": "string",
             "enum": [
-              "hosted"
+              "hosted",
+              "proxy"
             ]
           },
           "preview": {
@@ -13841,13 +14677,36 @@
           "version": {
             "type": "string"
           },
+          "anonymousRead": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "egressMode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "environment"
+            ]
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/HelmPreviewUpstreamAuthStatus"
+          },
           "sourceUrl": {
             "type": "string",
             "description": "Gateway-relative traditional index.yaml URL"
           },
           "publicationApi": {
             "type": "string",
-            "description": "Explicit Gateway multipart publication API template"
+            "description": "Explicit Gateway multipart publication API template, present only for Hosted"
           },
           "provenanceTrust": {
             "type": "string",

@@ -8,6 +8,12 @@
 
 ## Unreleased
 
+- 默认关闭的 Helm 预览增加传统 HTTP Proxy 与有序 Group 读取（#291）：有界索引条件重验、不可变来源快照、chart/provenance 完整校验缓存、私有上游凭据和持久 chart 来源绑定。Group 重排不会替换已选身份的来源；正式格式准入仍由 #292 承接。
+
+- NuGet 预览治理支持 Hosted 原生 unlist/relist、版本化墓碑/恢复，以及独立隔离状态与读取策略（#449）。撤架版本从搜索隐藏，registration、flat-container 版本清单和精确下载遵循 NuGet 语义；墓碑与启用的隔离读取同时约束缓存包和 Group 固定来源，恢复前重新核验原始字节。正式准入仍由 #289 承接。
+
+- Console 增加空 Hosted suite 的 [APT 首次发布流程](docs/apt-first-publication.zh-CN.md)（#450）：显式暂存原始 `.deb`、核对服务端识别的身份，再签署首个快照。上传或签名失败保留精确重试状态，已有 suite 继续使用现有生命周期操作。生产私钥托管与正式 Hosted 准入仍由 #305 承接。
+
 - APT 参考签名器为 v4 `InRelease` 保留 armor CRC24，恢复 Debian bookworm `gpgv` 互操作（#447）。已签正文与签名包保持原始字节；v6 `InRelease` 沿用维护库不含 CRC 的封装。
 
 - Nexus 周期迁移计划持久保存 UTC 周期、错过触发合并、源/映射/策略绑定、下次触发与已验证的最近成功状态（#443）。管理员可在 Console 中按版本和幂等键创建、暂停、恢复、停止计划；每次执行原子消费一份新鲜的管理员容量观测，缺失或过期时等待补充。目标映射相交的计划与手动批次不会并发派发。详见[周期计划](docs/nexus-migration-console.zh-CN.md#周期迁移计划)。
@@ -20,7 +26,7 @@
 
 - OCI Hosted、Proxy 与 Group 新增经授权的 [Catalog 与 OCI 1.1 Referrers 发现](docs/oci-discovery.zh-CN.md)（#315、#316）。覆盖报告区分完整、部分和不支持的源；绑定主体的不可变分页与持久来源绑定防止权限变化、Group 重排后替换内容。Referrers 校验原始 Manifest、annotations 和完整 Blob 闭包，匿名与认证身份的 owner 独立，错误凭据明确拒绝。固定官方 ORAS/Docker 验收作为第七条原生必需门禁；签名信任与 referrers-tag fallback 尚不支持。
 
-- 默认关闭的 [NuGet 预览](docs/nuget-proxy-group-preview.zh-CN.md) 新增只读 Proxy 与有序 Group（#288）：V3 资源发现、按源版本隔离的可验证缓存、包 ID/版本持久来源绑定、私有上游凭据及完整资源授权。上游 unlisted 精确版本仍可读取，搜索不展示它；被过滤的结果不能建立 Group 来源绑定。正式准入和本地 Hosted 治理仍由 #289 跟踪。
+- 默认关闭的 [NuGet 预览](docs/nuget-proxy-group-preview.zh-CN.md) 新增只读 Proxy 与有序 Group（#288）：V3 资源发现、按源版本隔离的可验证缓存、包 ID/版本持久来源绑定、私有上游凭据及完整资源授权。上游 unlisted 精确版本仍可读取，搜索不展示它；被过滤的结果不能建立 Group 来源绑定。正式准入仍由 #289 跟踪，本地治理由 #449 交付。
 
 - 受保护的 Maven Proxy/Group 新增固定官方 Gradle 9.3.1 验证（#286），覆盖三层依赖闭包、管理 API 配置的 Basic/Bearer 源凭据、每轮空客户端 HOME、原始完整 JAR/POM 身份校验、凭据轮换/清除及物理断源后的读取。
 

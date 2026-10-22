@@ -4,6 +4,118 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+export type HelmPreviewRepositoryCreate = {
+  name: string;
+  anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS index.yaml URL required for a Proxy
+   */
+  endpoint?: string;
+  /**
+   * Additional allowed HTTPS authorities; allowlisting never permits credentials to cross origins
+   */
+  allowedHosts?: Array<string>;
+  upstreamAuth?: HelmPreviewUpstreamAuth;
+  egressMode?: "direct" | "environment";
+};
+
+export type HelmPreviewRepositoryReplace = {
+  name: string;
+  version: string;
+  anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS index.yaml URL required for a Proxy
+   */
+  endpoint?: string;
+  allowedHosts?: Array<string>;
+  upstreamAuth?: HelmPreviewUpstreamAuth;
+  egressMode?: "direct" | "environment";
+};
+
+export type HelmPreviewGroupInput = {
+  name: string;
+  anonymousRead?: boolean;
+  /**
+   * Required for replacement and compared atomically
+   */
+  version?: string;
+  /**
+   * Ordered direct Hosted or Proxy members; nested Groups are rejected
+   */
+  members: Array<string>;
+};
+
+export type HelmPreviewGroupReplace = HelmPreviewGroupInput & {
+  [key: string]: unknown;
+};
+
+export type HelmPreviewGroup = {
+  id: string;
+  name: string;
+  format: "helm";
+  preview: true;
+  version: string;
+  anonymousRead: boolean;
+  members: Array<string>;
+  sourceUrl: string;
+};
+
+export type HelmPreviewSource = {
+  groupId: string;
+  chartName: string;
+  version: string;
+  repositoryId: string;
+  repositoryVersion: string;
+  digest: string;
+  upstreamUrl?: string;
+  /**
+   * Only a complete verified chart/provenance closure is cached
+   */
+  cached: boolean;
+};
+
+export type NuGetPreviewGovernance = {
+  repositoryId: string;
+  packageId: string;
+  version: string;
+  digest: string;
+  /**
+   * Opaque compare-and-swap version independent of repository configuration
+   */
+  governanceVersion: string;
+  /**
+   * Unlisted packages remain in registration and flat-container version lists and permit exact-version downloads
+   */
+  listed: boolean;
+  tombstoned: boolean;
+  /**
+   * Native reads are hidden only while the separate quarantine read policy is enabled
+   */
+  quarantined: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  reason?: string;
+};
+
+export type NuGetPreviewGovernanceRequest = {
+  expectedDigest: string;
+  expectedGovernanceVersion: string;
+  action: "unlist" | "relist" | "delete" | "restore" | "quarantine" | "release";
+  reason: string;
+};
+
+export type NuGetPreviewQuarantineReadPolicy = {
+  version: string;
+  enabled: boolean;
+};
+
+export type NuGetPreviewQuarantineReadPolicyRequest = {
+  expectedVersion: string;
+  enabled: boolean;
+};
+
 export type NuGetPreviewSourceRevalidation = {
   groupVersion: string;
   /**
@@ -1349,21 +1461,40 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+/**
+ * Write-only source credential sealed independently of local client credentials; a changed source binding requires a fresh secret or explicit none
+ */
+export type HelmPreviewUpstreamAuth = {
+  scheme: "none" | "basic" | "bearer";
+  username?: string;
+};
+
+export type HelmPreviewUpstreamAuthStatus = {
+  scheme: "none" | "basic" | "bearer";
+  username?: string;
+  credentialsConfigured: boolean;
+};
+
 export type HelmPreviewRepository = {
   id: string;
   name: string;
   format: "helm";
-  type: "hosted";
+  type: "hosted" | "proxy";
   preview: true;
   version: string;
+  anonymousRead: boolean;
+  endpoint?: string;
+  allowedHosts?: Array<string>;
+  egressMode?: "direct" | "environment";
+  upstreamAuth: HelmPreviewUpstreamAuthStatus;
   /**
    * Gateway-relative traditional index.yaml URL
    */
   sourceUrl: string;
   /**
-   * Explicit Gateway multipart publication API template
+   * Explicit Gateway multipart publication API template, present only for Hosted
    */
-  publicationApi: string;
+  publicationApi?: string;
   provenanceTrust: "consumer-public-keyring";
 };
 
@@ -3141,6 +3272,36 @@ export type ProxyCacheBrowseItem = {
   assets?: Array<ProxyCacheAsset>;
 };
 
+export type HelmPreviewRepositoryCreateWritable = {
+  name: string;
+  anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS index.yaml URL required for a Proxy
+   */
+  endpoint?: string;
+  /**
+   * Additional allowed HTTPS authorities; allowlisting never permits credentials to cross origins
+   */
+  allowedHosts?: Array<string>;
+  upstreamAuth?: HelmPreviewUpstreamAuthWritable;
+  egressMode?: "direct" | "environment";
+};
+
+export type HelmPreviewRepositoryReplaceWritable = {
+  name: string;
+  version: string;
+  anonymousRead?: boolean;
+  type?: "hosted" | "proxy";
+  /**
+   * Explicit HTTPS index.yaml URL required for a Proxy
+   */
+  endpoint?: string;
+  allowedHosts?: Array<string>;
+  upstreamAuth?: HelmPreviewUpstreamAuthWritable;
+  egressMode?: "direct" | "environment";
+};
+
 export type NuGetPreviewRepositoryReplaceWritable = {
   name: string;
   anonymousRead?: boolean;
@@ -3260,6 +3421,15 @@ export type OidcSettingsUpdateWritable = {
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
   jitDefaultRole: "none" | "member" | "admin";
+};
+
+/**
+ * Write-only source credential sealed independently of local client credentials; a changed source binding requires a fresh secret or explicit none
+ */
+export type HelmPreviewUpstreamAuthWritable = {
+  scheme: "none" | "basic" | "bearer";
+  username?: string;
+  secret?: string;
 };
 
 export type MigrationSourceInputWritable = {
@@ -3451,10 +3621,352 @@ export type SnapshotId = string;
  */
 export type ConanRevisionQuery = string;
 
-export type CreateHelmPreviewRepositoryData = {
-  body: {
-    name: string;
+export type CreateHelmPreviewGroupData = {
+  body: HelmPreviewGroupInput;
+  path?: never;
+  query?: never;
+  url: "/previews/helm/groups";
+};
+
+export type CreateHelmPreviewGroupErrors = {
+  /**
+   * Invalid name, members, nested Group or cycle
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Name or member configuration conflict
+   */
+  409: unknown;
+  /**
+   * Preview disabled or Group storage unavailable
+   */
+  503: unknown;
+};
+
+export type CreateHelmPreviewGroupResponses = {
+  /**
+   * Created preview Group
+   */
+  201: HelmPreviewGroup;
+};
+
+export type CreateHelmPreviewGroupResponse =
+  CreateHelmPreviewGroupResponses[keyof CreateHelmPreviewGroupResponses];
+
+export type GetHelmPreviewGroupData = {
+  body?: never;
+  path: {
+    groupId: string;
   };
+  query?: never;
+  url: "/previews/helm/groups/{groupId}";
+};
+
+export type GetHelmPreviewGroupErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Group read permission required
+   */
+  403: unknown;
+  /**
+   * Preview Group not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or Group storage unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewGroupResponses = {
+  /**
+   * Current ordered preview Group
+   */
+  200: HelmPreviewGroup;
+};
+
+export type GetHelmPreviewGroupResponse =
+  GetHelmPreviewGroupResponses[keyof GetHelmPreviewGroupResponses];
+
+export type ReplaceHelmPreviewGroupData = {
+  body: HelmPreviewGroupReplace;
+  path: {
+    groupId: string;
+  };
+  query?: never;
+  url: "/previews/helm/groups/{groupId}";
+};
+
+export type ReplaceHelmPreviewGroupErrors = {
+  /**
+   * Invalid members or missing version
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Preview Group not found
+   */
+  404: unknown;
+  /**
+   * Group version or member configuration conflict
+   */
+  409: unknown;
+  /**
+   * Preview disabled or Group storage unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceHelmPreviewGroupResponses = {
+  /**
+   * Updated ordered preview Group
+   */
+  200: HelmPreviewGroup;
+};
+
+export type ReplaceHelmPreviewGroupResponse =
+  ReplaceHelmPreviewGroupResponses[keyof ReplaceHelmPreviewGroupResponses];
+
+export type GetHelmPreviewSourceData = {
+  body?: never;
+  path: {
+    groupId: string;
+    chartName: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/helm/groups/{groupId}/sources/{chartName}/{version}";
+};
+
+export type GetHelmPreviewSourceErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Source read permission required
+   */
+  403: unknown;
+  /**
+   * Chart authority not bound
+   */
+  404: unknown;
+  /**
+   * Bound source configuration changed
+   */
+  409: unknown;
+  /**
+   * Preview disabled or source state unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewSourceResponses = {
+  /**
+   * Fixed source and verified cache status
+   */
+  200: HelmPreviewSource;
+};
+
+export type GetHelmPreviewSourceResponse =
+  GetHelmPreviewSourceResponses[keyof GetHelmPreviewSourceResponses];
+
+export type GetNuGetPreviewGovernanceData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    packageId: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance";
+};
+
+export type GetNuGetPreviewGovernanceErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * Preview repository or package not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or governance unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewGovernanceResponses = {
+  /**
+   * Current immutable identity and governance version
+   */
+  200: NuGetPreviewGovernance;
+};
+
+export type GetNuGetPreviewGovernanceResponse =
+  GetNuGetPreviewGovernanceResponses[keyof GetNuGetPreviewGovernanceResponses];
+
+export type ApplyNuGetPreviewGovernanceData = {
+  body: NuGetPreviewGovernanceRequest;
+  path: {
+    repositoryId: string;
+    packageId: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance";
+};
+
+export type ApplyNuGetPreviewGovernanceErrors = {
+  /**
+   * Invalid governance request or action
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * Preview repository or package not found
+   */
+  404: unknown;
+  /**
+   * Proxy sources do not permit local unlist or relist
+   */
+  405: unknown;
+  /**
+   * Package identity or governance version changed
+   */
+  409: unknown;
+  /**
+   * Preview disabled or governance unavailable
+   */
+  503: unknown;
+};
+
+export type ApplyNuGetPreviewGovernanceResponses = {
+  /**
+   * Updated governance evidence
+   */
+  200: NuGetPreviewGovernance;
+};
+
+export type ApplyNuGetPreviewGovernanceResponse =
+  ApplyNuGetPreviewGovernanceResponses[keyof ApplyNuGetPreviewGovernanceResponses];
+
+export type GetNuGetPreviewQuarantineReadPolicyData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type GetNuGetPreviewQuarantineReadPolicyErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or policy unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewQuarantineReadPolicyResponses = {
+  /**
+   * Versioned quarantine read policy
+   */
+  200: NuGetPreviewQuarantineReadPolicy;
+};
+
+export type GetNuGetPreviewQuarantineReadPolicyResponse =
+  GetNuGetPreviewQuarantineReadPolicyResponses[keyof GetNuGetPreviewQuarantineReadPolicyResponses];
+
+export type ReplaceNuGetPreviewQuarantineReadPolicyData = {
+  body: NuGetPreviewQuarantineReadPolicyRequest;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type ReplaceNuGetPreviewQuarantineReadPolicyErrors = {
+  /**
+   * Invalid policy request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Policy version changed
+   */
+  409: unknown;
+  /**
+   * Preview disabled or policy unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceNuGetPreviewQuarantineReadPolicyResponses = {
+  /**
+   * Updated quarantine read policy
+   */
+  200: NuGetPreviewQuarantineReadPolicy;
+};
+
+export type ReplaceNuGetPreviewQuarantineReadPolicyResponse =
+  ReplaceNuGetPreviewQuarantineReadPolicyResponses[keyof ReplaceNuGetPreviewQuarantineReadPolicyResponses];
+
+export type CreateHelmPreviewRepositoryData = {
+  body: HelmPreviewRepositoryCreateWritable;
   headers?: {
     /**
      * Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
@@ -3529,13 +4041,59 @@ export type GetHelmPreviewRepositoryErrors = {
 
 export type GetHelmPreviewRepositoryResponses = {
   /**
-   * Helm Hosted preview repository and index URL
+   * Helm preview repository, redacted source configuration and index URL
    */
   200: HelmPreviewRepository;
 };
 
 export type GetHelmPreviewRepositoryResponse =
   GetHelmPreviewRepositoryResponses[keyof GetHelmPreviewRepositoryResponses];
+
+export type ReplaceHelmPreviewRepositoryData = {
+  body: HelmPreviewRepositoryReplaceWritable;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}";
+};
+
+export type ReplaceHelmPreviewRepositoryErrors = {
+  /**
+   * Invalid source or missing fresh credential
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Repository configuration version changed
+   */
+  409: unknown;
+  /**
+   * Preview disabled or storage unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceHelmPreviewRepositoryResponses = {
+  /**
+   * Updated preview repository
+   */
+  200: HelmPreviewRepository;
+};
+
+export type ReplaceHelmPreviewRepositoryResponse =
+  ReplaceHelmPreviewRepositoryResponses[keyof ReplaceHelmPreviewRepositoryResponses];
 
 export type ListHelmPreviewChartsData = {
   body?: never;
@@ -3662,6 +4220,10 @@ export type PublishHelmPreviewChartErrors = {
    * Hosted preview repository not found
    */
   404: unknown;
+  /**
+   * Proxy and Group do not accept publication
+   */
+  405: unknown;
   /**
    * Immutable closure, pending owner or quota conflict
    */
