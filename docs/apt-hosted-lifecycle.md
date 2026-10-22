@@ -2,7 +2,7 @@
 
 [简体中文](apt-hosted-lifecycle.zh-CN.md) | [Documentation index](README.md)
 
-The APT Hosted operator preview supports dedicated package deletion, recovery, retention planning and snapshot pruning. Every membership change generates complete Packages indices, Release and both signatures before one transaction switches visibility. APT remains publicly advertised as Proxy/Group; production KMS/HSM custody remains a separate gate. Target-signed distribution is covered by the [distribution preview](apt-hosted-distribution.md).
+The APT Hosted operator preview supports dedicated package deletion, recovery, retention planning and snapshot pruning. Every membership change generates complete Packages indices, Release and both signatures before one transaction switches visibility. APT remains publicly advertised as Proxy/Group reads; production KMS/HSM custody remains a separate gate. Target-signed distribution is covered by the [distribution preview](apt-hosted-distribution.md).
 
 ## Management workflow
 
@@ -34,11 +34,25 @@ All changes bind `expectedSnapshotId`. The successful snapshot, request digest a
 
 Purged identity barriers and history remain; re-uploading that identity cannot bypass deletion. After recovery expires, restore a consistent database/object backup in a separate validation environment or publish a new package version. A single snapshot archive has no deletion/queue history and is not a full lifecycle backup.
 
+## Console operations
+
 The Console exposes these explicit operations under a Hosted APT Repository's **Signed snapshots** tab. Repository administrators enter an exact suite, inspect the current signing fingerprint and snapshot history, select packages for deletion, preview retention, or recover an eligible deletion. The review lists affected packages and the fixed base snapshot; retention apply sends the exact preview candidate IDs. A conflict requires refresh and a new preview. A failed or uncertain apply can reuse its existing idempotency key while the review remains open. A refresh failure keeps the last evidence visible and disables operations until refresh succeeds.
+
+The [first-publication form](apt-first-publication.md) appears only for Repository
+administrators after the suite state loads with no current or historical
+snapshots and no visible packages. Selecting a `.deb` computes its size and
+SHA-256 without uploading or publishing. Administrators explicitly choose
+**Stage and review package**, check the server-reported package name, version,
+architecture and canonical identity, then choose **Confirm and sign first
+snapshot** to publish `sequence: 1` containing only that staged session. Staging
+does not make the package available to APT clients. Failed or uncertain requests
+retain the original file, bodies, idempotency keys and any established session;
+publication retries keep `sequence: 1`. This operator-preview form does not edit
+existing snapshot membership.
 
 The Console also carries a **Disaster recovery** tab under the same Signed snapshots view. It exports any visible or retired snapshot as a portable archive and downloads it with its `sha256:` receipt, and it restores an archive only against the receipt the operator stored independently at backup time. See [Signed snapshot export and offline verification](apt-snapshot-archive.md) for the archive contract and the offline `apt-snapshot verify` command.
 
-Snapshot history permits pruning only retired snapshots whose grace deadline has elapsed, with explicit confirmation. It does not claim physical byte reclamation has completed. The generic scheduled retention-policy executor remains unavailable for APT. The Console does not provide first-publication forms.
+Snapshot history permits pruning only retired snapshots whose grace deadline has elapsed, with explicit confirmation. It does not claim physical byte reclamation has completed. The generic scheduled retention-policy executor remains unavailable for APT.
 
 The lifecycle response includes each package's server-generated `poolPath`, used for protocol reads and distribution. It is distinct from `revision.canonicalIdentity`, which is `package@version#architecture`. The Console never derives a pool path from that package identity. Run matching API and Console versions when using these operations.
 

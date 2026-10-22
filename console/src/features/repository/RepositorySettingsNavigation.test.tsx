@@ -106,14 +106,16 @@ it.each(["go", "maven", "oci"] as const)(
         </PreferencesProvider>
       </QueryClientProvider>,
     );
-    await user.type(
-      await screen.findByLabelText("Upstream token"),
-      "owned-first-upstream-secret",
-    );
-    await user.type(
-      screen.getByLabelText("Proxy password (optional)"),
-      "owned-first-proxy-secret",
-    );
+    const upstreamToken = await screen.findByLabelText("Upstream token");
+    const proxyPassword = screen.getByLabelText("Proxy password (optional)");
+    // Paste complete credentials without rendering the form for each keystroke.
+    await user.click(upstreamToken);
+    await user.paste("owned-first-upstream-secret");
+    await user.click(proxyPassword);
+    await user.paste("owned-first-proxy-secret");
+    expect(upstreamToken).toHaveValue("owned-first-upstream-secret");
+    expect(proxyPassword).toHaveValue("owned-first-proxy-secret");
+    expect(updateRepository).not.toHaveBeenCalled();
     await user.click(
       screen.getByRole("link", { name: "Switch to cached repository" }),
     );
