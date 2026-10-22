@@ -4,17 +4,18 @@
 
 ## Status and priority
 
-APT Hosted is the next planned format expansion after the Kubernetes local
-deployment baseline. APT Proxy and ordered Group reads are already supported;
-this roadmap covers trusted publication owned by Artifact Gateway. It does not
-change the current advertised capability until each milestone reaches its
-acceptance gate.
+APT Hosted is an unadvertised operator preview and a planned formal format
+expansion after the Kubernetes local deployment baseline. APT Proxy and ordered
+Group reads are already supported; this roadmap covers trusted publication owned
+by Artifact Gateway. The preview does not change the advertised Proxy/Group read
+capability before the remaining Hosted admission gates pass.
 
 The format cannot be admitted by adding a generic upload endpoint. Debian
 clients resolve `Packages` indices through checksums in `Release` or
 `InRelease`, and current APT clients reject unsigned repositories by default.
-Artifact Gateway therefore needs one atomic, signed repository-snapshot model
-before it can claim Hosted support. The normative upstream references are the
+Artifact Gateway therefore uses one atomic, signed repository-snapshot model
+for its Hosted preview; production admission still requires the gates below.
+The normative upstream references are the
 [Debian Repository Format](https://wiki.debian.org/DebianRepository/Format)
 and [`apt-secure(8)`](https://manpages.debian.org/unstable/apt/apt-secure.8.en.html).
 The deployable H2 preview and its production boundary are documented in
@@ -29,15 +30,17 @@ interrupted-upload recovery, durable reference-checked orphan collection,
 publication audit evidence, explicit building-snapshot model,
 Memory/PostgreSQL conformance, and narrow signer interface are implemented.
 Staged revisions and building snapshots remain intentionally absent from APT
-protocol reads. APT therefore continues to advertise Proxy-only capability
-until the later signed-snapshot and production-signing gates are complete.
+protocol reads. Public APT capability remains Proxy/Group reads; H2 signed
+snapshot publication is an operator preview, and production-signing gates
+remain open.
 
 The H1 management sequence is deliberately pre-visibility:
 
 1. An administrator explicitly provisions `format: apt, type: hosted` through
    `POST /api/v2/repositories`. This preview repository is management-visible,
-   but remains absent from the format capability API and Console creation
-   choices because it has no installable protocol surface yet.
+   but Hosted remains absent from the advertised format capability API and
+   Console repository-creation choices while formal admission remains open.
+   H2 provides signed protocol reads for the operator preview.
 2. `POST /api/v2/repositories/{repositoryId}/apt/publication-sessions`
    reserves quota for one suite, component, and declared `.deb` using an
    `Idempotency-Key`.
@@ -156,7 +159,22 @@ remain open.
 
 ## APT-H4: lifecycle, scanning, and distribution
 
-Dedicated [deletion, retention, recovery and pruning](apt-hosted-lifecycle.md) operator APIs are available, together with their Console forms and the Console disaster-recovery export/restore forms. Package scanning and quarantine are implemented, and [target-signed promotion and replication](apt-hosted-distribution.md) are available for operator preview. Generic scheduled policies and Console first-publication forms remain future gates.
+Dedicated [deletion, retention, recovery and pruning](apt-hosted-lifecycle.md)
+operator APIs are available, together with their Console forms and the Console
+disaster-recovery export/restore forms. Package scanning and quarantine are
+implemented, and [target-signed promotion and replication](apt-hosted-distribution.md)
+are available for operator preview.
+
+The [Console first-publication form](apt-first-publication.md) is also available
+to Repository administrators after a suite loads with no current or historical
+snapshots and no visible packages. Selecting a `.deb` computes its size and
+SHA-256 without uploading. Administrators explicitly stage the package, review
+its server-reported identity, then confirm signing of `sequence: 1` containing
+only that staged session. Staging does not make the package readable by APT
+clients. Failed or uncertain requests keep their original bodies, idempotency
+keys and any established session for exact retry. This remains an operator preview;
+generic scheduled retention policies and APT Group aggregate signing remain
+future gates.
 
 - Treat removal or retention as a new signed snapshot. Tombstoned packages stay
   restorable during the grace period, and object reclaim remains delayed and
@@ -182,7 +200,8 @@ tests without partial visibility.
 
 Work proceeds H1 through H4. H1 and H2 now establish the minimum truthful
 Hosted preview capability; H3 is required before any production claim; H4 closes parity with
-the existing lifecycle and security model. APT appears as `proxy`-only in the
-format capability API and Console until H1-H3 have all passed their gates; the
-explicit Hosted provisioning and snapshot publication surface is an operator preview, not a
-protocol compatibility claim.
+the existing lifecycle and security model. The advertised APT format profile
+lists only `proxy` repositories with Group reads supported, and Console
+repository creation excludes Hosted until formal admission passes. Explicit
+Hosted provisioning, Console first publication and signed snapshot operations
+remain an operator preview rather than a public Hosted compatibility claim.

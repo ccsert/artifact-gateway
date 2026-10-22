@@ -4,19 +4,21 @@
 
 ## 状态与优先级
 
-APT Hosted 是 Kubernetes 本地部署基线后的格式扩展重点。APT Proxy 与有序 Group 读取已支持；本文描述由 Artifact Gateway 持有的可信发布。在各里程碑通过验收前，不改变当前公开能力。
+APT Hosted 已提供非公开的操作员预览，仍是 Kubernetes 本地部署基线后的正式格式扩展重点。APT Proxy 与有序 Group 读取已支持；本文描述由 Artifact Gateway 持有的可信发布。剩余 Hosted 准入门禁通过前，预览不改变公开的 Proxy/Group 读取能力。
 
-APT 不能通过通用上传接口接纳。Debian 客户端通过 `Release`/`InRelease` 中的校验和解析 `Packages`，且当前 APT 默认拒绝无签名仓库，因此 Gateway 必须先实现原子签名快照模型。
+APT 不能通过通用上传接口接纳。Debian 客户端通过 `Release`/`InRelease` 中的校验和解析 `Packages`，且当前 APT 默认拒绝无签名仓库，因此 Gateway 的 Hosted 预览使用原子签名快照模型；生产准入仍需通过下述门禁。
 
 规范参考为 [Debian Repository Format](https://wiki.debian.org/DebianRepository/Format) 与 [`apt-secure(8)`](https://manpages.debian.org/unstable/apt/apt-secure.8.en.html)。
+
+可部署的 H2 预览与生产边界见 [APT Hosted H2 签名](apt-hosted-signing.zh-CN.md)。
 
 ## APT-H1：发布契约与领域模型
 
 状态：已完成。已实现流式 `.deb` 解析、预留配额的幂等 session、Repository 写权限管理 API、生成客户端、按内容寻址 staged revision、中断恢复、引用安全的持久孤儿回收、审计、building snapshot、Memory/PostgreSQL 一致性和窄 signer 接口。
 
-staged revision 与 building snapshot 不出现在协议读取中，H2/H3 完成前仍只公开 Proxy 能力。管理流程严格处于可见前：
+staged revision 与 building snapshot 不出现在协议读取中。公开 APT 能力仍为 Proxy/Group 读取；H2 签名快照发布属于操作员预览，生产签名门禁仍未完成。管理流程严格处于可见前：
 
-1. 管理员通过 `POST /api/v2/repositories` 显式创建 `format: apt, type: hosted` 预览仓库。
+1. 管理员通过 `POST /api/v2/repositories` 显式创建 `format: apt, type: hosted` 预览仓库。该仓库在管理侧可见，但正式准入前，公开格式能力 API 与 Console 创建仓库选项均不包含 Hosted；H2 为操作员预览提供签名协议读取。
 2. 带 `Idempotency-Key` 调用 `/apt/publication-sessions`，为一个 suite、component 和 `.deb` 预留配额。
 3. 向 session 的 `/package` 流式上传、哈希和解析包，从 Debian control 元数据派生规范身份。
 4. 查询 session 持久状态；`staged` 不代表可安装，只有 H2 原子快照才能发布。
@@ -47,7 +49,9 @@ Hosted 支持 GET、HEAD、条件响应和 Range。故障注入覆盖签名失�
 
 ## APT-H4：生命周期、扫描与分发
 
-专用[删除、保留、恢复与快照清理](apt-hosted-lifecycle.zh-CN.md)已提供操作员 API 与配套 Console 表单，Console 的灾备归档导出/恢复表单也已提供；包扫描与隔离已实现，[使用目标签名的晋级与复制](apt-hosted-distribution.zh-CN.md)已提供操作员预览；通用定时策略和 Console 首次发布表单仍需后续验收。
+专用[删除、保留、恢复与快照清理](apt-hosted-lifecycle.zh-CN.md)已提供操作员 API 与配套 Console 表单，Console 的灾备归档导出/恢复表单也已提供；包扫描与隔离已实现，[使用目标签名的晋级与复制](apt-hosted-distribution.zh-CN.md)已提供操作员预览。
+
+[Console 首次发布表单](apt-first-publication.zh-CN.md)也已提供：仅仓库管理员在套件状态读取成功，且没有当前或历史快照、没有可见软件包时使用。选择 `.deb` 只计算大小与 SHA-256，不自动上传；管理员须明确暂存、核对服务端识别的身份，再确认签署仅包含本次暂存会话的 `sequence: 1` 快照。暂存不会让 APT 客户端读到软件包；失败或结果不确定时保留原请求体、幂等键及已取得的会话供精确重试。此入口仍属于操作员预览；通用定时保留策略和 APT Group 聚合签名仍是后续门禁。
 
 - 删除或保留必须生成新签名快照；墓碑包在宽限期内可恢复，物理回收延迟且重查引用。
 - 在公开手动或发布扫描前实现 `.deb` resolver 与 scanner adapter；当前参考扫描器不宣称覆盖 APT。
@@ -59,4 +63,4 @@ Hosted 支持 GET、HEAD、条件响应和 Range。故障注入覆盖签名失�
 
 ## 交付顺序
 
-按 H1 至 H4 推进。H1/H2 建立最低真实 Hosted 预览，H3 是任何生产声明的前提，H4 补齐现有生命周期和安全模型。H1-H3 全部通过前，格式能力 API 与 Console 仍显示 APT 为 `proxy` only。
+按 H1 至 H4 推进。H1/H2 建立最低真实 Hosted 预览，H3 是任何生产声明的前提，H4 补齐现有生命周期和安全模型。公开 APT 格式能力仍仅列 `proxy` 仓库类型，并支持 Group 读取；正式准入前，Console 创建仓库选项不包含 Hosted。显式 Hosted provisioning、Console 首次发布及签名快照操作均属于操作员预览，不代表公开的 Hosted 兼容能力。
