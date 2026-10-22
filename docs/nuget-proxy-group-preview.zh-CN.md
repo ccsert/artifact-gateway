@@ -5,7 +5,8 @@
 NuGet Hosted、Proxy 和 Group 使用同一个显式开启的预览。使用标准迁移程序应用
 追加 SQL 后设置 `GATEWAY_NUGET_PREVIEW_ENABLED=true`；默认仍关闭。正式格式
 档案、仓库/Group 目录和 Console 选择器不公开 NuGet。此阶段没有 `agctl` 配置
-命令，治理与公开准入仍由 [#289](https://github.com/ccsert/artifact-gateway/issues/289) 跟踪。
+命令。[Hosted 治理预览](nuget-hosted-preview.zh-CN.md#列出状态与保留治理) 也保护
+已校验 Proxy 缓存和固定 Group 所有者；完整治理与公开准入仍由 [#289](https://github.com/ccsert/artifact-gateway/issues/289) 跟踪。
 
 ## 配置上游与有序 Group
 

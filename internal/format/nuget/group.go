@@ -122,6 +122,13 @@ func (m *Module) groupMetadata(ctx context.Context, group repository.HostedGroup
 		if owner.Digest != "" && selected.Digest != "" && (selected.Digest != owner.Digest || selected.Size != owner.Size) {
 			return nil, repository.ErrNuGetPublicationConflict
 		}
+		selected, blocked, err := m.governedPublication(ctx, selected)
+		if err != nil {
+			return nil, err
+		}
+		if blocked {
+			continue
+		}
 		out = append(out, selected)
 	}
 	return out, nil

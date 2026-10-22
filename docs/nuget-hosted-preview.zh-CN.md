@@ -6,7 +6,9 @@ NuGet Hosted 必须显式开启。它在 `/api/v2/previews/nuget` 下使用独�
 发布 DTO，原生协议入口为 `/nuget/{name}`。正式格式目录、正式仓库创建与公开
 目录、Console 格式选择器仍不公开 NuGet。独立启用的
 [Proxy/Group 预览](nuget-proxy-group-preview.zh-CN.md) 扩展原生读取。
-symbols 发布、签名校验、晋级、软删除/恢复、保留策略与完整治理准入仍由 #289 跟踪。
+[#449](https://github.com/ccsert/artifact-gateway/issues/449) 治理子切片增加取消列出/重新列出、
+保留墓碑和隔离读取拦截。symbols 发布、签名校验、扫描、晋级/复制、保留策略、
+回收、Console 与完整治理准入仍由 #289 跟踪。
 预览 API 暂无 `agctl` 命令。
 
 ## 开启与建仓
@@ -55,13 +57,53 @@ nuspec 最大 1 MiB，持久元数据最大 256 KiB；浮动依赖版本、歧�
 会话返回 410，GET 回执仍可读。此时用新幂等键创建新会话。预留有效期一小时，
 新会话使用独立不可变对象键。过期清理
 与发布使用同一个锁，因此旧清理任务不能删除新的可见发布。清理标记持久化，
-删除或标记失败会重试。可见包的治理能力不在本次预览范围内。
+删除或标记失败会重试。重放已提交的 push 会保留原有列出、墓碑和隔离决策。
 
 使用 GET/PUT `/api/v2/previews/nuget/repositories/{id}/capacity` 查看容量或设置
 配额，PUT 需要仓库全局管理权限。`usedBytes` 与 `objectCount` 统计已提交内容，
 准入还计算有效预留；PostgreSQL 提交和配额更新共享仓库锁。备份引用核验包含
 已提交 NuGet 对象，排除仅暂存对象；元数据指纹包含两个表。这项引用覆盖本身
 不等于已单独完成 NuGet 全灾难恢复验收。
+
+## 列出状态与保留治理
+
+Hosted `PackagePublish/2.0.0` 支持标准
+`DELETE /nuget/{name}/api/v2/package/{id}/{version}` 取消列出，同一路径 POST
+重新列出。两者需要包级写权限，达到目标状态返回 204；已加墓碑的版本返回 404。
+官方 `dotnet nuget delete ID VERSION --source SOURCE --api-key CREDENTIAL`
+使用此取消列出行为。取消列出后搜索和自动补全不再返回该版本；registration
+保留该版本并标记 `listed:false`，flat-container 版本目录也保留它。精确版本的
+GET/HEAD、nuspec、SHA-512、Range 与条件下载仍可用，重放 push 不会重新列出。
+
+仓库管理员通过
+`GET /api/v2/previews/nuget/repositories/{id}/packages/{packageId}/{version}/governance`
+读取保留身份。同一路径 POST 提交完整不可变 `expectedDigest`、独立
+`expectedGovernanceVersion`、操作（`unlist`、`relist`、`delete`、`restore`、
+`quarantine`、`release`）和非空且不超过 2048 字符的 `reason`。回执包含
+`listed`、`tombstoned`、`quarantined`、新 `governanceVersion` 以及操作者、时间
+和原因。身份或版本变化返回 409，需要重新读回后再决策。状态和审计同事务提交；
+精确无操作决策保留版本，不重复创建审计。
+
+`delete` 创建保留墓碑，`restore` 只移除该墓碑；`quarantine`、`release` 独立改变
+治理限制。release 和原生 relist 均不能恢复墓碑，restore 也不会释放隔离或重新列出。
+治理保留不可变字节、发布会话、备份引用和已用容量，不释放配额、不允许相同坐标
+替换字节，也不执行延迟回收。恢复、释放隔离和重新列出前会重新读取并校验保留
+包字节；字节损坏时保留原决策。
+
+仅管理员可访问 GET/PUT
+`/api/v2/previews/nuget/repositories/{id}/quarantine-read-policy`。默认返回
+`{"version":"1","enabled":false}`；PUT 必须包含 `expectedVersion` 和 `enabled`，
+策略和审计同事务提交。开启后，隔离身份从 registration、搜索、补全、
+flat-container 版本目录隐藏，并在处理 Range 和条件读取前拒绝所有精确表示的
+GET/HEAD。墓碑始终使用同样的读取屏障，策略读取失败时关闭访问。策略关闭时，
+隔离保留原生读取；释放隔离只移除自身限制。
+
+Proxy 治理仅作用于已完成字节校验的本地缓存身份，未缓存的远程元数据不是治理
+身份。取消列出/重新列出只支持 Hosted，Proxy 返回 405；其他治理操作保护本地
+缓存身份及其远程元数据投影。Group 在固定规范成员上判断治理可见性，隐藏的
+所有者不能回退到其他成员的包。这些操作不会开启预览或将 NuGet 加入正式格式
+目录。迁移 `000182` 为追加迁移；旧二进制不理解其读取屏障，不能继续服务升级后
+的 NuGet 预览。
 
 ## 原生读取与验收
 
@@ -79,6 +121,8 @@ GET/HEAD、Range、ETag/条件读取、原始 nuspec 与 SHA-512 sidecar。搜�
 上传/提交响应丢失、完整读回、清理互斥与备份引用。官方客户端会发布三层依赖
 链，确认缺少传递依赖时失败，再用冷缓存只从目标源恢复；重启 Gateway、
 PostgreSQL 和 RustFS 后再次冷恢复，最后停止目标，用已有缓存离线恢复和执行。
+门禁还覆盖官方客户端取消列出后的精确冷恢复、隔离读取拦截或墓碑期间冷恢复失败、
+三种服务重启后仍然拦截，以及显式治理恢复后读回原字节。
 必需用例不允许失败或跳过。`output/native-nuget-e2e/<project>/` 保存源码哈希、
 客户端/工具来源、JSON 结果及资源归零记录。本机验收、合并后 CI 和生产可用性
 分别报告。

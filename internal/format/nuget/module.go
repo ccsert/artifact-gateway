@@ -274,7 +274,11 @@ func (m *Module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.failure(w, err)
 		return
 	}
-	if len(parts) == 5 && parts[1] == "api" && parts[2] == "v2" && parts[3] == "package" && parts[4] == "" {
+	if len(parts) == 6 && parts[1] == "api" && parts[2] == "v2" && parts[3] == "package" {
+		m.nativeListing(w, r, repo, parts[4], parts[5])
+		return
+	}
+	if (len(parts) == 4 || len(parts) == 5 && parts[4] == "") && parts[1] == "api" && parts[2] == "v2" && parts[3] == "package" {
 		if repo.Type != repository.RepositoryTypeHosted {
 			m.problem(w, 405, "read_only_source")
 			return
