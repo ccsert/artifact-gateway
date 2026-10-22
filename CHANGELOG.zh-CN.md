@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 新安装通过一个事务初始化 8 个 Hosted 仓库、5 个公共上游 Proxy 和 5 个有序 Group（#444）；设置 `GATEWAY_REPOSITORY_PRESETS=none` 可选择空安装。已有目录保留，匿名访问仍关闭，管理员修改或删除后重启不会被覆盖或重新创建。详见[部署初始化](docs/distributed-deployment.zh-CN.md#首次安装仓库)。
+
 - OCI Hosted、Proxy 与 Group 新增经授权的 [Catalog 与 OCI 1.1 Referrers 发现](docs/oci-discovery.zh-CN.md)（#315、#316）。覆盖报告区分完整、部分和不支持的源；绑定主体的不可变分页与持久来源绑定防止权限变化、Group 重排后替换内容。Referrers 校验原始 Manifest、annotations 和完整 Blob 闭包，匿名与认证身份的 owner 独立，错误凭据明确拒绝。固定官方 ORAS/Docker 验收作为第七条原生必需门禁；签名信任与 referrers-tag fallback 尚不支持。
 
 - 默认关闭的 [NuGet 预览](docs/nuget-proxy-group-preview.zh-CN.md) 新增只读 Proxy 与有序 Group（#288）：V3 资源发现、按源版本隔离的可验证缓存、包 ID/版本持久来源绑定、私有上游凭据及完整资源授权。上游 unlisted 精确版本仍可读取，搜索不展示它；被过滤的结果不能建立 Group 来源绑定。正式准入和本地 Hosted 治理仍由 #289 跟踪。
