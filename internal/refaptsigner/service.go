@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
@@ -78,14 +79,48 @@ func (s *Service) SignRelease(ctx context.Context, release []byte) (aptpublicati
 	if err = cleartext.Close(); err != nil {
 		return aptpublication.SignReleaseResult{}, err
 	}
+	inReleaseBytes := inRelease.Bytes()
+	if s.entity.PrivateKey.Version == 4 {
+		inReleaseBytes, err = withV4InReleaseChecksum(inReleaseBytes)
+		if err != nil {
+			return aptpublication.SignReleaseResult{}, err
+		}
+	}
 	var detached bytes.Buffer
 	if err = openpgp.ArmoredDetachSign(&detached, s.entity, bytes.NewReader(release), config); err != nil {
 		return aptpublication.SignReleaseResult{}, err
 	}
 	return aptpublication.SignReleaseResult{
-		InRelease: inRelease.Bytes(), Detached: detached.Bytes(), SignerIdentity: s.identity,
+		InRelease: inReleaseBytes, Detached: detached.Bytes(), SignerIdentity: s.identity,
 		KeyFingerprint: s.fingerprint, Algorithm: s.algorithm,
 	}, nil
+}
+
+// withV4InReleaseChecksum keeps the generated cleartext and signature packets
+// intact. Legacy GnuPG requires CRC24 when signature armor has no base64 padding.
+func withV4InReleaseChecksum(inRelease []byte) ([]byte, error) {
+	block, rest := clearsign.Decode(inRelease)
+	if block == nil || len(rest) != 0 {
+		return nil, errors.New("invalid generated APT clear signature")
+	}
+	start := bytes.LastIndex(inRelease, []byte("\n-----BEGIN PGP SIGNATURE-----\n"))
+	if start < 0 {
+		return nil, errors.New("generated APT signature armor is missing")
+	}
+	var output bytes.Buffer
+	output.Write(inRelease[:start+1])
+	armored, err := armor.EncodeWithChecksumOption(&output, block.ArmoredSignature.Type, block.ArmoredSignature.Header, true)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = io.Copy(armored, block.ArmoredSignature.Body); err != nil {
+		_ = armored.Close()
+		return nil, err
+	}
+	if err = armored.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
 }
 
 func (s *Service) PublicKey() []byte {

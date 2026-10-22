@@ -1,0 +1,21 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA256
+
+Origin: Artifact Gateway synthetic fixture
+Suite: stable
+Architectures: amd64 arm64
+Components: main
+X-Armor-Probe: 22
+SHA256:
+
+-----BEGIN PGP SIGNATURE-----
+
+wsCoBAEBCABdBYJq2Z7XCRA81PFTMTGOzDUUAAAAAAAcABBzYWx0QG5vdGF0aW9u
+cy5vcGVucGdwanMub3Jnpcr6oMLfJgLHU9vZiq51MhYhBBWaT0vdBTlALOYDRTzU
+8VMxMY7MAADQigf4nNW2fdNh+/qbmLa4tyHKD2cRhWH5sz2tFZuAMIw92kNVGWO4
+sm4xAJEFlipRybug+Lc60UCGguyHPfbSi7b5cZoKYmDHsNEHTGLgVJDodP6JKPw/
+uKrtO+M7AhojKrb36rafbvqstsSkOZsxNBK6K8aSdytWNbQwgUGA0YJG4b1P6/IF
+NfIamF3gNqZWk28ZM8Gg7zIZAQb7C2/DKddzi9Fes+MlyhQFlaE+SZi147yMIya0
+bllCmZTjO1XvH7OLMfmZ7N2Kk+kP5dDr8SyFafXFT+W29P2dCD+x+7tZyjm4sRIZ
+Tz4+qn+oujLS/D8Zd4KMqWa4gtglrkVRk0bh
+-----END PGP SIGNATURE-----

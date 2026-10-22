@@ -1,0 +1,6 @@
+Origin: Artifact Gateway synthetic fixture
+Suite: stable
+Architectures: amd64 arm64
+Components: main
+X-Armor-Probe: 22
+SHA256:
