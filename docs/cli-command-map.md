@@ -508,3 +508,39 @@ Default-off. Management operations use the preview API; official Helm owns nativ
 | `HEAD /helm/{repository}/index.yaml`<br>`headHelmHostedIndex` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `GET /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`readHelmHostedAsset` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `HEAD /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`headHelmHostedAsset` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+
+## Helm Proxy/Group preview (#291)
+
+The management command names below are M2 plans only, not registered or
+verified agctl commands. Use the opt-in preview API today. Official Helm
+clients follow the frozen chart and provenance URLs in the index; agctl does
+not add another Helm protocol client. These rows do not admit Helm into the
+public format catalog.
+
+| API / operationId | Planned command | Owning issue | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `PUT /previews/helm/repositories/{repositoryId}`<br>`replaceHelmPreviewRepository` | `helm preview repo update <id>` | #291 | M2 planned | A | C |
+| `POST /previews/helm/groups`<br>`createHelmPreviewGroup` | `helm preview group create` | #291 | M2 planned | A | W |
+| `GET /previews/helm/groups/{groupId}`<br>`getHelmPreviewGroup` | `helm preview group show <id>` | #291 | M2 planned | R on all current members | Q |
+| `PUT /previews/helm/groups/{groupId}`<br>`replaceHelmPreviewGroup` | `helm preview group update <id>` | #291 | M2 planned | A | C |
+| `GET /previews/helm/groups/{groupId}/sources/{chartName}/{version}`<br>`getHelmPreviewSource` | `helm preview group source <id> --chart <name> --version <version>` | #291 | M2 planned | R on the chart in all current members | Q |
+| `GET /helm/{repository}/snapshots/{snapshotId}/charts/{chartName}/{version}/{filename}`<br>`readHelmSnapshotAsset` | official Helm snapshot asset read; no agctl protocol client | #291 | N/A | R* | N: official Helm follows the index snapshot URL; agctl neither registers nor sends this protocol action |
+| `HEAD /helm/{repository}/snapshots/{snapshotId}/charts/{chartName}/{version}/{filename}`<br>`headHelmSnapshotAsset` | native Helm snapshot asset metadata; no agctl protocol client | #291 | N/A | R* | N: the native Helm HTTP endpoint serves asset metadata; agctl neither registers nor sends this protocol action |
+
+## NuGet governance preview (#449)
+
+The four management command names are M2 plans only; none is registered or
+verified. Use the opt-in preview management API for governance evidence,
+digest/version guarded changes, and the independent quarantine read policy.
+Native PackagePublish unlist/relist remains separate from tombstoning and
+quarantine. The relist API row does not claim an official dotnet CLI relist
+command. This mapping does not mark the remaining #289 admission complete.
+
+| API / operationId | Planned command | Owning issue | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `GET /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance`<br>`getNuGetPreviewGovernance` | `nuget preview governance show --repo <id> --package <id> --version <version>` | #449 | M2 planned | RA | Q |
+| `POST /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance`<br>`applyNuGetPreviewGovernance` | `nuget preview governance apply --repo <id> --package <id> --version <version>` | #449 | M2 planned | RA | C |
+| `GET /previews/nuget/repositories/{repositoryId}/quarantine-read-policy`<br>`getNuGetPreviewQuarantineReadPolicy` | `nuget preview quarantine-policy show --repo <id>` | #449 | M2 planned | RA | Q |
+| `PUT /previews/nuget/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceNuGetPreviewQuarantineReadPolicy` | `nuget preview quarantine-policy set --repo <id>` | #449 | M2 planned | RA | C |
+| `DELETE /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`unlistNuGetHostedPackage` | native NuGet PackagePublish unlist; no agctl registry client | #449 | N/A | W | N: NuGet clients use the native unlist endpoint; agctl neither registers nor sends this protocol action |
+| `POST /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`relistNuGetHostedPackage` | native NuGet PackagePublish relist API; no agctl registry client | #449 | N/A | W | N: use the native relist API; no agctl or official dotnet CLI relist command is claimed |

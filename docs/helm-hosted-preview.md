@@ -1,13 +1,13 @@
-# Helm Hosted preview
+# Helm HTTP preview
 
 [简体中文](helm-hosted-preview.zh-CN.md) · [Documentation index](README.md)
 
-Traditional HTTP Helm Hosted is a default-off preview under #290. It provides
+Traditional HTTP Helm Hosted/Proxy/Group is a default-off preview under #290/#291. It provides
 `index.yaml`, original chart/provenance downloads, an explicit multipart upload
 API, bounded browsing, repository grants and capacity reservations. It remains
 absent from the formal Format enum, format profiles, repository lists, active
 capabilities and Console selectors. Existing OCI chart storage is a separate
-protocol. Proxy/Group remains #291; lifecycle and formal admission remain #292.
+protocol. Lifecycle and formal admission remain #292.
 
 ## Enable and provision
 
@@ -28,7 +28,7 @@ An administrator creates a private Hosted preview with
 the returned ID and Gateway-relative `sourceUrl`; the formal repository catalog
 does not list previews. An optional actor-scoped `Idempotency-Key` replays the
 same create request, while a changed body returns 409. Read the receipt through
-`GET /api/v2/previews/helm/repositories/{id}`. Proxy configuration is rejected.
+`GET /api/v2/previews/helm/repositories/{id}`. Proxy and Group provisioning is described below.
 
 Existing repository grant APIs can bind this ID. Resource prefixes match the
 case-sensitive chart name; every version of a chart uses that name as its
@@ -41,7 +41,7 @@ then filter each chart. Downloads and uploads check the full chart name.
 Read credentials support Bearer or HTTP Basic with the Gateway credential as
 password. The Basic username cannot select an actor. Management uploads use
 Bearer authentication. Explicit invalid/revoked credentials always fail.
-Creation is private; global anonymous policy never makes a new preview public.
+Creation is private by default; anonymous reads require both an explicit `anonymousRead:true` and the enabled global policy. Group anonymous reads additionally require every member to allow anonymous reads.
 
 ## Publish a complete closure
 
@@ -105,12 +105,90 @@ The index is a deterministic, authorized snapshot; unchanged publications produc
 identical YAML and ETags. GET/HEAD downloads support conditional and range reads
 and verify complete persisted bytes before serving a requested range.
 
-`GET /api/v2/previews/helm/repositories/{id}/charts` returns at most 4096 committed
-charts in one consistent snapshot; a larger inventory fails with 422 rather than
-silently truncating. `GET .../charts/{name}/{version}` returns identity, size,
-digests and download locations. `GET .../{id}/capacity` reads committed chart plus
+`GET /api/v2/previews/helm/repositories/{id}/charts` returns at most 4096 charts
+in one consistent snapshot; a larger inventory fails with 422 rather than
+silently truncating. `GET .../charts/{name}/{version}` returns identity, digests,
+download locations and an explicit `cached` flag. Hosted charts and complete
+cached Proxy closures have `cached:true` with their real `size` and
+`provenanceSize`; zero provenance size confirms an absent signature only for
+such a complete closure. Cold Proxy metadata has `cached:false` and omits both
+unknown sizes and provenance fields. Listing or reading this metadata may fetch
+the source index but never implicitly downloads assets or changes byte usage.
+`GET .../{id}/capacity` reads committed chart plus
 provenance usage; repository admins set `{"quotaBytes":N}` with PUT on that path.
 Zero means unlimited. Concurrent pending reservations count toward the same quota.
+
+## Proxy and Group source snapshots
+
+An administrator creates a Proxy through the same preview repository POST with
+`type:"proxy"`, an explicit HTTPS `endpoint` for its index, optional
+`allowedHosts` (at most 32 additional HTTPS authorities), `egressMode` (`direct`
+or `environment`) and optional `upstreamAuth:{scheme,username,secret}`. Supported
+schemes are `none`, `basic`, and `bearer`. The write-only source secret is sealed
+with `GATEWAY_SETTINGS_ENCRYPTION_KEY`; local Gateway credentials and signing
+private keys are independent. Responses expose only the scheme, optional username
+and `credentialsConfigured`. A repository PUT replaces configuration with a
+required current `version`. Changing endpoint/allowlist while retaining a source
+credential requires a fresh secret or explicit `scheme:"none"`.
+
+Only HTTPS URLs without userinfo, query, fragment, escaped/traversing paths or
+trailing-dot hosts are accepted. Every chart URL must belong to the index origin
+or an explicitly allowed authority. Every transport redirect independently checks
+DNS/egress and strips source credentials after crossing origins, including a
+redirect back to the initial origin. Client Authorization, cookies and proxy
+credentials never become source credentials. This preview accepts exactly one
+URL per index entry and deliberately rejects mirror/plugin/signature-query URLs.
+
+The complete index is at most 1 MiB/4096 identities. YAML aliases/anchors,
+duplicate/non-string keys, more than 64 levels, more than 100,000 nodes, extra
+documents, ambiguous duplicate chart versions and non-SHA-256 digests fail closed.
+A positive document is fresh for 30 seconds and revalidated using ETag and
+Last-Modified. Only unavailable dial/DNS/deadline failures permit stale positive
+metadata; HTTP denials, TLS/egress failures, malformed content and changed digests
+do not. A stale document remains readable while the same source configuration is
+active. A source config change creates a new cache namespace.
+
+Index entries point only to
+`/helm/{view}/snapshots/{snapshotId}/charts/{name}/{version}/{name}-{version}.tgz`;
+appending `.prov` uses the same frozen entry. Each persisted snapshot pins source
+repository/version, original metadata, full chart digest and one asset URL. A
+chart GET first fetches the full bounded archive and its optional `.prov`, checks
+identity, metadata, size/SHA-256 and provenance binding, then uses the existing
+quota reservation/immutable publication transaction. Missing charts, bad digests,
+authorization failures and malformed provenance never fall through to another
+source. Only a source provenance 404 fixes an absent signature; attaching it later
+requires a new chart version. Interrupted writes stay invisible and resume after
+restart. Verified cached closures support offline GET/HEAD/range reads and count
+toward the repository quota. Pending closures use the existing one-hour expiry
+and collector. Source metadata is not an admitted artifact identity.
+
+Create a Group with `POST /api/v2/previews/helm/groups` and
+`{name,members:[repositoryId,...],anonymousRead?}`. The 1–32 direct Hosted/Proxy
+members are ordered; nested Groups, duplicates and cycles are rejected. PUT on
+`/groups/{id}` replaces the order with a required current `version`; GET reads it.
+The same caller must pass every current member's read boundary before discovery.
+Chart prefix grants filter the intersection of readable charts. The first
+indexed name/version binds a durable source authority. Reordering cannot switch
+it, and any upstream/member error blocks the whole index. If that owner is
+removed, changes configuration/version, disappears from its current index, or
+advertises different bytes, reads fail with 409 instead of selecting a fallback.
+Previously frozen cached bytes survive an upstream index change, provided the
+owner remains an authorized active member with the same configuration version.
+An administrator can create a new Group to explicitly establish a new authority;
+this preview does not automatically rebind existing authorities after rotation.
+
+`GET /api/v2/previews/helm/groups/{id}/sources/{chartName}/{version}` reads an
+already established authority and reports source repository/version, digest,
+optional upstream URL and whether a complete closure is cached. It checks every
+member's chart permission and performs no implicit source fetch/download. An
+unselected coordinate returns 404. Snapshots are create-only and bounded to 128
+per view (each at most 4096 entries/8 MiB serialized metadata); new snapshots beyond
+that limit return 422. There is no snapshot pruning API in this preview. All
+Proxy/Group write operations return 405. Cached immutable conflicts/source version
+changes return 409, upstream missing/denied/corrupt inputs return 502, cache bounds
+return 422, and transient storage/transport failures return 503. Formal lifecycle,
+scan/quarantine/distribution and visible-cache eviction stay unavailable under
+#292; there is no implicit unsupported governance operation.
 
 ## Reproducible acceptance and remaining scope
 
@@ -123,7 +201,9 @@ only owned default-bridge PostgreSQL/RustFS containers, empty Docker credentials
 empty target-only Helm configuration/cache, a synthetic signed chart and a
 consumer-owned public keyring. It exercises the full Gateway routes, signed
 `helm package`, declared upload/replay, database/handler restart, `repo add/update`,
-cold `pull --verify`, independent `verify`, permission failures and real credential
+cold `pull --verify`, independent `verify`, private upstream source caching, mixed
+Hosted/Proxy Group source conflicts/reordering, upstream-offline reads after restart,
+permission failures and real credential
 rotation/revocation. A chart above 1 MiB compressed also exercises the upload body
 boundary.
 
@@ -138,10 +218,10 @@ fixed-client provenance, raw JSON test events, an explicit mandatory test list,
 required/summary results, raw CLI command outputs, original upstream source proof
 and exact owned-resource cleanup. Missing or skipped mandatory cases fail.
 
-This preview does not expose Proxy/Group publication or reads, Console creation/
+This preview does not expose Proxy/Group publication, Console creation/
 upload/browse, agctl commands, tombstones/restore, retention of visible charts,
 quarantine/scanning, promotion/replication, full backup/upgrade acceptance or Nexus
-Helm migration. These remain #291/#292 or their migration dependencies. There is
+Helm migration. These remain #292 or their migration dependencies. There is
 no production routing or source migration/cutover in this delivery.
 
 Protocol references: [Helm chart repository guide](https://helm.sh/docs/topics/chart_repository/),

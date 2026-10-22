@@ -20,13 +20,41 @@ import (
 var repositoryName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 func repositoryDTO(repo repository.HostedRepository) any {
-	return map[string]any{"id": repo.ID, "name": repo.Name, "format": "helm", "type": "hosted", "preview": true, "version": repo.Version, "sourceUrl": "/helm/" + url.PathEscape(repo.Name) + "/index.yaml", "publicationApi": "/api/v2/previews/helm/repositories/" + repo.ID + "/charts/{chartName}/{version}", "provenanceTrust": "consumer-public-keyring"}
+	out := map[string]any{"id": repo.ID, "name": repo.Name, "format": "helm", "type": repo.Type, "preview": true, "version": repo.Version, "anonymousRead": repo.AnonymousRead, "sourceUrl": "/helm/" + url.PathEscape(repo.Name) + "/index.yaml", "provenanceTrust": "consumer-public-keyring"}
+	status := upstreamStatus{Scheme: repository.UpstreamAuthSchemeNone}
+	if repo.UpstreamAuth != nil {
+		status.Scheme = repo.UpstreamAuth.Scheme
+		status.Username = repo.UpstreamAuth.Username
+		status.CredentialsConfigured = repo.UpstreamAuth.Secret != ""
+	}
+	out["upstreamAuth"] = status
+	if repo.Type == repository.RepositoryTypeHosted {
+		out["publicationApi"] = "/api/v2/previews/helm/repositories/" + repo.ID + "/charts/{chartName}/{version}"
+	} else {
+		out["endpoint"] = repo.Endpoint
+		out["allowedHosts"] = append([]string{}, repo.AllowedHosts...)
+		if repo.EgressProxy != nil {
+			out["egressMode"] = repo.EgressProxy.Mode
+		}
+	}
+	return out
 }
 func chartDTO(repo repository.HostedRepository, p repository.HelmPublication) any {
-	out := map[string]any{"repositoryId": p.RepositoryID, "name": p.Name, "version": p.Version, "digest": p.Digest, "size": p.Size, "publishedAt": p.PublishedAt, "chartUrl": assetPath(repo, p, false), "provenanceSize": p.ProvenanceSize}
-	if p.ProvenanceSize > 0 {
+	cached := p.Size > 0
+	out := map[string]any{"repositoryId": p.RepositoryID, "name": p.Name, "version": p.Version, "digest": p.Digest, "cached": cached, "publishedAt": p.PublishedAt, "chartUrl": assetPath(repo, p, false)}
+	if cached {
+		out["size"] = p.Size
+		out["provenanceSize"] = p.ProvenanceSize
+	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		out["chartUrl"] = snapshotPath(repo.Name, p.SessionID, repository.HelmSourceEntry{Name: p.Name, Version: p.Version})
+	}
+	if cached && p.ProvenanceSize > 0 {
 		out["provenanceDigest"] = p.ProvenanceDigest
 		out["provenanceUrl"] = assetPath(repo, p, true)
+		if repo.Type == repository.RepositoryTypeProxy {
+			out["provenanceUrl"] = snapshotPath(repo.Name, p.SessionID, repository.HelmSourceEntry{Name: p.Name, Version: p.Version}) + ".prov"
+		}
 	}
 	return out
 }
@@ -55,6 +83,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		m.problem(w, 403, reason)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/v2/previews/helm/groups") {
+		m.previewGroups(w, r, p)
+		return
+	}
 	const prefix = "/api/v2/previews/helm/repositories"
 	if r.URL.Path == prefix {
 		if r.Method != http.MethodPost {
@@ -66,13 +98,22 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 			m.problem(w, 403, "access_denied")
 			return
 		}
-		var in struct {
-			Name string `json:"name"`
-		}
-		if !decodeBody(w, r, &in) || !repositoryName.MatchString(in.Name) {
+		var in repositoryInput
+		if !decodeBody(w, r, &in) || in.Version != "" {
 			m.problem(w, 400, "invalid_repository")
 			return
 		}
+		next, e := m.configureRepository(in, repository.HostedRepository{})
+		if e != nil {
+			m.problem(w, 400, "invalid_repository")
+			return
+		}
+		ctx, release, e := m.nameLock(r.Context(), in.Name, "repository")
+		if e != nil {
+			m.failure(w, e)
+			return
+		}
+		defer release()
 		key := r.Header.Get("Idempotency-Key")
 		if len(key) > 200 || strings.ContainsAny(key, "\x00\r\n") {
 			m.problem(w, 400, "invalid_idempotency_key")
@@ -83,7 +124,7 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		}
 		body, _ := json.Marshal(in)
 		sum := sha256.Sum256(body)
-		repo, replay, err := m.repos.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: in.Name, Format: repository.FormatHelm, Type: repository.RepositoryTypeHosted}, p.Actor, "helm-preview:"+key, hex.EncodeToString(sum[:]))
+		repo, replay, err := m.repos.CreateHostedRepositoryIdempotently(ctx, withRepositoryID(next), p.Actor, "helm-preview:"+key, hex.EncodeToString(sum[:]))
 		if err != nil {
 			m.failure(w, err)
 			return
@@ -107,6 +148,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 	repo, err := m.repository(r.Context(), parts[0], true)
 	if err != nil {
 		m.failure(w, err)
+		return
+	}
+	if len(parts) == 1 && r.Method == http.MethodPut {
+		m.replacePreviewRepository(w, r, repo, p)
 		return
 	}
 	if len(parts) == 1 {
@@ -133,7 +178,7 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		if !allowed {
 			return
 		}
-		all, e := m.snapshot(r, repo, principal)
+		all, e := m.previewCharts(r, repo, principal)
 		if e != nil {
 			m.failure(w, e)
 			return
@@ -161,10 +206,15 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPut {
+		if repo.Type != repository.RepositoryTypeHosted {
+			w.Header().Set("Allow", "GET")
+			m.problem(w, 405, "read_only_source")
+			return
+		}
 		m.upload(w, r, repo, name, version, p.Actor)
 		return
 	}
-	in, err := m.store.GetHelmPublication(r.Context(), repo.ID, name, version)
+	in, err := m.previewChart(r, repo, name, version)
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -205,4 +255,9 @@ func (m *Module) capacity(w http.ResponseWriter, r *http.Request, repo repositor
 		_ = m.audit.RecordAudit(r.Context(), repository.AuditRecord{Actor: p.Actor, Repository: repo.Name, Format: string(repository.FormatHelm), Resource: repo.ID, Operation: "helm.preview.quota.configure", Outcome: repository.AuditResolved, Status: 200, OccurredAt: time.Now().UTC()})
 	}
 	writeJSON(w, r, 200, map[string]any{"repositoryId": repo.ID, "usedBytes": capacity.UsedBytes, "objectCount": capacity.ObjectCount, "quotaBytes": capacity.QuotaBytes})
+}
+
+func withRepositoryID(in repository.HostedRepository) repository.HostedRepository {
+	in.ID = uuid.NewString()
+	return in
 }

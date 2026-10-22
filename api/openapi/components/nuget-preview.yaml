@@ -1,3 +1,42 @@
+NuGetPreviewGovernance:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, packageId, version, digest, governanceVersion, listed, tombstoned, quarantined]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    packageId: {type: string}
+    version: {type: string}
+    digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    governanceVersion: {type: string, description: "Opaque compare-and-swap version independent of repository configuration"}
+    listed: {type: boolean, description: "Unlisted packages remain in registration and flat-container version lists and permit exact-version downloads"}
+    tombstoned: {type: boolean}
+    quarantined: {type: boolean, description: "Native reads are hidden only while the separate quarantine read policy is enabled"}
+    updatedAt: {type: string, format: date-time}
+    updatedBy: {type: string}
+    reason: {type: string}
+NuGetPreviewGovernanceRequest:
+  type: object
+  additionalProperties: false
+  required: [expectedDigest, expectedGovernanceVersion, action, reason]
+  properties:
+    expectedDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    expectedGovernanceVersion: {type: string, minLength: 1}
+    action: {type: string, enum: [unlist, relist, delete, restore, quarantine, release]}
+    reason: {type: string, minLength: 1, maxLength: 2048}
+NuGetPreviewQuarantineReadPolicy:
+  type: object
+  additionalProperties: false
+  required: [version, enabled]
+  properties:
+    version: {type: string}
+    enabled: {type: boolean, default: false}
+NuGetPreviewQuarantineReadPolicyRequest:
+  type: object
+  additionalProperties: false
+  required: [expectedVersion, enabled]
+  properties:
+    expectedVersion: {type: string, minLength: 1}
+    enabled: {type: boolean}
 NuGetPreviewRepositoryCreate:
   type: object
   additionalProperties: false

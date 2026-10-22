@@ -151,7 +151,11 @@ func TestHelmHostedPublishesImmutableChartProvenanceAndDeterministicIndex(t *tes
 	prov := provenanceFixture(t, chart)
 	for range 2 {
 		w := upload(t, f, "owned", "1.2.3", chart, prov)
-		if w.Code != 201 {
+		var receipt struct {
+			Cached               bool
+			Size, ProvenanceSize int
+		}
+		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &receipt) != nil || !receipt.Cached || receipt.Size != len(chart) || receipt.ProvenanceSize != len(prov) {
 			t.Fatalf("publish=%d %s", w.Code, w.Body.String())
 		}
 	}
@@ -367,7 +371,7 @@ func TestHelmQuotaCoversWholeClosureAndExpiredObjectCollection(t *testing.T) {
 func TestHelmPreviewManagementRejectsUnknownInputAndNonAdminCreation(t *testing.T) {
 	f := newFixture(t)
 	prefix := "/api/v2/previews/helm/repositories"
-	for _, body := range []string{`{"name":"valid","anonymousRead":true}`, `{"name":"UPPER"}`, `{"name":"valid"} {}`} {
+	for _, body := range []string{`{"name":"valid","unknown":true}`, `{"name":"UPPER"}`, `{"name":"valid"} {}`} {
 		if w := request(t, f.module.Preview(), "POST", prefix, []byte(body), admin); w.Code != 400 {
 			t.Fatalf("invalid create=%d %s", w.Code, w.Body.String())
 		}

@@ -346,12 +346,55 @@ func TestNativeNuGetRealDotnetPushAndColdTransitiveRestore(t *testing.T) {
 		}
 	}
 	verify("cold")
+	// The fixed official client performs the standard DELETE signal. An
+	// unlisted version stays downloadable by an exact, cold dependency graph.
+	// Unlike push, delete reads NuGet.Config from its owned working directory
+	// and does not expose --configfile or --allow-insecure-connections options.
+	writeNuGetClientFile(t, c.work, "NuGet.Config", config(c.admin))
+	c.succeeds(t, "unlist", "native-unlist", false, "nuget", "delete", "Hosted.App", "1.0.0", "--source", "gateway", "--api-key", c.admin, "--non-interactive")
+	verify("unlisted")
+	var discovery struct{ TotalHits int }
+	nugetClientHTTP(t, host, c.admin, "GET", "/nuget/nuget-official/v3/query?q=Hosted.App", "", 200, &discovery)
+	if discovery.TotalHits != 0 {
+		t.Fatalf("official unlist remained searchable: %+v", discovery)
+	}
+	nugetClientHTTP(t, host, c.admin, "POST", "/nuget/nuget-official/api/v2/package/Hosted.App/1.0.0", "", 204, nil)
+	governancePath := "/api/v2/previews/nuget/repositories/" + repo.ID + "/packages/hosted.app/1.0.0/governance"
+	change := func(action string) {
+		t.Helper()
+		var state struct {
+			Digest, GovernanceVersion string
+		}
+		nugetClientHTTP(t, host, c.admin, "GET", governancePath, "", 200, &state)
+		body, _ := json.Marshal(map[string]string{"expectedDigest": state.Digest, "expectedGovernanceVersion": state.GovernanceVersion, "action": action, "reason": "Official-client owned " + action})
+		nugetClientHTTP(t, host, c.admin, "POST", governancePath, string(body), 200, nil)
+	}
+	denyRestore := func(phase string) {
+		t.Helper()
+		if out, err := c.command(t, phase, "governed-cold-restore", false, args...); err == nil || (!strings.Contains(out, "NU1101") && !strings.Contains(out, "NU1301")) {
+			t.Fatalf("governed version restored %s: %v %s", phase, err, out)
+		}
+		for _, suffix := range []string{".nupkg", ".nupkg.sha512"} {
+			for _, method := range []string{"GET", "HEAD"} {
+				nugetClientHTTP(t, host, c.admin, method, "/nuget/nuget-official/v3/flat/hosted.app/1.0.0/hosted.app.1.0.0"+suffix, "", 404, nil)
+			}
+		}
+	}
+	change("quarantine")
+	nugetClientHTTP(t, host, c.admin, "GET", "/nuget/nuget-official/v3/flat/hosted.app/1.0.0/hosted.app.1.0.0.nupkg", "", 200, nil)
+	nugetClientHTTP(t, host, c.admin, "PUT", "/api/v2/previews/nuget/repositories/"+repo.ID+"/quarantine-read-policy", `{"expectedVersion":"1","enabled":true}`, 200, nil)
+	denyRestore("quarantined")
 	// Restart the real process and both owned persistence services, then use
 	// completely new global package, HTTP, plugin and SDK-home directories.
 	stop()
 	restartNuGetOwnedService(t, c.project, "postgres")
 	restartNuGetOwnedService(t, c.project, "rustfs")
 	stop = startNuGetGatewayBinary(t, c, bucket, address)
+	denyRestore("quarantined-restarted")
+	change("delete")
+	change("release") // Release does not remove the independent tombstone.
+	denyRestore("tombstoned")
+	change("restore")
 	verify("restarted")
 	stop()
 	c.succeeds(t, "restarted", "offline-restore-with-stopped-target", true, "restore", "/work/Consumer/Consumer.csproj", "--configfile", "/work/offline.config", "--no-http-cache", "--force", "-p:NuGetAudit=false", "--disable-build-servers")
@@ -374,7 +417,7 @@ func TestNativeNuGetRealDotnetPushAndColdTransitiveRestore(t *testing.T) {
 		}
 		checks[p.PackageID+"@"+p.Version] = p.Digest
 	}
-	encoded, _ := json.MarshalIndent(map[string]any{"repositoryId": repo.ID, "targetSource": source, "packageDigests": checks, "client": "10.0.100", "targetOnly": true, "transitivePackages": 3, "coldRestores": 2, "restarted": []string{"gateway", "postgres", "rustfs"}, "offlineRestoreWithStoppedTarget": true, "offlineExecution": "leaf:middle:app", "missingDependencyRejected": true, "sameContentPushReplay": true}, "", "  ")
+	encoded, _ := json.MarshalIndent(map[string]any{"repositoryId": repo.ID, "targetSource": source, "packageDigests": checks, "client": "10.0.100", "targetOnly": true, "transitivePackages": 3, "coldRestores": 3, "nativeUnlistExactColdRestore": true, "governedColdRestoresRejected": []string{"quarantined", "quarantined-restarted", "tombstoned"}, "governanceRecovery": true, "restarted": []string{"gateway", "postgres", "rustfs"}, "offlineRestoreWithStoppedTarget": true, "offlineExecution": "leaf:middle:app", "missingDependencyRejected": true, "sameContentPushReplay": true}, "", "  ")
 	if err = os.WriteFile(filepath.Join(c.evidence, "client-acceptance.json"), encoded, 0600); err != nil {
 		t.Fatal(err)
 	}

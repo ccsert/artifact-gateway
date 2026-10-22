@@ -8,6 +8,9 @@ import (
 )
 
 type MemoryStore struct {
+	helmDocuments        map[string]HelmSourceDocument
+	helmSnapshots        map[string]HelmSourceSnapshot
+	helmAuthorities      map[string]HelmGroupAuthority
 	helmSessions         map[string]HelmSession
 	helmPublications     map[string]HelmPublication
 	helmPublicationLocks map[string]chan struct{}

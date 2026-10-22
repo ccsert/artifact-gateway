@@ -41,7 +41,11 @@ N1 字节契约已实现：Gateway 能验证完整 `.nupkg` ZIP，读取根目�
 显式启用的 [Proxy/Group 预览](nuget-proxy-group-preview.zh-CN.md) 提供以下 V3 发现与
 身份边界。固定官方客户端门禁覆盖私有 Basic/Bearer 源、完整传递依赖、上游 unlisted
 精确版本，以及断源和存储重启后的缓存重放。搜索在持久来源绑定前检查完整包 ID
-权限。本阶段不公开接纳该格式，也不实现本地 Hosted unlist 或治理。
+权限。本阶段不公开接纳该格式。
+[#449](https://github.com/ccsert/artifact-gateway/issues/449) 的
+[治理预览](nuget-hosted-preview.zh-CN.md#列出状态与保留治理) 已增加本地 Hosted
+取消列出/重新列出、保留墓碑和可选隔离读取拦截，并覆盖已校验 Proxy 缓存和固定
+Group 所有者。
 
 - 从各 V3 service index 发现上游资源，不假设 nuget.org URL 结构。
 - 限制元数据/包缓存、负缓存、重定向、上游认证和出站 allowlist。
@@ -52,7 +56,8 @@ N1 字节契约已实现：Gateway 能验证完整 `.nupkg` ZIP，读取根目�
 
 ## N4：生命周期、扫描和分发一致性
 
-- 对 package 及其元数据实现墓碑、恢复、保留、延迟回收、不可变晋级和断点复制。
+- #449 已提供保留墓碑/恢复和取消列出/重新列出；继续对 package 及其元数据
+  实现保留策略、延迟回收、不可变晋级和断点复制。
 - 解析 `.nupkg` 供手动与发布扫描；保留 SBOM、许可证、漏洞、签名和来源证据，但不声称扫描器不支持的行为。
 - 将隔离准入和可选读取强制应用到规范 package 身份，覆盖直接与 Group 读取。
 - 扩展备份恢复、指标、审计、Webhook、升级兼容、Console 和运行时 OpenAPI 验证。

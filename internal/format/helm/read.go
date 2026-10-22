@@ -136,6 +136,9 @@ func (m *Module) asset(w http.ResponseWriter, r *http.Request, repo repository.H
 		m.failure(w, err)
 		return
 	}
+	m.publicationAsset(w, r, p, filename, provAsset)
+}
+func (m *Module) publicationAsset(w http.ResponseWriter, r *http.Request, p repository.HelmPublication, filename string, provAsset bool) {
 	if provAsset && p.ProvenanceSize == 0 {
 		m.problem(w, 404, "not_found")
 		return

@@ -9,6 +9,16 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/helm/groups":
+    "$ref": "./management/helm-preview.yaml#/groups"
+  "/previews/helm/groups/{groupId}":
+    "$ref": "./management/helm-preview.yaml#/group"
+  "/previews/helm/groups/{groupId}/sources/{chartName}/{version}":
+    "$ref": "./management/helm-preview.yaml#/source"
+  "/previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance":
+    "$ref": "./management/nuget-preview.yaml#/governance"
+  "/previews/nuget/repositories/{repositoryId}/quarantine-read-policy":
+    "$ref": "./management/nuget-preview.yaml#/quarantine_read_policy"
   "/previews/helm/repositories":
     "$ref": "./management/helm-preview.yaml#/repositories"
   "/previews/helm/repositories/{repositoryId}":
@@ -349,6 +359,26 @@ paths:
     "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_commit"
 components:
   schemas:
+    HelmPreviewRepositoryCreate:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewRepositoryCreate"
+    HelmPreviewRepositoryReplace:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewRepositoryReplace"
+    HelmPreviewGroupInput:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGroupInput"
+    HelmPreviewGroupReplace:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGroupReplace"
+    HelmPreviewGroup:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGroup"
+    HelmPreviewSource:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewSource"
+    NuGetPreviewGovernance:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewGovernance"
+    NuGetPreviewGovernanceRequest:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewGovernanceRequest"
+    NuGetPreviewQuarantineReadPolicy:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewQuarantineReadPolicy"
+    NuGetPreviewQuarantineReadPolicyRequest:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewQuarantineReadPolicyRequest"
     NuGetPreviewSourceRevalidation:
       "$ref": "./components/nuget-preview.yaml#/NuGetPreviewSourceRevalidation"
     NuGetPreviewRepositoryReplace:

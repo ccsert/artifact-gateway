@@ -40,6 +40,7 @@ type NuGetPublication struct {
 	MetadataJSON, Nuspec                                                      []byte
 	PublishedAt                                                               time.Time
 	SourceVersion, SourceURL, RegistrationURL                                 string
+	Governance                                                                NuGetGovernance
 }
 
 // NativeNuGetStore is injected independently; it is never part of GatewayStore.
@@ -54,6 +55,9 @@ type NativeNuGetStore interface {
 	ExpireNuGetSessions(context.Context, time.Time, int) ([]NuGetSession, error)
 	MarkNuGetSessionCollected(context.Context, string, string) error
 	LockNuGetPublication(context.Context, string, string, string) (context.Context, func(), error)
+	TransitionNuGetGovernance(context.Context, NuGetGovernanceChange) (NuGetPublication, error)
+	ReplaceNuGetQuarantineReadPolicy(context.Context, string, RepositoryQuarantineReadPolicy, string, string) (RepositoryQuarantineReadPolicy, error)
+	RepositoryQuarantineReadPolicyStore
 }
 
 var nuGetID = regexp.MustCompile(`^[a-z0-9_]+(?:[.-][a-z0-9_]+)*$`)
@@ -100,7 +104,13 @@ func cloneNuGetPublication(in NuGetPublication) NuGetPublication {
 	return in
 }
 func nuGetPublication(in NuGetSession, published time.Time) NuGetPublication {
-	return NuGetPublication{RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, ObjectKey: in.ObjectKey, SessionID: in.ID, Publisher: in.Actor, Size: in.Size, MetadataJSON: append([]byte(nil), in.MetadataJSON...), Nuspec: append([]byte(nil), in.Nuspec...), PublishedAt: published, SourceVersion: in.SourceVersion, SourceURL: in.SourceURL, RegistrationURL: in.RegistrationURL}
+	p := NuGetPublication{RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, ObjectKey: in.ObjectKey, SessionID: in.ID, Publisher: in.Actor, Size: in.Size, MetadataJSON: append([]byte(nil), in.MetadataJSON...), Nuspec: append([]byte(nil), in.Nuspec...), PublishedAt: published, SourceVersion: in.SourceVersion, SourceURL: in.SourceURL, RegistrationURL: in.RegistrationURL}
+	p.Governance = NuGetGovernance{Version: "1", Listed: true}
+	var meta struct{ Listed *bool }
+	if json.Unmarshal(in.MetadataJSON, &meta) == nil && meta.Listed != nil {
+		p.Governance.Listed = *meta.Listed
+	}
+	return p
 }
 func nuGetPublicationAudit(in NuGetPublication, repoName string) AuditRecord {
 	operation := "nuget.publish"

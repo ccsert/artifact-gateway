@@ -383,12 +383,17 @@ test("a member cannot open the migration source deep link or issue source API re
   await page.route("**/api/v2/artifact-search**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );
+  await page.route("**/api/v2/repositories?**", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: "" } }),
+  );
   let sourceRequests = 0;
   await page.route("**/api/v2/migration-sources**", (route) => {
     sourceRequests++;
     return route.fulfill({ status: 403, json: { status: 403 } });
   });
   await page.goto(`/operations?tab=migrations&source=${migrationSource.id}`);
+  // The empty state confirms the redirected catalog consumed its response.
+  await expect(page.getByText("暂无仓库", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/repositories$/);
   await expect(page.getByRole("tab", { name: "迁移源" })).toHaveCount(0);
   expect(sourceRequests).toBe(0);

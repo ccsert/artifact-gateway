@@ -122,6 +122,13 @@ func (m *Module) groupMetadata(ctx context.Context, group repository.HostedGroup
 		if owner.Digest != "" && selected.Digest != "" && (selected.Digest != owner.Digest || selected.Size != owner.Size) {
 			return nil, repository.ErrNuGetPublicationConflict
 		}
+		selected, blocked, err := m.governedPublication(ctx, selected)
+		if err != nil {
+			return nil, err
+		}
+		if blocked {
+			continue
+		}
 		out = append(out, selected)
 	}
 	return out, nil
@@ -286,12 +293,59 @@ func (m *Module) serveGroup(w http.ResponseWriter, r *http.Request, group reposi
 			return
 		}
 		w.Header().Set("X-NuGet-Source-Repository", p.RepositoryID)
-		m.packageFile(w, r, repo, p, file, principal.Actor)
-		_ = m.audit.RecordAudit(r.Context(), repository.AuditRecord{Actor: principal.Actor, Repository: repo.Name, GroupName: repo.Name, Format: "nuget", Resource: resource + "@" + version, Operation: "nuget.group.resolve", Outcome: repository.AuditResolved, Status: 200, OccurredAt: time.Now().UTC(), Evidence: map[string]string{"repositoryId": p.RepositoryID, "digest": p.Digest}})
+		result := &groupReadResult{ResponseWriter: w, status: http.StatusOK, head: r.Method == http.MethodHead}
+		m.packageFile(result, r, repo, p, file, principal.Actor)
+		outcome := repository.AuditResolved
+		switch {
+		case result.status == http.StatusNotFound:
+			outcome = repository.AuditNotFound
+		case result.status == http.StatusUnauthorized || result.status == http.StatusForbidden:
+			outcome = repository.AuditAccessDenied
+		case result.status == http.StatusBadGateway:
+			outcome = repository.AuditUpstreamError
+		case result.status >= http.StatusInternalServerError:
+			outcome = repository.AuditStorageError
+		case result.status >= http.StatusBadRequest:
+			outcome = repository.AuditProxyDenied
+		}
+		_ = m.audit.RecordAudit(r.Context(), repository.AuditRecord{Actor: principal.Actor, Repository: repo.Name, GroupName: repo.Name, Format: "nuget", Resource: resource + "@" + version, Operation: "nuget.group.resolve", Outcome: outcome, Status: result.status, Bytes: result.bytes, OccurredAt: time.Now().UTC(), Evidence: map[string]string{"repositoryId": p.RepositoryID, "digest": p.Digest}})
 		return
 	}
 	m.problem(w, 404, "not_found")
 }
+
+// groupReadResult observes the final read barrier and actual protocol response.
+// HEAD writes may report accepted bytes even though net/http suppresses the body.
+type groupReadResult struct {
+	http.ResponseWriter
+	status      int
+	bytes       int64
+	wroteHeader bool
+	head        bool
+}
+
+func (w *groupReadResult) WriteHeader(status int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *groupReadResult) Write(body []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	n, err := w.ResponseWriter.Write(body)
+	if !w.head {
+		w.bytes += int64(n)
+	}
+	return n, err
+}
+
+func (w *groupReadResult) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func searchParameters(r *http.Request) (int, int, error) {
 	q := r.URL.Query()
 	if len(q.Get("q")) > 512 || len(q.Get("id")) > 100 || q.Get("prerelease") != "" && q.Get("prerelease") != "true" && q.Get("prerelease") != "false" || q.Get("semVerLevel") != "" && q.Get("semVerLevel") != "2.0.0" || q.Get("packageType") != "" {

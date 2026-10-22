@@ -1,6 +1,50 @@
 import type { RepositoryMessageKey } from "./repository.zh-CN";
 
 export const repositoryEnUS: Record<RepositoryMessageKey, string> = {
+  "repository.aptFirstTitle": "Publish the first signed snapshot",
+  "repository.aptFirstManagementAfterPublish":
+    "After the first publication, manage visible packages here.",
+  "repository.aptFirstScope":
+    "The first snapshot contains this package only. Stage it, review its identity, then explicitly publish it before APT clients can read it.",
+  "repository.aptFirstHostedOnly":
+    "First publication requires an APT Hosted repository",
+  "repository.aptFirstFile": "Debian package (.deb)",
+  "repository.aptFirstComponentHint":
+    "For example, main. This stays fixed after creating the staging session.",
+  "repository.aptFirstInvalidComponent":
+    "Use lowercase letters, numbers and + . -, starting with a letter or number, up to 128 characters.",
+  "repository.aptFirstInvalidFile":
+    "Choose one non-empty .deb file with no path in its name, at most 255 filename characters and 1 GiB in size.",
+  "repository.aptFirstHashUnavailable":
+    "The file SHA-256 could not be computed. Select the file again on an HTTPS or localhost page.",
+  "repository.aptFirstHashing": "Computing file SHA-256…",
+  "repository.aptFirstExactSize": "{size} bytes",
+  "repository.aptFirstStage": "Stage and review package",
+  "repository.aptFirstRetryStage": "Retry staging and review",
+  "repository.aptFirstSession": "Staging session:",
+  "repository.aptFirstReviewTitle":
+    "Staged: review the server-identified package",
+  "repository.aptFirstPackage": "Package name",
+  "repository.aptFirstArchitecture": "Architecture",
+  "repository.aptFirstIdentity": "Package identity",
+  "repository.aptFirstReviewed":
+    "I checked the package name, version and architecture",
+  "repository.aptFirstPublish": "Confirm and sign first snapshot",
+  "repository.aptFirstRetryPublish": "Retry first publication",
+  "repository.aptFirstRetryHint":
+    "Your selection and any received staging record are retained. Retrying reuses the same request.",
+  "repository.aptFirstSessionMismatch":
+    "The staging session does not match this file or target. Upload was not continued.",
+  "repository.aptFirstRevisionMismatch":
+    "The server package identity is incomplete, or its digest or size differs from this file. Publication was not enabled.",
+  "repository.aptFirstSnapshotMismatch":
+    "No first visible snapshot was received for this repository and suite. Keep this request and retry.",
+  "repository.aptFirstPublishedRefresh":
+    "Publication is confirmed. If the current snapshot has not updated, use Refresh snapshots above.",
+  "repository.aptFirstDiscardTitle": "Clear this selection and retry record?",
+  "repository.aptFirstDiscardHint":
+    "Uploaded staging data expires on the server and will not be published automatically.",
+  "repository.aptFirstDiscard": "Clear this selection",
   "repository.copied": "Copied",
   "repository.copy": "Copy",
   "repository.publishWithDockerOrPodman": "Publish with Docker or Podman",

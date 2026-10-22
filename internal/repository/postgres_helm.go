@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const helmSessionColumns = `id::text,repository_id::text,name,version,digest,size,provenance_digest,provenance_size,actor,state,object_key,provenance_key,metadata_json,chart_yaml,created_at,expires_at,committed_at,collected_at`
+const helmSessionColumns = `id::text,repository_id::text,name,version,digest,size,provenance_digest,provenance_size,actor,state,object_key,provenance_key,metadata_json,chart_yaml,created_at,expires_at,committed_at,collected_at,source_version`
 const helmPublicationColumns = `repository_id::text,name,version,session_id::text,digest,object_key,size,provenance_digest,provenance_key,provenance_size,metadata_json,chart_yaml,publisher,published_at`
 
 type helmScanner interface{ Scan(...any) error }
@@ -15,7 +15,7 @@ type helmScanner interface{ Scan(...any) error }
 func scanHelmSession(row helmScanner) (HelmSession, error) {
 	var in HelmSession
 	var committed, collected sql.NullTime
-	err := row.Scan(&in.ID, &in.RepositoryID, &in.Name, &in.Version, &in.Digest, &in.Size, &in.ProvenanceDigest, &in.ProvenanceSize, &in.Actor, &in.State, &in.ObjectKey, &in.ProvenanceKey, &in.MetadataJSON, &in.ChartYAML, &in.CreatedAt, &in.ExpiresAt, &committed, &collected)
+	err := row.Scan(&in.ID, &in.RepositoryID, &in.Name, &in.Version, &in.Digest, &in.Size, &in.ProvenanceDigest, &in.ProvenanceSize, &in.Actor, &in.State, &in.ObjectKey, &in.ProvenanceKey, &in.MetadataJSON, &in.ChartYAML, &in.CreatedAt, &in.ExpiresAt, &committed, &collected, &in.SourceVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -74,12 +74,12 @@ func (s *PostgresStore) ReserveHelmPublication(ctx context.Context, in HelmSessi
 	if !validHelmSession(in) || !in.ExpiresAt.After(time.Now()) || !in.CreatedAt.IsZero() || in.State != "" || in.ObjectKey != "" || in.ProvenanceKey != "" || !in.CommittedAt.IsZero() || !in.CollectedAt.IsZero() {
 		return HelmSession{}, false, ErrInvalidHelmPublication
 	}
-	tx, _, err := s.helmTransaction(ctx, in.RepositoryID)
+	tx, _, err := s.helmWriteTransaction(ctx, in.RepositoryID, in.SourceVersion)
 	if err != nil {
 		return HelmSession{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.ExecContext(ctx, `UPDATE native_helm_publication_sessions SET state='expired' WHERE repository_id::text=$1 AND state='pending' AND expires_at<=now()`, in.RepositoryID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE native_helm_publication_sessions SET state='expired' WHERE repository_id::text=$1 AND state='pending' AND (expires_at<=now() OR source_version<>$2)`, in.RepositoryID, in.SourceVersion); err != nil {
 		return HelmSession{}, false, err
 	}
 	prior, err := scanHelmSession(tx.QueryRowContext(ctx, `SELECT `+helmSessionColumns+` FROM native_helm_publication_sessions WHERE id::text=$1`, in.ID))
@@ -109,7 +109,7 @@ func (s *PostgresStore) ReserveHelmPublication(ctx context.Context, in HelmSessi
 		return HelmSession{}, false, err
 	}
 	in.ObjectKey, in.ProvenanceKey = helmObjectKeys(in)
-	in, err = scanHelmSession(tx.QueryRowContext(ctx, `INSERT INTO native_helm_publication_sessions(id,repository_id,name,version,digest,size,provenance_digest,provenance_size,actor,state,object_key,provenance_key,metadata_json,chart_yaml,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11,$12,$13,$14) RETURNING `+helmSessionColumns, in.ID, in.RepositoryID, in.Name, in.Version, in.Digest, in.Size, in.ProvenanceDigest, in.ProvenanceSize, in.Actor, in.ObjectKey, in.ProvenanceKey, string(in.MetadataJSON), in.ChartYAML, in.ExpiresAt))
+	in, err = scanHelmSession(tx.QueryRowContext(ctx, `INSERT INTO native_helm_publication_sessions(id,repository_id,name,version,digest,size,provenance_digest,provenance_size,actor,state,object_key,provenance_key,metadata_json,chart_yaml,expires_at,source_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11,$12,$13,$14,$15) RETURNING `+helmSessionColumns, in.ID, in.RepositoryID, in.Name, in.Version, in.Digest, in.Size, in.ProvenanceDigest, in.ProvenanceSize, in.Actor, in.ObjectKey, in.ProvenanceKey, string(in.MetadataJSON), in.ChartYAML, in.ExpiresAt, in.SourceVersion))
 	if err != nil {
 		return HelmSession{}, false, err
 	}
@@ -123,7 +123,7 @@ func (s *PostgresStore) CommitHelmPublication(ctx context.Context, id, actor str
 	if err != nil {
 		return HelmPublication{}, false, err
 	}
-	tx, name, err := s.helmTransaction(ctx, before.RepositoryID)
+	tx, name, err := s.helmWriteTransaction(ctx, before.RepositoryID, before.SourceVersion)
 	if err != nil {
 		return HelmPublication{}, false, err
 	}
@@ -164,7 +164,7 @@ func (s *PostgresStore) CommitHelmPublication(ctx context.Context, id, actor str
 	return p, false, tx.Commit()
 }
 func (s *PostgresStore) GetHelmPublication(ctx context.Context, repo, name, version string) (HelmPublication, error) {
-	return scanHelmPublication(s.db.QueryRowContext(ctx, `SELECT `+helmPublicationColumns+` FROM native_helm_publications WHERE repository_id::text=$1 AND name=$2 AND version=$3 AND EXISTS(SELECT 1 FROM hosted_repositories h WHERE h.id=repository_id AND h.format='helm' AND h.repo_type='hosted' AND h.state='active')`, repo, name, version))
+	return scanHelmPublication(s.db.QueryRowContext(ctx, `SELECT `+helmPublicationColumns+` FROM native_helm_publications WHERE repository_id::text=$1 AND name=$2 AND version=$3 AND EXISTS(SELECT 1 FROM hosted_repositories h WHERE h.id=repository_id AND h.format='helm' AND h.repo_type IN ('hosted','proxy') AND h.state='active')`, repo, name, version))
 }
 func (s *PostgresStore) ListHelmPublications(ctx context.Context, repo string, limit int) ([]HelmPublication, error) {
 	if limit < 1 || limit > 4097 {
@@ -172,7 +172,7 @@ func (s *PostgresStore) ListHelmPublications(ctx context.Context, repo string, l
 	}
 	// One statement owns the complete bounded index snapshot. No page-by-page
 	// reads can mix concurrent commits into a partially constructed index.
-	rows, err := s.db.QueryContext(ctx, `SELECT `+helmPublicationColumns+` FROM native_helm_publications WHERE repository_id::text=$1 AND EXISTS(SELECT 1 FROM hosted_repositories h WHERE h.id=repository_id AND h.format='helm' AND h.repo_type='hosted' AND h.state='active') ORDER BY name COLLATE "C",version COLLATE "C" LIMIT $2`, repo, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+helmPublicationColumns+` FROM native_helm_publications WHERE repository_id::text=$1 AND EXISTS(SELECT 1 FROM hosted_repositories h WHERE h.id=repository_id AND h.format='helm' AND h.repo_type IN ('hosted','proxy') AND h.state='active') ORDER BY name COLLATE "C",version COLLATE "C" LIMIT $2`, repo, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -219,4 +219,11 @@ func (s *PostgresStore) MarkHelmSessionCollected(ctx context.Context, id, key st
 }
 func (s *PostgresStore) LockHelmPublication(ctx context.Context, repo, name, version string) (context.Context, func(), error) {
 	return s.lockPostgresAdvisoryKeys(ctx, []string{"native-helm-publication:" + repo + ":" + name + ":" + version})
+}
+
+func (s *PostgresStore) helmWriteTransaction(ctx context.Context, id, version string) (*sql.Tx, string, error) {
+	if version != "" {
+		return s.helmSourceTransaction(ctx, id, version)
+	}
+	return s.helmTransaction(ctx, id)
 }

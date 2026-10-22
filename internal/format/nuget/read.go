@@ -124,10 +124,30 @@ func (m *Module) flat(w http.ResponseWriter, r *http.Request, repo repository.Ho
 				m.failure(w, err)
 				return
 			}
-			m.metadataJSON(w, r, map[string]any{"versions": versions})
+			items := make([]repository.NuGetPublication, 0, len(versions))
+			for _, version := range versions {
+				items = append(items, repository.NuGetPublication{RepositoryID: repo.ID, PackageID: id, Version: version, SourceVersion: repo.Version})
+			}
+			items, err = m.visiblePublications(r.Context(), items)
+			if err != nil {
+				m.failure(w, err)
+				return
+			}
+			if len(items) == 0 {
+				m.problem(w, 404, "not_found")
+				return
+			}
+			visible := make([]string, 0, len(items))
+			for _, p := range items {
+				visible = append(visible, p.Version)
+			}
+			m.metadataJSON(w, r, map[string]any{"versions": visible})
 			return
 		}
 		items, err := m.all(r.Context(), repo.ID, id)
+		if err == nil {
+			items, err = m.visiblePublications(r.Context(), items)
+		}
 		if err != nil {
 			m.failure(w, err)
 			return
@@ -159,6 +179,20 @@ func (m *Module) flat(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		return
 	}
 	if repo.Type == repository.RepositoryTypeProxy {
+		if cached, lookupErr := m.store.GetNuGetPublication(r.Context(), repo.ID, id, version); lookupErr == nil {
+			_, blocked, governanceErr := m.governedPublication(r.Context(), cached)
+			if governanceErr != nil {
+				m.failure(w, governanceErr)
+				return
+			}
+			if blocked {
+				m.problem(w, 404, "not_found")
+				return
+			}
+		} else if !errors.Is(lookupErr, repository.ErrNotFound) {
+			m.failure(w, lookupErr)
+			return
+		}
 		if _, err = m.proxyPackage(r.Context(), repo, id, version); err != nil {
 			m.failure(w, err)
 			return
@@ -172,6 +206,29 @@ func (m *Module) flat(w http.ResponseWriter, r *http.Request, repo repository.Ho
 	m.packageFile(w, r, repo, p, parts[2], actor)
 }
 func (m *Module) packageFile(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, p repository.NuGetPublication, file, actor string) {
+	ctx, release, err := m.store.LockNuGetPublication(r.Context(), p.RepositoryID, p.PackageID, p.Version)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	defer release()
+	current, err := m.store.GetNuGetPublication(ctx, p.RepositoryID, p.PackageID, p.Version)
+	if err != nil || current.Digest != p.Digest {
+		if err == nil {
+			err = repository.ErrNuGetPublicationConflict
+		}
+		m.failure(w, err)
+		return
+	}
+	p, blocked, err := m.governedPublication(ctx, current)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	if blocked {
+		m.problem(w, 404, "not_found")
+		return
+	}
 	id, version := p.PackageID, p.Version
 	switch file {
 	case id + "." + version + ".nupkg":
@@ -211,7 +268,7 @@ func (m *Module) leaf(r *http.Request, repo repository.HostedRepository, p repos
 	base := sourceBase(r, repo)
 	leafURL := base + "registration/" + p.PackageID + "/" + p.Version + ".json"
 	content := packageURL(r, repo, p.PackageID, p.Version)
-	listed := meta.Listed == nil || *meta.Listed
+	listed := listedPublication(p, meta)
 	groups := make([]map[string]any, 0, len(meta.DependencyGroups))
 	for _, g := range meta.DependencyGroups {
 		deps := make([]map[string]any, 0, len(g.Dependencies))
@@ -241,6 +298,9 @@ func (m *Module) registration(w http.ResponseWriter, r *http.Request, repo repos
 		return
 	}
 	items, err := m.packageMetadata(r.Context(), repo, id)
+	if err == nil {
+		items, err = m.visiblePublications(r.Context(), items)
+	}
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -371,6 +431,14 @@ func (m *Module) searchItems(w http.ResponseWriter, r *http.Request, repo reposi
 		if filterAuthorization && principal.Actor != "anonymous" && !m.access.AuthorizeResource(r.Context(), principal, repo, authorization.RepositoryRead, p.PackageID).Allowed {
 			continue
 		}
+		p, blocked, err := m.governedPublication(r.Context(), p)
+		if err != nil {
+			m.failure(w, err)
+			return
+		}
+		if blocked {
+			continue
+		}
 		if !pre && strings.Contains(p.Version, "-") {
 			continue
 		}
@@ -382,7 +450,7 @@ func (m *Module) searchItems(w http.ResponseWriter, r *http.Request, repo reposi
 			m.failure(w, err)
 			return
 		}
-		if meta.Listed != nil && !*meta.Listed {
+		if !listedPublication(p, meta) {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(meta.ID+" "+meta.Description), q) {

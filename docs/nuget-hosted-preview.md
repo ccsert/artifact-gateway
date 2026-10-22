@@ -7,8 +7,10 @@ publication DTOs under `/api/v2/previews/nuget`, and a native `/nuget/{name}`
 protocol endpoint. It remains absent from the admitted format profiles, formal
 repository creation/catalog, and Console format selector. The separately enabled
 [Proxy/Group preview](nuget-proxy-group-preview.md) extends native reads.
-Symbols publication, signature verification, promotion, tombstone/restore,
-retention and full governance admission remain tracked by #289.
+The [#449](https://github.com/ccsert/artifact-gateway/issues/449) governance slice
+adds unlist/relist, retained tombstones and quarantine read enforcement. Symbols
+publication, signature verification, scanning, promotion/replication, retention,
+reclamation, Console and full governance admission remain tracked by #289.
 There is no `agctl` command for the preview API.
 
 ## Enable and provision
@@ -73,8 +75,8 @@ readable. Start a new session with a new idempotency key. Reservation
 expiry is one hour. Replacements use a distinct immutable object key, and
 expired-upload cleanup shares the publication lock, so an older cleanup attempt
 cannot delete a new visible publication. Collection markers are durable and a
-failed delete/marker is retried. Visible package governance is outside this
-preview.
+failed delete/marker is retried. Replaying a committed push preserves all
+existing listing, tombstone and quarantine decisions.
 
 Use GET/PUT `/api/v2/previews/nuget/repositories/{id}/capacity` for preview usage
 and quota. PUT requires repository-wide administration. `usedBytes` and
@@ -84,6 +86,57 @@ locks. Backup reference verification includes committed NuGet objects and
 excludes staging-only objects; backup metadata fingerprints include both tables.
 This reference coverage does not itself claim a separate full NuGet disaster
 recovery acceptance run.
+
+## Listing and retained governance
+
+Hosted `PackagePublish/2.0.0` supports standard
+`DELETE /nuget/{name}/api/v2/package/{id}/{version}` to unlist and `POST` at the
+same path to relist. Both require package-level write permission, return 204
+for the desired state and reject a tombstoned version with 404. The official
+`dotnet nuget delete ID VERSION --source SOURCE --api-key CREDENTIAL` command
+uses this unlist behavior. Unlisted packages disappear from search and
+autocomplete. Registration retains the version with `listed:false`, and the
+flat-container directory retains it; exact GET/HEAD, nuspec, SHA-512, ranges and
+conditional downloads continue to work. Replaying a push never relists it.
+
+Repository administrators read retained identities with
+`GET /api/v2/previews/nuget/repositories/{id}/packages/{packageId}/{version}/governance`.
+POST at the same path takes the complete immutable `expectedDigest`, the
+independent `expectedGovernanceVersion`, one action (`unlist`, `relist`, `delete`,
+`restore`, `quarantine`, `release`), and a non-empty `reason` up to 2048 characters.
+The receipt contains `listed`, `tombstoned`, `quarantined`, the new
+`governanceVersion` and actor/time/reason evidence. A changed identity or stale
+version returns 409; re-read before making a new decision. State and audit commit
+atomically. Exact no-op decisions keep the version and do not duplicate audit.
+
+`delete` installs a retained tombstone; `restore` removes only that tombstone.
+`quarantine` and `release` independently change the governance restriction.
+Neither release nor native relist restores a tombstoned version, and restore
+never releases quarantine or relists a package. Governance keeps immutable bytes,
+publication sessions, backup references and used capacity. It does not free quota,
+permit replacement bytes at the same coordinate, or run delayed reclamation.
+Restore, quarantine release and relisting re-read and verify retained package
+bytes before removing a restriction; corruption preserves the prior decision.
+
+The administrator-only GET/PUT endpoint
+`/api/v2/previews/nuget/repositories/{id}/quarantine-read-policy` returns
+`{"version":"1","enabled":false}` by default. PUT requires `expectedVersion`
+and `enabled`; policy state and audit commit together. Enabling it hides
+quarantined identities from registration, search, autocomplete and flat-container
+lists, and rejects every exact representation's GET/HEAD before range or
+conditional handling. A tombstone always has the same read barrier. Policy
+lookup failure fails closed. With the policy disabled, quarantine preserves
+native reads; release removes only its own restriction.
+
+Proxy governance applies only to already verified local cached identities;
+uncached remote metadata is not a governance identity. Local unlist/relist is a
+Hosted operation; Proxy requests return 405. Other actions protect the cached
+identity and its remote metadata projection. Group governance is evaluated on
+the pinned canonical member before visibility: a hidden owner cannot fall back
+to another member's package. Neither governance nor policy enables the preview
+or admits NuGet to formal format catalogs. Migration `000182` is append-only;
+older binaries do not understand its read barriers and must not serve the
+upgraded NuGet preview.
 
 ## Native reads and validation
 
@@ -106,7 +159,10 @@ cleanup serialization, and backup references. Official-client acceptance
 publishes a three-package dependency chain, rejects a missing transitive
 dependency, restores from the target alone with a cold cache, restarts Gateway,
 PostgreSQL and RustFS, restores cold again, then executes offline with the
-target stopped. Required tests may neither fail nor skip. The evidence directory
+target stopped. It also performs official-client unlisting and exact cold
+restore, rejects cold restore while quarantine enforcement or a tombstone is
+active, preserves enforcement through all three restarts, and restores the same
+bytes after an explicit governance recovery. Required tests may neither fail nor skip. The evidence directory
 `output/native-nuget-e2e/<project>/` retains source hashes, client/tool provenance,
 JSON test results and zero-resource cleanup records. Local acceptance, merged
 CI and production readiness are separate facts.

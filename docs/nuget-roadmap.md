@@ -71,7 +71,10 @@ discovery and identity boundaries below. Its pinned official-client gate covers
 private Basic/Bearer sources, complete transitive packages, upstream-unlisted
 exact versions and replay after source shutdown and storage restart. Search
 checks the full package ID before persisting a Group authority. This stage does
-not admit the format publicly or implement local Hosted unlist/governance.
+not admit the format publicly. The [#449](https://github.com/ccsert/artifact-gateway/issues/449)
+[governance preview](nuget-hosted-preview.md#listing-and-retained-governance) adds
+local Hosted unlist/relist, retained tombstones, and optional quarantine read
+enforcement, including verified Proxy caches and pinned Group owners.
 
 - Discover upstream resources from each V3 service index rather than assuming
   nuget.org URL shapes.
@@ -89,8 +92,9 @@ dependency-confusion boundaries.
 
 ## N4: lifecycle, scanning, and distribution parity
 
-- Add tombstone, restore, retention, delayed reclaim, immutable promotion, and
-  checkpointed replication over the package plus its owned metadata.
+- Retained tombstone/restore and unlist/relist are implemented by #449. Add
+  retention, delayed reclaim, immutable promotion and checkpointed replication
+  over the package plus its owned metadata.
 - Resolve `.nupkg` assets for manual and publication scanning; retain SBOM,
   license, vulnerability, signature, and provenance evidence without claiming
   unsupported scanner behavior.

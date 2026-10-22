@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// FormatHelm identifies an opt-in Hosted preview. It is intentionally absent
+// FormatHelm identifies an opt-in traditional HTTP preview. It is intentionally absent
 // from SupportedFormatProfiles and the public management Format enum.
 const FormatHelm Format = "helm"
 
@@ -27,6 +27,7 @@ var (
 
 type HelmSession struct {
 	ID, RepositoryID, Name, Version, Digest, ProvenanceDigest, Actor string
+	SourceVersion                                                    string
 	Size, ProvenanceSize                                             int64
 	State, ObjectKey, ProvenanceKey                                  string
 	MetadataJSON, ChartYAML                                          []byte

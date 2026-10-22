@@ -198,7 +198,15 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if parts[1] == "packages" {
+		if len(parts) == 5 && parts[4] == "governance" {
+			m.previewGovernance(w, r, repo, parts[2:4])
+			return
+		}
 		m.previewPackages(w, r, repo, parts[2:])
+		return
+	}
+	if parts[1] == "quarantine-read-policy" && len(parts) == 2 {
+		m.previewQuarantineReadPolicy(w, r, repo)
 		return
 	}
 	if parts[1] == "capacity" && len(parts) == 2 {

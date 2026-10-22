@@ -1,3 +1,83 @@
+governance:
+  parameters:
+    - {name: repositoryId, in: path, required: true, schema: {type: string, format: uuid}}
+    - {name: packageId, in: path, required: true, schema: {type: string, minLength: 1}}
+    - {name: version, in: path, required: true, schema: {type: string, minLength: 1}}
+  get:
+    operationId: getNuGetPreviewGovernance
+    description: Administrator-only governance evidence for a published or tombstoned cached package. Default-disabled preview; not a formal format admission.
+    responses:
+      '200':
+        description: Current immutable identity and governance version
+        content:
+          application/json:
+            schema: {$ref: '../components/nuget-preview.yaml#/NuGetPreviewGovernance'}
+      '401': {description: "Authentication required"}
+      '403': {description: "Repository administrator required"}
+      '404': {description: "Preview repository or package not found"}
+      '503': {description: "Preview disabled or governance unavailable"}
+  post:
+    operationId: applyNuGetPreviewGovernance
+    description: >-
+      Changes one exact package identity using its digest and governance compare-and-swap version.
+      Unlist affects search visibility while exact-version reads remain available. Tombstones hide
+      all native representations and retain bytes for restoration. Quarantine is independent and
+      hides reads only when the repository quarantine read policy is enabled. A Group never selects
+      a different authority to bypass governance. No physical objects are reclaimed by this operation.
+      Proxy operations require an already verified cached package; only Hosted accepts unlist/relist.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/nuget-preview.yaml#/NuGetPreviewGovernanceRequest'}
+    responses:
+      '200':
+        description: Updated governance evidence
+        content:
+          application/json:
+            schema: {$ref: '../components/nuget-preview.yaml#/NuGetPreviewGovernance'}
+      '400': {description: "Invalid governance request or action"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Repository administrator required"}
+      '404': {description: "Preview repository or package not found"}
+      '405': {description: "Proxy sources do not permit local unlist or relist"}
+      '409': {description: "Package identity or governance version changed"}
+      '503': {description: "Preview disabled or governance unavailable"}
+quarantine_read_policy:
+  parameters:
+    - {name: repositoryId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    operationId: getNuGetPreviewQuarantineReadPolicy
+    description: Administrator-only preview policy; disabled by default and independent of package quarantine state.
+    responses:
+      '200':
+        description: Versioned quarantine read policy
+        content:
+          application/json:
+            schema: {$ref: '../components/nuget-preview.yaml#/NuGetPreviewQuarantineReadPolicy'}
+      '401': {description: "Authentication required"}
+      '403': {description: "Repository administrator required"}
+      '404': {description: "Preview repository not found"}
+      '503': {description: "Preview disabled or policy unavailable"}
+  put:
+    operationId: replaceNuGetPreviewQuarantineReadPolicy
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/nuget-preview.yaml#/NuGetPreviewQuarantineReadPolicyRequest'}
+    responses:
+      '200':
+        description: Updated quarantine read policy
+        content:
+          application/json:
+            schema: {$ref: '../components/nuget-preview.yaml#/NuGetPreviewQuarantineReadPolicy'}
+      '400': {description: "Invalid policy request"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Repository administrator required"}
+      '404': {description: "Preview repository not found"}
+      '409': {description: "Policy version changed"}
+      '503': {description: "Preview disabled or policy unavailable"}
 repositories:
   post:
     operationId: createNuGetPreviewRepository
@@ -435,7 +515,7 @@ group:
       '401': {description: "Authentication required"}
       '403': {description: "Group permission required"}
       '404': {description: "Preview Group not found"}
-      '409': {description: Configured member source changed or became unavailable}
+      '409': {description: "Configured member source changed or became unavailable"}
       '503': {description: "Preview unavailable"}
   put:
     operationId: replaceNuGetPreviewGroup
@@ -488,7 +568,7 @@ source:
       '403': {description: "Group and member permission required"}
       '404': {description: "Package not found"}
       '409': {description: "Source binding, package or quota conflict"}
-      '410': {description: Cache publication reservation expired before verification completed}
+      '410': {description: "Cache publication reservation expired before verification completed"}
       '422': {description: "Unsupported or invalid upstream metadata"}
       '502': {description: "Upstream refused authentication or returned invalid content"}
       '503': {description: "Required source or verified local bytes unavailable"}
@@ -522,12 +602,12 @@ source_revalidation:
           application/json:
             schema:
               $ref: ../components/nuget-preview.yaml#/NuGetPreviewSource
-      '400': {description: Invalid revalidation input}
-      '401': {description: Authentication required}
-      '403': {description: Administrator required}
-      '404': {description: Canonical version or authority not found}
-      '409': {description: Group/source version or immutable identity conflict}
-      '410': {description: Cache publication reservation expired before verification completed}
-      '422': {description: Unsupported upstream metadata}
-      '502': {description: Upstream authentication or integrity failure}
-      '503': {description: Current source or verified local bytes unavailable}
+      '400': {description: "Invalid revalidation input"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Administrator required"}
+      '404': {description: "Canonical version or authority not found"}
+      '409': {description: "Group/source version or immutable identity conflict"}
+      '410': {description: "Cache publication reservation expired before verification completed"}
+      '422': {description: "Unsupported upstream metadata"}
+      '502': {description: "Upstream authentication or integrity failure"}
+      '503': {description: "Current source or verified local bytes unavailable"}

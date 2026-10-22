@@ -62,6 +62,18 @@ func (a *Adapter) ListNuGetPreviewPackages(w http.ResponseWriter, r *http.Reques
 func (a *Adapter) GetNuGetPreviewPackage(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
 	a.serve(w, r)
 }
+func (a *Adapter) GetNuGetPreviewGovernance(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
+	a.serve(w, r)
+}
+func (a *Adapter) ApplyNuGetPreviewGovernance(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
+	a.serve(w, r)
+}
+func (a *Adapter) GetNuGetPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Adapter) ReplaceNuGetPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
 func (a *Adapter) CreateNuGetPublicationSession(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _ api.CreateNuGetPublicationSessionParams) {
 	a.serve(w, r)
 }

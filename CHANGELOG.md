@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+- The default-off Helm preview adds traditional HTTP Proxy and ordered Group reads (#291): conditionally revalidated bounded indexes, immutable source snapshots, verified chart/provenance caches, private upstream credentials and persistent chart authorities. Group reordering never substitutes another source after an identity has been selected. Formal admission remains under #292.
+
+- NuGet preview governance now supports native Hosted unlist/relist, versioned tombstone/restore and independent quarantine/read-policy controls (#449). Search omits unlisted versions while registration, flat-container versions and exact downloads retain NuGet semantics. Tombstones and enforced quarantine apply consistently to cached packages and Group authorities; recovery verifies original bytes before changing state. Formal admission remains under #289.
+
+- Console adds an [APT first-publication workflow](docs/apt-first-publication.md) for empty Hosted suites (#450). Operators explicitly stage one original `.deb`, review the server-derived identity, and sign the first snapshot. Failed uploads and signing requests retain exact retry state; existing suites use the established lifecycle controls. Production key custody and formal Hosted admission remain under #305.
+
 - Restore Debian bookworm `gpgv` interoperability for reference-signer v4 `InRelease` by including the armor CRC24 (#447). The signed cleartext and signature packets retain their original bytes; v6 `InRelease` keeps the library's checksum-free armor.
 
 - Nexus migration schedules now persist UTC intervals, coalesced missed runs, source/mapping/policy bindings, next-run and verified last-successful state (#443). Administrators create and control plans in Console with versioned, idempotent operations. Each occurrence atomically consumes fresh operator-reported capacity evidence; missing or expired observations wait for an update. Intersecting target mappings cannot dispatch concurrent plan/manual batches. See [recurring plans](docs/nexus-migration-console.md#recurring-migration-plans).
@@ -23,7 +29,7 @@ their meaning.
 
 - OCI Hosted, Proxy and Group now support authorized [Catalog and OCI 1.1 Referrers discovery](docs/oci-discovery.md) (#315, #316). Coverage reports distinguish complete, partial and unsupported sources; immutable principal-bound pages and persistent source bindings prevent permission changes or Group reordering from substituting content. Referrers validate original manifests, annotations and complete blob closures. Anonymous and authenticated identities have separate owners, and invalid credentials fail closed. Official ORAS/Docker acceptance runs as a required seventh native lane; signature trust and referrers-tag fallback remain unsupported.
 
-- The default-off [NuGet preview](docs/nuget-proxy-group-preview.md) now supports read-only Proxy and ordered Group (#288): V3 resource discovery, verified source-versioned caches, persistent package/version authorities, private upstream credentials and full-resource authorization. Upstream-unlisted exact versions remain readable while search omits them; filtered results cannot establish a Group authority. Formal admission and local Hosted governance remain under #289.
+- The default-off [NuGet preview](docs/nuget-proxy-group-preview.md) now supports read-only Proxy and ordered Group (#288): V3 resource discovery, verified source-versioned caches, persistent package/version authorities, private upstream credentials and full-resource authorization. Upstream-unlisted exact versions remain readable while search omits them; filtered results cannot establish a Group authority. Formal admission remains under #289; local governance is tracked in #449.
 
 - Protected Maven Proxy/Group reads now have pinned official Gradle 9.3.1 coverage (#286), including a three-level dependency closure, API-configured Basic/Bearer source credentials, per-invocation empty client homes, complete original JAR/POM identity checks, credential rotation/removal and reads after physical source shutdown.
 

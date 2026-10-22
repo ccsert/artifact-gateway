@@ -57,13 +57,14 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [npm 版本治理](npm-version-governance.zh-CN.md) — 原生提示、撤包、权威屏障、恢复与不可变字节。
 - [APT Proxy 与 Group](apt-proxy.zh-CN.md) — 字节保持读取、缓存、授权与限制。
 - [APT Hosted 签名](apt-hosted-signing.zh-CN.md) — H2 预览、外部 signer、H3 轮换和生产边界。
+- [APT 首次发布](apt-first-publication.zh-CN.md) — 空 suite 的显式包暂存、身份核对与可重试签名。
 - [APT 快照归档](apt-snapshot-archive.zh-CN.md) — 签名字节导出、离线完整性校验、可信同仓库恢复与遗留实现分阶段迁移。
 - [APT Hosted 生命周期](apt-hosted-lifecycle.zh-CN.md) — 签名删除、保留、恢复窗口与引用安全的快照清理。
 - [APT Hosted 分发](apt-hosted-distribution.zh-CN.md) — 目标签名晋级、验证复制与 Worker 恢复。
 - [APT Hosted 路线图](apt-hosted-roadmap.zh-CN.md) — H1-H4 有序验收门禁。
 - [Cargo 客户端配置](cargo-usage.zh-CN.md) — Hosted、Proxy、Group 的仓库配置与命令。
 - [Cargo 仓库研究](cargo-repository-research.zh-CN.md) — Sparse Registry 设计决策与 C0-C4 实施记录。
-- [Helm Hosted 预览](helm-hosted-preview.zh-CN.md) — 默认关闭的传统 HTTP chart 发布与可验证冷消费。
+- [Helm HTTP 预览](helm-hosted-preview.zh-CN.md) — 默认关闭的 Hosted 发布、Proxy 缓存、Group 来源绑定与可验证冷消费。
 - [NuGet Hosted 预览](nuget-hosted-preview.zh-CN.md) — 默认关闭的原生发布与可验证恢复。
 - [NuGet Proxy 与 Group 预览](nuget-proxy-group-preview.zh-CN.md) — V3 源发现、持久来源绑定和私有可信缓存。
 - [NuGet 路线图](nuget-roadmap.zh-CN.md) — 预览验收与剩余生命周期、格式准入工作。
