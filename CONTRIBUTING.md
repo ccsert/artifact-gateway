@@ -245,9 +245,13 @@ complete log before updating the job's outer status. When that status remains
 `in_progress` with no conclusion in the current attempt, the contract collector
 can use the scheduler's successful dependency results,
 the exact head/run/job identity, successful runner completion steps and the
-matching complete raw log as independent completion evidence. It records that
-evidence in the log manifest without rewriting the original job status or
-timestamps. Missing or contradictory results, incomplete logs and identity
+matching complete raw log as independent completion evidence. This exception
+also requires the audited Runner 2.338.0 final log object: an HTTPS 200
+`BlockBlob` with matching provider length, content digest and publication time,
+plus raw output coverage for every non-skipped machine step. Other versions,
+appendable objects or missing integrity evidence must wait for the original
+terminal result. The log manifest records this evidence without rewriting the
+original job status or timestamps. Missing or contradictory results, incomplete logs and identity
 changes still fail the aggregate. Retained jobs from earlier attempts require
 their original completed/success result; benchmarks continue to require real
 terminal results and timestamps.

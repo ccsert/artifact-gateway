@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the unchanged contract targets and verify their isolated evidence."""
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -15,7 +16,9 @@ import sys
 import tempfile
 import time
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -532,6 +535,15 @@ class StripRedirectCredential(urllib.request.HTTPRedirectHandler):
         return redirected
 
 
+# The final single-block protocol is source-audited for this runner only:
+# actions/runner Logging.cs:117-164 and ResultsHttpClient.cs:424-499 at this commit.
+FINAL_LOG_RUNNER_VERSION = '2.338.0'
+FINAL_LOG_RUNNER_SOURCE_COMMIT = '197ca027b90de199464dee3bb9ff198a1db60967'
+FINAL_LOG_SAFE_HEADERS = {'content-length', 'content-md5', 'content-type', 'content-encoding',
+                          'content-range', 'transfer-encoding', 'etag', 'last-modified',
+                          'x-ms-blob-type'}
+
+
 def completed_runner_steps(job, lane):
     """An exact runner plan, including conditional skips and action post steps."""
     action = r'@[0-9a-f]{40}'
@@ -591,12 +603,15 @@ def runner_log_completion(data, steps):
         lines = data.decode('utf-8-sig').splitlines()
         pattern = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z) (.*)$')
         first, last = pattern.fullmatch(lines[0]), pattern.fullmatch(lines[-1])
-        if (not first or not last
-                or not re.fullmatch(r"Current runner version: '\d+\.\d+\.\d+'", first[2])):
+        runner = re.fullmatch(r"Current runner version: '(\d+\.\d+\.\d+)'", first[2]) if first else None
+        if not first or not last or not runner or runner[1] != FINAL_LOG_RUNNER_VERSION:
             return None
         posts, cleanup = [], []
+        log_times = []
         for index, line in enumerate(lines):
             match = pattern.fullmatch(line)
+            if match:
+                log_times.append(timestamp(match[1]))
             if match and match[2] == 'Post job cleanup.':
                 posts.append((index, match[1]))
             if match and match[2] == 'Cleaning up orphan processes':
@@ -612,10 +627,59 @@ def runner_log_completion(data, steps):
                 or not within(cleanup[0][1], steps[-1])
                 or any(not within(value, step) for (_, value), step in zip(posts, steps[-4:-1]))):
             return None
+        covered = []
+        for step in steps:
+            if step['conclusion'] == 'skipped':
+                continue
+            start, end = timestamp(step['started_at']), timestamp(step['completed_at']) + 1
+            if not any(start <= value < end for value in log_times):
+                return None
+            covered.append({'number': step['number'], 'name': step['name']})
         return {'runnerCompleteStep': steps[-1], 'logSetupAt': first[1],
                 'logPostCleanupAt': [value for _, value in posts],
-                'logCleanupAt': cleanup[0][1], 'logLastLineAt': last[1]}
+                'logCleanupAt': cleanup[0][1], 'logLastLineAt': last[1],
+                'runnerVersion': runner[1], 'coveredRunnerSteps': covered}
     except (UnicodeError, IndexError, KeyError, TypeError, ValueError):
+        return None
+
+
+def sealed_job_log_object(data, receipt, witness, job_id):
+    """Verify the trusted job endpoint's final object, not body-authored markers.
+
+    In the audited runner, only firstBlock && finalize creates a BlockBlob.
+    Incremental logs use AppendBlob; they are deliberately unsupported here.
+    Provider MD5 verifies object transport. SHA256 remains the evidence digest.
+    """
+    try:
+        headers = receipt['safeHeaders']
+        if (type(receipt['httpStatus']) is not int or receipt['httpStatus'] != 200
+                or receipt['jobId'] != job_id
+                or not receipt['trustedJobLogRedirect'] or not receipt['headersUnique']
+                or headers.get('x-ms-blob-type') != 'BlockBlob'
+                or headers.get('content-type', '').split(';', 1)[0].strip() != 'text/plain'
+                or any(key in headers for key in ('content-range', 'content-encoding', 'transfer-encoding'))
+                or not re.fullmatch(r'[1-9][0-9]*', headers.get('content-length', ''))
+                or int(headers['content-length']) != len(data)
+                or not re.fullmatch(r'"0x[0-9A-Fa-f]+"', headers.get('etag', ''))):
+            return None
+        digest = base64.b64decode(headers['content-md5'], validate=True)
+        if len(digest) != 16 or digest != hashlib.md5(data, usedforsecurity=False).digest():
+            return None
+        modified = parsedate_to_datetime(headers['last-modified'])
+        if (modified.tzinfo is None or modified.utcoffset().total_seconds() != 0
+                or modified.timestamp() < max(timestamp(witness['logLastLineAt']),
+                                              timestamp(witness['runnerCompleteStep']['completed_at']))
+                or modified.timestamp() > datetime.now(timezone.utc).timestamp()):
+            return None
+        return {'source': 'github-actions-results-final-block-blob',
+                'runnerVersion': FINAL_LOG_RUNNER_VERSION,
+                'runnerSourceCommit': FINAL_LOG_RUNNER_SOURCE_COMMIT,
+                'httpStatus': receipt['httpStatus'], 'downloadHost': receipt['downloadHost'],
+                'safeHeaders': headers, 'verifiedBytes': len(data),
+                'verifiedContentMD5': headers['content-md5'],
+                'verifiedSHA256': hashlib.sha256(data).hexdigest(),
+                'lastModifiedAt': modified.isoformat()}
+    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
         return None
 
 
@@ -649,6 +713,7 @@ def collect_job_logs(destination, prefixes=('contract',), lanes=LANES):
             pass  # Without the exact successful scheduler result, only REST terminal jobs qualify.
     identities = {}
     downloaded = set()
+    log_receipts = {}
     poll = 0
 
     def remaining():
@@ -657,15 +722,40 @@ def collect_job_logs(destination, prefixes=('contract',), lanes=LANES):
             raise ValueError('complete job log collection deadline exceeded (120s)')
         return available
 
-    def fetch(url):
+    def fetch(url, log_job=None):
         request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token,
                                          'Accept': 'application/vnd.github+json',
                                          'X-GitHub-Api-Version': '2022-11-28',
                                          'Cache-Control': 'no-cache'})
         with opener.open(request, timeout=min(45, remaining())) as response:
             data = response.read()
+            if log_job is not None:
+                headers, unique = {}, True
+                for key, value in response.headers.items():
+                    key = key.lower()
+                    if key in FINAL_LOG_SAFE_HEADERS:
+                        if key in headers:
+                            unique = False
+                        headers[key] = value
+                receipt = {'httpStatus': response.status, 'jobId': log_job,
+                           'safeHeaders': headers, 'headersUnique': unique,
+                           'trustedJobLogRedirect': False, 'downloadHost': None}
+                try:
+                    origin, target = urllib.parse.urlsplit(url), urllib.parse.urlsplit(response.geturl())
+                    receipt['downloadHost'] = target.hostname
+                    receipt['trustedJobLogRedirect'] = (
+                        origin.scheme == target.scheme == 'https'
+                        and origin.hostname == 'api.github.com' and origin.port in (None, 443)
+                        and origin.username is None and origin.password is None
+                        and origin.path == f'/repos/{repository}/actions/jobs/{log_job}/logs'
+                        and not origin.query and not origin.fragment
+                        and target.username is None and target.password is None
+                        and target.port in (None, 443) and not target.fragment
+                        and bool(re.fullmatch(r'[a-z0-9]{3,24}\.blob\.core\.windows\.net', target.hostname or '')))
+                except (TypeError, ValueError):
+                    pass
         remaining()
-        return data
+        return (data, receipt) if log_job is not None else data
 
     # A dependent job can start while the jobs API still reports its completed
     # prerequisite as in_progress. Current-attempt correctness collection can
@@ -761,9 +851,15 @@ def collect_job_logs(destination, prefixes=('contract',), lanes=LANES):
                 observed = {'jobId': job['id'], 'status': 'not_ready'}
                 readback['logReads'].append(observed)
                 try:
-                    data = ((destination / f'job-{job["id"]}.log').read_bytes()
-                            if job['id'] in downloaded else
-                            fetch(f'{api}/repos/{repository}/actions/jobs/{job["id"]}/logs'))
+                    if job['id'] in runner_completed:
+                        if job['id'] in downloaded and job['id'] in log_receipts:
+                            data = (destination / f'job-{job["id"]}.log').read_bytes()
+                            receipt = log_receipts[job['id']]
+                        else:
+                            data, receipt = fetch(f'{api}/repos/{repository}/actions/jobs/{job["id"]}/logs',
+                                                  log_job=job['id'])
+                    else:
+                        data = fetch(f'{api}/repos/{repository}/actions/jobs/{job["id"]}/logs')
                 except urllib.error.HTTPError as error:
                     if error.code != 404:
                         raise
@@ -774,22 +870,31 @@ def collect_job_logs(destination, prefixes=('contract',), lanes=LANES):
                     raw_path = destination / 'job-log-polls' / f'{poll:03d}-job-{job["id"]}.log'
                     raw_path.write_bytes(data)
                     observed['rawLog'] = str(raw_path.relative_to(destination))
+                    receipt_path = raw_path.with_suffix('.response.json')
+                    write(receipt_path, receipt)
+                    observed['responseReceipt'] = str(receipt_path.relative_to(destination))
                 if not data.strip():
                     observed['reason'] = 'empty_log'
                     continue
                 if job['id'] in runner_completed:
                     witness = runner_log_completion(data, runner_completed[job['id']])
-                    if witness is None:
+                    sealed = (sealed_job_log_object(data, receipt, witness, job['id'])
+                              if witness is not None else None)
+                    if witness is None or sealed is None:
                         downloaded.discard(job['id'])
-                        observed['reason'] = 'incomplete_runner_log'
+                        manifest['completionEvidence'].pop(str(job['id']), None)
+                        observed['reason'] = ('incomplete_runner_log' if witness is None
+                                              else 'unverified_final_log_object')
                         continue
+                    log_receipts[job['id']] = receipt
                     manifest['completionEvidence'][str(job['id'])] = {
                         'source': 'github-needs-and-runner-completion',
                         'schedulerJob': 'contract-core' if job['name'].endswith('contract/core') else 'contract-native',
                         'schedulerResults': {key: needs[key]['result'] for key in needs},
                         'jobId': job['id'], 'runId': job['run_id'], 'attempt': job['run_attempt'],
                         'head': job['head_sha'], 'observedStatus': job['status'],
-                        'logSHA256': hashlib.sha256(data).hexdigest(), **witness}
+                        'logSHA256': hashlib.sha256(data).hexdigest(),
+                        'sealedLogObject': sealed, **witness}
                 (destination / f'job-{job["id"]}.log').write_bytes(data)
                 downloaded.add(job['id'])
                 observed.update(status='ready', bytes=len(data), sha256=hashlib.sha256(data).hexdigest())

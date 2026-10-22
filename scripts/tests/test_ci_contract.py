@@ -1,5 +1,8 @@
 import copy
 import argparse
+import base64
+from email.message import Message
+import hashlib
 import importlib.util
 import json
 import os
@@ -929,12 +932,21 @@ class JobLogConsistencyTests(unittest.TestCase):
         self.calls = []
         self.sleeps = []
         self.request_elapsed = {}
+        self.log_receipt = None
 
-    def collect(self, snapshots, logs, prefixes=('contract',), lanes=('core',)):
+    def collect(self, snapshots, logs, prefixes=('contract',), lanes=('core',), receipts=None):
         calls = {'metadata': 0, 'log': 0}
         class Response:
-            def __init__(self, body):
+            def __init__(self, body, receipt=None):
                 self.body = body
+                receipt = receipt or {}
+                self.status = receipt.get('status')
+                self.url = receipt.get('url', '')
+                self.headers = Message()
+                for key, value in receipt.get('headers', {}).items():
+                    self.headers[key] = value
+            def geturl(self):
+                return self.url
             def __enter__(self):
                 return self
             def __exit__(self, *_):
@@ -950,7 +962,11 @@ class JobLogConsistencyTests(unittest.TestCase):
             calls[endpoint] += 1
             if isinstance(value, Exception):
                 raise value
-            return Response(json.dumps({'jobs': value}).encode() if endpoint == 'metadata' else value)
+            receipt = None
+            if endpoint == 'log':
+                receipt = (receipts[min(calls[endpoint] - 1, len(receipts) - 1)]
+                           if receipts is not None else self.log_receipt)
+            return Response(json.dumps({'jobs': value}).encode() if endpoint == 'metadata' else value, receipt)
         def sleep(seconds):
             self.assertGreater(seconds, 0)
             self.sleeps.append(seconds)
@@ -998,13 +1014,24 @@ class JobLogConsistencyTests(unittest.TestCase):
                'status': 'in_progress', 'conclusion': None, 'completed_at': None,
                'started_at': '2026-10-22T00:00:00Z', 'steps': steps}
         self.log = (b'\xef\xbb\xbf2026-10-22T00:00:01.1000000Z Current runner version: \'2.338.0\'\n'
-                    b'2026-10-22T00:00:10.1000000Z Original producer output\n'
-                    b'2026-10-22T00:00:12.1000000Z Post job cleanup.\n'
+                    + b''.join(f'2026-10-22T00:00:{index:02d}.1000000Z Step original output\n'.encode()
+                               for index in range(2, 12)
+                               if steps[index - 1]['conclusion'] != 'skipped')
+                    + b'2026-10-22T00:00:12.1000000Z Post job cleanup.\n'
                     b'2026-10-22T00:00:13.1000000Z Post job cleanup.\n'
                     b'2026-10-22T00:00:14.1000000Z Post job cleanup.\n'
                     b'2026-10-22T00:00:15.1000000Z Cleaning up orphan processes\n'
                     b'2026-10-22T00:00:15.2000000Z ##[warning]Runner warning after cleanup\n')
+        self.log_receipt = self.final_log_receipt(self.log)
         return job
+
+    def final_log_receipt(self, body):
+        return {'status': 200,
+                'url': 'https://synthetic.blob.core.windows.net/job-log?sig=must-not-be-recorded',
+                'headers': {'Content-Length': str(len(body)),
+                            'Content-MD5': base64.b64encode(hashlib.md5(body, usedforsecurity=False).digest()).decode(),
+                            'Content-Type': 'text/plain', 'x-ms-blob-type': 'BlockBlob',
+                            'ETag': '"0x123ABC"', 'Last-Modified': 'Thu, 22 Oct 2026 00:00:17 GMT'}}
 
     def test_scheduler_and_complete_runner_log_collect_despite_stale_outer_status(self):
         stale = self.scheduler_completed_job()
@@ -1019,6 +1046,105 @@ class JobLogConsistencyTests(unittest.TestCase):
         self.assertEqual(witness['source'], 'github-needs-and-runner-completion')
         self.assertEqual(witness['schedulerJob'], 'contract-core')
         self.assertEqual(witness['runnerCompleteStep'], stale['steps'][-1])
+        self.assertEqual(witness['sealedLogObject']['runnerVersion'], '2.338.0')
+        self.assertEqual(witness['sealedLogObject']['verifiedBytes'], len(self.log))
+        self.assertEqual(len(witness['coveredRunnerSteps']), len(stale['steps']))
+        self.assertNotIn('must-not-be-recorded', ''.join(path.read_text()
+                         for path in self.output.rglob('*.json')))
+
+    def test_provider_receipt_rejects_a_true_prefix_truncation_after_machine_cleanup(self):
+        job = self.scheduler_completed_job()
+        body = self.log.rsplit(b'2026-10-22T00:00:15.2000000Z', 1)[0]
+        with self.assertRaises(ValueError):
+            self.collect([[job]], [body])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertEqual(self.manifest()['completionEvidence'], {})
+        self.assertFalse((self.output / 'job-42.log').exists())
+
+    def test_provider_receipt_rejects_log_deletions_preserving_all_completion_markers(self):
+        job = self.scheduler_completed_job()
+        lines = self.log.splitlines(keepends=True)
+        body = b''.join(line for index, line in enumerate(lines)
+                        if index == 0 or b'Post job cleanup.' in line
+                        or b'Cleaning up orphan processes' in line or index == len(lines) - 1)
+        with self.assertRaises(ValueError):
+            self.collect([[job]], [body])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertEqual(self.manifest()['completionEvidence'], {})
+
+    def test_stale_completion_requires_every_independent_final_object_property(self):
+        job = self.scheduler_completed_job()
+        good = self.log_receipt
+        invalid = [None]
+        for key in good['headers']:
+            receipt = copy.deepcopy(good)
+            receipt['headers'].pop(key)
+            invalid.append(receipt)
+        for key, value in (('Content-Length', str(len(self.log) - 1)),
+                           ('Content-Length', '0'), ('Content-MD5', 'invalid base64'),
+                           ('Content-MD5', base64.b64encode(b'0' * 16).decode()),
+                           ('ETag', 'W/"weak"'), ('x-ms-blob-type', 'AppendBlob'),
+                           ('Content-Type', 'application/zip'), ('Content-Encoding', 'gzip'),
+                           ('Content-Encoding', 'identity'), ('Transfer-Encoding', 'chunked'),
+                           ('Content-Range', 'bytes 0-100/200'),
+                           ('Last-Modified', 'Thu, 22 Oct 2026 00:00:14 GMT'),
+                           ('Last-Modified', 'Fri, 23 Oct 2099 00:00:17 GMT'),
+                           ('Last-Modified', 'invalid date')):
+            receipt = copy.deepcopy(good)
+            receipt['headers'][key] = value
+            invalid.append(receipt)
+        for status in (206, 302):
+            invalid.append({**good, 'status': status})
+        for index, receipt in enumerate(invalid):
+            with self.subTest(case=index), self.assertRaises(ValueError):
+                self.collect([[job]], [self.log], receipts=[receipt])
+            self.assertFalse(self.manifest()['complete'])
+            self.assertEqual(self.manifest()['completionEvidence'], {})
+            self.assertFalse((self.output / 'job-42.log').exists())
+        readback = self.poll_readbacks()[0]['logReads'][0]
+        self.assertEqual((self.output / readback['rawLog']).read_bytes(), self.log)
+        self.assertTrue((self.output / readback['responseReceipt']).is_file())
+
+    def test_final_log_object_must_come_from_the_bound_https_job_redirect(self):
+        job = self.scheduler_completed_job()
+        invalid = ['http://synthetic.blob.core.windows.net/job-log',
+                   'https://api.github.com/job-log', 'https://untrusted.example/job-log',
+                   'https://synthetic.blob.core.windows.net.untrusted.example/job-log',
+                   'https://user:must-not-be-recorded@synthetic.blob.core.windows.net/job-log',
+                   'https://synthetic.blob.core.windows.net:444/job-log',
+                   'https://synthetic.blob.core.windows.net:invalid/job-log',
+                   'https://synthetic.blob.core.windows.net/job-log#fragment']
+        for url in invalid:
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                self.collect([[job]], [self.log], receipts=[{**self.log_receipt, 'url': url}])
+            self.assertFalse(self.manifest()['complete'])
+        for api in ('http://api.github.com', 'https://untrusted.example',
+                    'https://api.github.com/artifact-api'):
+            self.env['GITHUB_API_URL'] = api
+            with self.subTest(api=api), self.assertRaises(ValueError):
+                self.collect([[job]], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+        self.assertNotIn('must-not-be-recorded', ''.join(path.read_text()
+                         for path in self.output.rglob('*.json')))
+
+    def test_self_consistent_transport_still_requires_all_executed_step_coverage(self):
+        job = self.scheduler_completed_job()
+        body = self.log.replace(b'2026-10-22T00:00:05.1000000Z Step original output\n', b'')
+        with self.assertRaises(ValueError):
+            self.collect([[job]], [body], receipts=[self.final_log_receipt(body)])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertEqual(self.manifest()['completionEvidence'], {})
+
+    def test_unknown_runner_protocol_waits_for_original_rest_terminal_metadata(self):
+        job = self.scheduler_completed_job()
+        body = self.log.replace(b"version: '2.338.0'", b"version: '2.338.1'")
+        with self.assertRaises(ValueError):
+            self.collect([[job]], [body], receipts=[self.final_log_receipt(body)])
+        self.assertFalse(self.manifest()['complete'])
+        terminal = {**job, 'status': 'completed', 'conclusion': 'success'}
+        self.assertEqual(self.collect([[terminal]], [body], receipts=[None]), [terminal])
+        self.assertTrue(self.manifest()['complete'])
+        self.assertEqual(self.manifest()['completionEvidence'], {})
 
     def test_scheduler_completion_accepts_only_existing_conditional_native_skips(self):
         for lane in ci.PLAN['nativeOrder']:
