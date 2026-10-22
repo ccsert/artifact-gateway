@@ -447,3 +447,35 @@ server base）。计划命令省略前导 `agctl`。
 | `HEAD /helm/{repository}/index.yaml`<br>`headHelmHostedIndex` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
 | `GET /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`readHelmHostedAsset` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
 | `HEAD /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`headHelmHostedAsset` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+
+## Helm Proxy/Group 预览 (#291)
+
+下列管理命令名仅为 M2 计划，尚未注册或验证 agctl 命令；当前使用显式启用的
+预览 API。官方 Helm 客户端读取索引中的固定快照 Chart 与 provenance URL，
+agctl 不另建 Helm 协议客户端。这些行不代表 Helm 已进入正式格式目录。
+
+| API / operationId | 计划命令 | 承接 | 阶段 | 权限 | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| `PUT /previews/helm/repositories/{repositoryId}`<br>`replaceHelmPreviewRepository` | `helm preview repo update <id>` | #291 | M2 planned | A | C |
+| `POST /previews/helm/groups`<br>`createHelmPreviewGroup` | `helm preview group create` | #291 | M2 planned | A | W |
+| `GET /previews/helm/groups/{groupId}`<br>`getHelmPreviewGroup` | `helm preview group show <id>` | #291 | M2 planned | R（所有当前成员） | Q |
+| `PUT /previews/helm/groups/{groupId}`<br>`replaceHelmPreviewGroup` | `helm preview group update <id>` | #291 | M2 planned | A | C |
+| `GET /previews/helm/groups/{groupId}/sources/{chartName}/{version}`<br>`getHelmPreviewSource` | `helm preview group source <id> --chart <name> --version <version>` | #291 | M2 planned | R（所有当前成员的该 Chart） | Q |
+| `GET /helm/{repository}/snapshots/{snapshotId}/charts/{chartName}/{version}/{filename}`<br>`readHelmSnapshotAsset` | 官方 Helm 读取快照资源；不另建 agctl 协议客户端 | #291 | N/A | R* | N：官方 Helm 读取索引中的快照 URL；agctl 不注册或发送此协议动作 |
+| `HEAD /helm/{repository}/snapshots/{snapshotId}/charts/{chartName}/{version}/{filename}`<br>`headHelmSnapshotAsset` | 原生 Helm 快照资源元数据；不另建 agctl 协议客户端 | #291 | N/A | R* | N：原生 Helm HTTP 端点提供资源元数据；agctl 不注册或发送此协议动作 |
+
+## NuGet 治理预览 (#449)
+
+四个管理命令名仅为 M2 计划，尚未注册或验证。当前使用显式启用的预览管理 API
+查询治理证据、按摘要与版本执行 CAS 变更，并独立配置隔离读取策略。原生
+PackagePublish unlist/relist 与墓碑、隔离操作分开；relist API 行不代表官方
+dotnet CLI 提供 relist 命令。本映射不将 #289 其余准入工作标为完成。
+
+| API / operationId | 计划命令 | 承接 | 阶段 | 权限 | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| `GET /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance`<br>`getNuGetPreviewGovernance` | `nuget preview governance show --repo <id> --package <id> --version <version>` | #449 | M2 planned | RA | Q |
+| `POST /previews/nuget/repositories/{repositoryId}/packages/{packageId}/{version}/governance`<br>`applyNuGetPreviewGovernance` | `nuget preview governance apply --repo <id> --package <id> --version <version>` | #449 | M2 planned | RA | C |
+| `GET /previews/nuget/repositories/{repositoryId}/quarantine-read-policy`<br>`getNuGetPreviewQuarantineReadPolicy` | `nuget preview quarantine-policy show --repo <id>` | #449 | M2 planned | RA | Q |
+| `PUT /previews/nuget/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceNuGetPreviewQuarantineReadPolicy` | `nuget preview quarantine-policy set --repo <id>` | #449 | M2 planned | RA | C |
+| `DELETE /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`unlistNuGetHostedPackage` | 原生 NuGet PackagePublish unlist；不另建 agctl Registry 客户端 | #449 | N/A | W | N：NuGet 客户端使用原生 unlist 端点；agctl 不注册或发送此协议动作 |
+| `POST /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`relistNuGetHostedPackage` | 原生 NuGet PackagePublish relist API；不另建 agctl Registry 客户端 | #449 | N/A | W | N：使用原生 relist API，不声称提供 agctl 或官方 dotnet CLI relist 命令 |
