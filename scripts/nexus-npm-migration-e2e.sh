@@ -18,24 +18,55 @@ compose=(docker compose --env-file /dev/null --project-name "$project" -f "$repo
 started=0
 cleanup() {
   local status=$?
+  local cleanup_status=0
+  local down_status=0
+  local temporary_status=0
   trap - EXIT
   if [[ "$started" == 1 ]]; then
-    if ! "${compose[@]}" down -v --remove-orphans >"$evidence/cleanup.log" 2>&1; then status=1; fi
+    if "${compose[@]}" down -v --remove-orphans >"$evidence/cleanup.log" 2>&1; then
+      down_status=0
+    else
+      down_status=$?
+      cleanup_status=1
+    fi
   fi
-  if ! python3 -B - "$project" "$evidence/cleanup.json" <<'PY'
+  if rm -rf "$workdir"; then
+    temporary_status=0
+  else
+    temporary_status=$?
+    cleanup_status=1
+  fi
+  if ! python3 -B - "$project" "$evidence/cleanup.json" "$workdir" "$cleanup_status" "$down_status" "$temporary_status" "$status" <<'PYCLEANUP'
 import json, pathlib, subprocess, sys
-project, destination = sys.argv[1:]
+project, destination, temporary, initial, down, removal, run = sys.argv[1:]
+code = int(initial)
 commands = {"containers": ["docker", "ps", "-aq"],
             "volumes": ["docker", "volume", "ls", "-q"],
             "networks": ["docker", "network", "ls", "-q"]}
-remaining = {name: subprocess.check_output(command + ["--filter", "label=com.docker.compose.project=" + project], text=True).splitlines()
-             for name, command in commands.items()}
-pathlib.Path(destination).write_text(json.dumps({"project": project, **remaining}, indent=2) + "\n")
-if any(remaining.values()):
+remaining, readback = {}, {}
+for name, command in commands.items():
+    try:
+        result = subprocess.run(command + ["--filter", "label=com.docker.compose.project=" + project],
+                                capture_output=True, text=True, check=False)
+        readback[name] = result.returncode
+        remaining[name] = result.stdout.splitlines() if result.returncode == 0 else ["readback_failed"]
+    except OSError:
+        readback[name], remaining[name] = 1, ["readback_failed"]
+    if readback[name] or remaining[name]:
+        code = 1
+removed = not pathlib.Path(temporary).exists()
+if not removed:
+    code = 1
+receipt = {"project": project, "exitCode": code, "runExitCode": int(run),
+           "ownedTemporaryRemoved": removed, "composeDownExitCode": int(down),
+           "temporaryRemovalExitCode": int(removal), "readbackExitCodes": readback,
+           **remaining}
+pathlib.Path(destination).write_text(json.dumps(receipt, indent=2) + "\n")
+if code:
     raise SystemExit("owned npm migration fixture cleanup is incomplete")
-PY
-  then status=1; fi
-  rm -rf "$workdir"
+PYCLEANUP
+  then cleanup_status=1; fi
+  if [[ "$cleanup_status" != 0 ]]; then status=1; fi
   if [[ "$status" != 0 ]]; then
     printf 'npm migration gate failed; retained evidence: %s\n' "$evidence" >&2
     if [[ -f "$evidence/results.jsonl" ]]; then tail -n 20 "$evidence/results.jsonl" >&2; fi
