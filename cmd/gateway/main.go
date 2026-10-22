@@ -262,7 +262,9 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		WithOCI(app.NewNexusOCIMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner)).
 		WithConan(app.NewNexusConanMigrationPublication(store, store, objectStore).WithPublicationScanner(migrationScanner)).
 		WithNPM(app.NewNexusNPMMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner))
-	dependencies.MigrationService = nexusmigration.New(migrationpg.New(databasePool), dependencies.SourceService, migrationPublication, nexusmigration.Options{TargetID: migrationTargetID, PoolID: cfg.MigrationStoragePoolID})
+	migrationLedger := migrationpg.New(databasePool)
+	dependencies.MigrationService = nexusmigration.New(migrationLedger, dependencies.SourceService, migrationPublication, nexusmigration.Options{TargetID: migrationTargetID, PoolID: cfg.MigrationStoragePoolID})
+	dependencies.MigrationSchedules = nexusmigration.NewSchedules(migrationLedger, dependencies.MigrationService)
 	runtimeContext, stopRuntime := signalContext()
 	defer stopRuntime()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
@@ -310,12 +312,13 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	(backgroundRuntime{
 		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
 		scanner: dependencies.ArtifactScanner, scanResolver: dependencies.ArtifactScanResolver,
-		scannerFormats:   dependencies.ArtifactScannerFormats,
-		workerSessionID:  runtimeSessionID,
-		aptPublisher:     aptPublisher,
-		migration:        dependencies.MigrationService,
-		nugetMaintenance: nugetMaintenance,
-		helmMaintenance:  helmMaintenance,
+		scannerFormats:     dependencies.ArtifactScannerFormats,
+		workerSessionID:    runtimeSessionID,
+		aptPublisher:       aptPublisher,
+		migration:          dependencies.MigrationService,
+		migrationSchedules: dependencies.MigrationSchedules,
+		nugetMaintenance:   nugetMaintenance,
+		helmMaintenance:    helmMaintenance,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {

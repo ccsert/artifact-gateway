@@ -106,13 +106,20 @@ just an HTTP 200:
 
 ## Management contract operation map
 
-All 198 rows below cover the complete operation set of the baseline
+The rows below cover the complete operation set of the baseline
 `api/openapi/management-runtime-v1.json`; the drift guard re-derives the set
 from the file rather than trusting this count. Paths are relative to `/api/v2`,
 the contract's server base. Planned commands omit the leading `agctl`.
 
 | API (all under /api/v2) / operationId | Planned command (agctl omitted) | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migrations/nexus/schedules`<br>`listNexusMigrationSchedules` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules`<br>`createNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `GET /migrations/nexus/schedules/{scheduleId}`<br>`getNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/pause`<br>`pauseNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/resume`<br>`resumeNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/stop`<br>`stopNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/capacity`<br>`refreshNexusMigrationScheduleCapacity` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
 | `GET /migrations/nexus/capabilities`<br>`getNexusMigrationCapabilities` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `GET /migrations/nexus/batches`<br>`listNexusMigrationBatches` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `POST /migrations/nexus/batches`<br>`startNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |

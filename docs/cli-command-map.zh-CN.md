@@ -62,12 +62,19 @@ Gateway E2E，不只检查 HTTP 200：
 
 ## 管理契约逐操作映射
 
-下表 198 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
+下表覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
 守卫从文件重新推导该集合，不信任此计数。路径均相对 `/api/v2`（契约的
 server base）。计划命令省略前导 `agctl`。
 
 | API（均相对 /api/v2）/ operationId | 计划命令（省略 agctl） | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migrations/nexus/schedules`<br>`listNexusMigrationSchedules` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules`<br>`createNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `GET /migrations/nexus/schedules/{scheduleId}`<br>`getNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/pause`<br>`pauseNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/resume`<br>`resumeNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/stop`<br>`stopNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/capacity`<br>`refreshNexusMigrationScheduleCapacity` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
 | `GET /migrations/nexus/capabilities`<br>`getNexusMigrationCapabilities` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `GET /migrations/nexus/batches`<br>`listNexusMigrationBatches` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `POST /migrations/nexus/batches`<br>`startNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |

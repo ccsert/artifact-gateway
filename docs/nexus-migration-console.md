@@ -96,6 +96,50 @@ rollback needs reconciliation and backfill of those writes before switching
 back. The Console does not change CI, DNS or Ingress, stop Nexus, or authorize
 production traffic switching.
 
+## Recurring migration plans
+
+Open **Recurring migration plans** or `/operations?tab=migrations&view=schedules`.
+Create a plan from a fully successful completed batch and set an interval of
+1–43,200 minutes. The plan freezes that batch's source version, target mappings
+and native policy. Editing any of these bindings requires a new successful
+batch and a new plan. The additive schema is
+`000166_nexus_migration_schedules.sql`; administrator APIs live under
+`/api/v2/migrations/nexus/schedules`.
+
+The existing scheduler role dispatches ordinary durable batches; the existing
+migration worker performs each complete rescan, copy and verification. Closing
+the browser has no effect. Due times are persisted in UTC. Startup dispatches
+one overdue occurrence and coalesces missed intervals without backlog. The
+next eligible time is dispatch time plus the interval. An active batch prevents
+another occurrence, including a manual start against its targets.
+
+Each occurrence consumes one fresh operator-reported capacity observation.
+**Supply capacity observation** starts with empty fields. Its observation time
+must be strictly newer than both the previous supplied and consumed observation;
+the target/pool binding and existing one-hour freshness limit still apply.
+The product has no trusted remote object-pool observer: missing or expired
+observations enter `waiting_capacity`, retaining the due time and bounded reason.
+The system never extends old evidence or substitutes local disk measurements.
+This delivery is therefore not fully unattended migration.
+
+**Pause plan** and **Stop plan** prevent future dispatches while retaining the
+active batch and published content. Stop is permanent; pause can be resumed
+with fresh evidence. Manage a paused or blocked active batch through its own
+batch page before resuming the plan. Source/policy drift and real unsupported
+payloads block dispatch. Unexpected dispatch errors retry at one-minute
+intervals at most three times, then require explicit recovery. No plan operation
+deletes source or target content.
+
+The next eligible time and last successful sync are read from persisted state.
+A submitted batch is not success. Last success advances only after a complete,
+verified terminal batch within the plan-supported native scope. Original
+unsupported counts and details remain unchanged. The only reporting exceptions
+are the exact existing Maven regeneration reasons for canonical metadata paths
+or checksum sidecars whose release asset is present in the verified batch;
+SNAPSHOT, unknown payloads, missing POM/required assets and metadata lookalikes
+such as `maven-metadata.xml.evil` remain blockers. This timestamp does not imply
+that the entire source is cleared or that cold-client cutover is verified.
+
 ## Verification boundaries
 
 Focused state tests cover exact capacity/freshness, source-version mismatches,

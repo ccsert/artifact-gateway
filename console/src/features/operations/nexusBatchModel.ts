@@ -8,6 +8,7 @@ import type {
 } from "../../client";
 import { LocalizedError, type Translator } from "../../messages/translate";
 import type { NexusBatchMessageKey } from "../../messages/nexus-batch.zh-CN";
+import type { NexusScheduleMessageKey } from "../../messages/nexus-schedule.zh-CN";
 import type { MigrationMessageKey } from "../../messages/migration.zh-CN";
 
 export type BatchDraft = {
@@ -93,7 +94,17 @@ export function capacityEvidence(
   };
 }
 
-const codes: Record<string, NexusBatchMessageKey | MigrationMessageKey> = {
+const codes: Record<
+  string,
+  NexusBatchMessageKey | MigrationMessageKey | NexusScheduleMessageKey
+> = {
+  mapping_active_batch: "nexusSchedule.mappingBusy",
+  mapping_schedule_exists: "nexusSchedule.mappingExists",
+  successful_template_required: "nexusSchedule.templateRequired",
+  scheduler_dispatch_failed: "nexusSchedule.dispatchFailed",
+  batch_requires_attention: "nexusSchedule.blockedHint",
+  active_batch_requires_attention: "nexusSchedule.blockedHint",
+  policy_version_changed: "nexusSchedule.policyChanged",
   scan_interrupted: "nexusBatch.scanInterrupted",
   source_timeout: "nexusBatch.sourceFailure",
   source_missing: "nexusBatch.sourceMissing",

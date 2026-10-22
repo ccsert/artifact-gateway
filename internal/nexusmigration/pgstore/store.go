@@ -54,20 +54,43 @@ func (s *Store) totals(ctx context.Context, b *m.Batch) error {
 	return s.db.QueryRowContext(ctx, `SELECT COALESCE(sum(size),0) FROM (SELECT DISTINCT e.format,a->>'sha256' AS sha256,(a->>'size')::bigint AS size FROM nexus_migration_entries e CROSS JOIN LATERAL jsonb_array_elements(e.assets) a WHERE e.batch_id=$1 AND a->>'verified'='true' AND e.state IN ('verified','committed','skipped')) verified`, b.ID).Scan(&b.VerifiedBytes)
 }
 func (s *Store) Create(ctx context.Context, b m.Batch, key, hash string) (m.Batch, error) {
-	request, _ := json.Marshal(b.StartInput)
-	evidence, _ := json.Marshal(b.CapacityEvidence)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO nexus_migration_batches(id,actor,idempotency_key,request_hash,request,capacity_evidence,source_id,source_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(actor,idempotency_key) DO NOTHING`, b.ID, b.Actor, key, hash, request, evidence, b.SourceID, b.SourceVersion)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return m.Batch{}, err
 	}
-	var id, stored string
-	if err = s.db.QueryRowContext(ctx, `SELECT id::text,request_hash FROM nexus_migration_batches WHERE actor=$1 AND idempotency_key=$2`, b.Actor, key).Scan(&id, &stored); err != nil {
+	defer func() { _ = tx.Rollback() }()
+	if err = lockMigrationDispatch(ctx, tx); err != nil {
 		return m.Batch{}, err
 	}
-	if stored != hash {
-		return m.Batch{}, m.ErrIdempotencyConflict
+	var priorID, priorHash string
+	err = tx.QueryRowContext(ctx, `SELECT id::text,request_hash FROM nexus_migration_batches WHERE actor=$1 AND idempotency_key=$2`, b.Actor, key).Scan(&priorID, &priorHash)
+	if err == nil {
+		if priorHash != hash {
+			return m.Batch{}, m.ErrIdempotencyConflict
+		}
+		if err = tx.Rollback(); err != nil {
+			return m.Batch{}, err
+		}
+		return s.Get(ctx, priorID)
 	}
-	return s.Get(ctx, id)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return m.Batch{}, err
+	}
+	// Manual starts may not overlap a live batch already owned by a plan.
+	// Plan dispatch checks all live batches under this same transaction lock.
+	if err = activeMigrationTargets(ctx, tx, b.Mappings, true); err != nil {
+		return m.Batch{}, err
+	}
+	request, _ := json.Marshal(b.StartInput)
+	evidence, _ := json.Marshal(b.CapacityEvidence)
+	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_batches(id,actor,idempotency_key,request_hash,request,capacity_evidence,source_id,source_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, b.ID, b.Actor, key, hash, request, evidence, b.SourceID, b.SourceVersion)
+	if err != nil {
+		return m.Batch{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return m.Batch{}, err
+	}
+	return s.Get(ctx, b.ID)
 }
 func (s *Store) Get(ctx context.Context, id string) (m.Batch, error) {
 	b, err := scanBatch(s.db.QueryRowContext(ctx, `SELECT `+batchColumns+` FROM nexus_migration_batches b WHERE b.id::text=$1`, id))

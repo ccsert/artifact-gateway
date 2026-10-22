@@ -20,6 +20,8 @@ import { migrationZhCN } from "./migration.zh-CN";
 import { migrationEnUS } from "./migration.en-US";
 import { nexusBatchZhCN } from "./nexus-batch.zh-CN";
 import { nexusBatchEnUS } from "./nexus-batch.en-US";
+import { nexusScheduleZhCN } from "./nexus-schedule.zh-CN";
+import { nexusScheduleEnUS } from "./nexus-schedule.en-US";
 import { systemZhCN } from "./system.zh-CN";
 import { systemEnUS } from "./system.en-US";
 import { groupsZhCN } from "./groups.zh-CN";
@@ -50,6 +52,7 @@ export const zhCN = {
   ...operationsZhCN,
   ...migrationZhCN,
   ...nexusBatchZhCN,
+  ...nexusScheduleZhCN,
   ...systemZhCN,
   ...groupsZhCN,
   ...settingsZhCN,
@@ -74,6 +77,7 @@ export const enUS: Record<MessageKey, string> = {
   ...operationsEnUS,
   ...migrationEnUS,
   ...nexusBatchEnUS,
+  ...nexusScheduleEnUS,
   ...systemEnUS,
   ...groupsEnUS,
   ...settingsEnUS,

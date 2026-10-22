@@ -24,13 +24,19 @@ type Auditor interface {
 	RecordAudit(context.Context, repository.AuditRecord) error
 }
 type BatchAdapter struct {
-	service *m.Service
-	auth    Authenticator
-	audit   Auditor
+	service   *m.Service
+	schedules *m.ScheduleService
+	auth      Authenticator
+	audit     Auditor
 }
 
 func New(service *m.Service, auth Authenticator, audit Auditor) *BatchAdapter {
-	return &BatchAdapter{service, auth, audit}
+	return &BatchAdapter{service: service, auth: auth, audit: audit}
+}
+
+func (h *BatchAdapter) WithSchedules(schedules *m.ScheduleService) *BatchAdapter {
+	h.schedules = schedules
+	return h
 }
 
 type operation struct {
@@ -105,7 +111,7 @@ func (op *operation) failed(w http.ResponseWriter, err error) bool {
 		switch code {
 		case "invalid_request":
 			status = 400
-		case "invalid_state", "source_version_changed":
+		case "invalid_state", "source_version_changed", "source_changed", "policy_version_changed", "mapping_active_batch", "mapping_schedule_exists", "successful_template_required", "active_batch_requires_attention":
 			status = 409
 		case "migration_execution_disabled":
 			status = 503
