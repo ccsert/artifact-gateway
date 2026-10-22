@@ -50,8 +50,13 @@ func ParseIndex(data []byte, indexURL string) ([]IndexEntry, error) {
 				return nil, ErrInvalidChart
 			}
 			target, e := url.Parse(entry.URLs[0])
-			if e != nil || entry.URLs[0] == "" {
+			if e != nil || entry.URLs[0] == "" || len(entry.URLs[0]) > 4096 || target.User != nil || target.Fragment != "" || target.RawQuery != "" || target.Opaque != "" || (target.Scheme != "" && target.Scheme != "https") || strings.ContainsAny(entry.URLs[0], "\\\x00\r\n") || (target.RawPath != "" && target.EscapedPath() != target.Path) {
 				return nil, ErrInvalidChart
+			}
+			for _, part := range strings.Split(target.Path, "/") {
+				if part == "." || part == ".." {
+					return nil, ErrInvalidChart
+				}
 			}
 			entry.URLs = []string{base.ResolveReference(target).String()}
 			out = append(out, entry)

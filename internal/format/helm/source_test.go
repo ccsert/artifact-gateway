@@ -250,7 +250,7 @@ func TestHelmProxyMissingCorruptOrCrossIdentityClosureNeverBecomesVisible(t *tes
 	}
 }
 func TestHelmProxyRejectsAmbiguousBoundlessAndForbiddenIndex(t *testing.T) {
-	for _, kind := range []string{"alias", "duplicate", "overlimit", "cross-host", "query", "multiple-urls"} {
+	for _, kind := range []string{"alias", "duplicate", "overlimit", "cross-host", "query", "multiple-urls", "parent-path", "userinfo", "fragment", "escaped-path"} {
 		t.Run(kind, func(t *testing.T) {
 			chart := chartFixture(t, "owned", "1.2.3", "fixed")
 			feed := newHelmFeed(t, chart, nil)
@@ -266,6 +266,14 @@ func TestHelmProxyRejectsAmbiguousBoundlessAndForbiddenIndex(t *testing.T) {
 				feed.index = bytes.ReplaceAll(feed.index, []byte("assets/owned-1.2.3.tgz"), []byte("https://unapproved.example.invalid/owned.tgz"))
 			case "query":
 				feed.index = bytes.ReplaceAll(feed.index, []byte("assets/owned-1.2.3.tgz"), []byte("assets/owned-1.2.3.tgz?private=secret"))
+			case "parent-path":
+				feed.index = bytes.ReplaceAll(feed.index, []byte("assets/owned-1.2.3.tgz"), []byte("../owned-1.2.3.tgz"))
+			case "userinfo":
+				feed.index = bytes.ReplaceAll(feed.index, []byte("assets/owned-1.2.3.tgz"), []byte("https://user:secret@unapproved.example.invalid/owned.tgz"))
+			case "fragment":
+				feed.index = bytes.ReplaceAll(feed.index, []byte("assets/owned-1.2.3.tgz"), []byte("assets/owned-1.2.3.tgz#ignored"))
+			case "escaped-path":
+				feed.index = bytes.ReplaceAll(feed.index, []byte("assets/owned-1.2.3.tgz"), []byte("assets/%6fwned-1.2.3.tgz"))
 			case "multiple-urls":
 				feed.index = bytes.ReplaceAll(feed.index, []byte("- assets/owned-1.2.3.tgz"), []byte("- assets/owned-1.2.3.tgz\n          - other.tgz"))
 			}
