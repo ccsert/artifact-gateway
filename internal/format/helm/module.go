@@ -1,4 +1,4 @@
-// Package helm implements the opt-in traditional HTTP Helm Hosted preview.
+// Package helm implements the opt-in traditional HTTP Helm preview.
 package helm
 
 import (
@@ -32,7 +32,23 @@ type CapacityStore interface {
 	GetRepositoryCapacity(context.Context, string) (repository.RepositoryCapacity, error)
 	ReplaceRepositoryCapacityQuota(context.Context, string, int64) (repository.RepositoryCapacity, error)
 }
+type ConfigurationStore interface {
+	UpdateHostedRepository(context.Context, repository.HostedRepository, string) (repository.HostedRepository, error)
+}
+type GroupStore interface {
+	CreateHostedGroupIdempotently(context.Context, repository.HostedGroup, string, string, string) (repository.HostedGroup, bool, error)
+	GetHostedGroup(context.Context, string) (repository.HostedGroup, error)
+	GetHostedGroupByName(context.Context, string) (repository.HostedGroup, error)
+	ReplaceHostedGroup(context.Context, repository.HostedGroup, string) (repository.HostedGroup, error)
+}
+type Upstream interface {
+	FetchHelm(context.Context, repository.HostedRepository, string, http.Header) (*http.Response, error)
+}
 type Options struct {
+	Sources       repository.HelmSourceStore
+	Configuration ConfigurationStore
+	Groups        GroupStore
+	Upstream      Upstream
 	Store         repository.NativeHelmStore
 	Repositories  RepositoryStore
 	Objects       objectstore.Store
@@ -44,15 +60,19 @@ type Options struct {
 	MaxChartBytes int64
 }
 type Module struct {
-	store      repository.NativeHelmStore
-	repos      RepositoryStore
-	objects    objectstore.Store
-	auth       authorization.Authenticator
-	access     authorization.RepositoryAuthorizer
-	audit      Auditor
-	anonymous  AnonymousPolicy
-	capacities CapacityStore
-	maxBytes   int64
+	sources       repository.HelmSourceStore
+	configuration ConfigurationStore
+	groups        GroupStore
+	upstream      Upstream
+	store         repository.NativeHelmStore
+	repos         RepositoryStore
+	objects       objectstore.Store
+	auth          authorization.Authenticator
+	access        authorization.RepositoryAuthorizer
+	audit         Auditor
+	anonymous     AnonymousPolicy
+	capacities    CapacityStore
+	maxBytes      int64
 }
 
 func nilPort(v any) bool {
@@ -71,6 +91,16 @@ func New(o Options) (*Module, error) {
 			return nil, errors.New("helm preview requires explicit publication, repository, authorization, audit, anonymous policy and capacity ports")
 		}
 	}
+	for _, port := range []any{o.Sources, o.Configuration, o.Groups, o.Upstream} {
+		if port != nil && nilPort(port) {
+			return nil, errors.New("helm optional capability is typed nil")
+		}
+	}
+	if o.Sources != nil || o.Configuration != nil || o.Groups != nil || o.Upstream != nil {
+		if o.Sources == nil || o.Configuration == nil || o.Groups == nil || o.Upstream == nil {
+			return nil, errors.New("helm Proxy/Group requires explicit source, configuration, Group and upstream ports")
+		}
+	}
 	if err := objectstore.Validate(o.Objects); err != nil {
 		return nil, err
 	}
@@ -80,7 +110,7 @@ func New(o Options) (*Module, error) {
 	if o.MaxChartBytes < 1 || o.MaxChartBytes > helmprotocol.MaxChartBytes {
 		return nil, errors.New("helm compressed chart limit must be between 1 and 64 MiB")
 	}
-	return &Module{store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxChartBytes}, nil
+	return &Module{sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream, store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxChartBytes}, nil
 }
 func (*Module) Format() repository.Format { return repository.FormatHelm }
 func (m *Module) Routes() []formatmodule.Route {
@@ -145,7 +175,7 @@ func (m *Module) repository(ctx context.Context, key string, byID bool) (reposit
 	if err != nil {
 		return repository.HostedRepository{}, err
 	}
-	if repo.Format != repository.FormatHelm || repo.Type != repository.RepositoryTypeHosted || repo.State != repository.RepositoryActive {
+	if repo.Format != repository.FormatHelm || (repo.Type != repository.RepositoryTypeHosted && repo.Type != repository.RepositoryTypeProxy) || repo.State != repository.RepositoryActive {
 		return repository.HostedRepository{}, repository.ErrNotFound
 	}
 	return repo, nil
@@ -154,7 +184,7 @@ func (m *Module) problem(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": code, "status": status, "code": code, "detail": "Helm Hosted preview operation failed"})
+	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": code, "status": status, "code": code, "detail": "Helm preview operation failed"})
 }
 func (m *Module) failure(w http.ResponseWriter, err error) {
 	switch {
@@ -168,6 +198,14 @@ func (m *Module) failure(w http.ResponseWriter, err error) {
 		m.problem(w, 409, "quota_exceeded")
 	case errors.Is(err, repository.ErrHelmSessionExpired):
 		m.problem(w, 410, "helm_session_expired")
+	case errors.Is(err, repository.ErrHelmSourceChanged), errors.Is(err, repository.ErrVersionConflict):
+		m.problem(w, 409, "helm_source_changed")
+	case errors.Is(err, errUpstreamRejected):
+		m.problem(w, 502, "helm_upstream_rejected")
+	case errors.Is(err, errIntegrity):
+		m.problem(w, 502, "helm_object_integrity_failure")
+	case errors.Is(err, repository.ErrHelmCacheLimit):
+		m.problem(w, 422, "helm_preview_cache_limit")
 	case errors.Is(err, errInventoryLimit):
 		m.problem(w, 422, "helm_preview_inventory_limit")
 	default:
@@ -185,6 +223,13 @@ func (m *Module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	repo, err := m.repository(r.Context(), parts[0], false)
+	if errors.Is(err, repository.ErrNotFound) && m.groups != nil {
+		group, e := m.groups.GetHostedGroupByName(r.Context(), parts[0])
+		if e == nil && group.Format == repository.FormatHelm {
+			m.serveGroup(w, r, group, parts[1:])
+			return
+		}
+	}
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -194,7 +239,17 @@ func (m *Module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(405)
 		return
 	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		if m.sources == nil {
+			m.problem(w, 503, "helm_preview_unavailable")
+			return
+		}
+		m.serveSource(w, r, repo, parts[1:])
+		return
+	}
 	switch {
+	case len(parts) == 7 && parts[1] == "snapshots":
+		m.snapshotAsset(w, r, repo, nil, parts[2:])
 	case len(parts) == 2 && parts[1] == "index.yaml":
 		m.index(w, r, repo)
 	case len(parts) == 5 && parts[1] == "charts":

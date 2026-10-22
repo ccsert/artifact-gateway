@@ -190,7 +190,7 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 	newServer := func() *httptest.Server {
 		t.Helper()
 		auth := authorization.Authenticator{AdminToken: token, AdminActor: "helm-fixture", APIKeys: store, ServiceAccounts: store}
-		handler, e := app.NewGatewayHandler(app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: app.SharedObjectStores(objects), Adapter: ownedAdapter{}, Authenticator: auth, HelmPreviewEnabled: true, HelmStore: store, HelmObjects: objects})
+		handler, e := app.NewGatewayHandler(app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: app.SharedObjectStores(objects), Adapter: ownedAdapter{}, Authenticator: auth, HelmPreviewEnabled: true, HelmStore: store, HelmSources: store, HelmObjects: objects})
 		if e != nil {
 			t.Fatal(e)
 		}

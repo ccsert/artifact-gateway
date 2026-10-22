@@ -8,7 +8,7 @@ import (
 
 func (s *MemoryStore) activeHelmRepositoryLocked(id string) (HostedRepository, error) {
 	repo, ok := s.hostedRepositories[id]
-	if !ok || repo.State != RepositoryActive || repo.Type != RepositoryTypeHosted || repo.Format != FormatHelm {
+	if !ok || repo.State != RepositoryActive || (repo.Type != RepositoryTypeHosted && repo.Type != RepositoryTypeProxy) || repo.Format != FormatHelm {
 		return HostedRepository{}, ErrNotFound
 	}
 	return repo, nil
@@ -38,8 +38,10 @@ func (s *MemoryStore) ReserveHelmPublication(ctx context.Context, in HelmSession
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := s.activeHelmRepositoryLocked(in.RepositoryID); err != nil {
+	if repo, err := s.activeHelmRepositoryLocked(in.RepositoryID); err != nil {
 		return HelmSession{}, false, err
+	} else if repo.Type == RepositoryTypeProxy && in.SourceVersion != repo.Version || repo.Type == RepositoryTypeHosted && in.SourceVersion != "" {
+		return HelmSession{}, false, ErrHelmSourceChanged
 	}
 	if prior, ok := s.helmSessions[in.ID]; ok {
 		if !helmSessionSame(prior, in) || prior.Actor != in.Actor {
@@ -54,7 +56,7 @@ func (s *MemoryStore) ReserveHelmPublication(ctx context.Context, in HelmSession
 		if prior.RepositoryID != in.RepositoryID || prior.Name != in.Name || prior.Version != in.Version {
 			continue
 		}
-		if prior.State == "pending" && !prior.ExpiresAt.After(time.Now()) {
+		if prior.State == "pending" && (!prior.ExpiresAt.After(time.Now()) || prior.SourceVersion != in.SourceVersion) {
 			prior.State = "expired"
 			s.helmSessions[id] = prior
 		}
@@ -103,6 +105,9 @@ func (s *MemoryStore) CommitHelmPublication(ctx context.Context, id, actor strin
 	repo, err := s.activeHelmRepositoryLocked(in.RepositoryID)
 	if err != nil {
 		return HelmPublication{}, false, err
+	}
+	if repo.Type == RepositoryTypeProxy && in.SourceVersion != repo.Version {
+		return HelmPublication{}, false, ErrHelmSourceChanged
 	}
 	if in.Actor != actor {
 		return HelmPublication{}, false, ErrHelmPublicationConflict

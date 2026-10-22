@@ -5,3 +5,7 @@ package repository
 import "testing"
 
 func TestPostgresHelmStoreContract(t *testing.T) { testHelmStoreContract(t, newPostgresNuGetStore(t)) }
+
+func TestPostgresHelmSourceStoreContract(t *testing.T) {
+	testHelmSourceStoreContract(t, newPostgresNuGetStore(t))
+}

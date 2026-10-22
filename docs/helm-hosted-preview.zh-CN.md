@@ -1,11 +1,11 @@
-# Helm Hosted 预览
+# Helm HTTP 预览
 
 [English](helm-hosted-preview.md) · [文档首页](README.zh-CN.md)
 
-传统 HTTP Helm Hosted 是 #290 下默认关闭的预览，提供 `index.yaml`、原始 chart/
+传统 HTTP Helm Hosted/Proxy/Group 是 #290/#291 下默认关闭的预览，提供 `index.yaml`、原始 chart/
 provenance 下载、明确的 multipart 上传 API、有界浏览、仓库授权及容量预留。它不进入
 正式 Format 枚举、格式档案、仓库列表、active capabilities 或 Console 选择器。现有
-OCI chart 存储属于另一协议。Proxy/Group 仍由 #291 跟踪，生命周期与正式准入仍由 #292 跟踪。
+OCI chart 存储属于另一协议。生命周期与正式准入仍由 #292 跟踪。
 
 ## 启用与创建
 
@@ -22,7 +22,7 @@ OCI chart 存储属于另一协议。Proxy/Group 仍由 #291 跟踪，生命周�
 `{"name":"charts-internal"}` 创建私有 Hosted 预览。保存返回的 ID 及 Gateway 相对路径
 `sourceUrl`；正式仓库目录不会列出预览。可选的 `Idempotency-Key` 按调用者隔离，同一创建
 请求可重复读取结果，修改请求体返回 409。通过
-`GET /api/v2/previews/helm/repositories/{id}` 读回创建结果。Proxy 配置会被拒绝。
+`GET /api/v2/previews/helm/repositories/{id}` 读回创建结果。Proxy 与 Group 的配置见下文。
 
 既有仓库授权 API 可绑定该 ID。资源前缀匹配区分大小写的 chart 名称；同一 chart 的所有
 版本使用该名称作为资源。全量替换、单条写入与模板应用接受空前缀（整个仓库），或以
@@ -31,7 +31,7 @@ URL 路径被拒绝。此授权不会将 Helm 开放到正式制品搜索。
 索引和预览浏览接受有效的前缀授权，再逐项过滤 chart；下载与
 上传检查完整 chart 名称。读取接受 Bearer 或 HTTP Basic，Basic 的密码使用 Gateway 凭据，
 用户名不能选择身份。管理上传使用 Bearer。显式无效或已撤销凭据始终被拒绝。创建结果为
-私有仓库，启用全局匿名策略也不会自动公开新的预览。
+默认私有；匿名读取同时要求显式 `anonymousRead:true` 和启用全局匿名策略。Group 匿名读取还要求每个成员允许匿名读取。
 
 ## 一次发布完整闭包
 
@@ -86,6 +86,55 @@ chart；超过上限返回 422，不静默截断。`GET .../charts/{name}/{versi
 摘要和下载位置。`GET .../{id}/capacity` 读取已提交 chart/provenance 的用量；仓库管理员
 对该路径 PUT `{"quotaBytes":N}` 设置配额，零表示不限。并发待提交预留也占用同一配额。
 
+## Proxy 与 Group 来源快照
+
+管理员通过同一预览仓库 POST 创建 Proxy，传入 `type:"proxy"`、明确指向索引的 HTTPS
+`endpoint`、可选 `allowedHosts`（最多 32 个额外 HTTPS authority）、`egressMode`
+（`direct` 或 `environment`）及可选 `upstreamAuth:{scheme,username,secret}`。
+仅支持 `none`、`basic`、`bearer`。只写的上游秘密通过 `GATEWAY_SETTINGS_ENCRYPTION_KEY`
+加密，与 Gateway 客户端凭据、签名私钥相互独立；响应只包含 scheme、可选用户名和
+`credentialsConfigured`。对仓库 PUT 必须提交当前 `version` 才能替换配置。更改 endpoint/
+allowlist 而保留来源凭据时，必须提供新 secret 或显式设置 `scheme:"none"`。
+
+URL 必须使用 HTTPS，不能带 userinfo、query、fragment、转义/穿越路径或尾点主机名。
+每个 chart URL 必须属于索引原点或显式允许的 authority。每次跳转独立执行 DNS/egress 检查；
+跨原点后剥离上游凭据，即使之后跳回原原点也不会重新附加。客户端 Authorization、cookie
+及代理凭据不会变成上游凭据。此预览要求每个索引条目恰好一个 URL，不支持 mirror、plugin
+或含签名 query 的地址。
+
+完整索引上限为 1 MiB/4096 个身份。YAML alias/anchor、重复或非字符串键、超过 64 层、
+超过 100,000 节点、额外文档、重复 chart version 和非 SHA-256 摘要都直接失败。成功文档
+有效 30 秒，过期后通过 ETag/Last-Modified 条件重验；只有 dial/DNS/deadline 不可用时可读取
+旧成功文档。HTTP 拒绝、TLS/egress 失败、畸形内容和变化的摘要不能以旧缓存掩盖。
+来源配置仍相同时可持续离线读取旧文档；配置变更进入新的缓存命名空间。
+
+索引条目只指向
+`/helm/{view}/snapshots/{snapshotId}/charts/{name}/{version}/{name}-{version}.tgz`，
+追加 `.prov` 使用同一冻结条目。持久化快照固定来源仓库/version、原始元数据、完整 chart
+摘要及单一资产 URL。首次 chart GET 获取完整有界归档与可选 `.prov`，验证身份、元数据、
+size/SHA-256 和 provenance 绑定后，再进入既有配额预留/不可变发布事务。缺包、坏摘要、
+授权失败或畸形 provenance 都不能 fallback。只有来源 provenance 的 404 才固定为无签名；
+后补签必须使用新版本。部分写入不会可见，重启后可恢复；已核验闭包支持离线 GET/HEAD/Range，
+并计入仓库配额。待提交闭包沿用一小时过期及回收器。来源元数据不属于正式制品身份。
+
+通过 `POST /api/v2/previews/helm/groups` 提交
+`{name,members:[repositoryId,...],anonymousRead?}` 创建 Group。允许 1–32 个有序的直接
+Hosted/Proxy 成员，拒绝嵌套 Group、重复成员与环。PUT `/groups/{id}` 带当前 `version`
+替换顺序，GET 读取配置。发现数据前，同一调用者必须通过每个当前成员的读取权限；chart
+前缀授权按各成员可读集合的交集过滤。首次进入索引的 name/version 建立持久来源归属；
+成员重排不能换源，任一上游或成员错误都阻止完整索引。如果原来源被移除、配置/version
+改变、不再出现在当前来源索引或声明不同字节，则返回 409，不选择后备成员。只要来源仍是
+已授权的活动成员且配置版本相同，之前冻结的缓存字节不随上游索引变化。管理员可创建新
+Group 以显式建立新来源；此预览不会在轮换后自动重绑定已有来源。
+
+`GET /api/v2/previews/helm/groups/{id}/sources/{chartName}/{version}` 只读已经建立的归属，
+返回来源仓库/version、digest、可选上游 URL 和完整闭包是否已缓存；逐个检查成员的 chart
+读取权限，不隐式获取索引或下载资产。尚未选源的身份返回 404。快照只追加，每个 view 最多
+128 份，每份最多 4096 条/8 MiB 序列化元数据，新增超界返回 422；预览没有快照修剪 API。
+Proxy/Group 写入均返回 405；不可变冲突或来源版本变化返回 409，上游缺包/拒绝/坏内容返回
+502，缓存边界返回 422，临时存储/传输失败返回 503。正式生命周期、扫描/隔离/分发和可见缓存
+淘汰仍由 #292 承接，不会隐式执行不支持的治理操作。
+
 ## 可重复验收与剩余范围
 
 准备 Docker、仓库要求的 Go 工具链、curl 和 Node.js 24 后，执行 `make native-helm-e2e`。
@@ -94,7 +143,8 @@ chart；超过上限返回 422，不静默截断。`GET .../charts/{name}/{versi
 固定的 SHA-256；只使用独占、默认 bridge 网络上的 PostgreSQL/RustFS 容器、空 Docker 凭据、
 空且只指向目标的 Helm 配置/缓存、合成签名 chart 及消费者独占公钥环。场景经过完整 Gateway
 路由，覆盖带签名 `helm package`、声明的上传/重放、数据库和 handler 重启、`repo add/update`、
-冷 `pull --verify`、独立 `verify`、权限拒绝以及真实凭据轮换/撤销。压缩后超过 1 MiB 的 chart
+冷 `pull --verify`、独立 `verify`、私有上游缓存、混合 Hosted/Proxy Group 冲突及重排、
+上游离线后的重启读取、权限拒绝以及真实凭据轮换/撤销。压缩后超过 1 MiB 的 chart
 还验证真实管理上传请求不会受到通用 JSON body 上限干扰。
 
 Helm 3.19.0 的 `install --dry-run=client` 仍会在渲染前检查 Kubernetes 可达性。本验收提供
@@ -106,9 +156,8 @@ commit 与对应上游源码分支。该场景证明冷 chart 消费与 dry-run 
 测试事件、明确的 mandatory 清单、required/summary 结果、原始 CLI 输出、上游源码证据
 及精确自有资源清理结果。mandatory 缺失或 skip 均使验收失败。
 
-预览不提供 Proxy/Group 读写、Console 创建/上传/浏览、agctl 命令、墓碑/恢复、可见 chart
-保留策略、隔离/扫描、晋升/复制、完整备份/升级验收或 Nexus Helm 迁移。这些仍属于 #291/
-#292 或其迁移依赖。本交付不改变生产路由，不执行源迁移或切流。
+预览不提供 Proxy/Group 发布、Console 创建/上传/浏览、agctl 命令、墓碑/恢复、可见 chart
+保留策略、隔离/扫描、晋升/复制、完整备份/升级验收或 Nexus Helm 迁移。这些仍属于 #292 或其迁移依赖。本交付不改变生产路由，不执行源迁移或切流。
 
 协议依据：[Helm chart 仓库指南](https://helm.sh/docs/topics/chart_repository/)、
 [Helm provenance](https://helm.sh/docs/topics/provenance/)、

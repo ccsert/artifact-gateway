@@ -7,8 +7,8 @@ exec python3 -B - "$repo_root" <<'PY'
 import hashlib,json,os,pathlib,platform,secrets,shutil,subprocess,sys,tempfile,time,urllib.request
 root=pathlib.Path(sys.argv[1])
 for binary in ('docker','go','curl','node'):
-    if not shutil.which(binary): raise SystemExit('Helm Hosted gate requires '+binary)
-run_id='ag290-helm-'+secrets.token_hex(6)
+    if not shutil.which(binary): raise SystemExit('Helm preview gate requires '+binary)
+run_id='ag291-helm-'+secrets.token_hex(6)
 evidence=root/'output/native-helm-e2e'/run_id
 evidence.mkdir(parents=True)
 work=pathlib.Path(tempfile.mkdtemp(prefix=run_id+'-'))
@@ -19,6 +19,21 @@ docker_ready=False
 label='com.artifact-gateway.helm-e2e.run='+run_id
 containers=[];volumes=set();exit_code=1
 required={
+ 'TestHelmProxyInterruptedOldSourceCannotBlockRotatedClosureOrCollectReplacement',
+ 'TestHelmProxySnapshotCacheConditionalOfflineAndProvenance',
+ 'TestHelmProxyMissingCorruptOrCrossIdentityClosureNeverBecomesVisible',
+ 'TestHelmProxyRejectsAmbiguousBoundlessAndForbiddenIndex',
+ 'TestHelmProxyConcurrentReadCreatesOneImmutableClosureAndQuotaRejects',
+ 'TestHelmProxyCredentialRotationInvalidatesSnapshotsAndDenialNeverUsesStale',
+ 'TestHelmFrozenSourceAuditMatchesResponseStatusBytesAndAnonymousActor',
+ 'TestHelmGroupPinsSourceAcrossReorderAndFrozenIndex',
+ 'TestHelmGroupMissingAndCorruptOwnerNeverFallThrough',
+ 'TestHelmGroupRejectsNestingCyclesWritesAndMemberPermissionFallback',
+ 'TestHelmUpstreamPerHopCredentialAndEgressIsolation',
+ 'TestHelmMemorySourceStoreContract',
+ 'TestPostgresHelmSourceStoreContract',
+ 'TestPostgresRustFSHelmProxyInterruptedClosureRestartAndOffline',
+ 'TestHelmFixedOfficialCLIProxyGroupFrozenSourceOfflinePostgresRustFSRestart',
  'TestHelmArchiveRejectsUnsafeIncompleteAndAmbiguousInputs',
  'TestHelmProvenanceBindsChartMetadataFilenameAndDigest',
  'TestHelmHostedPublishesImmutableChartProvenanceAndDeterministicIndex',
@@ -54,7 +69,7 @@ try:
     if not endpoint:
         context=subprocess.check_output(['docker','context','show'],text=True).strip()
         endpoint=subprocess.check_output(['docker','context','inspect',context,'--format','{{.Endpoints.docker.Host}}'],text=True).strip()
-    if not endpoint.startswith('unix://'): raise SystemExit('Helm Hosted gate requires a local Docker socket')
+    if not endpoint.startswith('unix://'): raise SystemExit('Helm preview gate requires a local Docker socket')
     (work/'docker').mkdir();(work/'docker/config.json').write_text('{"auths":{}}\n')
     env=dict(base,DOCKER_HOST=endpoint,DOCKER_CONFIG=str(work/'docker'))
     env.pop('DOCKER_CONTEXT',None);env.pop('DOCKER_DEFAULT_PLATFORM',None)
@@ -63,7 +78,7 @@ try:
     hashes={'darwin-arm64':'31513e1193da4eb4ae042eb5f98ef9aca7890cfa136f4707c8d4f70e2115bef6','linux-amd64':'a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496','linux-arm64':'440cf7add0aee27ebc93fada965523c1dc2e0ab340d4348da2215737fc0d76ad'}
     if host_platform not in hashes: raise RuntimeError('Unsupported fixed Helm client platform: '+host_platform)
     archive=work/'helm.tar.gz';url='https://get.helm.sh/helm-v3.19.0-'+host_platform+'.tar.gz'
-    command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','120','--retry','2',url,'-o',str(archive)],output='helm-download.log')
+    command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','120','--retry','2','--retry-all-errors',url,'-o',str(archive)],output='helm-download.log')
     actual=hashlib.sha256(archive.read_bytes()).hexdigest()
     if actual!=hashes[host_platform]: raise RuntimeError('Official Helm archive differs from reviewed fixed SHA-256')
     # Extract only the verified Helm executable from the official archive.
@@ -78,7 +93,7 @@ try:
     source_proof={}
     for filename,relative in [('helm-install-action.go.txt','pkg/action/install.go'),('helm-install-command.go.txt','cmd/helm/install.go'),('helm-template-command.go.txt','cmd/helm/template.go')]:
         source_url='https://raw.githubusercontent.com/helm/helm/'+client_version[1]+'/'+relative
-        command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','90',source_url,'-o',str(evidence/filename)],output=filename+'.log')
+        command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','90','--retry','2','--retry-all-errors',source_url,'-o',str(evidence/filename)],output=filename+'.log')
         source_proof[relative]={'url':source_url,'sha256':hashlib.sha256((evidence/filename).read_bytes()).hexdigest()}
     action=(evidence/'helm-install-action.go.txt').read_text()
     if 'if !i.ClientOnly {' not in action or 'i.cfg.KubeClient.IsReachable()' not in action: raise RuntimeError('Pinned Helm reachability source branch changed')
@@ -124,7 +139,7 @@ try:
     bad=[item for item in events if item.get('Action') in ('skip','fail')]
     report={'target':'native-helm-e2e','exitCode':result.returncode,'required':sorted(required),'requiredPassed':sorted(required&passed),'missing':sorted(required-passed),'mandatoryCount':len(required),'mandatoryPassedCount':len(required&passed),'passedTests':len(passed),'passedTopLevelTests':len([name for name in passed if '/' not in name]),'failOrSkip':bad,'resultsSHA256':hashlib.sha256((evidence/'results.jsonl').read_bytes()).hexdigest()}
     write_json('required.json',report)
-    write_json('summary.json',{'target':'native-helm-e2e','mandatoryCount':len(required),'mandatoryPassedCount':len(required&passed),'missing':sorted(required-passed),'failOrSkipCount':len(bad),'client':'Helm v3.19.0','scope':'traditional-http-hosted-preview','proxyGroup':False,'formalAdmission':False,'passed':result.returncode==0 and not bad and not required-passed})
+    write_json('summary.json',{'target':'native-helm-e2e','mandatoryCount':len(required),'mandatoryPassedCount':len(required&passed),'missing':sorted(required-passed),'failOrSkipCount':len(bad),'client':'Helm v3.19.0','scope':'traditional-http-hosted-proxy-group-preview','proxyGroup':True,'formalAdmission':False,'passed':result.returncode==0 and not bad and not required-passed})
     exit_code=0 if result.returncode==0 and not bad and not required-passed else 1
 except Exception as error:
     # Credential-bearing Docker argument vectors and environment values are
@@ -161,6 +176,6 @@ finally:
     work_removed=not work.exists()
     if leftovers or remaining or remaining_volumes or not cleanup_ok or not work_removed: exit_code=1
     write_json('cleanup.json',{'runId':run_id,'exitCode':int(exit_code),'ownedContainers':containers,'remainingContainers':remaining+leftovers,'ownedVolumes':sorted(volumes),'remainingVolumes':remaining_volumes,'createdNetworks':[],'remainingNetworks':[],'networkMode':'existing-default-bridge','workDirectoryRemoved':work_removed,'cleanupReadBackSucceeded':cleanup_ok})
-    print('Helm Hosted evidence: '+str(evidence)+'; cleanup exit='+str(exit_code))
+    print('Helm preview evidence: '+str(evidence)+'; cleanup exit='+str(exit_code))
 sys.exit(exit_code)
 PY

@@ -367,7 +367,7 @@ func TestHelmQuotaCoversWholeClosureAndExpiredObjectCollection(t *testing.T) {
 func TestHelmPreviewManagementRejectsUnknownInputAndNonAdminCreation(t *testing.T) {
 	f := newFixture(t)
 	prefix := "/api/v2/previews/helm/repositories"
-	for _, body := range []string{`{"name":"valid","anonymousRead":true}`, `{"name":"UPPER"}`, `{"name":"valid"} {}`} {
+	for _, body := range []string{`{"name":"valid","unknown":true}`, `{"name":"UPPER"}`, `{"name":"valid"} {}`} {
 		if w := request(t, f.module.Preview(), "POST", prefix, []byte(body), admin); w.Code != 400 {
 			t.Fatalf("invalid create=%d %s", w.Code, w.Body.String())
 		}
