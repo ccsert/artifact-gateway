@@ -57,7 +57,9 @@ Idempotency-Key: <optional actor-scoped replay key>
 
 The `chart` file part is required and must be named `{name}-{version}.tgz`.
 An optional `provenance` file part must be named `{name}-{version}.tgz.prov`.
-Both must be sent in the same request. `Chart.yaml` determines identity and must
+Both must be sent in the same request. When using the generated Console client,
+pass named `File` values with these exact filenames so multipart preserves them.
+`Chart.yaml` determines identity and must
 match the path exactly: names are lowercase ASCII letters, digits and hyphens
 (maximum 63 characters), and versions are strict SemVer, including optional
 prerelease/build metadata. Gateway does not coerce `1.2` or `v1.2.3`.
@@ -112,7 +114,10 @@ Zero means unlimited. Concurrent pending reservations count toward the same quot
 
 ## Reproducible acceptance and remaining scope
 
-Run `make native-helm-e2e`. The gate downloads the official Helm 3.19.0
+Run `make native-helm-e2e` with Docker, the repository Go toolchain, curl and
+Node.js 24 available. The gate also verifies a named-file upload through the
+generated request type and multipart serializer over real HTTP. It downloads the
+official Helm 3.19.0
 archive for a supported platform and verifies a checked-in fixed SHA-256. It uses
 only owned default-bridge PostgreSQL/RustFS containers, empty Docker credentials,
 empty target-only Helm configuration/cache, a synthetic signed chart and a

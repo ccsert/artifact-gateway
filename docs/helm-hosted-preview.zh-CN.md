@@ -46,6 +46,7 @@ Idempotency-Key: <可选的调用者级重放键>
 
 必须包含名为 `chart` 的文件 part，文件名严格为 `{name}-{version}.tgz`。可选的
 `provenance` 文件 part 必须名为 `{name}-{version}.tgz.prov`，两者必须在同一请求中提交。
+通过生成的 Console 客户端上传时，使用具有上述准确名称的 `File`，确保 multipart 保留文件名。
 `Chart.yaml` 决定身份，并且必须与路径完全一致：名称仅允许小写 ASCII 字母、数字和连字符，
 最多 63 字符；版本为严格 SemVer，允许预发布和构建元数据，不自动把 `1.2` 或 `v1.2.3`
 转换为其他版本。
@@ -87,7 +88,9 @@ chart；超过上限返回 422，不静默截断。`GET .../charts/{name}/{versi
 
 ## 可重复验收与剩余范围
 
-执行 `make native-helm-e2e`。验收下载官方 Helm 3.19.0 对应平台归档，验证代码中
+准备 Docker、仓库要求的 Go 工具链、curl 和 Node.js 24 后，执行 `make native-helm-e2e`。
+验收还会通过生成的请求类型与 multipart 序列化器，经真实 HTTP 上传命名文件。
+验收下载官方 Helm 3.19.0 对应平台归档，验证代码中
 固定的 SHA-256；只使用独占、默认 bridge 网络上的 PostgreSQL/RustFS 容器、空 Docker 凭据、
 空且只指向目标的 Helm 配置/缓存、合成签名 chart 及消费者独占公钥环。场景经过完整 Gateway
 路由，覆盖带签名 `helm package`、声明的上传/重放、数据库和 handler 重启、`repo add/update`、
