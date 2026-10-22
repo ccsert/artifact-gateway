@@ -3,6 +3,8 @@ package contracts
 import (
 	"strings"
 	"testing"
+
+	"github.com/getkin/kin-openapi/openapi3"
 )
 
 func TestNuGetGovernanceContractRequiresExactIdentityAndIndependentReadPolicy(t *testing.T) {
@@ -70,6 +72,60 @@ func TestHelmProxyGroupContractPinsSourcesWithoutDeclaringFormalAdmission(t *tes
 		op := operation(t, native, "/helm/{repository}/snapshots/{snapshotId}/charts/{chartName}/{version}/{filename}", method)
 		for _, status := range []string{"200", "206", "304", "401", "403", "404", "409", "412", "416", "502", "503"} {
 			requireResponse(t, op, status)
+		}
+	}
+}
+
+func TestHelmChartContractDistinguishesIndexMetadataFromVerifiedBytes(t *testing.T) {
+	for _, spec := range []*openapi3.T{loadManagementRuntimeSpec(t), loadNativeHostedSpec(t)} {
+		schema := spec.Components.Schemas["HelmPreviewChart"].Value
+		metadata := map[string]any{
+			"repositoryId": "11111111-1111-4111-8111-111111111111",
+			"name":         "example",
+			"version":      "1.0.0",
+			"digest":       "sha256:" + strings.Repeat("a", 64),
+			"publishedAt":  "2026-10-22T00:00:00Z",
+			"chartUrl":     "/helm/example/snapshots/frozen/charts/example/1.0.0/example-1.0.0.tgz",
+			"cached":       false,
+		}
+		if err := schema.VisitJSON(metadata); err != nil {
+			t.Fatalf("cold index metadata must not require unknown byte counts: %v", err)
+		}
+		for key, value := range map[string]any{
+			"size":             float64(1),
+			"provenanceSize":   float64(0),
+			"provenanceDigest": "sha256:" + strings.Repeat("b", 64),
+			"provenanceUrl":    "/helm/example/chart.tgz.prov",
+		} {
+			metadata[key] = value
+			if err := schema.VisitJSON(metadata); err == nil {
+				t.Fatalf("cold index metadata may pretend to know %s", key)
+			}
+			delete(metadata, key)
+		}
+		metadata["cached"] = true
+		if err := schema.VisitJSON(metadata); err == nil {
+			t.Fatal("verified cached receipt may omit its byte counts")
+		}
+		metadata["size"] = float64(512)
+		metadata["provenanceSize"] = float64(0)
+		if err := schema.VisitJSON(metadata); err != nil {
+			t.Fatalf("unsigned verified receipt: %v", err)
+		}
+		metadata["size"] = float64(0)
+		if err := schema.VisitJSON(metadata); err == nil {
+			t.Fatal("cached chart may have a zero byte count")
+		}
+		metadata["size"] = float64(512)
+		metadata["provenanceSize"] = float64(128)
+		metadata["provenanceDigest"] = "sha256:" + strings.Repeat("b", 64)
+		metadata["provenanceUrl"] = metadata["chartUrl"].(string) + ".prov"
+		if err := schema.VisitJSON(metadata); err != nil {
+			t.Fatalf("signed verified receipt: %v", err)
+		}
+		delete(metadata, "cached")
+		if err := schema.VisitJSON(metadata); err == nil {
+			t.Fatal("chart receipt may omit its explicit cache state")
 		}
 	}
 }

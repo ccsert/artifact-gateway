@@ -1498,18 +1498,31 @@ export type HelmPreviewRepository = {
   provenanceTrust: "consumer-public-keyring";
 };
 
-export type HelmPreviewChart = {
+export type HelmPreviewChart = (
+  | {
+      cached?: false;
+    }
+  | {
+      cached?: true;
+      size: number;
+      provenanceSize: number;
+    }
+) & {
   repositoryId: string;
   name: string;
   version: string;
   digest: string;
-  size: number;
+  /**
+   * True only for a complete verified chart/provenance closure; false for index metadata without verified bytes
+   */
+  cached: boolean;
+  size?: number;
   publishedAt: string;
   /**
    * Gateway-relative immutable chart download URL
    */
   chartUrl: string;
-  provenanceSize: number;
+  provenanceSize?: number;
   provenanceDigest?: string;
   /**
    * Present only when the closure contains provenance
@@ -4129,7 +4142,7 @@ export type ListHelmPreviewChartsErrors = {
 
 export type ListHelmPreviewChartsResponses = {
   /**
-   * Committed chart identities with SHA-256, size, provenance digest and download locations
+   * Index identities and download locations, with verified byte counts and provenance only for complete cached closures
    */
   200: HelmPreviewChartList;
 };
@@ -4169,7 +4182,7 @@ export type GetHelmPreviewChartErrors = {
 
 export type GetHelmPreviewChartResponses = {
   /**
-   * Committed chart identity and download locations
+   * Chart identity, explicit cache state and download locations; unknown byte counts and provenance are omitted for cold metadata
    */
   200: HelmPreviewChart;
 };

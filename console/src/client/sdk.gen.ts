@@ -177,7 +177,7 @@ export const replaceHelmPreviewRepository = <ThrowOnError extends boolean = fals
 });
 
 /**
- * Single consistent snapshot of at most 4096 committed charts, filtered by chart resource grants. An inventory exceeding the preview bound fails explicitly.
+ * Single consistent snapshot of at most 4096 chart entries, filtered by chart resource grants. Cold Proxy entries contain index metadata with cached=false and omit unknown byte counts and provenance. An inventory exceeding the preview bound fails explicitly.
  */
 export const listHelmPreviewCharts = <ThrowOnError extends boolean = false>(options: Options<ListHelmPreviewChartsData, ThrowOnError>): RequestResult<ListHelmPreviewChartsResponses, ListHelmPreviewChartsErrors, ThrowOnError> => (options.client ?? client).get<ListHelmPreviewChartsResponses, ListHelmPreviewChartsErrors, ThrowOnError>({
     security: [{

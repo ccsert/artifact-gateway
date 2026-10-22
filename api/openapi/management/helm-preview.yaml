@@ -156,10 +156,10 @@ charts:
     - {$ref: '#/repositoryId'}
   get:
     operationId: listHelmPreviewCharts
-    description: Single consistent snapshot of at most 4096 committed charts, filtered by chart resource grants. An inventory exceeding the preview bound fails explicitly.
+    description: Single consistent snapshot of at most 4096 chart entries, filtered by chart resource grants. Cold Proxy entries contain index metadata with cached=false and omit unknown byte counts and provenance. An inventory exceeding the preview bound fails explicitly.
     responses:
       '200':
-        description: Committed chart identities with SHA-256, size, provenance digest and download locations
+        description: Index identities and download locations, with verified byte counts and provenance only for complete cached closures
         content:
           application/json:
             schema:
@@ -194,7 +194,7 @@ chart:
     operationId: getHelmPreviewChart
     responses:
       '200':
-        description: Committed chart identity and download locations
+        description: Chart identity, explicit cache state and download locations; unknown byte counts and provenance are omitted for cold metadata
         content:
           application/json:
             schema:

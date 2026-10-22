@@ -121,12 +121,28 @@ HelmPreviewRepository:
 HelmPreviewChart:
   type: object
   additionalProperties: false
-  required: [repositoryId, name, version, digest, size, publishedAt, chartUrl, provenanceSize]
+  description: Index metadata declares an expected digest; byte counts and provenance are known only after a complete closure has been verified and cached
+  required: [repositoryId, name, version, digest, publishedAt, chartUrl, cached]
+  oneOf:
+    - properties:
+        cached: {type: boolean, enum: [false]}
+      not:
+        anyOf:
+          - required: [size]
+          - required: [provenanceSize]
+          - required: [provenanceDigest]
+          - required: [provenanceUrl]
+    - required: [size, provenanceSize]
+      properties:
+        cached: {type: boolean, enum: [true]}
+        size: {type: integer, format: int64, minimum: 1}
+        provenanceSize: {type: integer, format: int64, minimum: 0}
   properties:
     repositoryId: {type: string, format: uuid}
     name: {type: string}
     version: {type: string}
     digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    cached: {type: boolean, description: "True only for a complete verified chart/provenance closure; false for index metadata without verified bytes"}
     size: {type: integer, format: int64, minimum: 1}
     publishedAt: {type: string, format: date-time}
     chartUrl: {type: string, description: "Gateway-relative immutable chart download URL"}

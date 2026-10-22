@@ -527,10 +527,10 @@
       ],
       "get": {
         "operationId": "listHelmPreviewCharts",
-        "description": "Single consistent snapshot of at most 4096 committed charts, filtered by chart resource grants. An inventory exceeding the preview bound fails explicitly.",
+        "description": "Single consistent snapshot of at most 4096 chart entries, filtered by chart resource grants. Cold Proxy entries contain index metadata with cached=false and omit unknown byte counts and provenance. An inventory exceeding the preview bound fails explicitly.",
         "responses": {
           "200": {
-            "description": "Committed chart identities with SHA-256, size, provenance digest and download locations",
+            "description": "Index identities and download locations, with verified byte counts and provenance only for complete cached closures",
             "content": {
               "application/json": {
                 "schema": {
@@ -585,7 +585,7 @@
         "operationId": "getHelmPreviewChart",
         "responses": {
           "200": {
-            "description": "Committed chart identity and download locations",
+            "description": "Chart identity, explicit cache state and download locations; unknown byte counts and provenance are omitted for cold metadata",
             "content": {
               "application/json": {
                 "schema": {
@@ -14719,15 +14719,75 @@
       "HelmPreviewChart": {
         "type": "object",
         "additionalProperties": false,
+        "description": "Index metadata declares an expected digest; byte counts and provenance are known only after a complete closure has been verified and cached",
         "required": [
           "repositoryId",
           "name",
           "version",
           "digest",
-          "size",
           "publishedAt",
           "chartUrl",
-          "provenanceSize"
+          "cached"
+        ],
+        "oneOf": [
+          {
+            "properties": {
+              "cached": {
+                "type": "boolean",
+                "enum": [
+                  false
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "size"
+                  ]
+                },
+                {
+                  "required": [
+                    "provenanceSize"
+                  ]
+                },
+                {
+                  "required": [
+                    "provenanceDigest"
+                  ]
+                },
+                {
+                  "required": [
+                    "provenanceUrl"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "required": [
+              "size",
+              "provenanceSize"
+            ],
+            "properties": {
+              "cached": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              },
+              "size": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1
+              },
+              "provenanceSize": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          }
         ],
         "properties": {
           "repositoryId": {
@@ -14743,6 +14803,10 @@
           "digest": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "cached": {
+            "type": "boolean",
+            "description": "True only for a complete verified chart/provenance closure; false for index metadata without verified bytes"
           },
           "size": {
             "type": "integer",

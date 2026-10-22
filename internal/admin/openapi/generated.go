@@ -1631,6 +1631,36 @@ func (e HTTPErrorRateState) Valid() bool {
 	}
 }
 
+// Defines values for HelmPreviewChart0Cached.
+const (
+	False HelmPreviewChart0Cached = false
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewChart0Cached enum.
+func (e HelmPreviewChart0Cached) Valid() bool {
+	switch e {
+	case False:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewChart1Cached.
+const (
+	HelmPreviewChart1CachedTrue HelmPreviewChart1Cached = true
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewChart1Cached enum.
+func (e HelmPreviewChart1Cached) Valid() bool {
+	switch e {
+	case HelmPreviewChart1CachedTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HelmPreviewGroupFormat.
 const (
 	HelmPreviewGroupFormatHelm HelmPreviewGroupFormat = "helm"
@@ -5820,22 +5850,44 @@ type HelmPreviewCapacity struct {
 	UsedBytes    int64              `json:"usedBytes"`
 }
 
-// HelmPreviewChart defines model for HelmPreviewChart.
+// HelmPreviewChart Index metadata declares an expected digest; byte counts and provenance are known only after a complete closure has been verified and cached
 type HelmPreviewChart struct {
+	// Cached True only for a complete verified chart/provenance closure; false for index metadata without verified bytes
+	Cached bool `json:"cached"`
+
 	// ChartUrl Gateway-relative immutable chart download URL
 	ChartUrl         string  `json:"chartUrl"`
 	Digest           string  `json:"digest"`
 	Name             string  `json:"name"`
 	ProvenanceDigest *string `json:"provenanceDigest,omitempty"`
-	ProvenanceSize   int64   `json:"provenanceSize"`
+	ProvenanceSize   *int64  `json:"provenanceSize,omitempty"`
 
 	// ProvenanceUrl Present only when the closure contains provenance
 	ProvenanceUrl *string            `json:"provenanceUrl,omitempty"`
 	PublishedAt   time.Time          `json:"publishedAt"`
 	RepositoryId  openapi_types.UUID `json:"repositoryId"`
-	Size          int64              `json:"size"`
+	Size          *int64             `json:"size,omitempty"`
 	Version       string             `json:"version"`
+	union         json.RawMessage
 }
+
+// HelmPreviewChart0 defines model for HelmPreviewChart.0.
+type HelmPreviewChart0 struct {
+	Cached *HelmPreviewChart0Cached `json:"cached,omitempty"`
+}
+
+// HelmPreviewChart0Cached defines model for HelmPreviewChart.0.Cached.
+type HelmPreviewChart0Cached bool
+
+// HelmPreviewChart1 defines model for HelmPreviewChart.1.
+type HelmPreviewChart1 struct {
+	Cached         *HelmPreviewChart1Cached `json:"cached,omitempty"`
+	ProvenanceSize int64                    `json:"provenanceSize"`
+	Size           int64                    `json:"size"`
+}
+
+// HelmPreviewChart1Cached defines model for HelmPreviewChart.1.Cached.
+type HelmPreviewChart1Cached bool
 
 // HelmPreviewChartList defines model for HelmPreviewChartList.
 type HelmPreviewChartList struct {
@@ -9071,6 +9123,229 @@ func (t CreatePublishSession) MarshalJSON() ([]byte, error) {
 
 func (t *CreatePublishSession) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsHelmPreviewChart0 returns the union data inside the HelmPreviewChart as a HelmPreviewChart0
+func (t HelmPreviewChart) AsHelmPreviewChart0() (HelmPreviewChart0, error) {
+	var body HelmPreviewChart0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmPreviewChart0 overwrites any union data inside the HelmPreviewChart as the provided HelmPreviewChart0
+func (t *HelmPreviewChart) FromHelmPreviewChart0(v HelmPreviewChart0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmPreviewChart0 performs a merge with any union data inside the HelmPreviewChart, using the provided HelmPreviewChart0
+func (t *HelmPreviewChart) MergeHelmPreviewChart0(v HelmPreviewChart0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsHelmPreviewChart1 returns the union data inside the HelmPreviewChart as a HelmPreviewChart1
+func (t HelmPreviewChart) AsHelmPreviewChart1() (HelmPreviewChart1, error) {
+	var body HelmPreviewChart1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmPreviewChart1 overwrites any union data inside the HelmPreviewChart as the provided HelmPreviewChart1
+func (t *HelmPreviewChart) FromHelmPreviewChart1(v HelmPreviewChart1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmPreviewChart1 performs a merge with any union data inside the HelmPreviewChart, using the provided HelmPreviewChart1
+func (t *HelmPreviewChart) MergeHelmPreviewChart1(v HelmPreviewChart1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t HelmPreviewChart) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["cached"], err = json.Marshal(t.Cached)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'cached': %w", err)
+	}
+
+	object["chartUrl"], err = json.Marshal(t.ChartUrl)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'chartUrl': %w", err)
+	}
+
+	object["digest"], err = json.Marshal(t.Digest)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'digest': %w", err)
+	}
+
+	object["name"], err = json.Marshal(t.Name)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'name': %w", err)
+	}
+
+	if t.ProvenanceDigest != nil {
+		object["provenanceDigest"], err = json.Marshal(t.ProvenanceDigest)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'provenanceDigest': %w", err)
+		}
+	}
+
+	if t.ProvenanceSize != nil {
+		object["provenanceSize"], err = json.Marshal(t.ProvenanceSize)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'provenanceSize': %w", err)
+		}
+	}
+
+	if t.ProvenanceUrl != nil {
+		object["provenanceUrl"], err = json.Marshal(t.ProvenanceUrl)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'provenanceUrl': %w", err)
+		}
+	}
+
+	object["publishedAt"], err = json.Marshal(t.PublishedAt)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'publishedAt': %w", err)
+	}
+
+	object["repositoryId"], err = json.Marshal(t.RepositoryId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'repositoryId': %w", err)
+	}
+
+	if t.Size != nil {
+		object["size"], err = json.Marshal(t.Size)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'size': %w", err)
+		}
+	}
+
+	object["version"], err = json.Marshal(t.Version)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'version': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *HelmPreviewChart) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["cached"]; found {
+		err = json.Unmarshal(raw, &t.Cached)
+		if err != nil {
+			return fmt.Errorf("error reading 'cached': %w", err)
+		}
+	}
+
+	if raw, found := object["chartUrl"]; found {
+		err = json.Unmarshal(raw, &t.ChartUrl)
+		if err != nil {
+			return fmt.Errorf("error reading 'chartUrl': %w", err)
+		}
+	}
+
+	if raw, found := object["digest"]; found {
+		err = json.Unmarshal(raw, &t.Digest)
+		if err != nil {
+			return fmt.Errorf("error reading 'digest': %w", err)
+		}
+	}
+
+	if raw, found := object["name"]; found {
+		err = json.Unmarshal(raw, &t.Name)
+		if err != nil {
+			return fmt.Errorf("error reading 'name': %w", err)
+		}
+	}
+
+	if raw, found := object["provenanceDigest"]; found {
+		err = json.Unmarshal(raw, &t.ProvenanceDigest)
+		if err != nil {
+			return fmt.Errorf("error reading 'provenanceDigest': %w", err)
+		}
+	}
+
+	if raw, found := object["provenanceSize"]; found {
+		err = json.Unmarshal(raw, &t.ProvenanceSize)
+		if err != nil {
+			return fmt.Errorf("error reading 'provenanceSize': %w", err)
+		}
+	}
+
+	if raw, found := object["provenanceUrl"]; found {
+		err = json.Unmarshal(raw, &t.ProvenanceUrl)
+		if err != nil {
+			return fmt.Errorf("error reading 'provenanceUrl': %w", err)
+		}
+	}
+
+	if raw, found := object["publishedAt"]; found {
+		err = json.Unmarshal(raw, &t.PublishedAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'publishedAt': %w", err)
+		}
+	}
+
+	if raw, found := object["repositoryId"]; found {
+		err = json.Unmarshal(raw, &t.RepositoryId)
+		if err != nil {
+			return fmt.Errorf("error reading 'repositoryId': %w", err)
+		}
+	}
+
+	if raw, found := object["size"]; found {
+		err = json.Unmarshal(raw, &t.Size)
+		if err != nil {
+			return fmt.Errorf("error reading 'size': %w", err)
+		}
+	}
+
+	if raw, found := object["version"]; found {
+		err = json.Unmarshal(raw, &t.Version)
+		if err != nil {
+			return fmt.Errorf("error reading 'version': %w", err)
+		}
+	}
+
 	return err
 }
 
@@ -27908,6 +28183,14 @@ type GetHelmPreviewChartResponseObject interface {
 
 type GetHelmPreviewChart200JSONResponse HelmPreviewChart
 
+func (t GetHelmPreviewChart200JSONResponse) MarshalJSON() ([]byte, error) {
+	return HelmPreviewChart(t).MarshalJSON()
+}
+
+func (t *GetHelmPreviewChart200JSONResponse) UnmarshalJSON(b []byte) error {
+	return (*HelmPreviewChart)(t).UnmarshalJSON(b)
+}
+
 func (response GetHelmPreviewChart200JSONResponse) VisitGetHelmPreviewChartResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
@@ -27965,6 +28248,14 @@ type PublishHelmPreviewChartResponseObject interface {
 }
 
 type PublishHelmPreviewChart201JSONResponse HelmPreviewChart
+
+func (t PublishHelmPreviewChart201JSONResponse) MarshalJSON() ([]byte, error) {
+	return HelmPreviewChart(t).MarshalJSON()
+}
+
+func (t *PublishHelmPreviewChart201JSONResponse) UnmarshalJSON(b []byte) error {
+	return (*HelmPreviewChart)(t).UnmarshalJSON(b)
+}
 
 func (response PublishHelmPreviewChart201JSONResponse) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
 
