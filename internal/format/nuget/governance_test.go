@@ -65,6 +65,10 @@ func TestNuGetNativeUnlistRelistPreservesExactResolution(t *testing.T) {
 	if g.Listed || g.Tombstoned || g.GovernanceVersion != "2" {
 		t.Fatalf("unlisted state=%+v", g)
 	}
+	audits, err := f.store.ListAudits(t.Context(), repository.AuditQuery{Repository: f.repo.Name, Operation: "nuget.governance.unlist", Limit: 10})
+	if err != nil || len(audits) != 1 || audits[0].Status != 204 {
+		t.Fatalf("native unlist atomic audit=%+v %v", audits, err)
+	}
 	for _, endpoint := range []string{"query?q=acme", "autocomplete?q=acme", "autocomplete?id=acme.listing"} {
 		w := request(t, f.module, "GET", base+"v3/"+endpoint, nil, bearer)
 		if w.Code != 200 || !strings.Contains(w.Body.String(), `"totalHits":0`) {
@@ -104,6 +108,10 @@ func TestNuGetNativeUnlistRelistPreservesExactResolution(t *testing.T) {
 	w = request(t, f.module, "GET", base+"v3/query?q=acme", nil, bearer)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"totalHits":1`) {
 		t.Fatalf("relisted search=%d %s", w.Code, w.Body.String())
+	}
+	audits, err = f.store.ListAudits(t.Context(), repository.AuditQuery{Repository: f.repo.Name, Operation: "nuget.governance.relist", Limit: 10})
+	if err != nil || len(audits) != 1 || audits[0].Status != 204 {
+		t.Fatalf("native relist atomic audit=%+v %v", audits, err)
 	}
 }
 

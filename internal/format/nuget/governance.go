@@ -132,7 +132,7 @@ func (m *Module) nativeListing(w http.ResponseWriter, r *http.Request, repo repo
 			}
 		}
 	}
-	_, err = m.store.TransitionNuGetGovernance(ctx, repository.NuGetGovernanceChange{RepositoryID: repo.ID, PackageID: id, Version: version, ExpectedDigest: publication.Digest, ExpectedVersion: publication.Governance.Version, Action: action, Actor: p.Actor, Reason: "Native NuGet " + action})
+	_, err = m.store.TransitionNuGetGovernance(ctx, repository.NuGetGovernanceChange{RepositoryID: repo.ID, PackageID: id, Version: version, ExpectedDigest: publication.Digest, ExpectedVersion: publication.Governance.Version, Action: action, Actor: p.Actor, Reason: "Native NuGet " + action, NativeListing: true})
 	if err != nil {
 		m.failure(w, err)
 		return

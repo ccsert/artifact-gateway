@@ -23,9 +23,13 @@ type NuGetGovernanceChange struct {
 	RepositoryID, PackageID, Version string
 	ExpectedDigest, ExpectedVersion  string
 	Action, Actor, Reason            string
+	NativeListing                    bool
 }
 
 func validNuGetGovernanceChange(in NuGetGovernanceChange) bool {
+	if in.NativeListing && in.Action != "unlist" && in.Action != "relist" {
+		return false
+	}
 	if in.RepositoryID == "" || !nuGetID.MatchString(in.PackageID) || len(in.PackageID) > 100 || !nuGetVersion.MatchString(in.Version) || len(in.Version) > 256 ||
 		!validSHA256Digest(in.ExpectedDigest) || !sourceVersionValid(in.ExpectedVersion) || in.Actor == "" || len(in.Actor) > 512 || strings.ContainsAny(in.Actor, "\x00\r\n") ||
 		strings.TrimSpace(in.Reason) == "" || utf8.RuneCountInString(in.Reason) > 2048 || strings.ContainsRune(in.Reason, '\x00') {
@@ -64,7 +68,11 @@ func transitionNuGetGovernance(p NuGetPublication, in NuGetGovernanceChange) (Nu
 }
 
 func nuGetGovernanceAudit(p NuGetPublication, in NuGetGovernanceChange, name string) AuditRecord {
+	status := 200
+	if in.NativeListing {
+		status = 204
+	}
 	return AuditRecord{Repository: name, GroupName: name, Actor: in.Actor, Format: string(FormatNuGet), Resource: p.PackageID + "@" + p.Version,
-		Operation: "nuget.governance." + in.Action, Outcome: AuditResolved, Status: 200, OccurredAt: p.Governance.UpdatedAt,
+		Operation: "nuget.governance." + in.Action, Outcome: AuditResolved, Status: status, OccurredAt: p.Governance.UpdatedAt,
 		Evidence: map[string]string{"digest": p.Digest, "governanceVersion": p.Governance.Version, "reason": in.Reason}}
 }
