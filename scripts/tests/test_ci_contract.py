@@ -771,6 +771,8 @@ class ContractGateTests(unittest.TestCase):
         self.assertIn('    needs: [contract-core, contract-native]', workflow)
         self.assertIn('  contract-and-test:\n    if: always()', workflow)
         self.assertEqual(workflow.count('    needs: [contract-and-test, quality, console]'), 2)
+        collector = workflow.split('      - name: Preserve complete job logs', 1)[1].split('      - name:', 1)[0]
+        self.assertIn('CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}', collector)
         native = workflow.split('  contract-native:', 1)[1].split('  contract-and-test:', 1)[0]
         self.assertIn('fail-fast: false', native)
         self.assertIn('max-parallel: 3', native)
@@ -928,7 +930,7 @@ class JobLogConsistencyTests(unittest.TestCase):
         self.sleeps = []
         self.request_elapsed = {}
 
-    def collect(self, snapshots, logs):
+    def collect(self, snapshots, logs, prefixes=('contract',), lanes=('core',)):
         calls = {'metadata': 0, 'log': 0}
         class Response:
             def __init__(self, body):
@@ -959,7 +961,7 @@ class JobLogConsistencyTests(unittest.TestCase):
                 patch.object(ci.urllib.request, 'build_opener', return_value=Opener()), \
                 patch.object(ci.time, 'monotonic', side_effect=lambda: self.elapsed), \
                 patch.object(ci.time, 'sleep', side_effect=sleep):
-            return ci.collect_job_logs(self.output, lanes=('core',))
+            return ci.collect_job_logs(self.output, prefixes=prefixes, lanes=lanes)
 
     def manifest(self):
         return json.loads((self.output / 'job-log-manifest.json').read_text())
@@ -967,6 +969,227 @@ class JobLogConsistencyTests(unittest.TestCase):
     def poll_readbacks(self):
         return [json.loads(path.read_text())
                 for path in sorted((self.output / 'job-log-polls').glob('*-readback.json'))]
+
+    def scheduler_completed_job(self, lane='core'):
+        self.env['CI_CONTRACT_NEEDS'] = json.dumps({
+            'contract-core': {'result': 'success'}, 'contract-native': {'result': 'success'}})
+        actions = {'checkout': 'actions/checkout@' + 'a' * 40,
+                   'go': 'actions/setup-go@' + 'b' * 40,
+                   'rust': 'dtolnay/rust-toolchain@' + 'c' * 40,
+                   'node': 'actions/setup-node@' + 'd' * 40}
+        names = ['Set up job', 'Initialize failure evidence before checkout or tool setup',
+                 'Run ' + actions['checkout'], 'Run ' + actions['go'], 'Run ' + actions['rust'],
+                 'Run ' + actions['node'], 'Verify public npm lockfile sources before install',
+                 'Install OpenAPI tooling', 'Install Console code generation dependencies',
+                 'Run unchanged lane targets and preserve raw evidence',
+                 'Preserve lane evidence including bootstrap failures',
+                 'Post Run ' + actions['node'], 'Post Run ' + actions['go'],
+                 'Post Run ' + actions['checkout'], 'Complete job']
+        steps = []
+        for index, name in enumerate(names, 1):
+            skipped = ((index == 5 and lane not in ('core', 'six-format-auth'))
+                       or (index in (7, 8, 9) and lane != 'core'))
+            steps.append({'name': name, 'number': index, 'status': 'completed',
+                          'conclusion': 'skipped' if skipped else 'success',
+                          'started_at': f'2026-10-22T00:00:{index:02d}Z',
+                          'completed_at': f'2026-10-22T00:00:{index:02d}Z'})
+        group = 'contract-core' if lane == 'core' else f'contract-native ({lane})'
+        job = {**self.job, 'name': f'{group} / contract/{lane}',
+               'status': 'in_progress', 'conclusion': None, 'completed_at': None,
+               'started_at': '2026-10-22T00:00:00Z', 'steps': steps}
+        self.log = (b'\xef\xbb\xbf2026-10-22T00:00:01.1000000Z Current runner version: \'2.338.0\'\n'
+                    b'2026-10-22T00:00:10.1000000Z Original producer output\n'
+                    b'2026-10-22T00:00:12.1000000Z Post job cleanup.\n'
+                    b'2026-10-22T00:00:13.1000000Z Post job cleanup.\n'
+                    b'2026-10-22T00:00:14.1000000Z Post job cleanup.\n'
+                    b'2026-10-22T00:00:15.1000000Z Cleaning up orphan processes\n'
+                    b'2026-10-22T00:00:15.2000000Z ##[warning]Runner warning after cleanup\n')
+        return job
+
+    def test_scheduler_and_complete_runner_log_collect_despite_stale_outer_status(self):
+        stale = self.scheduler_completed_job()
+        self.assertEqual(self.collect([[stale]], [self.log]), [stale])
+        self.assertEqual(json.loads((self.output / 'jobs.json').read_text()), [stale])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertEqual(self.elapsed, 0)
+        self.assertEqual(self.sleeps, [])
+        manifest = self.manifest()
+        self.assertTrue(manifest['complete'])
+        witness = manifest['completionEvidence']['42']
+        self.assertEqual(witness['source'], 'github-needs-and-runner-completion')
+        self.assertEqual(witness['schedulerJob'], 'contract-core')
+        self.assertEqual(witness['runnerCompleteStep'], stale['steps'][-1])
+
+    def test_scheduler_completion_accepts_only_existing_conditional_native_skips(self):
+        for lane in ci.PLAN['nativeOrder']:
+            with self.subTest(lane=lane):
+                stale = self.scheduler_completed_job(lane)
+                self.assertEqual(self.collect([[stale]], [self.log], lanes=(lane,)), [stale])
+                self.assertEqual(self.manifest()['completionEvidence']['42']['schedulerJob'],
+                                 'contract-native')
+
+    def test_scheduler_completion_requires_exact_successful_needs(self):
+        invalid = [None, {}, {'contract-core': {'result': 'success'}},
+                   {'contract-native': {'result': 'success'}}, [], 'invalid JSON']
+        good = {'contract-core': {'result': 'success'}, 'contract-native': {'result': 'success'}}
+        invalid.append({**good, 'other': {'result': 'success'}})
+        for result in ('failure', 'cancelled', 'skipped', None):
+            invalid.append({**good, 'contract-native': {'result': result}})
+        for needs in invalid:
+            with self.subTest(needs=needs):
+                stale = self.scheduler_completed_job()
+                if needs is None:
+                    self.env.pop('CI_CONTRACT_NEEDS')
+                else:
+                    self.env['CI_CONTRACT_NEEDS'] = (needs if isinstance(needs, str)
+                                                     else json.dumps(needs))
+                with self.assertRaises(ValueError):
+                    self.collect([[stale]], [self.log])
+                self.assertFalse(self.manifest()['complete'])
+                self.assertFalse(any(c['endpoint'] == 'log' for c in self.calls))
+
+    def test_scheduler_success_cannot_override_a_terminal_failure_skip_or_cancellation(self):
+        for result in ('failure', 'cancelled', 'skipped', 'timed_out', 'neutral'):
+            with self.subTest(result=result):
+                job = self.scheduler_completed_job()
+                job.update(status='completed', conclusion=result)
+                with self.assertRaisesRegex(ValueError, 'contradict'):
+                    self.collect([[job]], [self.log])
+                self.assertFalse(self.manifest()['complete'])
+                self.assertFalse(any(c['endpoint'] == 'log' for c in self.calls))
+
+    def test_scheduler_completion_requires_the_entire_successful_machine_step_plan(self):
+        good = self.scheduler_completed_job()
+        invalid = []
+        for index in range(len(good['steps'])):
+            job = copy.deepcopy(good)
+            job['steps'].pop(index)
+            invalid.append(job)
+        for change in ({'status': 'in_progress'}, {'conclusion': 'failure'},
+                       {'conclusion': 'skipped'}, {'conclusion': 'cancelled'},
+                       {'number': True}, {'number': 1}, {'started_at': None},
+                       {'started_at': '2026-10-22T00:00:15'},
+                       {'completed_at': '2026-10-22T00:00:14Z'}):
+            job = copy.deepcopy(good)
+            job['steps'][-1].update(change)
+            invalid.append(job)
+        for index in (4, 9, 10, 11, 12, 13):
+            job = copy.deepcopy(good)
+            job['steps'][index]['conclusion'] = 'skipped'
+            invalid.append(job)
+        job = copy.deepcopy(good)
+        job['steps'][11]['name'] = 'Post Run actions/setup-node@' + 'e' * 40
+        invalid.append(job)
+        job = copy.deepcopy(good)
+        job['steps'].append({**job['steps'][-1], 'name': 'Unexpected step after completion', 'number': 99})
+        invalid.append(job)
+        for index, job in enumerate(invalid):
+            with self.subTest(case=index), self.assertRaises(ValueError):
+                self.collect([[job]], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+        self.assertFalse(any(c['endpoint'] == 'log' for c in self.calls))
+
+    def test_scheduler_completion_rejects_partial_logs_and_stdout_completion_substrings(self):
+        job = self.scheduler_completed_job()
+        good = self.log
+        lines = good.splitlines(keepends=True)
+        invalid = [b' \n', b'ordinary output says Cleaning up orphan processes\n',
+                   b''.join(lines[1:]), b''.join(lines[:5]), b''.join(lines[:3] + lines[4:]),
+                   good[:-1], good + b'\xff\n',
+                   good.replace(b'Z Cleaning up orphan processes', b'Z stdout: Cleaning up orphan processes'),
+                   good.replace(b'00:00:15.1000000Z Cleaning', b'00:00:10.1000000Z Cleaning'),
+                   good.replace(b'00:00:15.1000000Z Cleaning', b'00:00:16.1000000Z Cleaning'),
+                   b''.join(lines[:4] + lines[5:6] + lines[4:5] + lines[6:]),
+                   good + lines[5], good.replace(lines[2], lines[2] + lines[2])]
+        for index, log in enumerate(invalid):
+            with self.subTest(case=index), self.assertRaises(ValueError):
+                self.collect([[job]], [log])
+            self.assertFalse(self.manifest()['complete'])
+            self.assertEqual(self.manifest()['completionEvidence'], {})
+            self.assertFalse((self.output / 'job-42.log').exists())
+        self.assertTrue(any((self.output / 'job-log-polls').glob('*-job-42.log')))
+
+    def test_partial_runner_log_is_preserved_and_polled_until_original_completion(self):
+        job = self.scheduler_completed_job()
+        partial = self.log.split(b'2026-10-22T00:00:15.', 1)[0]
+        self.assertEqual(self.collect([[job]], [partial, self.log]), [job])
+        readbacks = self.poll_readbacks()
+        self.assertEqual(readbacks[0]['logReads'][0]['reason'], 'incomplete_runner_log')
+        self.assertEqual(readbacks[1]['logReads'][0]['status'], 'ready')
+        self.assertEqual((self.output / readbacks[0]['logReads'][0]['rawLog']).read_bytes(), partial)
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertEqual(self.elapsed, 2)
+        self.assertTrue(self.manifest()['complete'])
+
+    def test_scheduler_completion_never_applies_to_retained_or_benchmark_jobs(self):
+        job = self.scheduler_completed_job()
+        with self.assertRaisesRegex(ValueError, 'retained job source binding'):
+            self.collect([[{**job, 'run_attempt': 1}]], [self.log])
+        job['name'] = 'serial (core) / benchmark-serial/core'
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[job]], [self.log], prefixes=('benchmark-serial',))
+        self.assertFalse(any(c['endpoint'] == 'log' for c in self.calls))
+        self.assertFalse(self.manifest()['complete'])
+
+    def test_scheduler_completion_requires_a_running_job_in_the_exact_scheduler_group(self):
+        good = self.scheduler_completed_job()
+        for change in ({'status': 'queued'}, {'status': 'waiting'}, {'status': 'pending'},
+                       {'status': 'requested'}, {'status': 'completed'},
+                       {'name': 'unrelated / contract/core'},
+                       {'completed_at': '2026-10-22T00:00:15Z'}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'deadline'):
+                self.collect([[{**good, **change}]], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+        self.assertFalse(any(c['endpoint'] == 'log' for c in self.calls))
+
+    def test_scheduler_completion_cannot_replace_missing_duplicate_or_changed_job_identities(self):
+        good = self.scheduler_completed_job()
+        for jobs in ([], [good, good]):
+            with self.subTest(jobs=len(jobs)), self.assertRaises(ValueError):
+                self.collect([jobs], [self.log])
+            self.assertFalse(self.manifest()['complete'])
+        unavailable = ci.urllib.error.HTTPError('https://api.github.com/synthetic/logs', 404,
+                                               'not ready', {}, None)
+        for change in ({'id': 43}, {'head_sha': '0' * 40}, {'run_id': 456}, {'run_attempt': 1}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'binding|identity'):
+                self.collect([[good], [{**good, **change}]], [unavailable, self.log])
+            self.assertFalse(self.manifest()['complete'])
+            self.assertEqual(self.manifest()['completionEvidence'], {})
+
+    def test_scheduler_completion_still_obeys_the_original_request_deadline(self):
+        job = self.scheduler_completed_job()
+        self.request_elapsed = {'metadata': 119, 'log': 2}
+        with self.assertRaisesRegex(ValueError, 'deadline'):
+            self.collect([[job]], [self.log])
+        self.assertEqual([call['timeout'] for call in self.calls], [45, 1])
+        self.assertFalse(self.manifest()['complete'])
+        self.assertFalse((self.output / 'job-42.log').exists())
+
+    def test_runner_proof_validation_is_inside_the_same_collection_deadline(self):
+        job = self.scheduler_completed_job()
+        self.request_elapsed = {'metadata': 119}
+        validate = ci.runner_log_completion
+
+        def delayed_validation(*args):
+            result = validate(*args)
+            self.elapsed += 2
+            return result
+
+        with patch.object(ci, 'runner_log_completion', side_effect=delayed_validation):
+            with self.assertRaisesRegex(ValueError, 'deadline'):
+                self.collect([[job]], [self.log])
+        self.assertFalse(self.manifest()['complete'])
+
+    def test_failed_scheduler_dependencies_keep_terminal_failure_logs_for_diagnosis(self):
+        job = self.scheduler_completed_job()
+        job.update(status='completed', conclusion='failure')
+        needs = {'contract-core': {'result': 'failure'}, 'contract-native': {'result': 'success'}}
+        self.env['CI_CONTRACT_NEEDS'] = json.dumps(needs)
+        self.assertEqual(self.collect([[job]], [self.log]), [job])
+        self.assertEqual((self.output / 'job-42.log').read_bytes(), self.log)
+        self.assertEqual(self.manifest()['completionEvidence'], {})
+        with self.assertRaisesRegex(ValueError, 'required job failed'):
+            ci.validate_needs(needs, ['contract-core', 'contract-native'])
 
     def test_successful_steps_with_stale_job_status_are_read_again(self):
         stale = {**self.job, 'status': 'in_progress', 'conclusion': None,

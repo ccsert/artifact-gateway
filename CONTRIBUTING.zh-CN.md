@@ -202,6 +202,15 @@ fixture 自有清理报告，不把其它并行开发者资源当作自己所有
 `contract-aggregate-<attempt>` 另保存包含准备阶段的完整 GitHub job 日志。
 只有该采集器增加只读 `actions: read`，发布写权限保持原样。
 
+完整日志采集继续使用 120 秒预算。GitHub 可能先发布 runner 的完整日志，
+稍后才更新 job 外层状态。仅当当前 attempt 的外层仍为 `in_progress` 且尚无
+结论时，contract 采集器可组合调度器确认成功的依赖结果、精确的 head/run/job
+身份、成功的 runner 收尾步骤和与之匹配的完整原始日志，形成独立完成证据。
+日志清单记录该依据，原始 job
+状态和时间戳不被改写。结果缺失或矛盾、日志不完整、身份变化仍使汇总失败。
+继承旧 attempt 的 job 仍须有原始 completed/success 结果；性能对照继续
+要求真实终态和时间戳。
+
 仅专用 GitHub core lane 在执行原目标前创建两个原本不存在的集成 Go 缓存卷；
 已有缓存会被拒绝使用。它记录随机 owner、run、attempt 标签和创建凭据，finally
 重新核对凭据后仅删除自己创建的两个卷；create 应答丢失或清理错误仍使 lane

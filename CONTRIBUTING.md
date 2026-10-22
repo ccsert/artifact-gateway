@@ -240,6 +240,18 @@ concurrent developers' resources. `contract-aggregate-<attempt>` also preserves
 complete GitHub job logs including setup. Only that collector gains read-only
 `actions: read`; publication write permissions are unchanged.
 
+Job-log collection keeps its 120-second budget. GitHub can publish a runner's
+complete log before updating the job's outer status. When that status remains
+`in_progress` with no conclusion in the current attempt, the contract collector
+can use the scheduler's successful dependency results,
+the exact head/run/job identity, successful runner completion steps and the
+matching complete raw log as independent completion evidence. It records that
+evidence in the log manifest without rewriting the original job status or
+timestamps. Missing or contradictory results, incomplete logs and identity
+changes still fail the aggregate. Retained jobs from earlier attempts require
+their original completed/success result; benchmarks continue to require real
+terminal results and timestamps.
+
 Only the dedicated GitHub core lane creates the two absent integration Go
 cache volumes before running targets. It refuses existing caches and records
 random owner/run/attempt labels and creation receipts. Finally it rechecks

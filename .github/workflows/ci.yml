@@ -59,6 +59,7 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          CI_CONTRACT_NEEDS: ${{ toJSON(needs) }}
         run: python3 scripts/ci-contract.py collect-job-logs --output "$RUNNER_TEMP/contract-aggregate"
       - name: Require all job results and complete matching lane evidence
         if: always()
