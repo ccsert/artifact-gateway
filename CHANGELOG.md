@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Restore Debian bookworm `gpgv` interoperability for reference-signer v4 `InRelease` by including the armor CRC24 (#447). The signed cleartext and signature packets retain their original bytes; v6 `InRelease` keeps the library's checksum-free armor.
+
 - Nexus migration schedules now persist UTC intervals, coalesced missed runs, source/mapping/policy bindings, next-run and verified last-successful state (#443). Administrators create and control plans in Console with versioned, idempotent operations. Each occurrence atomically consumes fresh operator-reported capacity evidence; missing or expired observations wait for an update. Intersecting target mappings cannot dispatch concurrent plan/manual batches. See [recurring plans](docs/nexus-migration-console.md#recurring-migration-plans).
 
 - New installations initialize eight Hosted repositories, five public-upstream Proxies and five ordered Groups in one transaction (#444). `GATEWAY_REPOSITORY_PRESETS=none` selects an empty installation. Existing catalogs are preserved, anonymous access stays disabled, and administrator changes or deletions survive restart. See [deployment setup](docs/distributed-deployment.md#repositories-on-first-installation).
