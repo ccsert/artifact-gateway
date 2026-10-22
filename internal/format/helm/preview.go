@@ -40,11 +40,16 @@ func repositoryDTO(repo repository.HostedRepository) any {
 	return out
 }
 func chartDTO(repo repository.HostedRepository, p repository.HelmPublication) any {
-	out := map[string]any{"repositoryId": p.RepositoryID, "name": p.Name, "version": p.Version, "digest": p.Digest, "size": p.Size, "publishedAt": p.PublishedAt, "chartUrl": assetPath(repo, p, false), "provenanceSize": p.ProvenanceSize}
+	cached := p.Size > 0
+	out := map[string]any{"repositoryId": p.RepositoryID, "name": p.Name, "version": p.Version, "digest": p.Digest, "cached": cached, "publishedAt": p.PublishedAt, "chartUrl": assetPath(repo, p, false)}
+	if cached {
+		out["size"] = p.Size
+		out["provenanceSize"] = p.ProvenanceSize
+	}
 	if repo.Type == repository.RepositoryTypeProxy {
 		out["chartUrl"] = snapshotPath(repo.Name, p.SessionID, repository.HelmSourceEntry{Name: p.Name, Version: p.Version})
 	}
-	if p.ProvenanceSize > 0 {
+	if cached && p.ProvenanceSize > 0 {
 		out["provenanceDigest"] = p.ProvenanceDigest
 		out["provenanceUrl"] = assetPath(repo, p, true)
 		if repo.Type == repository.RepositoryTypeProxy {

@@ -105,10 +105,16 @@ The index is a deterministic, authorized snapshot; unchanged publications produc
 identical YAML and ETags. GET/HEAD downloads support conditional and range reads
 and verify complete persisted bytes before serving a requested range.
 
-`GET /api/v2/previews/helm/repositories/{id}/charts` returns at most 4096 committed
-charts in one consistent snapshot; a larger inventory fails with 422 rather than
-silently truncating. `GET .../charts/{name}/{version}` returns identity, size,
-digests and download locations. `GET .../{id}/capacity` reads committed chart plus
+`GET /api/v2/previews/helm/repositories/{id}/charts` returns at most 4096 charts
+in one consistent snapshot; a larger inventory fails with 422 rather than
+silently truncating. `GET .../charts/{name}/{version}` returns identity, digests,
+download locations and an explicit `cached` flag. Hosted charts and complete
+cached Proxy closures have `cached:true` with their real `size` and
+`provenanceSize`; zero provenance size confirms an absent signature only for
+such a complete closure. Cold Proxy metadata has `cached:false` and omits both
+unknown sizes and provenance fields. Listing or reading this metadata may fetch
+the source index but never implicitly downloads assets or changes byte usage.
+`GET .../{id}/capacity` reads committed chart plus
 provenance usage; repository admins set `{"quotaBytes":N}` with PUT on that path.
 Zero means unlimited. Concurrent pending reservations count toward the same quota.
 

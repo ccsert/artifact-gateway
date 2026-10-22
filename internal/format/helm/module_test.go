@@ -151,7 +151,11 @@ func TestHelmHostedPublishesImmutableChartProvenanceAndDeterministicIndex(t *tes
 	prov := provenanceFixture(t, chart)
 	for range 2 {
 		w := upload(t, f, "owned", "1.2.3", chart, prov)
-		if w.Code != 201 {
+		var receipt struct {
+			Cached               bool
+			Size, ProvenanceSize int
+		}
+		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &receipt) != nil || !receipt.Cached || receipt.Size != len(chart) || receipt.ProvenanceSize != len(prov) {
 			t.Fatalf("publish=%d %s", w.Code, w.Body.String())
 		}
 	}

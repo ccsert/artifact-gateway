@@ -154,6 +154,77 @@ func expireHelmDocument(t *testing.T, store repository.HelmSourceStore, repo rep
 		t.Fatal(e)
 	}
 }
+func TestHelmProxyColdPreviewMetadataOmitsUnknownSizesWithoutDownloading(t *testing.T) {
+	chart := chartFixture(t, "owned", "1.2.3", "metadata before bytes")
+	prov := provenanceFixture(t, chart)
+	feed := newHelmFeed(t, chart, prov)
+	f, repo := proxyModule(t, feed)
+	before, err := f.store.GetRepositoryCapacity(t.Context(), repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "/api/v2/previews/helm/repositories/" + repo.ID + "/charts"
+	var chartURL string
+	for _, path := range []string{base, base + "/owned/1.2.3"} {
+		w := request(t, f.module.Preview(), "GET", path, nil, admin)
+		var item map[string]json.RawMessage
+		if path == base {
+			var list struct{ Items []map[string]json.RawMessage }
+			if json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 1 {
+				t.Fatalf("cold list=%d %s", w.Code, w.Body.String())
+			}
+			item = list.Items[0]
+		} else if json.Unmarshal(w.Body.Bytes(), &item) != nil {
+			t.Fatalf("cold detail=%d %s", w.Code, w.Body.String())
+		}
+		if w.Code != 200 || string(item["cached"]) != "false" || string(item["digest"]) != `"`+digestFor(chart)+`"` {
+			t.Fatalf("cold metadata=%d %s", w.Code, w.Body.String())
+		}
+		for _, field := range []string{"size", "provenanceSize", "provenanceDigest", "provenanceUrl"} {
+			if _, present := item[field]; present {
+				t.Fatalf("cold metadata claims unknown %s: %s", field, w.Body.String())
+			}
+		}
+		if err = json.Unmarshal(item["chartUrl"], &chartURL); err != nil || !strings.HasPrefix(chartURL, "/helm/helm-proxy/snapshots/") {
+			t.Fatalf("cold source URL=%q %v", chartURL, err)
+		}
+	}
+	feed.mu.Lock()
+	requests := make(map[string]int, len(feed.requests))
+	for path, count := range feed.requests {
+		requests[path] = count
+	}
+	feed.mu.Unlock()
+	if len(requests) != 1 || requests["/index.yaml"] != 1 {
+		t.Fatalf("metadata implicitly downloaded assets: %v", requests)
+	}
+	after, err := f.store.GetRepositoryCapacity(t.Context(), repo.ID)
+	if err != nil || after.UsedBytes != before.UsedBytes || after.ObjectCount != before.ObjectCount || after.UsedBytes != 0 {
+		t.Fatalf("cold metadata changed capacity: before=%+v after=%+v err=%v", before, after, err)
+	}
+	if w := request(t, f.module, "GET", chartURL, nil, admin); w.Code != 200 || !bytes.Equal(w.Body.Bytes(), chart) {
+		t.Fatalf("complete cache=%d %s", w.Code, w.Body.String())
+	}
+	for _, path := range []string{base, base + "/owned/1.2.3"} {
+		w := request(t, f.module.Preview(), "GET", path, nil, admin)
+		var receipt struct {
+			Cached                                            bool
+			Size, ProvenanceSize                              int
+			Digest, ProvenanceDigest, ChartURL, ProvenanceURL string
+		}
+		if path == base {
+			var list struct{ Items []json.RawMessage }
+			if json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 1 || json.Unmarshal(list.Items[0], &receipt) != nil {
+				t.Fatalf("cached list=%d %s", w.Code, w.Body.String())
+			}
+		} else if json.Unmarshal(w.Body.Bytes(), &receipt) != nil {
+			t.Fatalf("cached detail=%d %s", w.Code, w.Body.String())
+		}
+		if w.Code != 200 || !receipt.Cached || receipt.Size != len(chart) || receipt.ProvenanceSize != len(prov) || receipt.Digest != digestFor(chart) || receipt.ProvenanceDigest != digestFor(prov) || receipt.ChartURL != chartURL || receipt.ProvenanceURL != chartURL+".prov" {
+			t.Fatalf("complete metadata=%d %s", w.Code, w.Body.String())
+		}
+	}
+}
 func TestHelmProxySnapshotCacheConditionalOfflineAndProvenance(t *testing.T) {
 	chart := chartFixture(t, "owned", "1.2.3", "fixed closure")
 	prov := provenanceFixture(t, chart)
@@ -181,10 +252,11 @@ func TestHelmProxySnapshotCacheConditionalOfflineAndProvenance(t *testing.T) {
 	}
 	metadata := request(t, f.module.Preview(), "GET", "/api/v2/previews/helm/repositories/"+repo.ID+"/charts/owned/1.2.3", nil, admin)
 	var receipt struct {
+		Cached                                            bool
 		Size, ProvenanceSize                              int
 		Digest, ProvenanceDigest, ChartURL, ProvenanceURL string
 	}
-	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &receipt) != nil || receipt.Size != len(chart) || receipt.ProvenanceSize != len(prov) || receipt.Digest != digestFor(chart) || receipt.ProvenanceDigest != digestFor(prov) || receipt.ChartURL != path || receipt.ProvenanceURL != path+".prov" {
+	if metadata.Code != 200 || json.Unmarshal(metadata.Body.Bytes(), &receipt) != nil || !receipt.Cached || receipt.Size != len(chart) || receipt.ProvenanceSize != len(prov) || receipt.Digest != digestFor(chart) || receipt.ProvenanceDigest != digestFor(prov) || receipt.ChartURL != path || receipt.ProvenanceURL != path+".prov" {
 		t.Fatalf("complete metadata=%d %s", metadata.Code, metadata.Body.String())
 	}
 	expireHelmDocument(t, f.store, repo)

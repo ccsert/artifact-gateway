@@ -81,9 +81,13 @@ provenance 必须是原始 OpenPGP clearsigned Helm 文档，包含与 chart 相
 索引是确定且经过授权过滤的快照；发布记录不变时 YAML 和 ETag 不变。GET/HEAD 下载支持
 条件请求与 Range，并在发送范围字节前校验完整持久化对象。
 
-`GET /api/v2/previews/helm/repositories/{id}/charts` 从一个一致快照返回最多 4096 个已提交
-chart；超过上限返回 422，不静默截断。`GET .../charts/{name}/{version}` 返回身份、大小、
-摘要和下载位置。`GET .../{id}/capacity` 读取已提交 chart/provenance 的用量；仓库管理员
+`GET /api/v2/previews/helm/repositories/{id}/charts` 从一个一致快照返回最多 4096 个
+chart；超过上限返回 422，不静默截断。`GET .../charts/{name}/{version}` 返回身份、摘要、
+下载位置及明确的 `cached` 状态。Hosted 和完整缓存的 Proxy 闭包返回 `cached:true`，以及
+真实的 `size`、`provenanceSize`；只有完整闭包的 provenance 大小为零才表示无签名。
+尚未缓存的 Proxy 元数据返回 `cached:false`，省略未知大小及 provenance 字段。列表或详情
+读取可能获取上游索引，但不会隐式下载资产或改变字节用量。
+`GET .../{id}/capacity` 读取已提交 chart/provenance 的用量；仓库管理员
 对该路径 PUT `{"quotaBytes":N}` 设置配额，零表示不限。并发待提交预留也占用同一配额。
 
 ## Proxy 与 Group 来源快照
