@@ -63,6 +63,7 @@ var supportedWorkerKinds = map[string]struct{}{
 }
 
 type Config struct {
+	RepositoryPresetsMode           string
 	NuGetPreviewEnabled             bool
 	MigrationSourcePrivateEndpoints map[string][]netip.Prefix
 	MigrationStoragePoolID          string
@@ -156,7 +157,12 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	presetsMode, presetsErr := loadRepositoryPresetsMode()
+	if presetsErr != nil {
+		return Config{}, presetsErr
+	}
 	cfg := Config{
+		RepositoryPresetsMode:           presetsMode,
 		MigrationStoragePoolID:          strings.TrimSpace(os.Getenv("GATEWAY_MIGRATION_STORAGE_POOL_ID")),
 		ListenAddress:                   value("GATEWAY_LISTEN_ADDRESS", ":8080"),
 		ConsoleThemeDir:                 strings.TrimSpace(os.Getenv("GATEWAY_CONSOLE_THEME_DIR")),

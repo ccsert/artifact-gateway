@@ -6,6 +6,51 @@ Artifact Gateway stores metadata and durable work in PostgreSQL and Asset bytes
 in shared S3-compatible object storage. Gateway processes keep no artifact state
 that another instance must read locally, so the service can scale horizontally.
 
+## Repositories on First Installation
+
+New installations default to `GATEWAY_REPOSITORY_PRESETS=standard`. Before serving
+requests, the first API or standalone node creates the following catalog in one
+PostgreSQL transaction.
+
+| Format | Hosted | Public upstream Proxy | Group entry point |
+| --- | --- | --- | --- |
+| Maven | `maven-hosted` | `maven-central` → `https://repo.maven.apache.org/maven2` | `maven-all` |
+| npm | `npm-hosted` | `npmjs` → `https://registry.npmjs.org` | `npm-all` |
+| PyPI | `pypi-hosted` | `pypi-proxy` → `https://pypi.org` | `pypi-all` |
+| Go | `go-hosted` | `go-proxy` → `https://proxy.golang.org` | `go-all` |
+| Cargo | `cargo-hosted` | `crates-io` → `https://index.crates.io` | `cargo-all` |
+| Raw | `raw-hosted` | — | — |
+| OCI | `oci-hosted` | — | — |
+| Conan | `conan-hosted` | — | — |
+
+This creates 8 Hosted repositories, 5 Proxies, and 5 Groups. Each Group orders its
+local Hosted before the upstream Proxy. Authentication remains required and
+anonymous reads remain disabled. Grant user and CI identities access through the
+existing authorization workflow. Public Proxies use the environment egress policy
+and exact download-host allowlists: PyPI includes `files.pythonhosted.org`, Go
+includes `storage.googleapis.com`, and Cargo includes `static.crates.io`.
+Initialization writes only the database; upstream downloads occur on later client
+requests.
+
+These are ordinary native repositories that administrators can modify, authorize,
+and delete. `installation_repository_presets` records the one-time outcome.
+Concurrent API startup creates one catalog, and an SQL failure rolls back the
+entire set. Restarting preserves administrator changes and deletions. Upgrades
+with an existing repository or Group catalog skip initialization. Worker-only and
+scheduler-only nodes do not initialize repositories. Apply the additive
+`000174_installation_repository_presets.sql` migration before starting new nodes.
+
+To start empty, set `GATEWAY_REPOSITORY_PRESETS=none` on every API/standalone node.
+This deletes nothing. A later explicit change to `standard` initializes only an
+empty catalog that has never been initialized. NuGet/Helm previews, APT signing,
+and registries requiring additional upstream credentials retain their individual
+admission requirements.
+
+Public upstream references: [npm Registry](https://docs.npmjs.com/cli/v11/using-npm/registry/),
+[PyPI Index API](https://docs.pypi.org/api/index-api/),
+[Go modules services](https://proxy.golang.org/), and
+[Cargo registries](https://doc.rust-lang.org/cargo/reference/registries.html).
+
 ## Node Roles
 
 The same image selects responsibilities with `GATEWAY_NODE_ROLES`:

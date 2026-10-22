@@ -200,6 +200,10 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		return 1
 	}
 	defer func() { _ = store.Close() }()
+	if err := initializeRepositoryPresets(cfg, databasePool); err != nil {
+		slog.Error("initialize repository presets", "error", err)
+		return 1
+	}
 	dependencies.SourceService = nexussource.New(sourcepg.New(databasePool), store, nexussource.Options{PrivateEndpoints: cfg.MigrationSourcePrivateEndpoints})
 	if dependencies.ArtifactScanner != nil {
 		dependencies.ArtifactScanResolver = app.NewNativeArtifactScanResolver(store, objectStore)
