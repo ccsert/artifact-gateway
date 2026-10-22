@@ -24,6 +24,8 @@ export function APTOperationsTab({
         title={t("repository.repositoryAdministratorAccessRequired")}
       />
     );
+  if (repo.format !== "apt" || repo.type !== "hosted")
+    return <EmptyState title={t("repository.aptFirstHostedOnly")} />;
   return (
     <div className="ag-page-stack ag-apt-operations">
       <Notice

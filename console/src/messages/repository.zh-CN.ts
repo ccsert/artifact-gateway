@@ -1,4 +1,44 @@
 export const repositoryZhCN = {
+  "repository.aptFirstTitle": "发布首个签名快照",
+  "repository.aptFirstManagementAfterPublish":
+    "首次发布完成后，可在这里管理可见软件包。",
+  "repository.aptFirstScope":
+    "首次快照仅包含本次软件包。暂存后先核对身份，再明确发布，APT 客户端才能读取。",
+  "repository.aptFirstHostedOnly": "首次发布仅适用于 APT Hosted 仓库",
+  "repository.aptFirstFile": "Debian 软件包 (.deb)",
+  "repository.aptFirstComponentHint": "例如 main；创建暂存会话后保持不变。",
+  "repository.aptFirstInvalidComponent":
+    "使用小写字母、数字及 + . -，以字母或数字开头，最多 128 个字符。",
+  "repository.aptFirstInvalidFile":
+    "请选择一个非空 .deb 文件，文件名不含路径且不超过 255 个字符，大小不超过 1 GiB。",
+  "repository.aptFirstHashUnavailable":
+    "无法计算文件的 SHA-256。请在 HTTPS 或 localhost 页面重新选择文件。",
+  "repository.aptFirstHashing": "正在计算文件 SHA-256…",
+  "repository.aptFirstExactSize": "{size} 字节",
+  "repository.aptFirstStage": "暂存并核对软件包",
+  "repository.aptFirstRetryStage": "重试暂存并核对",
+  "repository.aptFirstSession": "暂存会话：",
+  "repository.aptFirstReviewTitle": "已暂存：核对服务端识别的身份",
+  "repository.aptFirstPackage": "包名",
+  "repository.aptFirstArchitecture": "架构",
+  "repository.aptFirstIdentity": "软件包身份",
+  "repository.aptFirstReviewed": "已核对包名、版本和架构",
+  "repository.aptFirstPublish": "确认并签署首次快照",
+  "repository.aptFirstRetryPublish": "重试首次发布",
+  "repository.aptFirstRetryHint":
+    "本次选择和已取得的暂存记录已保留；重试会复用同一请求。",
+  "repository.aptFirstSessionMismatch":
+    "服务端暂存会话与本次文件或目标不一致，未继续上传。",
+  "repository.aptFirstRevisionMismatch":
+    "服务端软件包身份不完整，或摘要、大小与本次文件不一致，未允许发布。",
+  "repository.aptFirstSnapshotMismatch":
+    "未收到本仓库和套件的首次可见快照。请保留本次请求并重试。",
+  "repository.aptFirstPublishedRefresh":
+    "发布已确认。如果当前快照尚未更新，请使用上方的“刷新快照”。",
+  "repository.aptFirstDiscardTitle": "清除本次选择和重试记录？",
+  "repository.aptFirstDiscardHint":
+    "已上传的暂存数据由服务端过期回收，不会自动发布。",
+  "repository.aptFirstDiscard": "清除本次选择",
   "repository.copied": "已复制",
   "repository.copy": "复制",
   "repository.publishWithDockerOrPodman": "通过 Docker 或 Podman 发布",

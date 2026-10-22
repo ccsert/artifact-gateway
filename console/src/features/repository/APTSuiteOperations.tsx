@@ -13,6 +13,7 @@ import { RepositoryDistributionTab } from "./RepositoryDistributionTab";
 
 import { APTArchiveOperations } from "./APTArchiveOperations";
 import { APTCurrentSnapshot } from "./APTCurrentSnapshot";
+import { APTFirstPublication } from "./APTFirstPublication";
 import { APTRecoveryList, APTSnapshotHistory } from "./APTLifecyclePanels";
 import { APTPackagesPanel } from "./APTPackagesPanel";
 import { APTReviewDialog } from "./APTReviewDialog";
@@ -49,6 +50,11 @@ export function APTSuiteOperations({
   const current = state?.snapshots.find(
     (item) => item.snapshot.state === "visible",
   )?.snapshot;
+  const firstPublication =
+    state !== null &&
+    !current &&
+    state.snapshots.length === 0 &&
+    state.packages.length === 0;
 
   // A reload discards the open review and selection; a preview that started
   // before it must not land on the reloaded state.
@@ -195,7 +201,24 @@ export function APTSuiteOperations({
         ) : null
       ) : (
         <>
-          <APTCurrentSnapshot current={current} />
+          {firstPublication ? (
+            <APTFirstPublication
+              repo={repo}
+              suite={suite}
+              disabled={disabled}
+              onPublished={async (snapshot) => {
+                setNotice(
+                  t("repository.publishedSnapshot", {
+                    suite,
+                    sequence: snapshot.sequence,
+                  }),
+                );
+                await load();
+              }}
+            />
+          ) : (
+            <APTCurrentSnapshot current={current} />
+          )}
           <Tabs
             className="ag-compact-tabs"
             tabBarGutter={24}
@@ -206,7 +229,11 @@ export function APTSuiteOperations({
                 label: t("repository.packages", {
                   length: state.packages.length,
                 }),
-                children: (
+                children: firstPublication ? (
+                  <p className="ag-apt-secondary">
+                    {t("repository.aptFirstManagementAfterPublish")}
+                  </p>
+                ) : (
                   <APTPackagesPanel
                     packages={state.packages}
                     // Previews run against the visible snapshot.
