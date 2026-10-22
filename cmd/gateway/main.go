@@ -260,7 +260,8 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	migrationPublication := app.NewNexusMigrationPublication(store, app.SharedObjectStores(objectStore), migrationTargetID, cfg.MigrationStoragePoolID).
 		WithPublicationScanner(migrationScanner).
 		WithOCI(app.NewNexusOCIMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner)).
-		WithConan(app.NewNexusConanMigrationPublication(store, store, objectStore).WithPublicationScanner(migrationScanner))
+		WithConan(app.NewNexusConanMigrationPublication(store, store, objectStore).WithPublicationScanner(migrationScanner)).
+		WithNPM(app.NewNexusNPMMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner))
 	dependencies.MigrationService = nexusmigration.New(migrationpg.New(databasePool), dependencies.SourceService, migrationPublication, nexusmigration.Options{TargetID: migrationTargetID, PoolID: cfg.MigrationStoragePoolID})
 	runtimeContext, stopRuntime := signalContext()
 	defer stopRuntime()

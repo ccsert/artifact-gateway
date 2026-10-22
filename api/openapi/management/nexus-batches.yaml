@@ -1043,7 +1043,8 @@
             "maven",
             "raw",
             "oci",
-            "conan"
+            "conan",
+            "npm"
           ]
         },
         "identity": {
@@ -1203,7 +1204,8 @@
             "source_verification_read",
             "source_verification_digest",
             "source_version_validation",
-            "oci_graph_validation"
+            "oci_graph_validation",
+            "npm_packument_validation"
           ]
         },
         "sourceRepositories": {

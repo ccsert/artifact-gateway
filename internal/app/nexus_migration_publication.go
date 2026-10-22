@@ -59,6 +59,7 @@ type NexusMigrationPublication struct {
 	scanner          nexusMigrationPublicationScanner
 	oci              NexusFormatMigrationPublication
 	conan            NexusFormatMigrationPublication
+	npm              NexusFormatMigrationPublication
 }
 
 var _ nexusmigration.Publication = (*NexusMigrationPublication)(nil)

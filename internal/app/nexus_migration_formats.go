@@ -40,6 +40,11 @@ func (p *NexusMigrationPublication) WithConan(publication NexusFormatMigrationPu
 	return p
 }
 
+func (p *NexusMigrationPublication) WithNPM(publication NexusFormatMigrationPublication) *NexusMigrationPublication {
+	p.npm = publication
+	return p
+}
+
 func (p *NexusMigrationPublication) formatPublication(format string) NexusFormatMigrationPublication {
 	if p == nil {
 		return nil
@@ -50,6 +55,8 @@ func (p *NexusMigrationPublication) formatPublication(format string) NexusFormat
 		publication = p.oci
 	case "conan":
 		publication = p.conan
+	case "npm":
+		publication = p.npm
 	}
 	if nilDependency(publication) {
 		return nil

@@ -29,7 +29,7 @@ export const nexusBatchZhCN = {
   "nexusBatch.moreSources": "加载更多源",
   "nexusBatch.mappingSummary": "{source} → {target}",
   "nexusBatch.explicitMapping":
-    "映射将作为批次的不可变输入保存。复制选中的 Maven 发布版本、Raw、OCI 和 Conan 2 Hosted 内容；Proxy/Group 仍需单独配置。",
+    "映射将作为批次的不可变输入保存。复制选中的 Maven 发布版本、Raw、OCI、Conan 2 和 npm Hosted 内容。npm 按包完整提交；已有标签或版本元数据不同会报告冲突。Proxy/Group 仍需单独配置。",
   "nexusBatch.capabilities": "执行能力与容量证据",
   "nexusBatch.disabled": "当前部署未启用迁移写入",
   "nexusBatch.disabledHint":
@@ -165,6 +165,13 @@ export const nexusBatchZhCN = {
   "nexusBatch.scanRead": "读取源资产校验流",
   "nexusBatch.scanDigest": "核对源资产摘要",
   "nexusBatch.scanVersion": "重新验证源连接版本",
+  "nexusBatch.scanNPM": "核对 npm 包元数据与完整版本集合",
+  "nexusBatch.npmClosure":
+    "npm 元数据与版本集合不完整或不一致。请核实所选源仓库的读取权限和全部版本后重新扫描。",
+  "nexusBatch.npmIntegrity":
+    "npm 包字节与源 shasum 或 SRI 不一致，未发布此包。请核实源内容后重新扫描。",
+  "nexusBatch.npmIdentity":
+    "npm 组件、包元数据和包内身份不一致，未发布此包。请核实源包名与版本。",
   "nexusBatch.scanGraph": "验证 OCI 完整依赖图",
   "nexusBatch.scanInterrupted":
     "扫描中断且未封存；可凭新容量证据在原批次完整重扫。",

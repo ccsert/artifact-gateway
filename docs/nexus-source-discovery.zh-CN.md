@@ -63,11 +63,11 @@ GATEWAY_MIGRATION_SOURCE_PRIVATE_ENDPOINTS=nexus.internal=10.20.30.0/24,10.20.30
 `POST /migration-sources/{sourceId}/discovery` 接受明确的 `repositories`
 （1–10 个不重复名称）、`maxPages`（1–100，默认 25）、`maxAssets`
 （1–10,000，默认 10,000），对选中的受支持 Hosted 仓库穷尽 Nexus Assets API
-continuation token。整个操作最多 128 次源请求、每个解码响应 2 MiB、总响应 16 MiB、
+continuation token（npm 身份使用 Components API）。整个操作最多 128 次源请求、每个解码响应 2 MiB、总响应 16 MiB、
 总时间 30 秒，时间包含源查询、DNS、TLS 与分页。支持与不支持的资产都占用资产预算。
 不会自动重试。
 
-支持 Raw、Maven RELEASE、OCI（源格式为 `docker`）与 Conan Hosted。Maven MIXED 仓库返回可辨识的 release
+支持 Raw、Maven RELEASE、OCI（源格式为 `docker`）、Conan 与 npm Hosted。npm 包名/版本来自 Components REST，每个版本恰有一个 tarball；packument 和归档闭包由持久批次进一步校验。Maven MIXED 仓库返回可辨识的 release
 版本路径；SNAPSHOT 目录、共享 `maven-metadata.xml` 和无法分类的路径明确列在
 `unsupportedAssets` 并附原因。Release 根据 Maven 的
 `group/artifact/version/artifact-version…` 布局辨识。SNAPSHOT 专用仓库、未知格式或
@@ -87,7 +87,7 @@ Problem 只回显有限错误码：`source_unauthorized`、`source_forbidden`、
 ## 显式映射预览
 
 `POST /migration-sources/{sourceId}/mapping-preview` 接受 `mappings`，每项包含
-`sourceRepository`、原生 `targetName`、`format`（`raw`/`maven`/`oci`/`conan`）、
+`sourceRepository`、原生 `targetName`、`format`（`raw`/`maven`/`oci`/`conan`/`npm`）、
 `type`（`hosted`/`proxy`/`group`）及可选有序 `targetMembers`。服务重新读取源配置，
 验证原生名称、重复目标、已有目标仓库的兼容性、格式/类型和每个 Group 成员的显式映射。
 缺失或不兼容依赖、成员乱序均无效。

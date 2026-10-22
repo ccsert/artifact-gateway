@@ -193,6 +193,44 @@ describe("migration source observations", () => {
     expect(result).toHaveTextContent("2 个源资产");
     expect(result).not.toHaveTextContent("secret");
   });
+  it("previews an npm Hosted mapping using its native format", async () => {
+    preflight.mockResolvedValueOnce({
+      data: {
+        ...migrationPreflight,
+        repositories: [
+          { ...migrationPreflight.repositories[0], format: "npm" },
+        ],
+      },
+    } as never);
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "运行预检" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: "选择 releases" }),
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "releases 的目标名称" }),
+      "native-npm",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "预览显式映射" }));
+    await waitFor(() =>
+      expect(preview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: {
+            mappings: [
+              {
+                sourceRepository: "releases",
+                targetName: "native-npm",
+                format: "npm",
+                type: "hosted",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+  });
   it("builds explicit multi-repository mappings with source Group order", async () => {
     show();
     await userEvent.click(

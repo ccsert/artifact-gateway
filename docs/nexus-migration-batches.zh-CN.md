@@ -3,14 +3,14 @@
 [English](nexus-migration-batches.md) · [文档索引](README.zh-CN.md)
 
 管理员 API 将[只读源发现](nexus-source-discovery.zh-CN.md)接到原生 Maven release、
-Raw、OCI 与 Conan 2 Hosted 发布。批次统一使用 `native-v1`，不支持旧策略输入或历史
+Raw、OCI、Conan 2 与 npm Hosted 发布。批次统一使用 `native-v1`，不支持旧策略输入或历史
 管理接口。生产切流、源删除、冲突覆盖、Proxy 历史缓存和在线 SNAPSHOT 历史不在此
 流程范围内。已交付的离线 SNAPSHOT 导入器保持独立。
 
 先应用 `000147_nexus_migration_batches.sql` 和
 `000148_nexus_migration_scan_diagnostics.sql`，以及追加的
 `000154_nexus_native_migration_formats.sql` 和
-`000155_nexus_migration_scan_checkpoints.sql`；统一使用标准迁移程序。将
+`000155_nexus_migration_scan_checkpoints.sql` 和 `000162_nexus_npm_migration.sql`；统一使用标准迁移程序。将
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` 配置为真实对象存储池标识；Compose 转发给所有
 继承的 Gateway 角色。不配置时仅禁止迁移写入，其他网关功能和迁移报告仍可读。
 源 HTTPS、凭据加密、精确内部地址 allowlist、DNS 固定及禁止重定向均复用源发现，
@@ -87,17 +87,53 @@ Conan 只从精确 revision storage path 识别身份，不从 Browse 展示推�
 变化需要新批次；后续批次始终重新完整枚举：新增身份发布、相同身份重验、源删除只报告
 并保留目标，不使用仅基于时间水位的增量。
 
+## npm Hosted 包闭包
+
+npm 使用 Nexus Components REST 的 `group`/`name` 与 `version` 身份，和完整
+packument、归档内 `package.json` 交叉核对，绝不从 tarball 文件名猜版本。每个条目包含
+一个源包的全部版本及 dist-tag 目标；库存版本缺失或多出、tarball 缺失、SHA-256、
+shasum、SRI 或包内身份不符，以及跨源或含凭据的 dist URL 均在发布前失败。读取沿用
+源的 HTTPS、凭据、出站和超时边界。每个版本恰有一个 tarball，最大 256 MiB；
+每个 packument 最大 64 MiB、1,000 个版本，每批全部 packument 合计最多 64 MiB。SRI 支持 SHA-1/256/384/512 并选择最强的已提供
+算法；如有 shasum 也必须一致。未知算法和 SRI options 语法明确拒绝。
+
+源 packument 的精确字节与摘要作为私有账本状态保存，在扫描完成后和发布前重新观察。
+目标原生 packument 由原版本 manifest 与固定标签生成，URL、integrity、registry revision
+及发布时间由 Gateway 生成；源包级 `name`、`versions`、`dist-tags` 以外字段保留在私有
+回执，不回放到目标 registry。源读取只是观察，不是 Nexus 事务快照；最终核对需要这项
+一致性时应停止源写入。
+
+全部缺失版本与标签在一个 PostgreSQL 事务内提交，沿用迁移租约/源版本保护、原生包
+协调锁、配额与隔离校验。已有相同版本保持原样；只创建缺失标签，已有标签指向、
+manifest、deprecate 或字节身份不同会使整个包冲突。仅目标存在的额外版本和标签保留，
+源删除不删除目标。源 tag 移动或 deprecate 更新必须独立审阅并显式治理目标后再建批次，
+迁移不会自动覆盖。恢复在原生对象锁下暂存摘要寻址 tarball，存储重开或响应丢失后重新
+校验完整字节；单独的源元数据成功不能使包可见。
+
+这里封闭的是一个包的存储内容，不自动递归抓取其它 dependency registry。必须显式
+选择并映射全部所需 Hosted 包仓库；外部、optional 和平台相关依赖仍需 target-only
+消费验收。Proxy 缓存和 Group 字节仍不在导入范围。`visibleIdentities` 计包闭包；
+固定 packument 只计入 `sourceVerificationBytes`，`totalBytes`、`transferredBytes`
+与 `verifiedBytes` 只计真实 tarball 字节，私有 packument 回执不进入管理资产列表，也不会取得已上传/已验证的目标字节回执。
+
+`make nexus-npm-migration-e2e` 必跑九组 PostgreSQL/RustFS 验收，拒绝跳过用例，覆盖
+源与目标漂移、上传/校验/提交故障恢复、源版本/租约/原生事务丢失、配额与隔离保护。
+门禁按官方归档 SHA-512 固定 npm 11.6.2，关闭合成源并重开目标存储，以空缓存解析
+两包依赖链并核对四个原始 tarball。`output/nexus-npm-migration-e2e/<project>/` 保留
+原始 Go JSON、必需用例汇总、客户端输出、源码 head/tree 与清理回执。脚本只创建、
+清理其自有 Compose 项目，结束后自有容器、卷和网络必须全部清零。这些 fixture 不代表
+真实业务 Nexus 版本或库存已验收，也不授权生产流量变更。
+
 ## 进度与限制
 
 `metadataDiscovered` 计库存条数，并优先使用发现结果已有的必需摘要。缺 SHA-256，或
 Maven 为生成旁文件缺 SHA-1/MD5 时，执行有界源验证，真实读取字节独立持久计为
-`sourceVerificationBytes`，扫描未完成/失败也保留。OCI 图还需预读 manifest 正文；
-此阶段不写目标、
-不使用本地下载暂存文件。
+`sourceVerificationBytes`，扫描未完成/失败也保留。OCI 图还需预读 manifest 正文，npm 则必须预读完整归档。Raw、Maven 和 OCI 校验流式
+求摘要且不写目标；npm 为核对包内身份使用私有临时归档文件，有界读取后立即清理。
 
 `transferredBytes` 计复制阶段真实源正文读取字节，包含重试和对已有身份的重新验证；
 `verifiedBytes` 按唯一原始目标字节的完整读回证据计数，不因重试膨胀；
-`visibleIdentities` 独立计原生 Raw 路径、Maven GAV、OCI 引用、Conan revision 的
+`visibleIdentities` 独立计原生 Raw 路径、Maven GAV、OCI 引用、Conan revision 与 npm 包闭包的
 已提交或读回确认数量。
 `totalBytes` 在清单完整封存前为 null，之后计支持范围内唯一原始字节。Unsupported 与
 源删除项保留独立报告，不能把这些计数称为官方客户端验收。

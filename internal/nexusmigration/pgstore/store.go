@@ -111,14 +111,16 @@ func (s *Store) List(ctx context.Context, limit int, cursor string) ([]m.Batch, 
 // The public asset schema deliberately omits internal, derived checksum facts.
 type savedAsset struct {
 	m.Asset
-	SHA1 string `json:"sha1"`
-	MD5  string `json:"md5"`
+	SHA1         string `json:"sha1"`
+	MD5          string `json:"md5"`
+	SHA512       string `json:"sha512,omitempty"`
+	NPMPackument []byte `json:"npmPackument,omitempty"`
 }
 
 func encodeAssets(in []m.Asset) []byte {
 	out := make([]savedAsset, len(in))
 	for i, a := range in {
-		out[i] = savedAsset{a, a.SHA1, a.MD5}
+		out[i] = savedAsset{a, a.SHA1, a.MD5, a.SHA512, a.NPMPackument}
 	}
 	b, _ := json.Marshal(out)
 	return b
@@ -142,6 +144,8 @@ func scanEntry(row scanner) (m.Entry, error) {
 		e.Assets[i] = a.Asset
 		e.Assets[i].SHA1 = a.SHA1
 		e.Assets[i].MD5 = a.MD5
+		e.Assets[i].SHA512 = a.SHA512
+		e.Assets[i].NPMPackument = a.NPMPackument
 	}
 	return e, nil
 }

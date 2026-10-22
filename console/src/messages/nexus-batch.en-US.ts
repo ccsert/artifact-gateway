@@ -30,7 +30,7 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.moreSources": "Load more sources",
   "nexusBatch.mappingSummary": "{source} → {target}",
   "nexusBatch.explicitMapping":
-    "Mappings become immutable batch inputs. Selected Maven releases, Raw, OCI and Conan 2 Hosted content are copied. Configure Proxy/Group separately.",
+    "Mappings become immutable batch inputs. Selected Maven releases, Raw, OCI, Conan 2 and npm Hosted content are copied. npm packages commit as complete version sets; different existing tags or version metadata conflict. Configure Proxy/Group separately.",
   "nexusBatch.capabilities": "Execution capability and capacity evidence",
   "nexusBatch.disabled": "Migration writes are disabled in this deployment",
   "nexusBatch.disabledHint":
@@ -177,6 +177,13 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.scanRead": "Read source verification stream",
   "nexusBatch.scanDigest": "Check source asset digest",
   "nexusBatch.scanVersion": "Revalidate source connection version",
+  "nexusBatch.scanNPM": "Check the npm packument and complete version set",
+  "nexusBatch.npmClosure":
+    "The npm metadata and version set are incomplete or inconsistent. Check read access to the selected repository and every version, then rescan.",
+  "nexusBatch.npmIntegrity":
+    "The npm bytes do not match the source shasum or SRI. This package was not published. Inspect the source and rescan.",
+  "nexusBatch.npmIdentity":
+    "The npm component, packument and archive identities differ. This package was not published. Check the source package name and version.",
   "nexusBatch.scanGraph": "Validate the complete OCI dependency graph",
   "nexusBatch.scanInterrupted":
     "The scan was interrupted and never sealed. Fresh capacity evidence allows a full rescan of the same batch.",

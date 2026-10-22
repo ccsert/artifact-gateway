@@ -83,13 +83,13 @@ is capped at 500 entries.
 
 `POST /migration-sources/{sourceId}/discovery` accepts explicit `repositories`
 (1–10 unique names), `maxPages` (1–100, default 25) and `maxAssets` (1–10,000,
-default 10,000). It exhausts the Nexus Assets API continuation tokens for selected
+default 10,000). It exhausts the Nexus Assets API continuation tokens (Components API for npm identities) for selected
 supported Hosted repositories. Budgets apply to the entire operation: 128 source
 requests, 2 MiB per decoded response, 16 MiB total and 30 seconds including source
 lookup, DNS, TLS and pagination. Supported and unsupported asset entries both
 consume the asset budget. There are no automatic retries.
 
-Raw, Maven RELEASE, OCI (`docker`) and Conan Hosted assets are supported. MIXED Maven repositories
+Raw, Maven RELEASE, OCI (`docker`), Conan and npm Hosted assets are supported. npm component names/versions come from Components REST, with exactly one tarball asset per version; packument and archive closure validation happens in the durable batch. MIXED Maven repositories
 return identifiable release-version paths; SNAPSHOT directories, shared
 `maven-metadata.xml` and unclassifiable paths appear separately in
 `unsupportedAssets` with a reason. A release is identified by Maven's
@@ -116,7 +116,7 @@ or target lookup 503. Invalid source input is 400 and a missing source is 404.
 ## Explicit mapping preview
 
 `POST /migration-sources/{sourceId}/mapping-preview` accepts `mappings`, each
-containing `sourceRepository`, native `targetName`, `format` (`raw`/`maven`/`oci`/`conan`),
+containing `sourceRepository`, native `targetName`, `format` (`raw`/`maven`/`oci`/`conan`/`npm`),
 `type` (`hosted`/`proxy`/`group`) and optional ordered `targetMembers`. It re-reads
 source configuration and checks native names, duplicate targets, compatible
 existing target repositories, format/type and each Group member's explicit

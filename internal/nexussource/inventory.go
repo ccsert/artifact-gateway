@@ -98,6 +98,9 @@ func (s *Service) ReadInventoryPage(ctx context.Context, id, expected string, re
 }
 
 func (s *session) inventoryPage(repo Repository, cursor string) (InventoryPage, error) {
+	if repo.Format == "npm" {
+		return s.npmInventoryPage(repo, cursor)
+	}
 	query := url.Values{"repository": {repo.Name}}
 	if cursor != "" {
 		query.Set("continuationToken", cursor)

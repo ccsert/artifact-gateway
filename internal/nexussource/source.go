@@ -190,6 +190,8 @@ type Asset struct {
 	Repository, Path, DownloadURL string
 	Size                          int64
 	Checksum                      map[string]string
+	// npm identities are supplied by Components REST and checked against packument.
+	PackageName, Version string
 }
 type DiscoveryInput struct {
 	Repositories        []string

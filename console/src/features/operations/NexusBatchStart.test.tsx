@@ -115,6 +115,7 @@ describe("explicit start", () => {
   it.each([
     ["docker", "oci"],
     ["conan", "conan"],
+    ["npm", "npm"],
   ] as const)(
     "starts a %s batch only against its %s Hosted target",
     async (sourceFormat, targetFormat) => {

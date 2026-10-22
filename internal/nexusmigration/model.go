@@ -109,6 +109,9 @@ type Asset struct {
 	Verified   bool   `json:"verified"`
 	SHA1       string `json:"-"`
 	MD5        string `json:"-"`
+	SHA512     string `json:"-"`
+	// NPMPackument preserves exact frozen bytes privately in the ledger.
+	NPMPackument []byte `json:"-"`
 }
 type Entry struct {
 	ID                 string    `json:"id"`

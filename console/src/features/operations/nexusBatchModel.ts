@@ -115,6 +115,16 @@ const codes: Record<string, NexusBatchMessageKey | MigrationMessageKey> = {
   raw_path_unsupported: "nexusBatch.unsupportedReason",
   maven_pom_missing: "nexusBatch.unsupportedReason",
   maven_release_closure_unsupported: "nexusBatch.unsupportedReason",
+  npm_metadata_limit_exceeded: "nexusBatch.unsupportedReason",
+  npm_source_unavailable: "nexusBatch.sourceFailure",
+  npm_source_shape_unsupported: "nexusBatch.unsupportedReason",
+  npm_packument_invalid: "nexusBatch.npmClosure",
+  npm_component_identity_invalid: "nexusBatch.npmIdentity",
+  npm_closure_incomplete: "nexusBatch.npmClosure",
+  npm_closure_invalid: "nexusBatch.npmClosure",
+  npm_integrity_mismatch: "nexusBatch.npmIntegrity",
+  npm_tarball_identity_invalid: "nexusBatch.npmIdentity",
+  source_download_url_denied: "nexusBatch.sourceFailure",
   conan_identity_invalid: "nexusBatch.unsupportedReason",
   conan_revision_incomplete: "nexusBatch.unsupportedReason",
   conan_source_shape_unsupported: "nexusBatch.unsupportedReason",
@@ -174,6 +184,7 @@ export function scanStage(
     source_verification_digest: "nexusBatch.scanDigest",
     source_version_validation: "nexusBatch.scanVersion",
     oci_graph_validation: "nexusBatch.scanGraph",
+    npm_packument_validation: "nexusBatch.scanNPM",
   };
   return stages[stage];
 }

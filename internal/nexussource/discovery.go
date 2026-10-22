@@ -461,7 +461,7 @@ func (s *session) asset(repo Repository, raw assetRaw) (Asset, error) {
 	// acceptable only after the decoded path exactly matches safe metadata.
 	// Reconstruct the URL so source RawPath aliases never cross this boundary.
 	downloadURL := (&url.URL{Scheme: s.base.Scheme, Host: s.base.Host, Path: expected}).String()
-	return Asset{repo.Name, canonical, downloadURL, *raw.FileSize, checksum}, nil
+	return Asset{Repository: repo.Name, Path: canonical, DownloadURL: downloadURL, Size: *raw.FileSize, Checksum: checksum}, nil
 }
 func validAssetPath(value string) bool {
 	if value == "" || len(value) > 2048 || strings.HasPrefix(value, "/") || path.Clean(value) != value || strings.ContainsAny(value, "\\\r\n\x00?#%") {
