@@ -3624,11 +3624,11 @@ export type PublishHelmPreviewChartData = {
     /**
      * A bounded tar.gz chart; maximum 64 MiB compressed, 256 MiB expanded across packaged dependencies, 10000 total entries and at most 8 nested packaged dependencies
      */
-    chart: string;
+    chart: Blob | File;
     /**
      * Optional original OpenPGP clearsigned Helm provenance, maximum 1 MiB
      */
-    provenance?: string;
+    provenance?: Blob | File;
   };
   headers?: {
     /**

@@ -7984,10 +7984,10 @@ type ReplaceHelmPreviewQuotaJSONBody struct {
 // PublishHelmPreviewChartMultipartBody defines parameters for PublishHelmPreviewChart.
 type PublishHelmPreviewChartMultipartBody struct {
 	// Chart A bounded tar.gz chart; maximum 64 MiB compressed, 256 MiB expanded across packaged dependencies, 10000 total entries and at most 8 nested packaged dependencies
-	Chart string `json:"chart"`
+	Chart openapi_types.File `json:"chart"`
 
 	// Provenance Optional original OpenPGP clearsigned Helm provenance, maximum 1 MiB
-	Provenance *string `json:"provenance,omitempty"`
+	Provenance *openapi_types.File `json:"provenance,omitempty"`
 }
 
 // PublishHelmPreviewChartParams defines parameters for PublishHelmPreviewChart.

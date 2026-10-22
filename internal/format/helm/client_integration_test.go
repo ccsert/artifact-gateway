@@ -290,6 +290,21 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 		return payload.Bytes(), writer.FormDataContentType()
 	}
 	payload, contentType := formData("owned", chartBytes, provBytes)
+	sdkNode, sdkScript := os.Getenv("HELM_SDK_NODE"), os.Getenv("HELM_SDK_PUBLISH_SCRIPT")
+	if sdkNode == "" || sdkScript == "" {
+		t.Fatal("fixed Node.js and generated SDK serializer fixture are required")
+	}
+	sdkReceipt := filepath.Join(work, "helm-sdk-http.json")
+	if evidence := os.Getenv("HELM_OWNED_EVIDENCE_DIR"); evidence != "" {
+		sdkReceipt = filepath.Join(evidence, "helm-sdk-http.json")
+	}
+	sdkContext, stopSDK := context.WithTimeout(t.Context(), 45*time.Second)
+	defer stopSDK()
+	sdkCommand := exec.CommandContext(sdkContext, sdkNode, "--disable-warning=ExperimentalWarning", sdkScript, server.URL+publishPath, chartFile, provFile, sdkReceipt)
+	sdkCommand.Env = append(os.Environ(), "HELM_SDK_BEARER="+blue)
+	if output, err := sdkCommand.CombinedOutput(); err != nil {
+		t.Fatalf("generated SDK multipart publication failed: %v\n%s", err, output)
+	}
 	for range 2 {
 		send("PUT", publishPath, blue, contentType, payload, 201)
 	}
