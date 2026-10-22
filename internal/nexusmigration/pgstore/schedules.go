@@ -98,16 +98,16 @@ func (s *Store) ReplayScheduleControl(ctx context.Context, id, actor, key, actio
 	return p, true, err
 }
 
-// All schedule/manual batch dispatches use one short transaction lock before
-// checking target overlap. Network scanning and copying never hold this lock.
+// All schedule/manual dispatches and batch reactivations take this lock before
+// publication leases and batch rows. Network scanning/copying never hold it.
 func lockMigrationDispatch(ctx context.Context, tx *sql.Tx) error {
 	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('nexus-migration-dispatch',0))`)
 	return err
 }
 
-func activeMigrationTargets(ctx context.Context, tx *sql.Tx, mappings []m.Mapping, onlyScheduled bool) error {
+func activeMigrationTargets(ctx context.Context, tx *sql.Tx, mappings []m.Mapping, onlyScheduled bool, exceptBatchID string) error {
 	var busy bool
-	err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nexus_migration_batches b CROSS JOIN LATERAL jsonb_array_elements(b.request->'mappings') oldmp JOIN jsonb_array_elements($1::jsonb) newmp ON oldmp->>'targetRepositoryId'=newmp->>'targetRepositoryId' WHERE b.state NOT IN ('completed','failed','cancelled') AND (NOT $2 OR b.schedule_id IS NOT NULL))`, mustJSON(mappings), onlyScheduled).Scan(&busy)
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nexus_migration_batches b CROSS JOIN LATERAL jsonb_array_elements(b.request->'mappings') oldmp JOIN jsonb_array_elements($1::jsonb) newmp ON oldmp->>'targetRepositoryId'=newmp->>'targetRepositoryId' WHERE b.state NOT IN ('completed','failed','cancelled') AND (NOT $2 OR b.schedule_id IS NOT NULL) AND b.id::text<>$3)`, mustJSON(mappings), onlyScheduled, exceptBatchID).Scan(&busy)
 	if err == nil && busy {
 		return m.Failed("mapping_active_batch")
 	}
@@ -462,7 +462,7 @@ func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batc
 			return err
 		}
 	}
-	if err = activeMigrationTargets(ctx, tx, p.Mappings, false); err != nil {
+	if err = activeMigrationTargets(ctx, tx, p.Mappings, false, ""); err != nil {
 		return err
 	}
 	now, err = freshScheduleEvidence(ctx, tx, p.CapacityEvidence)
@@ -474,8 +474,11 @@ func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batc
 		return err
 	}
 	next := now.Add(time.Duration(p.IntervalSeconds) * time.Second)
-	_, err = tx.ExecContext(ctx, `UPDATE nexus_migration_schedules SET active_batch_id=$2,last_batch_id=$2,consumed_observed_at=$3,capacity_evidence=NULL,next_run_at=$4,last_error='',dispatch_attempts=0,lease_token='',lease_expires_at=NULL,version=version+1,updated_at=clock_timestamp() WHERE id=$1`, p.ID, b.ID, p.CapacityEvidence.ObservedAt, next)
-	if err != nil {
+	// Source/target lock waits can outlive the claim. The final write uses the
+	// database clock and full owner fence; failure rolls back the inserted batch
+	// and preserves the unconsumed capacity observation.
+	result, err := tx.ExecContext(ctx, `UPDATE nexus_migration_schedules SET active_batch_id=$2,last_batch_id=$2,consumed_observed_at=$3,capacity_evidence=NULL,next_run_at=$4,last_error='',dispatch_attempts=0,lease_token='',lease_expires_at=NULL,version=version+1,updated_at=clock_timestamp() WHERE id=$1 AND lease_token=$5 AND lease_epoch=$6 AND version=$7::bigint AND lease_expires_at>clock_timestamp() AND state='active' AND active_batch_id IS NULL`, p.ID, b.ID, p.CapacityEvidence.ObservedAt, next, claim.LeaseToken, claim.LeaseEpoch, claim.Version)
+	if err = changed(result, err); err != nil {
 		return err
 	}
 	return tx.Commit()

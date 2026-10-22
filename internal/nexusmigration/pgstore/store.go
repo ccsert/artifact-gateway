@@ -78,7 +78,7 @@ func (s *Store) Create(ctx context.Context, b m.Batch, key, hash string) (m.Batc
 	}
 	// Manual starts may not overlap a live batch already owned by a plan.
 	// Plan dispatch checks all live batches under this same transaction lock.
-	if err = activeMigrationTargets(ctx, tx, b.Mappings, true); err != nil {
+	if err = activeMigrationTargets(ctx, tx, b.Mappings, true, ""); err != nil {
 		return m.Batch{}, err
 	}
 	request, _ := json.Marshal(b.StartInput)
@@ -227,6 +227,13 @@ func (s *Store) Control(ctx context.Context, id, expected, actor, key, action, h
 		return m.Batch{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// Reactivation follows dispatch -> publication lease -> batch row. Taking
+	// dispatch after the batch row would invert schedule creation's lock order.
+	if action == "resume" || action == "retry" {
+		if err = lockMigrationDispatch(ctx, tx); err != nil {
+			return m.Batch{}, err
+		}
+	}
 	// Cancellation takes the publication fence. A committed entry is retained;
 	// once cancellation returns no old worker can cross the publication boundary.
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('nexus-migration-lease:'||$1,0))`, id); err != nil {
@@ -278,6 +285,9 @@ func (s *Store) Control(ctx context.Context, id, expected, actor, key, action, h
 		}
 		if evidence == nil {
 			return b, m.Failed("capacity_unknown")
+		}
+		if err = activeMigrationTargets(ctx, tx, b.Mappings, false, b.ID); err != nil {
+			return b, err
 		}
 		b.CapacityEvidence = *evidence
 		b.PauseRequested = false
