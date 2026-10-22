@@ -20,9 +20,9 @@ const FormatHelm Format = "helm"
 
 var (
 	ErrInvalidHelmPublication  = errors.New("invalid Helm publication")
-	ErrHelmPublicationConflict = errors.New("Helm chart identity contains a different immutable closure")
-	ErrHelmSessionExpired      = errors.New("Helm publication reservation expired")
-	ErrHelmSessionState        = errors.New("Helm publication session state prevents this operation")
+	ErrHelmPublicationConflict = errors.New("helm chart identity contains a different immutable closure")
+	ErrHelmSessionExpired      = errors.New("helm publication reservation expired")
+	ErrHelmSessionState        = errors.New("helm publication session state prevents this operation")
 )
 
 type HelmSession struct {
