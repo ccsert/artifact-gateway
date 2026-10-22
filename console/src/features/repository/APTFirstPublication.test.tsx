@@ -341,12 +341,15 @@ it.each(["upload", "publish"])(
     view.rerender(
       workflow(onPublished, { ...repo, id: "next-repository" }, "bookworm"),
     );
+    const nextComponent = screen.getByRole("textbox", { name: "组件" });
+    await user.click(nextComponent);
     await act(async () => {
       upload.resolve(success(revision));
       publish.resolve(success(snapshot, 201));
     });
     expect(screen.getByText("尚未选择文件")).toBeInTheDocument();
     expect(screen.queryByText("widget@1.2.3#amd64")).not.toBeInTheDocument();
+    expect(nextComponent).toHaveFocus();
     expect(onPublished).not.toHaveBeenCalled();
     const request =
       phase === "upload"
@@ -426,6 +429,26 @@ it("hashes without uploading, stages the original File, and requires identity co
       headers: { "Idempotency-Key": expect.any(String) },
     }),
   );
+});
+
+it("focuses the staged identity heading and lets keyboard review continue without refocusing", async () => {
+  const user = userEvent.setup();
+  const view = render(workflow());
+  await stage(view.container, user);
+  const heading = screen.getByRole("heading", {
+    name: "已暂存：核对服务端识别的身份",
+  });
+  expect(heading).toHaveFocus();
+  await user.tab();
+  const review = screen.getByRole("checkbox", {
+    name: "已核对包名、版本和架构",
+  });
+  expect(review).toHaveFocus();
+  await user.keyboard(" ");
+  expect(review).toBeChecked();
+  expect(review).toHaveFocus();
+  view.rerender(workflow());
+  expect(review).toHaveFocus();
 });
 
 it("keeps the create request and idempotency key after a lost create response", async () => {

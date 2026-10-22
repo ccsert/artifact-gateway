@@ -242,6 +242,15 @@ for (const [width, locale, theme, errorMode] of [
     await expect(
       surface.getByText(revision.canonicalIdentity, { exact: true }),
     ).toBeVisible();
+    await expect(
+      surface.getByRole("heading", {
+        name: en
+          ? "Staged: review the server-identified package"
+          : "已暂存：核对服务端识别的身份",
+      }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(surface.getByRole("checkbox")).toBeFocused();
     expect(creates).toHaveLength(1);
     expect(uploadCount).toBe(1);
     expect(publications).toEqual([]);

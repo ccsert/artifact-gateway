@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { Button, Checkbox, Input, Popconfirm, Upload } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 import type { AptRepositorySnapshot, Repository } from "../../client";
@@ -39,6 +39,11 @@ function APTFirstPublicationForm({
     onPublished,
   });
   const revision = form.attempt?.revision;
+  const revisionId = revision?.id;
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (revisionId) reviewHeading.current?.focus();
+  }, [revisionId]);
   const cannotAct = disabled || form.busy !== null || !!form.published;
   const stageLabel = t(
     form.attempt ? "repository.aptFirstRetryStage" : "repository.aptFirstStage",
@@ -137,7 +142,9 @@ function APTFirstPublicationForm({
       )}
       {revision && (
         <div className="ag-page-stack ag-apt-first-review">
-          <h4>{t("repository.aptFirstReviewTitle")}</h4>
+          <h4 ref={reviewHeading} tabIndex={-1}>
+            {t("repository.aptFirstReviewTitle")}
+          </h4>
           <dl className="ag-apt-evidence">
             <div>
               <dt>{t("repository.aptFirstPackage")}</dt>
