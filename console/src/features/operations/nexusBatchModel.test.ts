@@ -176,6 +176,37 @@ describe("batch truth and safe reports", () => {
     }
     expect(scanStage("oci_graph_validation")).toBe("nexusBatch.scanGraph");
   });
+  it("keeps npm scan failures bounded and localized in reports", () => {
+    expect(scanStage("npm_packument_validation")).toBe("nexusBatch.scanNPM");
+    const t = createTranslator("zh-CN");
+    for (const code of [
+      "npm_closure_incomplete",
+      "npm_packument_invalid",
+      "npm_component_identity_invalid",
+      "npm_integrity_mismatch",
+      "npm_tarball_identity_invalid",
+    ]) {
+      const report = observationReport(
+        {
+          ...nexusBatch,
+          lastScanFailure: {
+            ...nexusScanFailure,
+            stage: "npm_packument_validation",
+            code,
+          },
+        },
+        [],
+        false,
+        [],
+      );
+      expect(report.lastScanFailure).toMatchObject({
+        stage: "npm_packument_validation",
+        code,
+      });
+      expect(batchReason(code, t)).toContain("npm");
+      expect(JSON.stringify(report)).not.toContain("password");
+    }
+  });
   it("gates controls by server state and retryable counts rather than optimistic progress", () => {
     expect(canPause({ ...nexusBatch, state: "running" })).toBe(true);
     expect(canResume({ ...nexusBatch, state: "paused" })).toBe(true);

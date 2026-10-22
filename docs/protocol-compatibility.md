@@ -13,7 +13,7 @@ product boundary; see [the full repository roadmap](full-artifact-repository-roa
 - **Gateway extension** means ecosystem reads or basic uploads stay native, while publication, deletion, or management requires an additional Gateway API.
 - **Proxy/Group compatibility** covers only the listed read paths. It does not inherit Hosted writes, catalog, referrer, or lifecycle behavior automatically.
 - **A passing regression gate** proves the current fixture and client flows. It is not evidence for every client version, authentication mode, or extension combination.
-- **Preview or research** is not a public support claim. APT Hosted and NuGet remain in this category.
+- **Preview or research** is not a public support claim. APT Hosted, NuGet and traditional HTTP Helm remain in this category.
 
 ## Native client roots
 
@@ -71,6 +71,18 @@ Changing a credential's endpoint or OCI issuer realm/service requires a fresh
 secret or explicit `scheme: none`; otherwise PATCH fails with
 `400 upstream_credential_rebind_required` and preserves the existing version
 and ciphertext.
+
+## Helm Hosted preview
+
+The default-off [traditional Helm Hosted preview](helm-hosted-preview.md) provides
+atomic chart/provenance multipart publication, an authorized deterministic
+`index.yaml`, original verified downloads and quota reservations. It uses explicit
+`/api/v2/previews/helm` management and `/helm/<repository>` read routes; formal
+format profiles, repository catalogs, active capabilities and Console selectors
+remain unchanged. The fixed official Helm 3.19.0 gate checks cold pull/verify and
+dry-run rendering against an owned read-only discovery fixture. It does not claim
+a real Kubernetes installation. Proxy/Group (#291) and lifecycle/admission (#292)
+remain separate work.
 
 ## NuGet Hosted, Proxy and Group preview
 

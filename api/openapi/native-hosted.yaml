@@ -9,6 +9,20 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/helm/repositories":
+    "$ref": "./management/helm-preview.yaml#/repositories"
+  "/previews/helm/repositories/{repositoryId}":
+    "$ref": "./management/helm-preview.yaml#/repository"
+  "/previews/helm/repositories/{repositoryId}/charts":
+    "$ref": "./management/helm-preview.yaml#/charts"
+  "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}":
+    "$ref": "./management/helm-preview.yaml#/chart"
+  "/previews/helm/repositories/{repositoryId}/capacity":
+    "$ref": "./management/helm-preview.yaml#/capacity"
+  "/helm/{repository}/index.yaml":
+    "$ref": "./protocols/helm.yaml#/index"
+  "/helm/{repository}/charts/{chartName}/{version}/{filename}":
+    "$ref": "./protocols/helm.yaml#/asset"
   "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate":
     "$ref": "./management/nuget-preview.yaml#/source_revalidation"
   "/previews/nuget/groups":
@@ -51,6 +65,18 @@ paths:
     "$ref": "./protocols/conan.yaml#/conan_recipe_file"
   "/conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/packages/{packageId}/revisions/{packageRevision}/files/{file}":
     "$ref": "./protocols/conan.yaml#/conan_package_file"
+  "/migrations/nexus/schedules":
+    "$ref": "./management/nexus-schedules.yaml#/schedules"
+  "/migrations/nexus/schedules/{scheduleId}":
+    "$ref": "./management/nexus-schedules.yaml#/schedule"
+  "/migrations/nexus/schedules/{scheduleId}/pause":
+    "$ref": "./management/nexus-schedules.yaml#/pause"
+  "/migrations/nexus/schedules/{scheduleId}/resume":
+    "$ref": "./management/nexus-schedules.yaml#/resume"
+  "/migrations/nexus/schedules/{scheduleId}/stop":
+    "$ref": "./management/nexus-schedules.yaml#/stop"
+  "/migrations/nexus/schedules/{scheduleId}/capacity":
+    "$ref": "./management/nexus-schedules.yaml#/capacity"
   "/migrations/nexus/capabilities":
     "$ref": "./management/nexus-batches.yaml#/capabilities"
   "/migrations/nexus/batches":

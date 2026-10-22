@@ -653,6 +653,7 @@ schemas:
         - maven
         - oci
         - conan
+        - npm
       type:
         type: string
         enum:

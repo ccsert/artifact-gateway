@@ -106,13 +106,20 @@ just an HTTP 200:
 
 ## Management contract operation map
 
-All 198 rows below cover the complete operation set of the baseline
+The rows below cover the complete operation set of the baseline
 `api/openapi/management-runtime-v1.json`; the drift guard re-derives the set
 from the file rather than trusting this count. Paths are relative to `/api/v2`,
 the contract's server base. Planned commands omit the leading `agctl`.
 
 | API (all under /api/v2) / operationId | Planned command (agctl omitted) | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migrations/nexus/schedules`<br>`listNexusMigrationSchedules` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules`<br>`createNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `GET /migrations/nexus/schedules/{scheduleId}`<br>`getNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/pause`<br>`pauseNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/resume`<br>`resumeNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/stop`<br>`stopNexusMigrationSchedule` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/capacity`<br>`refreshNexusMigrationScheduleCapacity` | N: migration schedule API/Console only; CLI deferred | #443 | N/A | A | N: no CLI command registered; use the supported management API or Console |
 | `GET /migrations/nexus/capabilities`<br>`getNexusMigrationCapabilities` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `GET /migrations/nexus/batches`<br>`listNexusMigrationBatches` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `POST /migrations/nexus/batches`<br>`startNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
@@ -403,8 +410,8 @@ only, never that agctl implements it:
 | gateway apt-snapshot verify | #138 documentation; remote archive/restore see the table above | LOCAL, already exists | local archive read and digest integrity; the output signatures=not_checked must not pretend trusted signature verification passed |
 | gateway theme validate/install/list | #139 distinguishes the local directory from remote managed | LOCAL, already exists | explicit local directory/file privileges; package validation and ownership; a remote admin token does not buy local write access |
 | complete system backup/restore, host/deployment configuration, worker/PG/S3/SMTP relay/auth/CA | #126/#137/#139 define the deployment entry points; remote needs a dedicated API | LOCAL/remote BLOCKED | no generic remote management endpoint yet; no implicit SSH/container/database access; no automatic probing from real secrets |
-| Manual full and full-rescan incremental byte migration | #381/#382, Console #383; no agctl command | API-only, implemented | source discovery/mapping and durable Maven release/Raw batches have shipped; existing Console/API keep source read-only and expose capacity/identity/verification evidence; protocol consumers still need the configured native endpoints |
-| Periodically scheduled Nexus synchronization | #269, related to #199/#202/#204/#205; a future #137 consumes its concrete scheduling contract | BLOCKED | durable manual batches do not implement automatic periodic scheduling; offline import cannot claim online synchronization, principal/credential migration or production cutover |
+| Manual full and full-rescan incremental byte migration | #381/#382/#206/#425/#442, Console #383; no agctl command | API/Console, implemented | durable Maven release, Raw, OCI, Conan 2 and npm batches keep the source read-only and expose capacity/identity/full-byte verification evidence; protocol consumers still need the configured native endpoints |
+| Periodically scheduled Nexus synchronization | #443 and #269; API/Console plan management, agctl deferred to #137 | API/Console, implemented; CLI deferred | administrator-only plans freeze a successful batch's source version, target mappings and native policy; each occurrence needs a fresh operator capacity observation or waits in waiting_capacity; pause/stop prevent future dispatches; not fully unattended migration |
 | physical mount alerts, cluster sender readiness/backlog, and more complete notifications | #255/#256 and #209–#213/#229/#230; a future #336 extends it | BLOCKED | the existing partial capability/heartbeat is not proof that every role shipped; wait for real API/schema/deployment acceptance; do not fabricate fields or commands |
 
 Sources: `cmd/gateway/main.go`; `internal/{backupops,snapshotimport,preflight,evidence,aptpublication,consoletheme}/cli*.go`;
@@ -483,3 +490,21 @@ These opt-in preview operations have no agctl command. They do not admit NuGet i
 | `PUT /previews/nuget/groups/{groupId}`<br>`replaceNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version}`<br>`getNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate`<br>`revalidateNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+
+## Helm Hosted preview (#290)
+
+Default-off. Management operations use the preview API; official Helm owns native reads. No agctl Helm command is registered.
+
+| API / operationId | Planned command | Owning issue | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `POST /previews/helm/repositories`<br>`createHelmPreviewRepository` | N: Helm preview API or official client; CLI deferred | #290 | N/A | A | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}`<br>`getHelmPreviewRepository` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}/charts`<br>`listHelmPreviewCharts` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`getHelmPreviewChart` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`publishHelmPreviewChart` | N: Helm preview API or official client; CLI deferred | #290 | N/A | W | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /previews/helm/repositories/{repositoryId}/capacity`<br>`getHelmPreviewCapacity` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `PUT /previews/helm/repositories/{repositoryId}/capacity`<br>`replaceHelmPreviewQuota` | N: Helm preview API or official client; CLI deferred | #290 | N/A | RA | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /helm/{repository}/index.yaml`<br>`readHelmHostedIndex` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `HEAD /helm/{repository}/index.yaml`<br>`headHelmHostedIndex` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `GET /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`readHelmHostedAsset` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |
+| `HEAD /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`headHelmHostedAsset` | N: Helm preview API or official client; CLI deferred | #290 | N/A | R | N: explicit opt-in preview; no CLI command registers or sends this operation |

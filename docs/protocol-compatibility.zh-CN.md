@@ -12,7 +12,7 @@ npm、PyPI、Go、Cargo 和 APT 协议，并用中文说明已实现行为、明
 - **Gateway 扩展**表示读取或基础上传沿用生态协议，但发布、删除或管理需要额外的 Gateway API。
 - **Proxy/Group 兼容**只覆盖明确列出的只读路径。它不自动继承 Hosted 的写入、Catalog、Referrer 或生命周期能力。
 - **回归门禁通过**证明当前 fixture 和真实客户端流程成立，不代表所有客户端版本、认证方式和扩展组合都经过测试。
-- **预览或研究**不得当作公开支持能力。APT Hosted 和 NuGet 仍属于这一层级。
+- **预览或研究**不得当作公开支持能力。APT Hosted、NuGet 和传统 HTTP Helm 仍属于这一层级。
 
 ## 原生客户端根路径
 
@@ -61,6 +61,15 @@ Maven/OCI 及固定官方 Gradle 私有 Maven Proxy/Group 读取的真实客户�
 Gradle 的 Gateway 客户端身份与上游凭据相互独立。修改凭据绑定的 endpoint 或 OCI issuer realm/service，
 须提交新密钥或显式选择 `scheme: none`；否则 PATCH 返回
 `400 upstream_credential_rebind_required`，旧版本与密文不变。
+
+## Helm Hosted 预览
+
+默认关闭的[传统 Helm Hosted 预览](helm-hosted-preview.zh-CN.md) 提供 chart/provenance
+单请求原子发布、授权过滤且确定的 `index.yaml`、原始字节校验下载及配额预留。管理使用独立
+`/api/v2/previews/helm`，读取位于 `/helm/<repository>`；正式格式档案、仓库目录、active
+capabilities 和 Console 选择器均不公开 Helm。固定官方 Helm 3.19.0 验收冷 pull/verify，
+并通过自有只读 discovery fixture 验证 dry-run 渲染，不声明真实 Kubernetes 安装。
+Proxy/Group（#291）和生命周期/正式准入（#292）仍为独立工作。
 
 ## NuGet Hosted、Proxy 与 Group 预览
 

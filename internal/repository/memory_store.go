@@ -8,11 +8,14 @@ import (
 )
 
 type MemoryStore struct {
-	quotaAlertEvents  map[string]RepositoryQuotaAlertEvent
-	quotaAlertRules   map[string]RepositoryQuotaAlertRule
-	emailTargets      map[string]EmailTarget
-	emailDeliveries   map[string]EmailDelivery
-	emailRequestTimes []time.Time
+	helmSessions         map[string]HelmSession
+	helmPublications     map[string]HelmPublication
+	helmPublicationLocks map[string]chan struct{}
+	quotaAlertEvents     map[string]RepositoryQuotaAlertEvent
+	quotaAlertRules      map[string]RepositoryQuotaAlertRule
+	emailTargets         map[string]EmailTarget
+	emailDeliveries      map[string]EmailDelivery
+	emailRequestTimes    []time.Time
 
 	mu                     sync.RWMutex
 	consoleThemeCatalogMu  sync.Mutex

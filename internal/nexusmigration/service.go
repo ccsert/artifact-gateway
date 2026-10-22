@@ -490,6 +490,8 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 	}
 	byIdentity := map[string]*Entry{}
 	ociInventory := map[string][]nexussource.Asset{}
+	npmInventory := map[string][]nexussource.Asset{}
+	npmMetadataBudget := int64(MaxInventoryMetadataBytes)
 	entries := []Entry{}
 	metadata := int64(len(discovery.Assets) + len(discovery.UnsupportedAssets))
 	if err = s.store.RecordScanProgress(ctx, b.ID, b.LeaseToken, metadata, 0); err != nil {
@@ -518,6 +520,10 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			return nil, "", 0, 0, err
 		}
 		format := formats[a.Repository]
+		if format == "npm" {
+			npmInventory[a.Repository] = append(npmInventory[a.Repository], a)
+			continue
+		}
 		if format == "oci" {
 			ociInventory[a.Repository] = append(ociInventory[a.Repository], a)
 			continue
@@ -639,6 +645,13 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 		entries = append(entries, *entry)
 	}
 	for _, name := range names {
+		if formats[name] == "npm" {
+			planned, err := s.planNPMEntries(ctx, b, name, targets[name], npmInventory[name], failure, &npmMetadataBudget)
+			if err != nil {
+				return nil, "", 0, 0, err
+			}
+			entries = append(entries, planned...)
+		}
 		if formats[name] != "oci" {
 			continue
 		}
@@ -685,6 +698,9 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			continue
 		}
 		for _, a := range e.Assets {
+			if e.Format == "npm" && a.TargetPath == NPMPackumentPath {
+				continue
+			}
 			k := e.Format + ":" + a.SHA256
 			if unique[k] {
 				continue
@@ -806,7 +822,11 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 		name := spool.Name()
 		unlinked := os.Remove(name) == nil
 		h := sha256.New()
-		writer := &transferWriter{ctx: ctx, store: s.store, entry: e.ID, batch: b.ID, token: b.LeaseToken, writer: io.MultiWriter(spool, h)}
+		targetBytes := e.Format != "npm" || asset.TargetPath != NPMPackumentPath
+		var writer io.Writer = &transferWriter{ctx: ctx, store: s.store, entry: e.ID, batch: b.ID, token: b.LeaseToken, writer: io.MultiWriter(spool, h)}
+		if !targetBytes {
+			writer = io.MultiWriter(spool, h, &scanByteWriter{ctx: ctx, store: s.store, batch: b.ID, token: b.LeaseToken})
+		}
 		written, copyErr := io.CopyBuffer(writer, io.LimitReader(content.Body, asset.Size+1), make([]byte, 1<<20))
 		closeErr := content.Body.Close()
 		if copyErr == nil && closeErr != nil {
@@ -828,8 +848,8 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 		if copyErr != nil {
 			return copyErr
 		}
-		asset.Uploaded = state == Absent || asset.Uploaded
-		if s.options.AfterUpload != nil && state == Absent {
+		asset.Uploaded = targetBytes && (state == Absent || asset.Uploaded)
+		if s.options.AfterUpload != nil && state == Absent && targetBytes {
 			if err = s.options.AfterUpload(ctx, *e); err != nil {
 				return err
 			}
@@ -856,6 +876,9 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 		}
 	}
 	for i := range e.Assets {
+		if e.Format == "npm" && e.Assets[i].TargetPath == NPMPackumentPath {
+			continue
+		}
 		e.Assets[i].Verified = true
 		e.VerifiedBytes += e.Assets[i].Size
 	}
@@ -875,6 +898,9 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 		return err
 	}
 	if err = s.ValidateEvidence(b.CapacityEvidence); err != nil {
+		return err
+	}
+	if err = s.verifyNPMSource(ctx, b, *e); err != nil {
 		return err
 	}
 	if state == Absent {

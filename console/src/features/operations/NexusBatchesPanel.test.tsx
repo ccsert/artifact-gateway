@@ -490,6 +490,7 @@ describe("real batch read/control states", () => {
     ["raw", "/raw/native-releases/"],
     ["oci", "/v2/native-releases/"],
     ["conan", "/conan/native-releases"],
+    ["npm", "/npm/native-releases/"],
   ] as const)(
     "exports a canonical %s URL independent of display commands",
     async (format, path) => {

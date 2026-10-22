@@ -6,6 +6,44 @@ Artifact Gateway 使用 PostgreSQL 保存元数据和后台任务，使用共享
 保存 Asset 字节。Gateway 进程本身不保存必须由其他实例读取的制品状态，因此可以
 横向扩展。
 
+## 首次安装仓库
+
+新安装默认使用 `GATEWAY_REPOSITORY_PRESETS=standard`。第一个 API 或 standalone
+节点在提供服务前，以一个 PostgreSQL 事务创建以下标准仓库；无需逐个点击创建。
+
+| 格式 | Hosted | 公共源 Proxy | 组合入口 |
+| --- | --- | --- | --- |
+| Maven | `maven-hosted` | `maven-central` → `https://repo.maven.apache.org/maven2` | `maven-all` |
+| npm | `npm-hosted` | `npmjs` → `https://registry.npmjs.org` | `npm-all` |
+| PyPI | `pypi-hosted` | `pypi-proxy` → `https://pypi.org` | `pypi-all` |
+| Go | `go-hosted` | `go-proxy` → `https://proxy.golang.org` | `go-all` |
+| Cargo | `cargo-hosted` | `crates-io` → `https://index.crates.io` | `cargo-all` |
+| Raw | `raw-hosted` | — | — |
+| OCI | `oci-hosted` | — | — |
+| Conan | `conan-hosted` | — | — |
+
+总计 8 个 Hosted、5 个 Proxy、5 个 Group。每个 Group 的顺序为本地 Hosted、公共源
+Proxy。所有入口保持鉴权，匿名读取默认关闭；用户和 CI 身份仍通过现有授权管理获得
+权限。公共源 Proxy 使用环境出站代理策略及精确下载主机列表；PyPI 包括
+`files.pythonhosted.org`，Go 包括 `storage.googleapis.com`，Cargo 包括
+`static.crates.io`。初始化仅写数据库，公共源下载发生在后续客户端请求时。
+
+这些是可正常修改、授权和删除的原生仓库。`installation_repository_presets`
+记录一次性结果：多 API 节点并发启动只创建一套，SQL 失败整体回滚；管理员修改或
+删除后重启不会覆盖或复活。升级时已有仓库或 Group 的安装会保留原目录并跳过预置。
+仅 worker/scheduler 节点不执行初始化。应用追加迁移
+`000174_installation_repository_presets.sql` 后再启动新节点。
+
+希望从空目录开始时，在所有 API/standalone 节点设置
+`GATEWAY_REPOSITORY_PRESETS=none`。该设置不删除任何仓库；之后显式改回 `standard`
+时，仅仍为空且尚未初始化的目录可创建预置。NuGet/Helm 预览、APT 签名发布和需要
+额外上游凭据的仓库继续按各自准入条件配置。
+
+公共源参考：[npm Registry](https://docs.npmjs.com/cli/v11/using-npm/registry/)、
+[PyPI Index API](https://docs.pypi.org/api/index-api/)、
+[Go modules services](https://proxy.golang.org/)、
+[Cargo registries](https://doc.rust-lang.org/cargo/reference/registries.html)。
+
 ## 节点角色
 
 同一个镜像通过 `GATEWAY_NODE_ROLES` 选择运行职责：

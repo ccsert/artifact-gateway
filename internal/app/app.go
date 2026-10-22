@@ -31,6 +31,7 @@ type Checker interface {
 
 type Dependencies struct {
 	MigrationService              *nexusmigration.Service
+	MigrationSchedules            *nexusmigration.ScheduleService
 	SourceService                 *nexussource.Service
 	checkers                      []Checker
 	BuildVersion                  string

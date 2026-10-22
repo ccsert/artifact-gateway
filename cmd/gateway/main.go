@@ -20,6 +20,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/consoletheme"
 	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/ccsert/artifact-gateway/internal/evidence"
+	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
@@ -200,6 +201,10 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		return 1
 	}
 	defer func() { _ = store.Close() }()
+	if err := initializeRepositoryPresets(cfg, databasePool); err != nil {
+		slog.Error("initialize repository presets", "error", err)
+		return 1
+	}
 	dependencies.SourceService = nexussource.New(sourcepg.New(databasePool), store, nexussource.Options{PrivateEndpoints: cfg.MigrationSourcePrivateEndpoints})
 	if dependencies.ArtifactScanner != nil {
 		dependencies.ArtifactScanResolver = app.NewNativeArtifactScanResolver(store, objectStore)
@@ -255,8 +260,11 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	migrationPublication := app.NewNexusMigrationPublication(store, app.SharedObjectStores(objectStore), migrationTargetID, cfg.MigrationStoragePoolID).
 		WithPublicationScanner(migrationScanner).
 		WithOCI(app.NewNexusOCIMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner)).
-		WithConan(app.NewNexusConanMigrationPublication(store, store, objectStore).WithPublicationScanner(migrationScanner))
-	dependencies.MigrationService = nexusmigration.New(migrationpg.New(databasePool), dependencies.SourceService, migrationPublication, nexusmigration.Options{TargetID: migrationTargetID, PoolID: cfg.MigrationStoragePoolID})
+		WithConan(app.NewNexusConanMigrationPublication(store, store, objectStore).WithPublicationScanner(migrationScanner)).
+		WithNPM(app.NewNexusNPMMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner))
+	migrationLedger := migrationpg.New(databasePool)
+	dependencies.MigrationService = nexusmigration.New(migrationLedger, dependencies.SourceService, migrationPublication, nexusmigration.Options{TargetID: migrationTargetID, PoolID: cfg.MigrationStoragePoolID})
+	dependencies.MigrationSchedules = nexusmigration.NewSchedules(migrationLedger, dependencies.MigrationService)
 	runtimeContext, stopRuntime := signalContext()
 	defer stopRuntime()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
@@ -285,6 +293,14 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	if dependencies.APTSigner != nil {
 		aptPublisher = aptpublication.NewPublisher(store, objectStore, dependencies.APTSigner).WithMetrics(metrics).WithPublicationScanner(app.NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics))
 	}
+	var helmMaintenance *helmformat.Maintenance
+	if cfg.HelmPreviewEnabled {
+		helmMaintenance, err = helmformat.NewMaintenance(store, objectStore)
+		if err != nil {
+			slog.Error("configure Helm preview maintenance", "error", err)
+			return 1
+		}
+	}
 	var nugetMaintenance *nugetformat.Maintenance
 	if cfg.NuGetPreviewEnabled {
 		nugetMaintenance, err = nugetformat.NewMaintenance(store, objectStore)
@@ -296,11 +312,13 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	(backgroundRuntime{
 		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
 		scanner: dependencies.ArtifactScanner, scanResolver: dependencies.ArtifactScanResolver,
-		scannerFormats:   dependencies.ArtifactScannerFormats,
-		workerSessionID:  runtimeSessionID,
-		aptPublisher:     aptPublisher,
-		migration:        dependencies.MigrationService,
-		nugetMaintenance: nugetMaintenance,
+		scannerFormats:     dependencies.ArtifactScannerFormats,
+		workerSessionID:    runtimeSessionID,
+		aptPublisher:       aptPublisher,
+		migration:          dependencies.MigrationService,
+		migrationSchedules: dependencies.MigrationSchedules,
+		nugetMaintenance:   nugetMaintenance,
+		helmMaintenance:    helmMaintenance,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
@@ -342,6 +360,11 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			},
 			Metrics:  metrics,
 			Upstream: app.UpstreamClient{OCIBearerCache: app.NewOCIBearerTokenCache()},
+		}
+		if cfg.HelmPreviewEnabled {
+			gatewayOptions.HelmPreviewEnabled = true
+			gatewayOptions.HelmStore = store
+			gatewayOptions.HelmObjects = objectStore
 		}
 		if cfg.NuGetPreviewEnabled {
 			gatewayOptions.NuGetPreviewEnabled = true

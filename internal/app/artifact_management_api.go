@@ -96,7 +96,7 @@ func newArtifactManagementHandler(options artifactManagementOptions) artifactMan
 }
 
 func (h artifactManagementHandler) authorizeAnonymousGroupBrowse(w http.ResponseWriter, r *http.Request, group repository.HostedGroup) bool {
-	if group.Format == repository.FormatNuGet {
+	if !repository.IsSupportedFormat(group.Format) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return false
 	}

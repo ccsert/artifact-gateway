@@ -80,6 +80,16 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 				capacity.ObjectCount++
 			}
 		}
+	case FormatHelm:
+		for _, publication := range s.helmPublications {
+			if publication.RepositoryID == id {
+				capacity.UsedBytes += publication.Size + publication.ProvenanceSize
+				capacity.ObjectCount++
+				if publication.ProvenanceSize > 0 {
+					capacity.ObjectCount++
+				}
+			}
+		}
 	case FormatNuGet:
 		for _, publication := range s.nugetPublications {
 			if publication.RepositoryID == id {

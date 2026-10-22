@@ -10,6 +10,7 @@ import (
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/ccsert/artifact-gateway/internal/authorization"
+	helmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/helm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -203,7 +204,7 @@ func (h accessManagementHandler) ListRepositoryGrants(w http.ResponseWriter, r *
 	}
 	items := make(adminopenapi.RepositoryGrantRecordList, 0, len(records))
 	for _, record := range records {
-		if !h.mayAdministerRepository(r, principal, record.RepositoryID) {
+		if !repository.IsSupportedFormat(record.Format) || !h.mayAdministerRepository(r, principal, record.RepositoryID) {
 			continue
 		}
 		item := adminopenapi.RepositoryGrantRecord{
@@ -772,7 +773,15 @@ func validGrantPrincipal(principal string) bool {
 // a repository: it has to satisfy the shape rules and be a valid prefix for
 // that repository's format.
 func validGrantResourcePrefix(prefix string, format repository.Format) bool {
-	return validGrantResourcePrefixShape(prefix) && validArtifactSearchQuery(format, prefix)
+	if !validGrantResourcePrefixShape(prefix) {
+		return false
+	}
+	// Helm grants bind the preview's chart-name resource. Grant administration
+	// does not admit this preview into formal artifact search or browsing.
+	if format == repository.FormatHelm {
+		return helmprotocol.ValidNamePrefix(prefix)
+	}
+	return validArtifactSearchQuery(format, prefix)
 }
 
 // validGrantResourcePrefixShape reports whether a prefix has the shape every

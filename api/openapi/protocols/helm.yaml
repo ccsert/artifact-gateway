@@ -1,0 +1,130 @@
+index:
+  servers: [{url: https://gateway.example.com}]
+  parameters:
+    - {$ref: '#/repository'}
+  get:
+    operationId: readHelmHostedIndex
+    description: Opt-in traditional HTTP Helm repository index. A deterministic snapshot contains only committed charts the caller may read. All chart/provenance URLs resolve against this Gateway. No Proxy or Group support is advertised.
+    security: [{protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200':
+        description: >-
+          Deterministic Helm index.yaml with full original chart digest
+      '304':
+        description: >-
+          Same authorized index snapshot
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Repository read permission required
+      '404':
+        description: >-
+          Preview disabled or repository not found
+      '422':
+        description: >-
+          Preview inventory exceeds its bound
+      '503':
+        description: >-
+          Consistent index snapshot unavailable
+  head:
+    operationId: headHelmHostedIndex
+    security: [{protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200':
+        description: >-
+          Same headers as GET without body
+      '304':
+        description: >-
+          Same authorized index snapshot
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Repository read permission required
+      '404':
+        description: >-
+          Preview disabled or repository not found
+      '422':
+        description: >-
+          Preview inventory exceeds its bound
+      '503':
+        description: >-
+          Consistent index snapshot unavailable
+asset:
+  servers: [{url: https://gateway.example.com}]
+  parameters:
+    - {$ref: '#/repository'}
+    - {name: chartName, in: path, required: true, schema: {type: string}}
+    - {name: version, in: path, required: true, schema: {type: string}}
+    - {name: filename, in: path, required: true, schema: {type: string}}
+  get:
+    operationId: readHelmHostedAsset
+    description: Original committed chart or provenance bytes. Exact filename must match Chart.yaml identity. Chart and provenance use the same committed publication and resource authorization. Full size and SHA-256 are verified before sending bytes.
+    security: [{protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200':
+        description: >-
+          Original chart or provenance
+      '206':
+        description: >-
+          Requested byte range
+      '304':
+        description: >-
+          Same immutable object
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Chart read permission required
+      '404':
+        description: >-
+          Chart or provenance not found
+      '412':
+        description: >-
+          Conditional precondition failed
+      '416':
+        description: >-
+          Unsatisfiable byte range
+      '503':
+        description: >-
+          Published object unavailable or integrity verification failed
+  head:
+    operationId: headHelmHostedAsset
+    security: [{protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200':
+        description: >-
+          Same headers as GET without body
+      '206':
+        description: >-
+          Requested byte range headers
+      '304':
+        description: >-
+          Same immutable object
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Chart read permission required
+      '404':
+        description: >-
+          Chart or provenance not found
+      '412':
+        description: >-
+          Conditional precondition failed
+      '416':
+        description: >-
+          Unsatisfiable byte range
+      '503':
+        description: >-
+          Published object unavailable or integrity verification failed
+repository:
+  name: repository
+  in: path
+  required: true
+  schema: {type: string, minLength: 1}

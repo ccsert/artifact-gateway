@@ -104,7 +104,7 @@ func (h repositoryManagementHandler) readGroup(w http.ResponseWriter, r *http.Re
 		return repository.HostedGroup{}, false
 	}
 	group, err := h.groups.GetHostedGroup(r.Context(), id)
-	if errors.Is(err, repository.ErrNotFound) || (err == nil && (group.Format == repository.FormatNuGet || !principal.Admin && !h.administersGroupMembers(r, principal, group.Members))) {
+	if errors.Is(err, repository.ErrNotFound) || (err == nil && (!repository.IsSupportedFormat(group.Format) || !principal.Admin && !h.administersGroupMembers(r, principal, group.Members))) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "group not found")
 		return repository.HostedGroup{}, false
 	}
@@ -153,7 +153,7 @@ func (h repositoryManagementHandler) ListGroups(w http.ResponseWriter, r *http.R
 		}
 		visible := make([]repository.HostedGroup, 0, len(items))
 		for _, item := range items {
-			if item.Format != repository.FormatNuGet {
+			if repository.IsSupportedFormat(item.Format) {
 				visible = append(visible, item)
 			}
 		}
@@ -180,7 +180,7 @@ func (h repositoryManagementHandler) ListGroups(w http.ResponseWriter, r *http.R
 		hasMore = next != ""
 		for index, candidate := range batch {
 			scanned = candidate.ID
-			if candidate.Format != repository.FormatNuGet && h.administersGroupMembers(r, principal, candidate.Members) {
+			if repository.IsSupportedFormat(candidate.Format) && h.administersGroupMembers(r, principal, candidate.Members) {
 				items = append(items, candidate)
 			}
 			if len(items) == limit {
@@ -285,7 +285,7 @@ func (h repositoryManagementHandler) DeleteGroup(w http.ResponseWriter, r *http.
 		return
 	}
 	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) || err == nil && group.Format == repository.FormatNuGet {
+	if errors.Is(err, repository.ErrNotFound) || err == nil && !repository.IsSupportedFormat(group.Format) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return
 	}
@@ -309,7 +309,7 @@ func (h repositoryManagementHandler) ReplaceGroup(w http.ResponseWriter, r *http
 		return
 	}
 	current, err := h.groups.GetHostedGroup(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) || err == nil && current.Format == repository.FormatNuGet {
+	if errors.Is(err, repository.ErrNotFound) || err == nil && !repository.IsSupportedFormat(current.Format) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return
 	}
@@ -340,7 +340,7 @@ func (h repositoryManagementHandler) ReplaceGroupMembers(w http.ResponseWriter, 
 		return
 	}
 	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) || err == nil && group.Format == repository.FormatNuGet {
+	if errors.Is(err, repository.ErrNotFound) || err == nil && !repository.IsSupportedFormat(group.Format) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return
 	}

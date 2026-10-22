@@ -62,12 +62,19 @@ Gateway E2E，不只检查 HTTP 200：
 
 ## 管理契约逐操作映射
 
-下表 198 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
+下表覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
 守卫从文件重新推导该集合，不信任此计数。路径均相对 `/api/v2`（契约的
 server base）。计划命令省略前导 `agctl`。
 
 | API（均相对 /api/v2）/ operationId | 计划命令（省略 agctl） | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migrations/nexus/schedules`<br>`listNexusMigrationSchedules` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules`<br>`createNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `GET /migrations/nexus/schedules/{scheduleId}`<br>`getNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/pause`<br>`pauseNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/resume`<br>`resumeNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/stop`<br>`stopNexusMigrationSchedule` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
+| `POST /migrations/nexus/schedules/{scheduleId}/capacity`<br>`refreshNexusMigrationScheduleCapacity` | N：当前仅提供迁移计划 API/Console，CLI 暂缓 | #443 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API 或 Console |
 | `GET /migrations/nexus/capabilities`<br>`getNexusMigrationCapabilities` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `GET /migrations/nexus/batches`<br>`listNexusMigrationBatches` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `POST /migrations/nexus/batches`<br>`startNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
@@ -354,8 +361,8 @@ server base）。计划命令省略前导 `agctl`。
 | gateway apt-snapshot verify | #138 文档；远程归档/恢复见上表 | LOCAL 已有 | 本地归档读/摘要完整性；输出 signatures=not_checked 不冒充可信签名已通过 |
 | gateway theme validate/install/list | #139 区分本地 directory 与远程 managed | LOCAL 已有 | 显式本地目录/文件权限；包校验/ownership；不以远端 admin token 获得本地写入权 |
 | 完整系统备份/恢复、主机/部署配置、worker/PG/S3/SMTP relay/auth/CA | #126/#137/#139 明确部署入口；远程需求待独立 API | LOCAL/远程 BLOCKED | 尚无通用远程管理端点；不做隐式 SSH/容器/数据库直连，不从真实 secrets 自动探测 |
-| 手动全量与完整重扫的增量字节迁移 | #381/#382、Console #383；没有 agctl 命令 | API-only 已实现 | 源发现/映射与持久 Maven release/Raw 批次已经交付；现有 Console/API 保持源只读，提供容量/身份/校验证据；协议客户端仍需配置原生端点 |
-| 周期调度的 Nexus 持续同步 | #269，关联 #199/#202/#204/#205；未来 #137 消费实际调度契约 | BLOCKED | 持久手动批次不等于自动周期调度；离线导入不冒充在线同步、主体/凭据迁移或生产切流 |
+| 手动全量与完整重扫的增量字节迁移 | #381/#382/#206/#425/#442、Console #383；没有 agctl 命令 | API/Console 已实现 | Maven release、Raw、OCI、Conan 2 和 npm 的持久批次保持源只读，提供容量/身份/完整字节校验证据；协议客户端仍需配置原生端点 |
+| 周期调度的 Nexus 持续同步 | #443 与 #269；通过 API/Console 管理计划，agctl 由 #137 后续承接 | API/Console 已实现；CLI 暂缓 | 仅管理员可操作，计划冻结成功批次的源版本、目标映射和原生策略；每轮需要新鲜的管理员容量观测，否则进入 waiting_capacity；暂停/停止阻止后续派发；尚非完全无人值守迁移 |
 | 物理挂载告警、集群 sender 就绪/积压与更完整通知 | #255/#256 及 #209–#213/#229/#230；未来 #336 扩展 | BLOCKED | 现有局部 capability/心跳不是全部角色交付证明；待实际 API/schema/部署验收，不伪造字段或命令 |
 
 来源：`cmd/gateway/main.go`、`internal/{backupops,snapshotimport,preflight,evidence,aptpublication,consoletheme}/cli*.go`；
@@ -422,3 +429,21 @@ server base）。计划命令省略前导 `agctl`。
 | `PUT /previews/nuget/groups/{groupId}`<br>`replaceNuGetPreviewGroup` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `GET /previews/nuget/groups/{groupId}/sources/{packageId}/{version}`<br>`getNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
 | `POST /previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate`<br>`revalidateNuGetPreviewGroupSource` | preview API; no CLI command | #288 | N/A | native-format or preview authorization | N: explicit opt-in preview; no CLI command registers or sends this operation |
+
+## Helm Hosted 预览 (#290)
+
+默认关闭；管理操作使用预览 API，原生读取使用官方 Helm 客户端。未提供 agctl Helm 命令。
+
+| API / operationId | 计划命令 | 承接 | 阶段 | 权限 | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| `POST /previews/helm/repositories`<br>`createHelmPreviewRepository` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | A | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}`<br>`getHelmPreviewRepository` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}/charts`<br>`listHelmPreviewCharts` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`getHelmPreviewChart` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `PUT /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}`<br>`publishHelmPreviewChart` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | W | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /previews/helm/repositories/{repositoryId}/capacity`<br>`getHelmPreviewCapacity` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `PUT /previews/helm/repositories/{repositoryId}/capacity`<br>`replaceHelmPreviewQuota` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | RA | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /helm/{repository}/index.yaml`<br>`readHelmHostedIndex` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `HEAD /helm/{repository}/index.yaml`<br>`headHelmHostedIndex` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `GET /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`readHelmHostedAsset` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |
+| `HEAD /helm/{repository}/charts/{chartName}/{version}/{filename}`<br>`headHelmHostedAsset` | N：Helm 预览 API 或官方客户端；CLI 暂缓 | #290 | N/A | R | N：显式启用的预览，未注册 CLI 命令 |

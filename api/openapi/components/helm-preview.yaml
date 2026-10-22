@@ -1,0 +1,47 @@
+HelmPreviewRepository:
+  type: object
+  additionalProperties: false
+  required: [id, name, format, type, preview, version, sourceUrl, publicationApi, provenanceTrust]
+  properties:
+    id: {type: string, format: uuid}
+    name: {type: string}
+    format: {type: string, enum: [helm]}
+    type: {type: string, enum: [hosted]}
+    preview: {type: boolean, const: true}
+    version: {type: string}
+    sourceUrl: {type: string, description: Gateway-relative traditional index.yaml URL}
+    publicationApi: {type: string, description: Explicit Gateway multipart publication API template}
+    provenanceTrust: {type: string, enum: [consumer-public-keyring]}
+HelmPreviewChart:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, name, version, digest, size, publishedAt, chartUrl, provenanceSize]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    name: {type: string}
+    version: {type: string}
+    digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    size: {type: integer, format: int64, minimum: 1}
+    publishedAt: {type: string, format: date-time}
+    chartUrl: {type: string, description: Gateway-relative immutable chart download URL}
+    provenanceSize: {type: integer, format: int64, minimum: 0}
+    provenanceDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    provenanceUrl: {type: string, description: Present only when the closure contains provenance}
+HelmPreviewChartList:
+  type: object
+  additionalProperties: false
+  required: [items]
+  properties:
+    items:
+      type: array
+      maxItems: 4096
+      items: {$ref: '#/HelmPreviewChart'}
+HelmPreviewCapacity:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, usedBytes, objectCount, quotaBytes]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    quotaBytes: {type: integer, format: int64, minimum: 0}

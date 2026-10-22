@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
+	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 )
 
 // NativeFormat translates the source's format identity into the target domain.
@@ -13,7 +14,7 @@ func NativeFormat(source string) (string, bool) {
 		return "maven", true
 	case "docker":
 		return "oci", true
-	case "raw", "conan":
+	case "raw", "conan", "npm":
 		return source, true
 	default:
 		return "", false
@@ -39,6 +40,14 @@ func assetRoute(format, value string) (canonical, wire, reason string) {
 			return normalized, strings.TrimPrefix(route, "/"), ""
 		}
 		return canonical, wire, "oci_source_path_unsupported"
+	case "npm":
+		if npmprotocol.ValidPackageName(canonical) {
+			return canonical, wire, ""
+		}
+		if name, tarball, ok := strings.Cut(canonical, "/-/"); ok && npmprotocol.ValidPackageName(name) && npmprotocol.ValidTarballName(tarball) {
+			return canonical, wire, ""
+		}
+		return canonical, wire, "npm_source_shape_unsupported"
 	case "conan":
 		if strings.HasPrefix(canonical, "conans/") {
 			wire = "v2/" + canonical

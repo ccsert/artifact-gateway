@@ -1,0 +1,249 @@
+# Opt-in Hosted preview. Not a public format admission or a Helm push protocol.
+repositories:
+  post:
+    operationId: createHelmPreviewRepository
+    parameters:
+      - {$ref: '#/helmPreviewIdempotencyKey'}
+    description: Create an explicitly enabled Helm Hosted preview. Requires administrator permission; excluded from the public format catalog.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+              name:
+                type: string
+                pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+    responses:
+      '201':
+        description: Created or identical idempotent replay
+        content:
+          application/json:
+            schema:
+              $ref: ../components/helm-preview.yaml#/HelmPreviewRepository
+      '400':
+        description: >-
+          Invalid name or body
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Administrator required
+      '409':
+        description: >-
+          Name or idempotency conflict
+      '503':
+        description: >-
+          Preview disabled or storage unavailable
+repository:
+  parameters:
+    - {$ref: '#/repositoryId'}
+  get:
+    operationId: getHelmPreviewRepository
+    responses:
+      '200':
+        description: Helm Hosted preview repository and index URL
+        content:
+          application/json:
+            schema:
+              $ref: ../components/helm-preview.yaml#/HelmPreviewRepository
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Repository read permission required
+      '404':
+        description: >-
+          Preview repository not found
+      '503':
+        description: >-
+          Preview disabled or unavailable
+charts:
+  parameters:
+    - {$ref: '#/repositoryId'}
+  get:
+    operationId: listHelmPreviewCharts
+    description: Single consistent snapshot of at most 4096 committed charts, filtered by chart resource grants. An inventory exceeding the preview bound fails explicitly.
+    responses:
+      '200':
+        description: Committed chart identities with SHA-256, size, provenance digest and download locations
+        content:
+          application/json:
+            schema:
+              $ref: ../components/helm-preview.yaml#/HelmPreviewChartList
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Repository read permission required
+      '404':
+        description: >-
+          Preview repository not found
+      '422':
+        description: >-
+          Preview inventory exceeds its bound
+      '503':
+        description: >-
+          Preview disabled or unavailable
+chart:
+  parameters:
+    - {$ref: '#/repositoryId'}
+    - name: chartName
+      in: path
+      required: true
+      schema: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
+    - name: version
+      in: path
+      required: true
+      schema: {type: string, maxLength: 256}
+  get:
+    operationId: getHelmPreviewChart
+    responses:
+      '200':
+        description: Committed chart identity and download locations
+        content:
+          application/json:
+            schema:
+              $ref: ../components/helm-preview.yaml#/HelmPreviewChart
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Chart read permission required
+      '404':
+        description: >-
+          Chart not found
+      '503':
+        description: >-
+          Preview disabled or unavailable
+  put:
+    operationId: publishHelmPreviewChart
+    parameters:
+      - {$ref: '#/helmPreviewIdempotencyKey'}
+    description: >-
+      Gateway-specific publication API, not a native helm push or ChartMuseum endpoint.
+      Upload one chart and optional provenance as a single immutable closure. Chart.yaml name/version
+      must equal the path; chart filename must be name-version.tgz and provenance name-version.tgz.prov.
+      The provenance must contain the same chart metadata and full chart SHA-256; publisher trust is
+      verified separately by Helm using a consumer-owned public keyring. Gateway does not import
+      private keys or assert signature trust. Exact closure replay is idempotent; changing chart,
+      provenance or its absence returns 409. Objects are read back and verified before transaction
+      commit. Pending uploads never appear in the index.
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [chart]
+            properties:
+              chart: {type: string, format: binary, contentEncoding: binary, description: 'A bounded tar.gz chart; maximum 64 MiB compressed, 256 MiB expanded across packaged dependencies, 10000 total entries and at most 8 nested packaged dependencies'}
+              provenance: {type: string, format: binary, contentEncoding: binary, description: 'Optional original OpenPGP clearsigned Helm provenance, maximum 1 MiB'}
+    responses:
+      '201':
+        description: Complete chart closure committed or identical replay
+        content:
+          application/json:
+            schema:
+              $ref: ../components/helm-preview.yaml#/HelmPreviewChart
+      '400':
+        description: >-
+          Invalid archive, provenance, identity, multipart body or filename
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Chart write permission required
+      '404':
+        description: >-
+          Hosted preview repository not found
+      '409':
+        description: >-
+          Immutable closure, pending owner or quota conflict
+      '410':
+        description: >-
+          Upload reservation expired before publication
+      '413':
+        description: >-
+          Compressed chart or provenance exceeds its bound
+      '503':
+        description: >-
+          Preview disabled, incomplete object read-back or storage unavailable
+capacity:
+  parameters:
+    - {$ref: '#/repositoryId'}
+  get:
+    operationId: getHelmPreviewCapacity
+    responses:
+      '200':
+        description: Committed chart and provenance size and repository quota
+        content:
+          application/json:
+            schema:
+              $ref: ../components/helm-preview.yaml#/HelmPreviewCapacity
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Repository read permission required
+      '404':
+        description: >-
+          Preview repository not found
+      '503':
+        description: >-
+          Preview disabled or unavailable
+  put:
+    operationId: replaceHelmPreviewQuota
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [quotaBytes]
+            properties:
+              quotaBytes: {type: integer, format: int64, minimum: 0}
+    responses:
+      '200':
+        description: Updated quota, zero means unlimited
+        content:
+          application/json:
+            schema:
+              $ref: ../components/helm-preview.yaml#/HelmPreviewCapacity
+      '400':
+        description: >-
+          Invalid quota
+      '401':
+        description: >-
+          Authentication required
+      '403':
+        description: >-
+          Repository admin permission required
+      '404':
+        description: >-
+          Preview repository not found
+      '503':
+        description: >-
+          Preview disabled or unavailable
+repositoryId:
+  name: repositoryId
+  in: path
+  required: true
+  schema: {type: string, format: uuid}
+helmPreviewIdempotencyKey:
+  name: Idempotency-Key
+  in: header
+  required: false
+  description: Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
+  schema: {type: string, minLength: 1, maxLength: 200}

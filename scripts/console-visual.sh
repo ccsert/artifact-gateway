@@ -15,10 +15,10 @@ docker run --rm --init --ipc=host \
   -v /work/console/node_modules \
   -w /work/console \
   "$image" \
-  bash -c '
+  bash -ec '
     npm ci --no-audit --no-fund --loglevel=error
     status=0
-    npx playwright test -c playwright.visual.config.ts "$@" || status=$?
+    ./node_modules/.bin/playwright test -c playwright.visual.config.ts "$@" || status=$?
     # Hand generated baselines and reports back to the invoking user.
     chown -R "$HOST_UID:$HOST_GID" e2e/visual/__screenshots__ test-results 2>/dev/null || true
     exit $status

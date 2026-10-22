@@ -45,7 +45,7 @@ func (h generatedRepositoryAPIAdapter) GetOverviewStatistics(w http.ResponseWrit
 		Repositories: make([]adminopenapi.OverviewRepositoryStatistics, 0, len(records)),
 	}
 	for _, record := range records {
-		if record.Repository.State == repository.RepositoryDeleted || !h.mayAdministerRepository(r, principal, record.Repository.ID) {
+		if !repository.IsSupportedFormat(record.Repository.Format) || record.Repository.State == repository.RepositoryDeleted || !h.mayAdministerRepository(r, principal, record.Repository.ID) {
 			continue
 		}
 		capacity := record.Capacity

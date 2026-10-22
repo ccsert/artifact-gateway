@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -1630,6 +1631,66 @@ func (e HTTPErrorRateState) Valid() bool {
 	}
 }
 
+// Defines values for HelmPreviewRepositoryFormat.
+const (
+	HelmPreviewRepositoryFormatHelm HelmPreviewRepositoryFormat = "helm"
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewRepositoryFormat enum.
+func (e HelmPreviewRepositoryFormat) Valid() bool {
+	switch e {
+	case HelmPreviewRepositoryFormatHelm:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewRepositoryPreview.
+const (
+	HelmPreviewRepositoryPreviewTrue HelmPreviewRepositoryPreview = true
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewRepositoryPreview enum.
+func (e HelmPreviewRepositoryPreview) Valid() bool {
+	switch e {
+	case HelmPreviewRepositoryPreviewTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewRepositoryProvenanceTrust.
+const (
+	ConsumerPublicKeyring HelmPreviewRepositoryProvenanceTrust = "consumer-public-keyring"
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewRepositoryProvenanceTrust enum.
+func (e HelmPreviewRepositoryProvenanceTrust) Valid() bool {
+	switch e {
+	case ConsumerPublicKeyring:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewRepositoryType.
+const (
+	HelmPreviewRepositoryTypeHosted HelmPreviewRepositoryType = "hosted"
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewRepositoryType enum.
+func (e HelmPreviewRepositoryType) Valid() bool {
+	switch e {
+	case HelmPreviewRepositoryTypeHosted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LifecycleJobKind.
 const (
 	LifecycleJobKindIntelligence LifecycleJobKind = "intelligence"
@@ -1847,6 +1908,7 @@ func (e MigrationSourceFieldDisposition) Valid() bool {
 const (
 	MigrationSourceMappingFormatConan MigrationSourceMappingFormat = "conan"
 	MigrationSourceMappingFormatMaven MigrationSourceMappingFormat = "maven"
+	MigrationSourceMappingFormatNpm   MigrationSourceMappingFormat = "npm"
 	MigrationSourceMappingFormatOci   MigrationSourceMappingFormat = "oci"
 	MigrationSourceMappingFormatRaw   MigrationSourceMappingFormat = "raw"
 )
@@ -1857,6 +1919,8 @@ func (e MigrationSourceMappingFormat) Valid() bool {
 	case MigrationSourceMappingFormatConan:
 		return true
 	case MigrationSourceMappingFormatMaven:
+		return true
+	case MigrationSourceMappingFormatNpm:
 		return true
 	case MigrationSourceMappingFormatOci:
 		return true
@@ -2036,6 +2100,7 @@ func (e NexusMigrationCapabilitiesCapacityEvidenceSource) Valid() bool {
 const (
 	NexusMigrationEntryFormatConan NexusMigrationEntryFormat = "conan"
 	NexusMigrationEntryFormatMaven NexusMigrationEntryFormat = "maven"
+	NexusMigrationEntryFormatNpm   NexusMigrationEntryFormat = "npm"
 	NexusMigrationEntryFormatOci   NexusMigrationEntryFormat = "oci"
 	NexusMigrationEntryFormatRaw   NexusMigrationEntryFormat = "raw"
 )
@@ -2046,6 +2111,8 @@ func (e NexusMigrationEntryFormat) Valid() bool {
 	case NexusMigrationEntryFormatConan:
 		return true
 	case NexusMigrationEntryFormatMaven:
+		return true
+	case NexusMigrationEntryFormatNpm:
 		return true
 	case NexusMigrationEntryFormatOci:
 		return true
@@ -2102,6 +2169,7 @@ func (e NexusMigrationEntryState) Valid() bool {
 const (
 	ManifestPlanning         NexusMigrationScanFailureStage = "manifest_planning"
 	MetadataDiscovery        NexusMigrationScanFailureStage = "metadata_discovery"
+	NpmPackumentValidation   NexusMigrationScanFailureStage = "npm_packument_validation"
 	OciGraphValidation       NexusMigrationScanFailureStage = "oci_graph_validation"
 	SourceVerificationDigest NexusMigrationScanFailureStage = "source_verification_digest"
 	SourceVerificationOpen   NexusMigrationScanFailureStage = "source_verification_open"
@@ -2115,6 +2183,8 @@ func (e NexusMigrationScanFailureStage) Valid() bool {
 	case ManifestPlanning:
 		return true
 	case MetadataDiscovery:
+		return true
+	case NpmPackumentValidation:
 		return true
 	case OciGraphValidation:
 		return true
@@ -2131,15 +2201,57 @@ func (e NexusMigrationScanFailureStage) Valid() bool {
 	}
 }
 
+// Defines values for NexusMigrationSchedulePolicyVersion.
+const (
+	NexusMigrationSchedulePolicyVersionNativeV1 NexusMigrationSchedulePolicyVersion = "native-v1"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationSchedulePolicyVersion enum.
+func (e NexusMigrationSchedulePolicyVersion) Valid() bool {
+	switch e {
+	case NexusMigrationSchedulePolicyVersionNativeV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NexusMigrationScheduleState.
+const (
+	NexusMigrationScheduleStateActive          NexusMigrationScheduleState = "active"
+	NexusMigrationScheduleStateBlocked         NexusMigrationScheduleState = "blocked"
+	NexusMigrationScheduleStatePaused          NexusMigrationScheduleState = "paused"
+	NexusMigrationScheduleStateStopped         NexusMigrationScheduleState = "stopped"
+	NexusMigrationScheduleStateWaitingCapacity NexusMigrationScheduleState = "waiting_capacity"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationScheduleState enum.
+func (e NexusMigrationScheduleState) Valid() bool {
+	switch e {
+	case NexusMigrationScheduleStateActive:
+		return true
+	case NexusMigrationScheduleStateBlocked:
+		return true
+	case NexusMigrationScheduleStatePaused:
+		return true
+	case NexusMigrationScheduleStateStopped:
+		return true
+	case NexusMigrationScheduleStateWaitingCapacity:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NexusMigrationStartPolicyVersion.
 const (
-	NativeV1 NexusMigrationStartPolicyVersion = "native-v1"
+	NexusMigrationStartPolicyVersionNativeV1 NexusMigrationStartPolicyVersion = "native-v1"
 )
 
 // Valid indicates whether the value is a known member of the NexusMigrationStartPolicyVersion enum.
 func (e NexusMigrationStartPolicyVersion) Valid() bool {
 	switch e {
-	case NativeV1:
+	case NexusMigrationStartPolicyVersionNativeV1:
 		return true
 	default:
 		return false
@@ -2356,21 +2468,6 @@ func (e NuGetPreviewUpstreamAuthStatusScheme) Valid() bool {
 	}
 }
 
-// Defines values for NuGetPreviewWorkerFormat.
-const (
-	NuGetPreviewWorkerFormatNuget NuGetPreviewWorkerFormat = "nuget"
-)
-
-// Valid indicates whether the value is a known member of the NuGetPreviewWorkerFormat enum.
-func (e NuGetPreviewWorkerFormat) Valid() bool {
-	switch e {
-	case NuGetPreviewWorkerFormatNuget:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for NuGetPublicationSessionState.
 const (
 	NuGetPublicationSessionStateCommitted NuGetPublicationSessionState = "committed"
@@ -2503,6 +2600,24 @@ func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
 	case OIDCSettingsUpdateProvisioningModeDisabled:
 		return true
 	case OIDCSettingsUpdateProvisioningModeJit:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewWorkerFormat.
+const (
+	PreviewWorkerFormatHelm  PreviewWorkerFormat = "helm"
+	PreviewWorkerFormatNuget PreviewWorkerFormat = "nuget"
+)
+
+// Valid indicates whether the value is a known member of the PreviewWorkerFormat enum.
+func (e PreviewWorkerFormat) Valid() bool {
+	switch e {
+	case PreviewWorkerFormatHelm:
+		return true
+	case PreviewWorkerFormatNuget:
 		return true
 	default:
 		return false
@@ -5090,8 +5205,8 @@ type DiagnosticRuntime struct {
 	InstanceId string `json:"instanceId"`
 
 	// PreviewWorkerFormats Separately enabled preview workers; absent when none are configured.
-	PreviewWorkerFormats *[]NuGetPreviewWorkerFormat `json:"previewWorkerFormats,omitempty"`
-	Roles                []string                    `json:"roles"`
+	PreviewWorkerFormats *[]PreviewWorkerFormat `json:"previewWorkerFormats,omitempty"`
+	Roles                []string               `json:"roles"`
 
 	// SessionId Session of the process that answered this diagnostics request.
 	SessionId     *string  `json:"sessionId,omitempty"`
@@ -5501,6 +5616,65 @@ type HTTPErrorRateReason string
 
 // HTTPErrorRateState defines model for HTTPErrorRateState.
 type HTTPErrorRateState string
+
+// HelmPreviewCapacity defines model for HelmPreviewCapacity.
+type HelmPreviewCapacity struct {
+	ObjectCount  int64              `json:"objectCount"`
+	QuotaBytes   int64              `json:"quotaBytes"`
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	UsedBytes    int64              `json:"usedBytes"`
+}
+
+// HelmPreviewChart defines model for HelmPreviewChart.
+type HelmPreviewChart struct {
+	// ChartUrl Gateway-relative immutable chart download URL
+	ChartUrl         string  `json:"chartUrl"`
+	Digest           string  `json:"digest"`
+	Name             string  `json:"name"`
+	ProvenanceDigest *string `json:"provenanceDigest,omitempty"`
+	ProvenanceSize   int64   `json:"provenanceSize"`
+
+	// ProvenanceUrl Present only when the closure contains provenance
+	ProvenanceUrl *string            `json:"provenanceUrl,omitempty"`
+	PublishedAt   time.Time          `json:"publishedAt"`
+	RepositoryId  openapi_types.UUID `json:"repositoryId"`
+	Size          int64              `json:"size"`
+	Version       string             `json:"version"`
+}
+
+// HelmPreviewChartList defines model for HelmPreviewChartList.
+type HelmPreviewChartList struct {
+	Items []HelmPreviewChart `json:"items"`
+}
+
+// HelmPreviewRepository defines model for HelmPreviewRepository.
+type HelmPreviewRepository struct {
+	Format          HelmPreviewRepositoryFormat          `json:"format"`
+	Id              openapi_types.UUID                   `json:"id"`
+	Name            string                               `json:"name"`
+	Preview         HelmPreviewRepositoryPreview         `json:"preview"`
+	ProvenanceTrust HelmPreviewRepositoryProvenanceTrust `json:"provenanceTrust"`
+
+	// PublicationApi Explicit Gateway multipart publication API template
+	PublicationApi string `json:"publicationApi"`
+
+	// SourceUrl Gateway-relative traditional index.yaml URL
+	SourceUrl string                    `json:"sourceUrl"`
+	Type      HelmPreviewRepositoryType `json:"type"`
+	Version   string                    `json:"version"`
+}
+
+// HelmPreviewRepositoryFormat defines model for HelmPreviewRepository.Format.
+type HelmPreviewRepositoryFormat string
+
+// HelmPreviewRepositoryPreview defines model for HelmPreviewRepository.Preview.
+type HelmPreviewRepositoryPreview bool
+
+// HelmPreviewRepositoryProvenanceTrust defines model for HelmPreviewRepository.ProvenanceTrust.
+type HelmPreviewRepositoryProvenanceTrust string
+
+// HelmPreviewRepositoryType defines model for HelmPreviewRepository.Type.
+type HelmPreviewRepositoryType string
 
 // LifecycleJob defines model for LifecycleJob.
 type LifecycleJob struct {
@@ -5940,6 +6114,50 @@ type NexusMigrationScanFailure struct {
 // NexusMigrationScanFailureStage defines model for NexusMigrationScanFailure.Stage.
 type NexusMigrationScanFailureStage string
 
+// NexusMigrationSchedule defines model for NexusMigrationSchedule.
+type NexusMigrationSchedule struct {
+	ActiveBatchId      string                          `json:"activeBatchId"`
+	CapacityEvidence   *NexusMigrationCapacityEvidence `json:"capacityEvidence"`
+	ConsumedObservedAt *time.Time                      `json:"consumedObservedAt"`
+	CreatedAt          time.Time                       `json:"createdAt"`
+	DispatchAttempts   int                             `json:"dispatchAttempts"`
+	Id                 openapi_types.UUID              `json:"id"`
+	IntervalSeconds    int                             `json:"intervalSeconds"`
+	LastBatchId        string                          `json:"lastBatchId"`
+	LastError          string                          `json:"lastError"`
+
+	// LastSuccessfulAt Most recent fully verified batch within the plan-supported native content scope. Exact regenerated Maven metadata remains in original unsupported details and counts; this is not complete-source clearance or client-cutover evidence.
+	LastSuccessfulAt *time.Time                          `json:"lastSuccessfulAt"`
+	Mappings         []NexusMigrationMapping             `json:"mappings"`
+	NextRunAt        *time.Time                          `json:"nextRunAt"`
+	PolicyVersion    NexusMigrationSchedulePolicyVersion `json:"policyVersion"`
+	SourceId         openapi_types.UUID                  `json:"sourceId"`
+	SourceVersion    string                              `json:"sourceVersion"`
+	State            NexusMigrationScheduleState         `json:"state"`
+	TemplateBatchId  openapi_types.UUID                  `json:"templateBatchId"`
+	UpdatedAt        time.Time                           `json:"updatedAt"`
+	Version          string                              `json:"version"`
+}
+
+// NexusMigrationSchedulePolicyVersion defines model for NexusMigrationSchedule.PolicyVersion.
+type NexusMigrationSchedulePolicyVersion string
+
+// NexusMigrationScheduleState defines model for NexusMigrationSchedule.State.
+type NexusMigrationScheduleState string
+
+// NexusMigrationScheduleCreate defines model for NexusMigrationScheduleCreate.
+type NexusMigrationScheduleCreate struct {
+	CapacityEvidence *NexusMigrationCapacityEvidence `json:"capacityEvidence,omitempty"`
+	IntervalSeconds  int                             `json:"intervalSeconds"`
+	TemplateBatchId  openapi_types.UUID              `json:"templateBatchId"`
+}
+
+// NexusMigrationSchedulePage defines model for NexusMigrationSchedulePage.
+type NexusMigrationSchedulePage struct {
+	Items      []NexusMigrationSchedule `json:"items"`
+	NextCursor string                   `json:"nextCursor"`
+}
+
 // NexusMigrationStart defines model for NexusMigrationStart.
 type NexusMigrationStart struct {
 	CapacityEvidence NexusMigrationCapacityEvidence   `json:"capacityEvidence"`
@@ -6126,9 +6344,6 @@ type NuGetPreviewUpstreamAuthStatus struct {
 
 // NuGetPreviewUpstreamAuthStatusScheme defines model for NuGetPreviewUpstreamAuthStatus.Scheme.
 type NuGetPreviewUpstreamAuthStatusScheme string
-
-// NuGetPreviewWorkerFormat Opt-in NuGet Hosted upload cleanup; does not admit NuGet to the formal format catalog.
-type NuGetPreviewWorkerFormat string
 
 // NuGetPublicationRequest defines model for NuGetPublicationRequest.
 type NuGetPublicationRequest struct {
@@ -6320,6 +6535,9 @@ type OverviewWindowCounts struct {
 	SevenDays  int64 `json:"sevenDays"`
 	ThirtyDays int64 `json:"thirtyDays"`
 }
+
+// PreviewWorkerFormat Opt-in preview upload cleanup formats; these do not enter the formal format catalog.
+type PreviewWorkerFormat string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -6989,7 +7207,7 @@ type RuntimeNode struct {
 	LastSeenAt time.Time `json:"lastSeenAt"`
 
 	// PreviewWorkerFormats Separately enabled preview workers; absent when none are configured.
-	PreviewWorkerFormats *[]NuGetPreviewWorkerFormat `json:"previewWorkerFormats,omitempty"`
+	PreviewWorkerFormats *[]PreviewWorkerFormat `json:"previewWorkerFormats,omitempty"`
 
 	// Revision Build revision reported by this node; absent for legacy records.
 	Revision  *string           `json:"revision,omitempty"`
@@ -7452,6 +7670,9 @@ type SessionId = openapi_types.UUID
 // SnapshotId defines model for SnapshotId.
 type SnapshotId = openapi_types.UUID
 
+// HelmPreviewIdempotencyKey defines model for helmPreviewIdempotencyKey.
+type HelmPreviewIdempotencyKey = string
+
 // ArtifactList defines model for ArtifactList.
 type ArtifactList = ArtifactPage
 
@@ -7707,6 +7928,72 @@ type ResumeNexusMigrationBatchParams struct {
 type RetryNexusMigrationBatchParams struct {
 	IfMatch        string `json:"If-Match"`
 	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// ListNexusMigrationSchedulesParams defines parameters for ListNexusMigrationSchedules.
+type ListNexusMigrationSchedulesParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateNexusMigrationScheduleParams defines parameters for CreateNexusMigrationSchedule.
+type CreateNexusMigrationScheduleParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// RefreshNexusMigrationScheduleCapacityParams defines parameters for RefreshNexusMigrationScheduleCapacity.
+type RefreshNexusMigrationScheduleCapacityParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+	IfMatch        string `json:"If-Match"`
+}
+
+// PauseNexusMigrationScheduleParams defines parameters for PauseNexusMigrationSchedule.
+type PauseNexusMigrationScheduleParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+	IfMatch        string `json:"If-Match"`
+}
+
+// ResumeNexusMigrationScheduleParams defines parameters for ResumeNexusMigrationSchedule.
+type ResumeNexusMigrationScheduleParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+	IfMatch        string `json:"If-Match"`
+}
+
+// StopNexusMigrationScheduleParams defines parameters for StopNexusMigrationSchedule.
+type StopNexusMigrationScheduleParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+	IfMatch        string `json:"If-Match"`
+}
+
+// CreateHelmPreviewRepositoryJSONBody defines parameters for CreateHelmPreviewRepository.
+type CreateHelmPreviewRepositoryJSONBody struct {
+	Name string `json:"name"`
+}
+
+// CreateHelmPreviewRepositoryParams defines parameters for CreateHelmPreviewRepository.
+type CreateHelmPreviewRepositoryParams struct {
+	// IdempotencyKey Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
+	IdempotencyKey *HelmPreviewIdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ReplaceHelmPreviewQuotaJSONBody defines parameters for ReplaceHelmPreviewQuota.
+type ReplaceHelmPreviewQuotaJSONBody struct {
+	QuotaBytes int64 `json:"quotaBytes"`
+}
+
+// PublishHelmPreviewChartMultipartBody defines parameters for PublishHelmPreviewChart.
+type PublishHelmPreviewChartMultipartBody struct {
+	// Chart A bounded tar.gz chart; maximum 64 MiB compressed, 256 MiB expanded across packaged dependencies, 10000 total entries and at most 8 nested packaged dependencies
+	Chart openapi_types.File `json:"chart"`
+
+	// Provenance Optional original OpenPGP clearsigned Helm provenance, maximum 1 MiB
+	Provenance *openapi_types.File `json:"provenance,omitempty"`
+}
+
+// PublishHelmPreviewChartParams defines parameters for PublishHelmPreviewChart.
+type PublishHelmPreviewChartParams struct {
+	// IdempotencyKey Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
+	IdempotencyKey *HelmPreviewIdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListNuGetPreviewPackagesParams defines parameters for ListNuGetPreviewPackages.
@@ -8213,6 +8500,24 @@ type ResumeNexusMigrationBatchJSONRequestBody = NexusMigrationResume
 // RetryNexusMigrationBatchJSONRequestBody defines body for RetryNexusMigrationBatch for application/json ContentType.
 type RetryNexusMigrationBatchJSONRequestBody = NexusMigrationResume
 
+// CreateNexusMigrationScheduleJSONRequestBody defines body for CreateNexusMigrationSchedule for application/json ContentType.
+type CreateNexusMigrationScheduleJSONRequestBody = NexusMigrationScheduleCreate
+
+// RefreshNexusMigrationScheduleCapacityJSONRequestBody defines body for RefreshNexusMigrationScheduleCapacity for application/json ContentType.
+type RefreshNexusMigrationScheduleCapacityJSONRequestBody = NexusMigrationResume
+
+// ResumeNexusMigrationScheduleJSONRequestBody defines body for ResumeNexusMigrationSchedule for application/json ContentType.
+type ResumeNexusMigrationScheduleJSONRequestBody = NexusMigrationResume
+
+// CreateHelmPreviewRepositoryJSONRequestBody defines body for CreateHelmPreviewRepository for application/json ContentType.
+type CreateHelmPreviewRepositoryJSONRequestBody CreateHelmPreviewRepositoryJSONBody
+
+// ReplaceHelmPreviewQuotaJSONRequestBody defines body for ReplaceHelmPreviewQuota for application/json ContentType.
+type ReplaceHelmPreviewQuotaJSONRequestBody ReplaceHelmPreviewQuotaJSONBody
+
+// PublishHelmPreviewChartMultipartRequestBody defines body for PublishHelmPreviewChart for multipart/form-data ContentType.
+type PublishHelmPreviewChartMultipartRequestBody PublishHelmPreviewChartMultipartBody
+
 // CreateNuGetPreviewGroupJSONRequestBody defines body for CreateNuGetPreviewGroup for application/json ContentType.
 type CreateNuGetPreviewGroupJSONRequestBody = NuGetPreviewGroupInput
 
@@ -8617,9 +8922,51 @@ type ServerInterface interface {
 
 	// (GET /migrations/nexus/capabilities)
 	GetNexusMigrationCapabilities(w http.ResponseWriter, r *http.Request)
+
+	// (GET /migrations/nexus/schedules)
+	ListNexusMigrationSchedules(w http.ResponseWriter, r *http.Request, params ListNexusMigrationSchedulesParams)
+
+	// (POST /migrations/nexus/schedules)
+	CreateNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, params CreateNexusMigrationScheduleParams)
+
+	// (GET /migrations/nexus/schedules/{scheduleId})
+	GetNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/capacity)
+	RefreshNexusMigrationScheduleCapacity(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params RefreshNexusMigrationScheduleCapacityParams)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/pause)
+	PauseNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params PauseNexusMigrationScheduleParams)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/resume)
+	ResumeNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params ResumeNexusMigrationScheduleParams)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/stop)
+	StopNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params StopNexusMigrationScheduleParams)
 	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
 	// (GET /overview-statistics)
 	GetOverviewStatistics(w http.ResponseWriter, r *http.Request)
+
+	// (POST /previews/helm/repositories)
+	CreateHelmPreviewRepository(w http.ResponseWriter, r *http.Request, params CreateHelmPreviewRepositoryParams)
+
+	// (GET /previews/helm/repositories/{repositoryId})
+	GetHelmPreviewRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (GET /previews/helm/repositories/{repositoryId}/capacity)
+	GetHelmPreviewCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (PUT /previews/helm/repositories/{repositoryId}/capacity)
+	ReplaceHelmPreviewQuota(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (GET /previews/helm/repositories/{repositoryId}/charts)
+	ListHelmPreviewCharts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version})
+	GetHelmPreviewChart(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, chartName string, version string)
+
+	// (PUT /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version})
+	PublishHelmPreviewChart(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, chartName string, version string, params PublishHelmPreviewChartParams)
 
 	// (POST /previews/nuget/groups)
 	CreateNuGetPreviewGroup(w http.ResponseWriter, r *http.Request)
@@ -11804,11 +12151,693 @@ func (siw *ServerInterfaceWrapper) GetNexusMigrationCapabilities(w http.Response
 	handler.ServeHTTP(w, r)
 }
 
+// ListNexusMigrationSchedules operation middleware
+func (siw *ServerInterfaceWrapper) ListNexusMigrationSchedules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNexusMigrationSchedulesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNexusMigrationSchedules(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNexusMigrationSchedule operation middleware
+func (siw *ServerInterfaceWrapper) CreateNexusMigrationSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateNexusMigrationScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNexusMigrationSchedule(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNexusMigrationSchedule operation middleware
+func (siw *ServerInterfaceWrapper) GetNexusMigrationSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNexusMigrationSchedule(w, r, scheduleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshNexusMigrationScheduleCapacity operation middleware
+func (siw *ServerInterfaceWrapper) RefreshNexusMigrationScheduleCapacity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RefreshNexusMigrationScheduleCapacityParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshNexusMigrationScheduleCapacity(w, r, scheduleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseNexusMigrationSchedule operation middleware
+func (siw *ServerInterfaceWrapper) PauseNexusMigrationSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PauseNexusMigrationScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseNexusMigrationSchedule(w, r, scheduleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeNexusMigrationSchedule operation middleware
+func (siw *ServerInterfaceWrapper) ResumeNexusMigrationSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResumeNexusMigrationScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeNexusMigrationSchedule(w, r, scheduleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopNexusMigrationSchedule operation middleware
+func (siw *ServerInterfaceWrapper) StopNexusMigrationSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StopNexusMigrationScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopNexusMigrationSchedule(w, r, scheduleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetOverviewStatistics operation middleware
 func (siw *ServerInterfaceWrapper) GetOverviewStatistics(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetOverviewStatistics(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateHelmPreviewRepository operation middleware
+func (siw *ServerInterfaceWrapper) CreateHelmPreviewRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateHelmPreviewRepositoryParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey HelmPreviewIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateHelmPreviewRepository(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHelmPreviewRepository operation middleware
+func (siw *ServerInterfaceWrapper) GetHelmPreviewRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHelmPreviewRepository(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHelmPreviewCapacity operation middleware
+func (siw *ServerInterfaceWrapper) GetHelmPreviewCapacity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHelmPreviewCapacity(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceHelmPreviewQuota operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceHelmPreviewQuota(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceHelmPreviewQuota(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHelmPreviewCharts operation middleware
+func (siw *ServerInterfaceWrapper) ListHelmPreviewCharts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHelmPreviewCharts(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHelmPreviewChart operation middleware
+func (siw *ServerInterfaceWrapper) GetHelmPreviewChart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "chartName" -------------
+	var chartName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "chartName", r.PathValue("chartName"), &chartName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "chartName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHelmPreviewChart(w, r, repositoryId, chartName, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishHelmPreviewChart operation middleware
+func (siw *ServerInterfaceWrapper) PublishHelmPreviewChart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "chartName" -------------
+	var chartName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "chartName", r.PathValue("chartName"), &chartName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "chartName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PublishHelmPreviewChartParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey HelmPreviewIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishHelmPreviewChart(w, r, repositoryId, chartName, version, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17871,7 +18900,21 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/resume", wrapper.ResumeNexusMigrationBatch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/batches/{batchId}/retry", wrapper.RetryNexusMigrationBatch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/capabilities", wrapper.GetNexusMigrationCapabilities)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/schedules", wrapper.ListNexusMigrationSchedules)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/schedules", wrapper.CreateNexusMigrationSchedule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migrations/nexus/schedules/{scheduleId}", wrapper.GetNexusMigrationSchedule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/schedules/{scheduleId}/capacity", wrapper.RefreshNexusMigrationScheduleCapacity)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/schedules/{scheduleId}/pause", wrapper.PauseNexusMigrationSchedule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/schedules/{scheduleId}/resume", wrapper.ResumeNexusMigrationSchedule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migrations/nexus/schedules/{scheduleId}/stop", wrapper.StopNexusMigrationSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/overview-statistics", wrapper.GetOverviewStatistics)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/helm/repositories", wrapper.CreateHelmPreviewRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}", wrapper.GetHelmPreviewRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}/capacity", wrapper.GetHelmPreviewCapacity)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}/capacity", wrapper.ReplaceHelmPreviewQuota)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}/charts", wrapper.ListHelmPreviewCharts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}", wrapper.GetHelmPreviewChart)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}", wrapper.PublishHelmPreviewChart)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/nuget/groups", wrapper.CreateNuGetPreviewGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/groups/{groupId}", wrapper.GetNuGetPreviewGroup)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/groups/{groupId}", wrapper.ReplaceNuGetPreviewGroup)
@@ -24467,6 +25510,1035 @@ func (response GetNexusMigrationCapabilities503ApplicationProblemPlusJSONRespons
 	return err
 }
 
+type ListNexusMigrationSchedulesRequestObject struct {
+	Params ListNexusMigrationSchedulesParams
+}
+
+type ListNexusMigrationSchedulesResponseObject interface {
+	VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error
+}
+
+type ListNexusMigrationSchedules200ResponseHeaders struct {
+	ETag *string
+}
+
+type ListNexusMigrationSchedules200JSONResponse struct {
+	Body    NexusMigrationSchedulePage
+	Headers ListNexusMigrationSchedules200ResponseHeaders
+}
+
+func (response ListNexusMigrationSchedules200JSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListNexusMigrationSchedules400ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationSchedules401ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationSchedules403ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationSchedules404ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationSchedules409ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules412ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationSchedules412ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules422ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationSchedules422ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNexusMigrationSchedules503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNexusMigrationSchedules503ApplicationProblemPlusJSONResponse) VisitListNexusMigrationSchedulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationScheduleRequestObject struct {
+	Params CreateNexusMigrationScheduleParams
+	Body   *CreateNexusMigrationScheduleJSONRequestBody
+}
+
+type CreateNexusMigrationScheduleResponseObject interface {
+	VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error
+}
+
+type CreateNexusMigrationSchedule201ResponseHeaders struct {
+	ETag *string
+}
+
+type CreateNexusMigrationSchedule201JSONResponse struct {
+	Body    NexusMigrationSchedule
+	Headers CreateNexusMigrationSchedule201ResponseHeaders
+}
+
+func (response CreateNexusMigrationSchedule201JSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateNexusMigrationSchedule400ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateNexusMigrationSchedule401ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateNexusMigrationSchedule403ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateNexusMigrationSchedule404ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateNexusMigrationSchedule409ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule412ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateNexusMigrationSchedule412ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule422ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateNexusMigrationSchedule422ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNexusMigrationSchedule503ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateNexusMigrationSchedule503ApplicationProblemPlusJSONResponse) VisitCreateNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationScheduleRequestObject struct {
+	ScheduleId openapi_types.UUID `json:"scheduleId"`
+}
+
+type GetNexusMigrationScheduleResponseObject interface {
+	VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error
+}
+
+type GetNexusMigrationSchedule200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetNexusMigrationSchedule200JSONResponse struct {
+	Body    NexusMigrationSchedule
+	Headers GetNexusMigrationSchedule200ResponseHeaders
+}
+
+func (response GetNexusMigrationSchedule200JSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetNexusMigrationSchedule400ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationSchedule401ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationSchedule403ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationSchedule404ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationSchedule409ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule412ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationSchedule412ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule422ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationSchedule422ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNexusMigrationSchedule503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetNexusMigrationSchedule503ApplicationProblemPlusJSONResponse) VisitGetNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacityRequestObject struct {
+	ScheduleId openapi_types.UUID `json:"scheduleId"`
+	Params     RefreshNexusMigrationScheduleCapacityParams
+	Body       *RefreshNexusMigrationScheduleCapacityJSONRequestBody
+}
+
+type RefreshNexusMigrationScheduleCapacityResponseObject interface {
+	VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error
+}
+
+type RefreshNexusMigrationScheduleCapacity200ResponseHeaders struct {
+	ETag *string
+}
+
+type RefreshNexusMigrationScheduleCapacity200JSONResponse struct {
+	Body    NexusMigrationSchedule
+	Headers RefreshNexusMigrationScheduleCapacity200ResponseHeaders
+}
+
+func (response RefreshNexusMigrationScheduleCapacity200JSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RefreshNexusMigrationScheduleCapacity400ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity401ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshNexusMigrationScheduleCapacity401ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity403ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshNexusMigrationScheduleCapacity403ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity404ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshNexusMigrationScheduleCapacity404ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity409ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshNexusMigrationScheduleCapacity409ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity412ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshNexusMigrationScheduleCapacity412ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity422ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshNexusMigrationScheduleCapacity422ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshNexusMigrationScheduleCapacity503ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshNexusMigrationScheduleCapacity503ApplicationProblemPlusJSONResponse) VisitRefreshNexusMigrationScheduleCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationScheduleRequestObject struct {
+	ScheduleId openapi_types.UUID `json:"scheduleId"`
+	Params     PauseNexusMigrationScheduleParams
+}
+
+type PauseNexusMigrationScheduleResponseObject interface {
+	VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error
+}
+
+type PauseNexusMigrationSchedule200ResponseHeaders struct {
+	ETag *string
+}
+
+type PauseNexusMigrationSchedule200JSONResponse struct {
+	Body    NexusMigrationSchedule
+	Headers PauseNexusMigrationSchedule200ResponseHeaders
+}
+
+func (response PauseNexusMigrationSchedule200JSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PauseNexusMigrationSchedule400ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule401ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationSchedule401ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule403ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationSchedule403ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule404ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationSchedule404ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule409ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationSchedule409ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule412ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationSchedule412ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule422ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationSchedule422ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseNexusMigrationSchedule503ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseNexusMigrationSchedule503ApplicationProblemPlusJSONResponse) VisitPauseNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationScheduleRequestObject struct {
+	ScheduleId openapi_types.UUID `json:"scheduleId"`
+	Params     ResumeNexusMigrationScheduleParams
+	Body       *ResumeNexusMigrationScheduleJSONRequestBody
+}
+
+type ResumeNexusMigrationScheduleResponseObject interface {
+	VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error
+}
+
+type ResumeNexusMigrationSchedule200ResponseHeaders struct {
+	ETag *string
+}
+
+type ResumeNexusMigrationSchedule200JSONResponse struct {
+	Body    NexusMigrationSchedule
+	Headers ResumeNexusMigrationSchedule200ResponseHeaders
+}
+
+func (response ResumeNexusMigrationSchedule200JSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ResumeNexusMigrationSchedule400ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule401ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationSchedule401ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule403ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationSchedule403ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule404ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationSchedule404ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule409ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationSchedule409ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule412ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationSchedule412ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule422ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationSchedule422ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeNexusMigrationSchedule503ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeNexusMigrationSchedule503ApplicationProblemPlusJSONResponse) VisitResumeNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationScheduleRequestObject struct {
+	ScheduleId openapi_types.UUID `json:"scheduleId"`
+	Params     StopNexusMigrationScheduleParams
+}
+
+type StopNexusMigrationScheduleResponseObject interface {
+	VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error
+}
+
+type StopNexusMigrationSchedule200ResponseHeaders struct {
+	ETag *string
+}
+
+type StopNexusMigrationSchedule200JSONResponse struct {
+	Body    NexusMigrationSchedule
+	Headers StopNexusMigrationSchedule200ResponseHeaders
+}
+
+func (response StopNexusMigrationSchedule200JSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StopNexusMigrationSchedule400ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule401ApplicationProblemPlusJSONResponse Problem
+
+func (response StopNexusMigrationSchedule401ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule403ApplicationProblemPlusJSONResponse Problem
+
+func (response StopNexusMigrationSchedule403ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule404ApplicationProblemPlusJSONResponse Problem
+
+func (response StopNexusMigrationSchedule404ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule409ApplicationProblemPlusJSONResponse Problem
+
+func (response StopNexusMigrationSchedule409ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule412ApplicationProblemPlusJSONResponse Problem
+
+func (response StopNexusMigrationSchedule412ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule422ApplicationProblemPlusJSONResponse Problem
+
+func (response StopNexusMigrationSchedule422ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopNexusMigrationSchedule503ApplicationProblemPlusJSONResponse Problem
+
+func (response StopNexusMigrationSchedule503ApplicationProblemPlusJSONResponse) VisitStopNexusMigrationScheduleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetOverviewStatisticsRequestObject struct {
 }
 
@@ -24516,6 +26588,448 @@ func (response GetOverviewStatistics403ApplicationProblemPlusJSONResponse) Visit
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type CreateHelmPreviewRepositoryRequestObject struct {
+	Params CreateHelmPreviewRepositoryParams
+	Body   *CreateHelmPreviewRepositoryJSONRequestBody
+}
+
+type CreateHelmPreviewRepositoryResponseObject interface {
+	VisitCreateHelmPreviewRepositoryResponse(w http.ResponseWriter) error
+}
+
+type CreateHelmPreviewRepository201JSONResponse HelmPreviewRepository
+
+func (response CreateHelmPreviewRepository201JSONResponse) VisitCreateHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHelmPreviewRepository400Response struct {
+}
+
+func (response CreateHelmPreviewRepository400Response) VisitCreateHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateHelmPreviewRepository401Response struct {
+}
+
+func (response CreateHelmPreviewRepository401Response) VisitCreateHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateHelmPreviewRepository403Response struct {
+}
+
+func (response CreateHelmPreviewRepository403Response) VisitCreateHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type CreateHelmPreviewRepository409Response struct {
+}
+
+func (response CreateHelmPreviewRepository409Response) VisitCreateHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type CreateHelmPreviewRepository503Response struct {
+}
+
+func (response CreateHelmPreviewRepository503Response) VisitCreateHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetHelmPreviewRepositoryRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetHelmPreviewRepositoryResponseObject interface {
+	VisitGetHelmPreviewRepositoryResponse(w http.ResponseWriter) error
+}
+
+type GetHelmPreviewRepository200JSONResponse HelmPreviewRepository
+
+func (response GetHelmPreviewRepository200JSONResponse) VisitGetHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHelmPreviewRepository401Response struct {
+}
+
+func (response GetHelmPreviewRepository401Response) VisitGetHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetHelmPreviewRepository403Response struct {
+}
+
+func (response GetHelmPreviewRepository403Response) VisitGetHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetHelmPreviewRepository404Response struct {
+}
+
+func (response GetHelmPreviewRepository404Response) VisitGetHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetHelmPreviewRepository503Response struct {
+}
+
+func (response GetHelmPreviewRepository503Response) VisitGetHelmPreviewRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetHelmPreviewCapacityRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type GetHelmPreviewCapacityResponseObject interface {
+	VisitGetHelmPreviewCapacityResponse(w http.ResponseWriter) error
+}
+
+type GetHelmPreviewCapacity200JSONResponse HelmPreviewCapacity
+
+func (response GetHelmPreviewCapacity200JSONResponse) VisitGetHelmPreviewCapacityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHelmPreviewCapacity401Response struct {
+}
+
+func (response GetHelmPreviewCapacity401Response) VisitGetHelmPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetHelmPreviewCapacity403Response struct {
+}
+
+func (response GetHelmPreviewCapacity403Response) VisitGetHelmPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetHelmPreviewCapacity404Response struct {
+}
+
+func (response GetHelmPreviewCapacity404Response) VisitGetHelmPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetHelmPreviewCapacity503Response struct {
+}
+
+func (response GetHelmPreviewCapacity503Response) VisitGetHelmPreviewCapacityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type ReplaceHelmPreviewQuotaRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *ReplaceHelmPreviewQuotaJSONRequestBody
+}
+
+type ReplaceHelmPreviewQuotaResponseObject interface {
+	VisitReplaceHelmPreviewQuotaResponse(w http.ResponseWriter) error
+}
+
+type ReplaceHelmPreviewQuota200JSONResponse HelmPreviewCapacity
+
+func (response ReplaceHelmPreviewQuota200JSONResponse) VisitReplaceHelmPreviewQuotaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceHelmPreviewQuota400Response struct {
+}
+
+func (response ReplaceHelmPreviewQuota400Response) VisitReplaceHelmPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type ReplaceHelmPreviewQuota401Response struct {
+}
+
+func (response ReplaceHelmPreviewQuota401Response) VisitReplaceHelmPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type ReplaceHelmPreviewQuota403Response struct {
+}
+
+func (response ReplaceHelmPreviewQuota403Response) VisitReplaceHelmPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type ReplaceHelmPreviewQuota404Response struct {
+}
+
+func (response ReplaceHelmPreviewQuota404Response) VisitReplaceHelmPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ReplaceHelmPreviewQuota503Response struct {
+}
+
+func (response ReplaceHelmPreviewQuota503Response) VisitReplaceHelmPreviewQuotaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type ListHelmPreviewChartsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+}
+
+type ListHelmPreviewChartsResponseObject interface {
+	VisitListHelmPreviewChartsResponse(w http.ResponseWriter) error
+}
+
+type ListHelmPreviewCharts200JSONResponse HelmPreviewChartList
+
+func (response ListHelmPreviewCharts200JSONResponse) VisitListHelmPreviewChartsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHelmPreviewCharts401Response struct {
+}
+
+func (response ListHelmPreviewCharts401Response) VisitListHelmPreviewChartsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type ListHelmPreviewCharts403Response struct {
+}
+
+func (response ListHelmPreviewCharts403Response) VisitListHelmPreviewChartsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type ListHelmPreviewCharts404Response struct {
+}
+
+func (response ListHelmPreviewCharts404Response) VisitListHelmPreviewChartsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ListHelmPreviewCharts422Response struct {
+}
+
+func (response ListHelmPreviewCharts422Response) VisitListHelmPreviewChartsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(422)
+	return nil
+}
+
+type ListHelmPreviewCharts503Response struct {
+}
+
+func (response ListHelmPreviewCharts503Response) VisitListHelmPreviewChartsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetHelmPreviewChartRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	ChartName    string       `json:"chartName"`
+	Version      string       `json:"version"`
+}
+
+type GetHelmPreviewChartResponseObject interface {
+	VisitGetHelmPreviewChartResponse(w http.ResponseWriter) error
+}
+
+type GetHelmPreviewChart200JSONResponse HelmPreviewChart
+
+func (response GetHelmPreviewChart200JSONResponse) VisitGetHelmPreviewChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHelmPreviewChart401Response struct {
+}
+
+func (response GetHelmPreviewChart401Response) VisitGetHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetHelmPreviewChart403Response struct {
+}
+
+func (response GetHelmPreviewChart403Response) VisitGetHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetHelmPreviewChart404Response struct {
+}
+
+func (response GetHelmPreviewChart404Response) VisitGetHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetHelmPreviewChart503Response struct {
+}
+
+func (response GetHelmPreviewChart503Response) VisitGetHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type PublishHelmPreviewChartRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	ChartName    string       `json:"chartName"`
+	Version      string       `json:"version"`
+	Params       PublishHelmPreviewChartParams
+	Body         *multipart.Reader
+}
+
+type PublishHelmPreviewChartResponseObject interface {
+	VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error
+}
+
+type PublishHelmPreviewChart201JSONResponse HelmPreviewChart
+
+func (response PublishHelmPreviewChart201JSONResponse) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishHelmPreviewChart400Response struct {
+}
+
+func (response PublishHelmPreviewChart400Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type PublishHelmPreviewChart401Response struct {
+}
+
+func (response PublishHelmPreviewChart401Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type PublishHelmPreviewChart403Response struct {
+}
+
+func (response PublishHelmPreviewChart403Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type PublishHelmPreviewChart404Response struct {
+}
+
+func (response PublishHelmPreviewChart404Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type PublishHelmPreviewChart409Response struct {
+}
+
+func (response PublishHelmPreviewChart409Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type PublishHelmPreviewChart410Response struct {
+}
+
+func (response PublishHelmPreviewChart410Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(410)
+	return nil
+}
+
+type PublishHelmPreviewChart413Response struct {
+}
+
+func (response PublishHelmPreviewChart413Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(413)
+	return nil
+}
+
+type PublishHelmPreviewChart503Response struct {
+}
+
+func (response PublishHelmPreviewChart503Response) VisitPublishHelmPreviewChartResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
 }
 
 type CreateNuGetPreviewGroupRequestObject struct {
@@ -35011,9 +37525,51 @@ type StrictServerInterface interface {
 
 	// (GET /migrations/nexus/capabilities)
 	GetNexusMigrationCapabilities(ctx context.Context, request GetNexusMigrationCapabilitiesRequestObject) (GetNexusMigrationCapabilitiesResponseObject, error)
+
+	// (GET /migrations/nexus/schedules)
+	ListNexusMigrationSchedules(ctx context.Context, request ListNexusMigrationSchedulesRequestObject) (ListNexusMigrationSchedulesResponseObject, error)
+
+	// (POST /migrations/nexus/schedules)
+	CreateNexusMigrationSchedule(ctx context.Context, request CreateNexusMigrationScheduleRequestObject) (CreateNexusMigrationScheduleResponseObject, error)
+
+	// (GET /migrations/nexus/schedules/{scheduleId})
+	GetNexusMigrationSchedule(ctx context.Context, request GetNexusMigrationScheduleRequestObject) (GetNexusMigrationScheduleResponseObject, error)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/capacity)
+	RefreshNexusMigrationScheduleCapacity(ctx context.Context, request RefreshNexusMigrationScheduleCapacityRequestObject) (RefreshNexusMigrationScheduleCapacityResponseObject, error)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/pause)
+	PauseNexusMigrationSchedule(ctx context.Context, request PauseNexusMigrationScheduleRequestObject) (PauseNexusMigrationScheduleResponseObject, error)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/resume)
+	ResumeNexusMigrationSchedule(ctx context.Context, request ResumeNexusMigrationScheduleRequestObject) (ResumeNexusMigrationScheduleResponseObject, error)
+
+	// (POST /migrations/nexus/schedules/{scheduleId}/stop)
+	StopNexusMigrationSchedule(ctx context.Context, request StopNexusMigrationScheduleRequestObject) (StopNexusMigrationScheduleResponseObject, error)
 	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
 	// (GET /overview-statistics)
 	GetOverviewStatistics(ctx context.Context, request GetOverviewStatisticsRequestObject) (GetOverviewStatisticsResponseObject, error)
+
+	// (POST /previews/helm/repositories)
+	CreateHelmPreviewRepository(ctx context.Context, request CreateHelmPreviewRepositoryRequestObject) (CreateHelmPreviewRepositoryResponseObject, error)
+
+	// (GET /previews/helm/repositories/{repositoryId})
+	GetHelmPreviewRepository(ctx context.Context, request GetHelmPreviewRepositoryRequestObject) (GetHelmPreviewRepositoryResponseObject, error)
+
+	// (GET /previews/helm/repositories/{repositoryId}/capacity)
+	GetHelmPreviewCapacity(ctx context.Context, request GetHelmPreviewCapacityRequestObject) (GetHelmPreviewCapacityResponseObject, error)
+
+	// (PUT /previews/helm/repositories/{repositoryId}/capacity)
+	ReplaceHelmPreviewQuota(ctx context.Context, request ReplaceHelmPreviewQuotaRequestObject) (ReplaceHelmPreviewQuotaResponseObject, error)
+
+	// (GET /previews/helm/repositories/{repositoryId}/charts)
+	ListHelmPreviewCharts(ctx context.Context, request ListHelmPreviewChartsRequestObject) (ListHelmPreviewChartsResponseObject, error)
+
+	// (GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version})
+	GetHelmPreviewChart(ctx context.Context, request GetHelmPreviewChartRequestObject) (GetHelmPreviewChartResponseObject, error)
+
+	// (PUT /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version})
+	PublishHelmPreviewChart(ctx context.Context, request PublishHelmPreviewChartRequestObject) (PublishHelmPreviewChartResponseObject, error)
 
 	// (POST /previews/nuget/groups)
 	CreateNuGetPreviewGroup(ctx context.Context, request CreateNuGetPreviewGroupRequestObject) (CreateNuGetPreviewGroupResponseObject, error)
@@ -37560,6 +40116,213 @@ func (sh *strictHandler) GetNexusMigrationCapabilities(w http.ResponseWriter, r 
 	}
 }
 
+// ListNexusMigrationSchedules operation middleware
+func (sh *strictHandler) ListNexusMigrationSchedules(w http.ResponseWriter, r *http.Request, params ListNexusMigrationSchedulesParams) {
+	var request ListNexusMigrationSchedulesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNexusMigrationSchedules(ctx, request.(ListNexusMigrationSchedulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNexusMigrationSchedules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNexusMigrationSchedulesResponseObject); ok {
+		if err := validResponse.VisitListNexusMigrationSchedulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNexusMigrationSchedule operation middleware
+func (sh *strictHandler) CreateNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, params CreateNexusMigrationScheduleParams) {
+	var request CreateNexusMigrationScheduleRequestObject
+
+	request.Params = params
+
+	var body CreateNexusMigrationScheduleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNexusMigrationSchedule(ctx, request.(CreateNexusMigrationScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNexusMigrationSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNexusMigrationScheduleResponseObject); ok {
+		if err := validResponse.VisitCreateNexusMigrationScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNexusMigrationSchedule operation middleware
+func (sh *strictHandler) GetNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID) {
+	var request GetNexusMigrationScheduleRequestObject
+
+	request.ScheduleId = scheduleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNexusMigrationSchedule(ctx, request.(GetNexusMigrationScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNexusMigrationSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNexusMigrationScheduleResponseObject); ok {
+		if err := validResponse.VisitGetNexusMigrationScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefreshNexusMigrationScheduleCapacity operation middleware
+func (sh *strictHandler) RefreshNexusMigrationScheduleCapacity(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params RefreshNexusMigrationScheduleCapacityParams) {
+	var request RefreshNexusMigrationScheduleCapacityRequestObject
+
+	request.ScheduleId = scheduleId
+	request.Params = params
+
+	var body RefreshNexusMigrationScheduleCapacityJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshNexusMigrationScheduleCapacity(ctx, request.(RefreshNexusMigrationScheduleCapacityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshNexusMigrationScheduleCapacity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefreshNexusMigrationScheduleCapacityResponseObject); ok {
+		if err := validResponse.VisitRefreshNexusMigrationScheduleCapacityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PauseNexusMigrationSchedule operation middleware
+func (sh *strictHandler) PauseNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params PauseNexusMigrationScheduleParams) {
+	var request PauseNexusMigrationScheduleRequestObject
+
+	request.ScheduleId = scheduleId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PauseNexusMigrationSchedule(ctx, request.(PauseNexusMigrationScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PauseNexusMigrationSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PauseNexusMigrationScheduleResponseObject); ok {
+		if err := validResponse.VisitPauseNexusMigrationScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumeNexusMigrationSchedule operation middleware
+func (sh *strictHandler) ResumeNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params ResumeNexusMigrationScheduleParams) {
+	var request ResumeNexusMigrationScheduleRequestObject
+
+	request.ScheduleId = scheduleId
+	request.Params = params
+
+	var body ResumeNexusMigrationScheduleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumeNexusMigrationSchedule(ctx, request.(ResumeNexusMigrationScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumeNexusMigrationSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumeNexusMigrationScheduleResponseObject); ok {
+		if err := validResponse.VisitResumeNexusMigrationScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StopNexusMigrationSchedule operation middleware
+func (sh *strictHandler) StopNexusMigrationSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params StopNexusMigrationScheduleParams) {
+	var request StopNexusMigrationScheduleRequestObject
+
+	request.ScheduleId = scheduleId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StopNexusMigrationSchedule(ctx, request.(StopNexusMigrationScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StopNexusMigrationSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StopNexusMigrationScheduleResponseObject); ok {
+		if err := validResponse.VisitStopNexusMigrationScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetOverviewStatistics operation middleware
 func (sh *strictHandler) GetOverviewStatistics(w http.ResponseWriter, r *http.Request) {
 	var request GetOverviewStatisticsRequestObject
@@ -37577,6 +40340,214 @@ func (sh *strictHandler) GetOverviewStatistics(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOverviewStatisticsResponseObject); ok {
 		if err := validResponse.VisitGetOverviewStatisticsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateHelmPreviewRepository operation middleware
+func (sh *strictHandler) CreateHelmPreviewRepository(w http.ResponseWriter, r *http.Request, params CreateHelmPreviewRepositoryParams) {
+	var request CreateHelmPreviewRepositoryRequestObject
+
+	request.Params = params
+
+	var body CreateHelmPreviewRepositoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateHelmPreviewRepository(ctx, request.(CreateHelmPreviewRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateHelmPreviewRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateHelmPreviewRepositoryResponseObject); ok {
+		if err := validResponse.VisitCreateHelmPreviewRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHelmPreviewRepository operation middleware
+func (sh *strictHandler) GetHelmPreviewRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetHelmPreviewRepositoryRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHelmPreviewRepository(ctx, request.(GetHelmPreviewRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHelmPreviewRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHelmPreviewRepositoryResponseObject); ok {
+		if err := validResponse.VisitGetHelmPreviewRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHelmPreviewCapacity operation middleware
+func (sh *strictHandler) GetHelmPreviewCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request GetHelmPreviewCapacityRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHelmPreviewCapacity(ctx, request.(GetHelmPreviewCapacityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHelmPreviewCapacity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHelmPreviewCapacityResponseObject); ok {
+		if err := validResponse.VisitGetHelmPreviewCapacityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceHelmPreviewQuota operation middleware
+func (sh *strictHandler) ReplaceHelmPreviewQuota(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request ReplaceHelmPreviewQuotaRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body ReplaceHelmPreviewQuotaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceHelmPreviewQuota(ctx, request.(ReplaceHelmPreviewQuotaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceHelmPreviewQuota")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceHelmPreviewQuotaResponseObject); ok {
+		if err := validResponse.VisitReplaceHelmPreviewQuotaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListHelmPreviewCharts operation middleware
+func (sh *strictHandler) ListHelmPreviewCharts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request ListHelmPreviewChartsRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListHelmPreviewCharts(ctx, request.(ListHelmPreviewChartsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListHelmPreviewCharts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListHelmPreviewChartsResponseObject); ok {
+		if err := validResponse.VisitListHelmPreviewChartsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHelmPreviewChart operation middleware
+func (sh *strictHandler) GetHelmPreviewChart(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, chartName string, version string) {
+	var request GetHelmPreviewChartRequestObject
+
+	request.RepositoryId = repositoryId
+	request.ChartName = chartName
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHelmPreviewChart(ctx, request.(GetHelmPreviewChartRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHelmPreviewChart")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHelmPreviewChartResponseObject); ok {
+		if err := validResponse.VisitGetHelmPreviewChartResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublishHelmPreviewChart operation middleware
+func (sh *strictHandler) PublishHelmPreviewChart(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, chartName string, version string, params PublishHelmPreviewChartParams) {
+	var request PublishHelmPreviewChartRequestObject
+
+	request.RepositoryId = repositoryId
+	request.ChartName = chartName
+	request.Version = version
+	request.Params = params
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublishHelmPreviewChart(ctx, request.(PublishHelmPreviewChartRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublishHelmPreviewChart")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublishHelmPreviewChartResponseObject); ok {
+		if err := validResponse.VisitPublishHelmPreviewChartResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

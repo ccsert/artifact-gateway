@@ -23,6 +23,8 @@ const failures: Record<string, MigrationMessageKey> = {
   source_timeout: "migration.sourceUnavailable",
   source_tls_failed: "migration.sourceUnavailable",
   source_unreachable: "migration.sourceUnavailable",
+  npm_component_identity_invalid: "migration.sourceUnavailable",
+  npm_packument_invalid: "migration.sourceUnavailable",
   source_invalid_response: "migration.sourceUnavailable",
   source_download_url_denied: "migration.sourceUnavailable",
   source_redirect_denied: "migration.sourceUnavailable",

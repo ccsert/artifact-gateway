@@ -54,6 +54,9 @@ type GatewayOptions struct {
 	Storage           ObjectStores
 	// NuGet is an opt-in preview, outside the admitted format catalog.
 	// Its persistent ports are supplied explicitly, never inferred from Store.
+	HelmPreviewEnabled  bool
+	HelmStore           repository.NativeHelmStore
+	HelmObjects         ObjectStore
 	NuGetPreviewEnabled bool
 	NuGetStore          repository.NativeNuGetStore
 	NuGetSources        repository.NuGetSourceStore
@@ -70,6 +73,16 @@ type GatewayOptions struct {
 
 func (o GatewayOptions) validate() error {
 	var failures []error
+	if o.HelmPreviewEnabled {
+		if nilDependency(o.HelmStore) {
+			failures = append(failures, errors.New("helm preview publication store is required"))
+		}
+		if err := objectstore.Validate(o.HelmObjects); err != nil {
+			failures = append(failures, fmt.Errorf("helm preview %w", err))
+		}
+	} else if o.HelmStore != nil || o.HelmObjects != nil {
+		failures = append(failures, errors.New("helm preview dependencies require explicit enablement"))
+	}
 	if o.NuGetPreviewEnabled {
 		if nilDependency(o.NuGetStore) {
 			failures = append(failures, errors.New("NuGet preview publication store is required"))

@@ -9,6 +9,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/config"
 	"github.com/ccsert/artifact-gateway/internal/emailnotification"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
@@ -19,18 +20,20 @@ import (
 )
 
 type backgroundRuntime struct {
-	migration        *nexusmigration.Service
-	store            *repository.PostgresStore
-	objects          app.ObjectStore
-	taskQueue        *app.PostgresCacheTaskQueue
-	maintenance      *app.CacheMaintenance
-	metrics          *app.Metrics
-	scanner          scanning.Scanner
-	scanResolver     app.ArtifactScanResolver
-	scannerFormats   []repository.Format
-	workerSessionID  string
-	aptPublisher     *aptpublication.Publisher
-	nugetMaintenance *nugetformat.Maintenance
+	migration          *nexusmigration.Service
+	migrationSchedules *nexusmigration.ScheduleService
+	store              *repository.PostgresStore
+	objects            app.ObjectStore
+	taskQueue          *app.PostgresCacheTaskQueue
+	maintenance        *app.CacheMaintenance
+	metrics            *app.Metrics
+	scanner            scanning.Scanner
+	scanResolver       app.ArtifactScanResolver
+	scannerFormats     []repository.Format
+	workerSessionID    string
+	aptPublisher       *aptpublication.Publisher
+	helmMaintenance    *helmformat.Maintenance
+	nugetMaintenance   *nugetformat.Maintenance
 }
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
@@ -39,6 +42,9 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 	}
 	if cfg.HasRole(config.NodeRoleWorker) {
 		r.startWorkers(ctx, cfg, app.NativeRepositoryRetention{Store: r.store, Metrics: r.metrics, WorkerFormats: cfg.WorkerFormats})
+		if r.helmMaintenance != nil && cfg.WorkerEnabled("helm", "retention") {
+			r.helmMaintenance.Start(ctx, time.Minute)
+		}
 		if r.nugetMaintenance != nil && cfg.WorkerEnabled("nuget", "retention") {
 			// This preview only reclaims expired, never-visible uploads. It
 			// does not advertise NuGet lifecycle/retention capability.
@@ -49,6 +55,9 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 }
 
 func (r backgroundRuntime) startSchedulers(ctx context.Context, cfg config.Config, retention app.NativeRepositoryRetention) {
+	if r.migrationSchedules != nil {
+		r.migrationSchedules.StartScheduler(ctx, 5*time.Second)
+	}
 	app.QuotaAlertEvaluator{Store: r.store, Mail: repository.QuotaAlertMailConfig{Enabled: cfg.Email.Enabled, From: cfg.Email.From, ConsoleOrigin: cfg.Email.ConsoleOrigin}}.Start(ctx, 15*time.Second)
 	app.ScheduledTaskScheduler{Store: r.store}.Start(ctx, time.Minute)
 	app.UserSessionJanitor{Store: r.store}.Start(ctx, time.Hour)
@@ -250,7 +259,7 @@ func (r backgroundRuntime) startConanWorkers(ctx context.Context, cfg config.Con
 
 func migrationWorkerFormats(cfg config.Config) []string {
 	formats := []string{}
-	for _, format := range []string{"maven", "raw"} {
+	for _, format := range []string{"maven", "raw", "oci", "conan", "npm"} {
 		if cfg.WorkerFormatEnabled(format) {
 			formats = append(formats, format)
 		}

@@ -12,6 +12,7 @@ export function migrationTargetFormat(
     case "docker":
       return "oci";
     case "conan":
+    case "npm":
     case "raw":
       return sourceFormat;
   }
@@ -20,7 +21,7 @@ export function migrationTargetFormat(
 export function isMigrationTargetFormat(
   format: string,
 ): format is MigrationTargetFormat {
-  return ["maven", "raw", "oci", "conan"].includes(format);
+  return ["maven", "raw", "oci", "conan", "npm"].includes(format);
 }
 
 /** Report URLs are protocol roots, independent of the commands shown in the UI. */
@@ -39,5 +40,7 @@ export function migrationTargetURL(
       return `${origin}/v2/${name}/`;
     case "conan":
       return `${origin}/conan/${name}`;
+    case "npm":
+      return `${origin}/npm/${name}/`;
   }
 }

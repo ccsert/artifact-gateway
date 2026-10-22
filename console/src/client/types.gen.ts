@@ -216,9 +216,9 @@ export type Format =
   "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "cargo" | "apt";
 
 /**
- * Opt-in NuGet Hosted upload cleanup; does not admit NuGet to the formal format catalog.
+ * Opt-in preview upload cleanup formats; these do not enter the formal format catalog.
  */
-export type NuGetPreviewWorkerFormat = "nuget";
+export type PreviewWorkerFormat = "nuget" | "helm";
 
 export type FormatProfile = {
   format: Format;
@@ -1349,6 +1349,54 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+export type HelmPreviewRepository = {
+  id: string;
+  name: string;
+  format: "helm";
+  type: "hosted";
+  preview: true;
+  version: string;
+  /**
+   * Gateway-relative traditional index.yaml URL
+   */
+  sourceUrl: string;
+  /**
+   * Explicit Gateway multipart publication API template
+   */
+  publicationApi: string;
+  provenanceTrust: "consumer-public-keyring";
+};
+
+export type HelmPreviewChart = {
+  repositoryId: string;
+  name: string;
+  version: string;
+  digest: string;
+  size: number;
+  publishedAt: string;
+  /**
+   * Gateway-relative immutable chart download URL
+   */
+  chartUrl: string;
+  provenanceSize: number;
+  provenanceDigest?: string;
+  /**
+   * Present only when the closure contains provenance
+   */
+  provenanceUrl?: string;
+};
+
+export type HelmPreviewChartList = {
+  items: Array<HelmPreviewChart>;
+};
+
+export type HelmPreviewCapacity = {
+  repositoryId: string;
+  usedBytes: number;
+  objectCount: number;
+  quotaBytes: number;
+};
+
 export type NuGetPreviewCapacity = {
   repositoryId: string;
   usedBytes: number;
@@ -1358,15 +1406,6 @@ export type NuGetPreviewCapacity = {
 
 export type NuGetPreviewQuota = {
   quotaBytes: number;
-};
-
-export type NexusMigrationCapabilities = {
-  targetId: string;
-  poolId: string;
-  executionEnabled: boolean;
-  capacityEvidenceSource: "operator-reported";
-  policyVersion: string;
-  maxAttempts: number;
 };
 
 export type NexusMigrationMapping = {
@@ -1385,6 +1424,55 @@ export type NexusMigrationCapacityEvidence = {
   backupBytes: number | null;
   restoreBytes: number | null;
   headroomBytes: number | null;
+};
+
+export type NexusMigrationSchedule = {
+  id: string;
+  version: string;
+  state: "active" | "waiting_capacity" | "paused" | "blocked" | "stopped";
+  templateBatchId: string;
+  sourceId: string;
+  sourceVersion: string;
+  mappings: Array<NexusMigrationMapping>;
+  policyVersion: "native-v1";
+  intervalSeconds: number;
+  nextRunAt: string | null;
+  /**
+   * Most recent fully verified batch within the plan-supported native content scope. Exact regenerated Maven metadata remains in original unsupported details and counts; this is not complete-source clearance or client-cutover evidence.
+   */
+  lastSuccessfulAt: string | null;
+  consumedObservedAt: string | null;
+  capacityEvidence: NexusMigrationCapacityEvidence | null;
+  activeBatchId: string;
+  lastBatchId: string;
+  lastError: string;
+  dispatchAttempts: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NexusMigrationSchedulePage = {
+  items: Array<NexusMigrationSchedule>;
+  nextCursor: string;
+};
+
+export type NexusMigrationScheduleCreate = {
+  templateBatchId: string;
+  intervalSeconds: number;
+  capacityEvidence?: NexusMigrationCapacityEvidence;
+};
+
+export type NexusMigrationResume = {
+  capacityEvidence: NexusMigrationCapacityEvidence;
+};
+
+export type NexusMigrationCapabilities = {
+  targetId: string;
+  poolId: string;
+  executionEnabled: boolean;
+  capacityEvidenceSource: "operator-reported";
+  policyVersion: string;
+  maxAttempts: number;
 };
 
 export type NexusMigrationCounts = {
@@ -1411,7 +1499,8 @@ export type NexusMigrationScanFailure = {
     | "source_verification_read"
     | "source_verification_digest"
     | "source_version_validation"
-    | "oci_graph_validation";
+    | "oci_graph_validation"
+    | "npm_packument_validation";
   sourceRepositories: Array<string>;
   sourceRepository: string;
   sourcePath: string;
@@ -1492,7 +1581,7 @@ export type NexusMigrationEntry = {
   batchId: string;
   sourceRepository: string;
   targetRepositoryId: string;
-  format: "maven" | "raw" | "oci" | "conan";
+  format: "maven" | "raw" | "oci" | "conan" | "npm";
   identity: string;
   state:
     | "pending"
@@ -1517,10 +1606,6 @@ export type NexusMigrationEntry = {
 export type NexusMigrationEntryPage = {
   items: Array<NexusMigrationEntry>;
   nextCursor: string;
-};
-
-export type NexusMigrationResume = {
-  capacityEvidence: NexusMigrationCapacityEvidence;
 };
 
 export type MigrationSource = {
@@ -1622,7 +1707,7 @@ export type MigrationSourceDiscovery = {
 export type MigrationSourceMapping = {
   sourceRepository: string;
   targetName: string;
-  format: "raw" | "maven" | "oci" | "conan";
+  format: "raw" | "maven" | "oci" | "conan" | "npm";
   type: "hosted" | "proxy" | "group";
   targetMembers?: Array<string>;
 };
@@ -1969,7 +2054,7 @@ export type RuntimeNode = {
   /**
    * Separately enabled preview workers; absent when none are configured.
    */
-  previewWorkerFormats?: Array<NuGetPreviewWorkerFormat>;
+  previewWorkerFormats?: Array<PreviewWorkerFormat>;
   workerKinds: Array<string>;
   startedAt: string;
   lastSeenAt: string;
@@ -2026,7 +2111,7 @@ export type DiagnosticRuntime = {
   /**
    * Separately enabled preview workers; absent when none are configured.
    */
-  previewWorkerFormats?: Array<NuGetPreviewWorkerFormat>;
+  previewWorkerFormats?: Array<PreviewWorkerFormat>;
   workerKinds: Array<string>;
 };
 
@@ -3338,6 +3423,13 @@ export type IdempotencyKey = string;
 export type IfMatch = string;
 
 /**
+ * Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
+ */
+export type HelmPreviewIdempotencyKey = string;
+
+export type RepositoryId2 = string;
+
+/**
  * Explicit coordinate matching. contains is a case-insensitive literal substring; prefix is a case-sensitive literal prefix. Omitting match preserves the legacy behavior of each format (Cargo name substring; other formats prefix). Complete SHA-256 queries in global search remain exact digest matches. Contains requests have a five-second server budget; narrow the query if it expires.
  */
 export type ArtifactSearchMatch = "prefix" | "contains";
@@ -3358,6 +3450,327 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type CreateHelmPreviewRepositoryData = {
+  body: {
+    name: string;
+  };
+  headers?: {
+    /**
+     * Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
+     */
+    "Idempotency-Key"?: string;
+  };
+  path?: never;
+  query?: never;
+  url: "/previews/helm/repositories";
+};
+
+export type CreateHelmPreviewRepositoryErrors = {
+  /**
+   * Invalid name or body
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Administrator required
+   */
+  403: unknown;
+  /**
+   * Name or idempotency conflict
+   */
+  409: unknown;
+  /**
+   * Preview disabled or storage unavailable
+   */
+  503: unknown;
+};
+
+export type CreateHelmPreviewRepositoryResponses = {
+  /**
+   * Created or identical idempotent replay
+   */
+  201: HelmPreviewRepository;
+};
+
+export type CreateHelmPreviewRepositoryResponse =
+  CreateHelmPreviewRepositoryResponses[keyof CreateHelmPreviewRepositoryResponses];
+
+export type GetHelmPreviewRepositoryData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}";
+};
+
+export type GetHelmPreviewRepositoryErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository read permission required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewRepositoryResponses = {
+  /**
+   * Helm Hosted preview repository and index URL
+   */
+  200: HelmPreviewRepository;
+};
+
+export type GetHelmPreviewRepositoryResponse =
+  GetHelmPreviewRepositoryResponses[keyof GetHelmPreviewRepositoryResponses];
+
+export type ListHelmPreviewChartsData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/charts";
+};
+
+export type ListHelmPreviewChartsErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository read permission required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Preview inventory exceeds its bound
+   */
+  422: unknown;
+  /**
+   * Preview disabled or unavailable
+   */
+  503: unknown;
+};
+
+export type ListHelmPreviewChartsResponses = {
+  /**
+   * Committed chart identities with SHA-256, size, provenance digest and download locations
+   */
+  200: HelmPreviewChartList;
+};
+
+export type ListHelmPreviewChartsResponse =
+  ListHelmPreviewChartsResponses[keyof ListHelmPreviewChartsResponses];
+
+export type GetHelmPreviewChartData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    chartName: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}";
+};
+
+export type GetHelmPreviewChartErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Chart read permission required
+   */
+  403: unknown;
+  /**
+   * Chart not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewChartResponses = {
+  /**
+   * Committed chart identity and download locations
+   */
+  200: HelmPreviewChart;
+};
+
+export type GetHelmPreviewChartResponse =
+  GetHelmPreviewChartResponses[keyof GetHelmPreviewChartResponses];
+
+export type PublishHelmPreviewChartData = {
+  body: {
+    /**
+     * A bounded tar.gz chart; maximum 64 MiB compressed, 256 MiB expanded across packaged dependencies, 10000 total entries and at most 8 nested packaged dependencies
+     */
+    chart: Blob | File;
+    /**
+     * Optional original OpenPGP clearsigned Helm provenance, maximum 1 MiB
+     */
+    provenance?: Blob | File;
+  };
+  headers?: {
+    /**
+     * Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
+     */
+    "Idempotency-Key"?: string;
+  };
+  path: {
+    repositoryId: string;
+    chartName: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}";
+};
+
+export type PublishHelmPreviewChartErrors = {
+  /**
+   * Invalid archive, provenance, identity, multipart body or filename
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Chart write permission required
+   */
+  403: unknown;
+  /**
+   * Hosted preview repository not found
+   */
+  404: unknown;
+  /**
+   * Immutable closure, pending owner or quota conflict
+   */
+  409: unknown;
+  /**
+   * Upload reservation expired before publication
+   */
+  410: unknown;
+  /**
+   * Compressed chart or provenance exceeds its bound
+   */
+  413: unknown;
+  /**
+   * Preview disabled, incomplete object read-back or storage unavailable
+   */
+  503: unknown;
+};
+
+export type PublishHelmPreviewChartResponses = {
+  /**
+   * Complete chart closure committed or identical replay
+   */
+  201: HelmPreviewChart;
+};
+
+export type PublishHelmPreviewChartResponse =
+  PublishHelmPreviewChartResponses[keyof PublishHelmPreviewChartResponses];
+
+export type GetHelmPreviewCapacityData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/capacity";
+};
+
+export type GetHelmPreviewCapacityErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository read permission required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewCapacityResponses = {
+  /**
+   * Committed chart and provenance size and repository quota
+   */
+  200: HelmPreviewCapacity;
+};
+
+export type GetHelmPreviewCapacityResponse =
+  GetHelmPreviewCapacityResponses[keyof GetHelmPreviewCapacityResponses];
+
+export type ReplaceHelmPreviewQuotaData = {
+  body: {
+    quotaBytes: number;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/capacity";
+};
+
+export type ReplaceHelmPreviewQuotaErrors = {
+  /**
+   * Invalid quota
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository admin permission required
+   */
+  403: unknown;
+  /**
+   * Preview repository not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceHelmPreviewQuotaResponses = {
+  /**
+   * Updated quota, zero means unlimited
+   */
+  200: HelmPreviewCapacity;
+};
+
+export type ReplaceHelmPreviewQuotaResponse =
+  ReplaceHelmPreviewQuotaResponses[keyof ReplaceHelmPreviewQuotaResponses];
 
 export type RevalidateNuGetPreviewGroupSourceData = {
   body: NuGetPreviewSourceRevalidation;
@@ -4129,6 +4542,423 @@ export type CommitNuGetPublicationSessionResponses = {
 
 export type CommitNuGetPublicationSessionResponse =
   CommitNuGetPublicationSessionResponses[keyof CommitNuGetPublicationSessionResponses];
+
+export type ListNexusMigrationSchedulesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+    cursor?: string;
+  };
+  url: "/migrations/nexus/schedules";
+};
+
+export type ListNexusMigrationSchedulesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ListNexusMigrationSchedulesError =
+  ListNexusMigrationSchedulesErrors[keyof ListNexusMigrationSchedulesErrors];
+
+export type ListNexusMigrationSchedulesResponses = {
+  /**
+   * Durable administrator-owned migration schedule. ETag is the CAS version.
+   */
+  200: NexusMigrationSchedulePage;
+};
+
+export type ListNexusMigrationSchedulesResponse =
+  ListNexusMigrationSchedulesResponses[keyof ListNexusMigrationSchedulesResponses];
+
+export type CreateNexusMigrationScheduleData = {
+  body: NexusMigrationScheduleCreate;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/migrations/nexus/schedules";
+};
+
+export type CreateNexusMigrationScheduleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type CreateNexusMigrationScheduleError =
+  CreateNexusMigrationScheduleErrors[keyof CreateNexusMigrationScheduleErrors];
+
+export type CreateNexusMigrationScheduleResponses = {
+  /**
+   * Durable administrator-owned migration schedule. ETag is the CAS version.
+   */
+  201: NexusMigrationSchedule;
+};
+
+export type CreateNexusMigrationScheduleResponse =
+  CreateNexusMigrationScheduleResponses[keyof CreateNexusMigrationScheduleResponses];
+
+export type GetNexusMigrationScheduleData = {
+  body?: never;
+  path: {
+    scheduleId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/schedules/{scheduleId}";
+};
+
+export type GetNexusMigrationScheduleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type GetNexusMigrationScheduleError =
+  GetNexusMigrationScheduleErrors[keyof GetNexusMigrationScheduleErrors];
+
+export type GetNexusMigrationScheduleResponses = {
+  /**
+   * Durable administrator-owned migration schedule. ETag is the CAS version.
+   */
+  200: NexusMigrationSchedule;
+};
+
+export type GetNexusMigrationScheduleResponse =
+  GetNexusMigrationScheduleResponses[keyof GetNexusMigrationScheduleResponses];
+
+export type PauseNexusMigrationScheduleData = {
+  body?: never;
+  headers: {
+    "Idempotency-Key": string;
+    "If-Match": string;
+  };
+  path: {
+    scheduleId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/schedules/{scheduleId}/pause";
+};
+
+export type PauseNexusMigrationScheduleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type PauseNexusMigrationScheduleError =
+  PauseNexusMigrationScheduleErrors[keyof PauseNexusMigrationScheduleErrors];
+
+export type PauseNexusMigrationScheduleResponses = {
+  /**
+   * Durable administrator-owned migration schedule. ETag is the CAS version.
+   */
+  200: NexusMigrationSchedule;
+};
+
+export type PauseNexusMigrationScheduleResponse =
+  PauseNexusMigrationScheduleResponses[keyof PauseNexusMigrationScheduleResponses];
+
+export type ResumeNexusMigrationScheduleData = {
+  body: NexusMigrationResume;
+  headers: {
+    "Idempotency-Key": string;
+    "If-Match": string;
+  };
+  path: {
+    scheduleId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/schedules/{scheduleId}/resume";
+};
+
+export type ResumeNexusMigrationScheduleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ResumeNexusMigrationScheduleError =
+  ResumeNexusMigrationScheduleErrors[keyof ResumeNexusMigrationScheduleErrors];
+
+export type ResumeNexusMigrationScheduleResponses = {
+  /**
+   * Durable administrator-owned migration schedule. ETag is the CAS version.
+   */
+  200: NexusMigrationSchedule;
+};
+
+export type ResumeNexusMigrationScheduleResponse =
+  ResumeNexusMigrationScheduleResponses[keyof ResumeNexusMigrationScheduleResponses];
+
+export type StopNexusMigrationScheduleData = {
+  body?: never;
+  headers: {
+    "Idempotency-Key": string;
+    "If-Match": string;
+  };
+  path: {
+    scheduleId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/schedules/{scheduleId}/stop";
+};
+
+export type StopNexusMigrationScheduleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type StopNexusMigrationScheduleError =
+  StopNexusMigrationScheduleErrors[keyof StopNexusMigrationScheduleErrors];
+
+export type StopNexusMigrationScheduleResponses = {
+  /**
+   * Durable administrator-owned migration schedule. ETag is the CAS version.
+   */
+  200: NexusMigrationSchedule;
+};
+
+export type StopNexusMigrationScheduleResponse =
+  StopNexusMigrationScheduleResponses[keyof StopNexusMigrationScheduleResponses];
+
+export type RefreshNexusMigrationScheduleCapacityData = {
+  body: NexusMigrationResume;
+  headers: {
+    "Idempotency-Key": string;
+    "If-Match": string;
+  };
+  path: {
+    scheduleId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/schedules/{scheduleId}/capacity";
+};
+
+export type RefreshNexusMigrationScheduleCapacityErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type RefreshNexusMigrationScheduleCapacityError =
+  RefreshNexusMigrationScheduleCapacityErrors[keyof RefreshNexusMigrationScheduleCapacityErrors];
+
+export type RefreshNexusMigrationScheduleCapacityResponses = {
+  /**
+   * Durable administrator-owned migration schedule. ETag is the CAS version.
+   */
+  200: NexusMigrationSchedule;
+};
+
+export type RefreshNexusMigrationScheduleCapacityResponse =
+  RefreshNexusMigrationScheduleCapacityResponses[keyof RefreshNexusMigrationScheduleCapacityResponses];
 
 export type GetNexusMigrationCapabilitiesData = {
   body?: never;

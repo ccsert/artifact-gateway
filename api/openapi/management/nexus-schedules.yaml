@@ -1,0 +1,715 @@
+{
+  "schedules": {
+    "get": {
+      "operationId": "listNexusMigrationSchedules",
+      "description": "Administrators only. Lists durable schedules; nextRunAt is the next eligible UTC occurrence, not a promise that capacity or a worker is available.",
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "maxLength": 36
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+          "headers": {
+            "ETag": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedulePage"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "401": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "403": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "404": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "409": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "412": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "422": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "503": {
+          "$ref": "../components/responses.yaml#/Problem"
+        }
+      }
+    },
+    "post": {
+      "operationId": "createNexusMigrationSchedule",
+      "description": "Administrators only. Freeze the source version, mappings and native policy from a successfully completed batch. Each occurrence fully re-enumerates using the existing durable batch worker. One pending operator capacity observation is consumed once; missing or expired observations cause waiting_capacity. There is no trusted remote object-pool observer. Restart and missed intervals coalesce to one due occurrence; no backlog or browser timer is used. A stopped plan cannot resume. Genuine unsupported payloads, SNAPSHOT, missing required artifacts and source drift reject a template. Exact regenerated Maven metadata may remain as separately reported unsupported entries.",
+      "parameters": [
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationScheduleCreate"
+            }
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+          "headers": {
+            "ETag": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedule"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "401": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "403": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "404": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "409": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "412": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "422": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "503": {
+          "$ref": "../components/responses.yaml#/Problem"
+        }
+      }
+    }
+  },
+  "schedule": {
+    "parameters": [
+      {
+        "name": "scheduleId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    ],
+    "get": {
+      "operationId": "getNexusMigrationSchedule",
+      "responses": {
+        "200": {
+          "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+          "headers": {
+            "ETag": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedule"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "401": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "403": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "404": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "409": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "412": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "422": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "503": {
+          "$ref": "../components/responses.yaml#/Problem"
+        }
+      }
+    }
+  },
+  "pause": {
+    "parameters": [
+      {
+        "name": "scheduleId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    ],
+    "post": {
+      "operationId": "pauseNexusMigrationSchedule",
+      "description": "Administrators only. Stop creating future batches. The active batch and already published artifacts are retained. If-Match and actor-scoped idempotency are required.",
+      "parameters": [
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        {
+          "name": "If-Match",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+          "headers": {
+            "ETag": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedule"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "401": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "403": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "404": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "409": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "412": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "422": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "503": {
+          "$ref": "../components/responses.yaml#/Problem"
+        }
+      }
+    }
+  },
+  "resume": {
+    "parameters": [
+      {
+        "name": "scheduleId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    ],
+    "post": {
+      "operationId": "resumeNexusMigrationSchedule",
+      "description": "Administrators only. Explicitly resume a paused or blocked schedule with a new capacity observation. Frozen source and target bindings are revalidated. If-Match and actor-scoped idempotency are required.",
+      "parameters": [
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        {
+          "name": "If-Match",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+          "headers": {
+            "ETag": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedule"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "401": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "403": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "404": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "409": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "412": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "422": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "503": {
+          "$ref": "../components/responses.yaml#/Problem"
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./nexus-batches.yaml#/schemas/NexusMigrationResume"
+            }
+          }
+        }
+      }
+    }
+  },
+  "stop": {
+    "parameters": [
+      {
+        "name": "scheduleId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    ],
+    "post": {
+      "operationId": "stopNexusMigrationSchedule",
+      "description": "Administrators only. Permanently stop creating future batches. The active batch and published artifacts are retained. If-Match and actor-scoped idempotency are required.",
+      "parameters": [
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        {
+          "name": "If-Match",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+          "headers": {
+            "ETag": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedule"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "401": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "403": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "404": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "409": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "412": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "422": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "503": {
+          "$ref": "../components/responses.yaml#/Problem"
+        }
+      }
+    }
+  },
+  "capacity": {
+    "parameters": [
+      {
+        "name": "scheduleId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    ],
+    "post": {
+      "operationId": "refreshNexusMigrationScheduleCapacity",
+      "description": "Administrators only. Store one new operator observation, strictly newer than the prior observation. A waiting_capacity schedule becomes active; paused schedules remain paused. If-Match and actor-scoped idempotency are required.",
+      "parameters": [
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        {
+          "name": "If-Match",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Durable administrator-owned migration schedule. ETag is the CAS version.",
+          "headers": {
+            "ETag": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedule"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "401": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "403": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "404": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "409": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "412": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "422": {
+          "$ref": "../components/responses.yaml#/Problem"
+        },
+        "503": {
+          "$ref": "../components/responses.yaml#/Problem"
+        }
+      },
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./nexus-batches.yaml#/schemas/NexusMigrationResume"
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "NexusMigrationSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "state",
+        "templateBatchId",
+        "sourceId",
+        "sourceVersion",
+        "mappings",
+        "policyVersion",
+        "intervalSeconds",
+        "nextRunAt",
+        "lastSuccessfulAt",
+        "consumedObservedAt",
+        "capacityEvidence",
+        "activeBatchId",
+        "lastBatchId",
+        "lastError",
+        "dispatchAttempts",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "active",
+            "waiting_capacity",
+            "paused",
+            "blocked",
+            "stopped"
+          ]
+        },
+        "templateBatchId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sourceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sourceVersion": {
+          "type": "string"
+        },
+        "mappings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "$ref": "./nexus-batches.yaml#/schemas/NexusMigrationMapping"
+          }
+        },
+        "policyVersion": {
+          "type": "string",
+          "enum": [
+            "native-v1"
+          ]
+        },
+        "intervalSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 2592000
+        },
+        "nextRunAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "lastSuccessfulAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "description": "Most recent fully verified batch within the plan-supported native content scope. Exact regenerated Maven metadata remains in original unsupported details and counts; this is not complete-source clearance or client-cutover evidence."
+        },
+        "consumedObservedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "capacityEvidence": {
+          "oneOf": [
+            {
+              "$ref": "./nexus-batches.yaml#/schemas/NexusMigrationCapacityEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "activeBatchId": {
+          "type": "string"
+        },
+        "lastBatchId": {
+          "type": "string"
+        },
+        "lastError": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "dispatchAttempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "NexusMigrationSchedulePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "./nexus-schedules.yaml#/schemas/NexusMigrationSchedule"
+          }
+        },
+        "nextCursor": {
+          "type": "string"
+        }
+      }
+    },
+    "NexusMigrationScheduleCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "templateBatchId",
+        "intervalSeconds"
+      ],
+      "properties": {
+        "templateBatchId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "intervalSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 2592000
+        },
+        "capacityEvidence": {
+          "$ref": "./nexus-batches.yaml#/schemas/NexusMigrationCapacityEvidence"
+        }
+      }
+    }
+  }
+}

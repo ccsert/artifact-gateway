@@ -8,6 +8,14 @@
 
 ## Unreleased
 
+- Nexus 周期迁移计划持久保存 UTC 周期、错过触发合并、源/映射/策略绑定、下次触发与已验证的最近成功状态（#443）。管理员可在 Console 中按版本和幂等键创建、暂停、恢复、停止计划；每次执行原子消费一份新鲜的管理员容量观测，缺失或过期时等待补充。目标映射相交的计划与手动批次不会并发派发。详见[周期计划](docs/nexus-migration-console.zh-CN.md#周期迁移计划)。
+
+- 新安装通过一个事务初始化 8 个 Hosted 仓库、5 个公共上游 Proxy 和 5 个有序 Group（#444）；设置 `GATEWAY_REPOSITORY_PRESETS=none` 可选择空安装。已有目录保留，匿名访问仍关闭，管理员修改或删除后重启不会被覆盖或重新创建。详见[部署初始化](docs/distributed-deployment.zh-CN.md#首次安装仓库)。
+
+- 新增默认关闭的[传统 HTTP Helm Hosted 预览](docs/helm-hosted-preview.zh-CN.md)（#290）：chart/provenance 不可变单请求上传、授权过滤且确定的 `index.yaml`、完整字节校验下载、配额预留和中断发布持久恢复。固定 Helm 3.19.0 冷 pull/verify 与自有只读 discovery 下 dry-run 渲染证据，和 Proxy/Group（#291）、真实集群安装、生命周期正式准入（#292）分别记录。
+
+- Nexus npm Hosted 迁移通过原生事务发布完整包版本闭包（#442）。Components、packument 与包内身份交叉核对，完整校验 SHA-256、shasum 与 SRI；已有标签、deprecate 和字节不被静默改写。包含持久重试、原生事务保护、Console 映射/报告和固定官方 npm 的 target-only 门禁，见[闭包及元数据策略](docs/nexus-migration-batches.zh-CN.md#npm-hosted-包闭包)。
+
 - OCI Hosted、Proxy 与 Group 新增经授权的 [Catalog 与 OCI 1.1 Referrers 发现](docs/oci-discovery.zh-CN.md)（#315、#316）。覆盖报告区分完整、部分和不支持的源；绑定主体的不可变分页与持久来源绑定防止权限变化、Group 重排后替换内容。Referrers 校验原始 Manifest、annotations 和完整 Blob 闭包，匿名与认证身份的 owner 独立，错误凭据明确拒绝。固定官方 ORAS/Docker 验收作为第七条原生必需门禁；签名信任与 referrers-tag fallback 尚不支持。
 
 - 默认关闭的 [NuGet 预览](docs/nuget-proxy-group-preview.zh-CN.md) 新增只读 Proxy 与有序 Group（#288）：V3 资源发现、按源版本隔离的可验证缓存、包 ID/版本持久来源绑定、私有上游凭据及完整资源授权。上游 unlisted 精确版本仍可读取，搜索不展示它；被过滤的结果不能建立 Group 来源绑定。正式准入和本地 Hosted 治理仍由 #289 跟踪。

@@ -11,11 +11,12 @@ Format:
   - go
   - cargo
   - apt
-NuGetPreviewWorkerFormat:
+PreviewWorkerFormat:
   type: string
-  description: Opt-in NuGet Hosted upload cleanup; does not admit NuGet to the formal format catalog.
+  description: Opt-in preview upload cleanup formats; these do not enter the formal format catalog.
   enum:
   - nuget
+  - helm
 RepositoryOperation:
   type: string
   enum:
@@ -126,7 +127,7 @@ RuntimeNode:
       type: array
       description: Separately enabled preview workers; absent when none are configured.
       items:
-        "$ref": "#/NuGetPreviewWorkerFormat"
+        "$ref": "#/PreviewWorkerFormat"
     workerKinds:
       type: array
       items:
@@ -271,7 +272,7 @@ DiagnosticRuntime:
       type: array
       description: Separately enabled preview workers; absent when none are configured.
       items:
-        "$ref": "#/NuGetPreviewWorkerFormat"
+        "$ref": "#/PreviewWorkerFormat"
     workerKinds:
       type: array
       items:

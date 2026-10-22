@@ -91,7 +91,7 @@ func (h repositoryManagementHandler) listReadableRepositories(w http.ResponseWri
 		}
 		for index, candidate := range batch {
 			scanned = candidate.ID
-			if candidate.Format != repository.FormatNuGet && h.authorizer.Authorize(r.Context(), principal, candidate, RepositoryRead).Allowed {
+			if repository.IsSupportedFormat(candidate.Format) && h.authorizer.Authorize(r.Context(), principal, candidate, RepositoryRead).Allowed {
 				items = append(items, redactRepositorySecrets(candidate))
 			}
 			if len(items) == pageSize {
@@ -119,7 +119,7 @@ func (h repositoryManagementHandler) CreateRepository(w http.ResponseWriter, r *
 
 func (h repositoryManagementHandler) DeleteRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
-		if rejectNuGetFormalProjection(w, repo) {
+		if rejectPreviewFormalProjection(w, repo) {
 			return
 		}
 		h.hosted.disable(w, r, id.String())
@@ -134,7 +134,7 @@ func (h repositoryManagementHandler) GetRepository(w http.ResponseWriter, r *htt
 
 func (h repositoryManagementHandler) UpdateRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId, params adminopenapi.UpdateRepositoryParams) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
-		if rejectNuGetFormalProjection(w, repo) {
+		if rejectPreviewFormalProjection(w, repo) {
 			return
 		}
 		h.hosted.update(w, r, repo, string(params.IfMatch))
@@ -143,7 +143,7 @@ func (h repositoryManagementHandler) UpdateRepository(w http.ResponseWriter, r *
 
 func (h repositoryManagementHandler) GetRepositoryCapabilities(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
-		if rejectNuGetFormalProjection(w, repo) {
+		if rejectPreviewFormalProjection(w, repo) {
 			return
 		}
 		artifactScanning := h.artifactScanner != nil && scanFormatEnabled(h.artifactScanFormats, repo.Format) && scanRepositoryAssetsAvailable(repo)

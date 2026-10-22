@@ -116,6 +116,10 @@ func (h managementScope) withRepositoryBrowseScope(w http.ResponseWriter, r *htt
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
 		return
 	}
+	if !repository.IsSupportedFormat(repo.Format) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
 	if !authenticated {
 		if anonymousHostedRepositoryReadAllowed(r.Context(), h.anonymousPolicy, repo, r.Method) {
 			handler(anonymousPrincipal(), repo)

@@ -52,6 +52,9 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
 	FROM native_nuget_publications GROUP BY repository_id
 	UNION ALL
+	SELECT repository_id,COALESCE(SUM(size+provenance_size),0)::bigint,SUM(1+CASE WHEN provenance_size>0 THEN 1 ELSE 0 END)::bigint
+	FROM native_helm_publications GROUP BY repository_id
+	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
 	FROM native_apt_assets GROUP BY repository_id
 	UNION ALL
@@ -102,6 +105,7 @@ func (s *PostgresStore) GetRepositoryCapacity(ctx context.Context, id string) (R
 		FormatPyPI:  `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_pypi_files WHERE repository_id::text=$1 AND object_key<>'' AND state='visible'`,
 		FormatGo:    `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_go_assets WHERE repository_id::text=$1 AND collected_at IS NULL`,
 		FormatCargo: `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_cargo_publications WHERE repository_id::text=$1 AND collected_at IS NULL`,
+		FormatHelm:  `SELECT COALESCE(SUM(size+provenance_size),0),COALESCE(SUM(1+CASE WHEN provenance_size>0 THEN 1 ELSE 0 END),0) FROM native_helm_publications WHERE repository_id::text=$1`,
 		FormatNuGet: `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_nuget_publications WHERE repository_id::text=$1`,
 		FormatAPT: `SELECT
 			COALESCE((SELECT SUM(size) FROM native_apt_assets WHERE repository_id::text=$1),0)+

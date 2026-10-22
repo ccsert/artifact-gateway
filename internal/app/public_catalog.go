@@ -44,7 +44,7 @@ func (h publicRepositoryCatalogHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 		for _, repo := range repositories {
-			if repo.Format != repository.FormatNuGet && repo.State == repository.RepositoryActive && repo.AnonymousRead {
+			if repository.IsSupportedFormat(repo.Format) && repo.State == repository.RepositoryActive && repo.AnonymousRead {
 				items = append(items, publicRepositoryCatalogEntry{ID: repo.ID, Name: repo.Name, Format: repo.Format, Type: string(repo.Type)})
 			}
 		}
@@ -62,7 +62,7 @@ func (h publicRepositoryCatalogHandler) ServeHTTP(w http.ResponseWriter, r *http
 				return
 			}
 			for _, group := range groups {
-				if group.Format != repository.FormatNuGet && anonymousHostedGroupReadAllowed(r.Context(), h.anonymous, h.repositories, group, r.Method) {
+				if repository.IsSupportedFormat(group.Format) && anonymousHostedGroupReadAllowed(r.Context(), h.anonymous, h.repositories, group, r.Method) {
 					items = append(items, publicRepositoryCatalogEntry{ID: group.ID, Name: group.Name, Format: group.Format, Type: "group"})
 				}
 			}
