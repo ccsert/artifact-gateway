@@ -157,7 +157,7 @@ func (h artifactManagementHandler) readableSearchRepositories(ctx context.Contex
 			return nil, err
 		}
 		for _, repo := range page {
-			if repo.State != repository.RepositoryActive || format != "" && repo.Format != format || query.Mode == repository.ArtifactSearchByCoordinate && !validArtifactKeyword(repo.Format, query.Value, query.Match) {
+			if !repository.IsSupportedFormat(repo.Format) || repo.State != repository.RepositoryActive || format != "" && repo.Format != format || query.Mode == repository.ArtifactSearchByCoordinate && !validArtifactKeyword(repo.Format, query.Value, query.Match) {
 				continue
 			}
 			if h.authorizer.Authorize(ctx, principal, repo, RepositoryRead).Allowed {

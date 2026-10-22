@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"strings"
 
+	helmapi "github.com/ccsert/artifact-gateway/internal/admin/helm"
 	migrationapi "github.com/ccsert/artifact-gateway/internal/admin/nexusmigration"
 	sourceapi "github.com/ccsert/artifact-gateway/internal/admin/nexussource"
 	nugetapi "github.com/ccsert/artifact-gateway/internal/admin/nuget"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -67,6 +69,9 @@ func isManagementObjectUpload(r *http.Request) bool {
 	}
 	if r.Method != http.MethodPut {
 		return false
+	}
+	if len(segments) == 9 && segments[0] == "api" && segments[1] == "v2" && segments[2] == "previews" && segments[3] == "helm" && segments[4] == "repositories" && segments[5] != "" && segments[6] == "charts" && segments[7] != "" && segments[8] != "" {
+		return true
 	}
 	if len(segments) == 9 && segments[0] == "api" && segments[1] == "v2" && segments[2] == "previews" && segments[3] == "nuget" && segments[4] == "repositories" && segments[5] != "" && segments[6] == "publication-sessions" && segments[7] != "" && segments[8] == "package" {
 		return true
@@ -257,6 +262,15 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		GroupRuntime: rawModuleGroupRuntime{resolver: v2GroupResolver{groups: store, repos: store, audit: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}, policy: store},
 		LegacyStore:  store, LegacyRuntime: rawRuntime{handler: rawLegacy}, RecordFailure: recordRawFailure})
 	modules := []formatmodule.Module{rawModule}
+	var helmPreview http.Handler
+	if options.HelmPreviewEnabled {
+		helmModule, err := helmformat.New(helmformat.Options{Store: options.HelmStore, Repositories: store, Objects: options.HelmObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		if err != nil {
+			return nil, err
+		}
+		modules = append(modules, helmModule)
+		helmPreview = helmModule.Preview()
+	}
 	var nugetPreview http.Handler
 	if options.NuGetPreviewEnabled {
 		client := nugetformat.Upstream(UpstreamClient{})
@@ -350,7 +364,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	}
 	identityAPI := newIdentityManagementHandler(identityManagementOptions{Scope: scope, Users: store, APIKeys: store, ServiceAccounts: store, OIDC: identityOIDC})
 	legacyAPI := generatedRepositoryAPIAdapter{BatchAdapter: migrationapi.New(dependencies.MigrationService, authenticator, store), Adapter: sourceapi.New(dependencies.SourceService, authenticator, store), managementScope: scope, store: store, sessions: nativeMaven, npmRestore: options.NPMRestore, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, replication: store, oci: store, cargo: store, conan: store, audit: store, maintenance: maintenance, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, quotaAlerts: store, queueStats: store, diagnostics: dependencies, objects: options.Storage, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}
-	adminopenapi.HandlerWithOptions(managementServer{Adapter: nugetapi.New(nugetPreview), repositoryManagementHandler: repositoriesAPI, artifactManagementHandler: artifactsAPI, accessManagementHandler: accessAPI, identityManagementHandler: identityAPI, pypiYankManagementHandler: pypiYankAPI, generatedRepositoryAPIAdapter: legacyAPI}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(managementServer{Boundary: helmapi.New(helmPreview), Adapter: nugetapi.New(nugetPreview), repositoryManagementHandler: repositoriesAPI, artifactManagementHandler: artifactsAPI, accessManagementHandler: accessAPI, identityManagementHandler: identityAPI, pypiYankManagementHandler: pypiYankAPI, generatedRepositoryAPIAdapter: legacyAPI}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

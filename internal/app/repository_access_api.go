@@ -203,7 +203,7 @@ func (h accessManagementHandler) ListRepositoryGrants(w http.ResponseWriter, r *
 	}
 	items := make(adminopenapi.RepositoryGrantRecordList, 0, len(records))
 	for _, record := range records {
-		if !h.mayAdministerRepository(r, principal, record.RepositoryID) {
+		if !repository.IsSupportedFormat(record.Format) || !h.mayAdministerRepository(r, principal, record.RepositoryID) {
 			continue
 		}
 		item := adminopenapi.RepositoryGrantRecord{

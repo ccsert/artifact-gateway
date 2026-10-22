@@ -64,6 +64,7 @@ var supportedWorkerKinds = map[string]struct{}{
 
 type Config struct {
 	RepositoryPresetsMode           string
+	HelmPreviewEnabled              bool
 	NuGetPreviewEnabled             bool
 	MigrationSourcePrivateEndpoints map[string][]netip.Prefix
 	MigrationStoragePoolID          string
@@ -239,6 +240,15 @@ func Load() (Config, error) {
 		},
 		OTLPHTTPEndpoint:  strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),
 		OTELSamplingRatio: 1,
+	}
+	if raw := strings.TrimSpace(os.Getenv("GATEWAY_HELM_PREVIEW_ENABLED")); raw != "" {
+		if raw != "true" && raw != "false" {
+			return Config{}, errors.New("GATEWAY_HELM_PREVIEW_ENABLED must be true or false")
+		}
+		cfg.HelmPreviewEnabled = raw == "true"
+	}
+	if cfg.HelmPreviewEnabled && strings.TrimSpace(os.Getenv("GATEWAY_WORKER_FORMATS")) == "" {
+		cfg.WorkerFormats = append(cfg.WorkerFormats, "helm")
 	}
 	if raw := strings.TrimSpace(os.Getenv("GATEWAY_NUGET_PREVIEW_ENABLED")); raw != "" {
 		if raw != "true" && raw != "false" {
@@ -713,6 +723,9 @@ func validateRuntimeConfig(cfg Config) error {
 		return fmt.Errorf("GATEWAY_NODE_ROLES=standalone cannot be combined with other roles")
 	}
 	for _, format := range cfg.WorkerFormats {
+		if format == "helm" && cfg.HelmPreviewEnabled {
+			continue
+		}
 		if format == "nuget" && cfg.NuGetPreviewEnabled {
 			continue
 		}

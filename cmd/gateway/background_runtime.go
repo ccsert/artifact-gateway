@@ -9,6 +9,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/config"
 	"github.com/ccsert/artifact-gateway/internal/emailnotification"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
@@ -30,6 +31,7 @@ type backgroundRuntime struct {
 	scannerFormats   []repository.Format
 	workerSessionID  string
 	aptPublisher     *aptpublication.Publisher
+	helmMaintenance  *helmformat.Maintenance
 	nugetMaintenance *nugetformat.Maintenance
 }
 
@@ -39,6 +41,9 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 	}
 	if cfg.HasRole(config.NodeRoleWorker) {
 		r.startWorkers(ctx, cfg, app.NativeRepositoryRetention{Store: r.store, Metrics: r.metrics, WorkerFormats: cfg.WorkerFormats})
+		if r.helmMaintenance != nil && cfg.WorkerEnabled("helm", "retention") {
+			r.helmMaintenance.Start(ctx, time.Minute)
+		}
 		if r.nugetMaintenance != nil && cfg.WorkerEnabled("nuget", "retention") {
 			// This preview only reclaims expired, never-visible uploads. It
 			// does not advertise NuGet lifecycle/retention capability.

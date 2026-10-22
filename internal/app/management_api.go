@@ -1,6 +1,7 @@
 package app
 
 import (
+	helmapi "github.com/ccsert/artifact-gateway/internal/admin/helm"
 	nugetapi "github.com/ccsert/artifact-gateway/internal/admin/nuget"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 )
@@ -9,6 +10,7 @@ import (
 // binding is shared; authorization and persistence belong to each domain.
 type managementServer struct {
 	*nugetapi.Adapter
+	*helmapi.Boundary
 	repositoryManagementHandler
 	artifactManagementHandler
 	accessManagementHandler

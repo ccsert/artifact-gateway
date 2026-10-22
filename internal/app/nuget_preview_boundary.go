@@ -7,10 +7,10 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-// Public repository DTOs only contain the admitted Format enum. The NuGet
-// preview has independent DTOs; APT's existing provisioning workflow is kept.
-func rejectNuGetFormalProjection(w http.ResponseWriter, repo repository.HostedRepository) bool {
-	if repo.Format != repository.FormatNuGet {
+// Public repository DTOs only contain the admitted Format enum. The format
+// previews have independent DTOs; APT's existing provisioning workflow is kept.
+func rejectPreviewFormalProjection(w http.ResponseWriter, repo repository.HostedRepository) bool {
+	if repository.IsSupportedFormat(repo.Format) {
 		return false
 	}
 	writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
@@ -21,13 +21,16 @@ func runtimeWorkerFormatProjection(input []repository.Format) ([]adminopenapi.Fo
 	formal := make([]adminopenapi.Format, 0, len(input))
 	var previews *[]adminopenapi.NuGetPreviewWorkerFormat
 	for _, format := range input {
-		if format == repository.FormatNuGet {
+		if format == repository.FormatNuGet || format == repository.FormatHelm {
 			if previews == nil {
-				previews = &[]adminopenapi.NuGetPreviewWorkerFormat{adminopenapi.NuGetPreviewWorkerFormatNuget}
+				previews = &[]adminopenapi.NuGetPreviewWorkerFormat{}
 			}
+			*previews = append(*previews, adminopenapi.NuGetPreviewWorkerFormat(format))
 			continue
 		}
-		formal = append(formal, adminopenapi.Format(format))
+		if repository.IsSupportedFormat(format) {
+			formal = append(formal, adminopenapi.Format(format))
+		}
 	}
 	return formal, previews
 }

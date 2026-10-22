@@ -43,7 +43,7 @@ func (h artifactManagementHandler) BrowseGroup(w http.ResponseWriter, r *http.Re
 		return
 	}
 	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) || err == nil && group.Format == repository.FormatNuGet {
+	if errors.Is(err, repository.ErrNotFound) || err == nil && !repository.IsSupportedFormat(group.Format) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return
 	}

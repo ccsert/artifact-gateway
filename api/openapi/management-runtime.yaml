@@ -9,6 +9,16 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/helm/repositories":
+    "$ref": "./management/helm-preview.yaml#/repositories"
+  "/previews/helm/repositories/{repositoryId}":
+    "$ref": "./management/helm-preview.yaml#/repository"
+  "/previews/helm/repositories/{repositoryId}/charts":
+    "$ref": "./management/helm-preview.yaml#/charts"
+  "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}":
+    "$ref": "./management/helm-preview.yaml#/chart"
+  "/previews/helm/repositories/{repositoryId}/capacity":
+    "$ref": "./management/helm-preview.yaml#/capacity"
   "/previews/nuget/groups/{groupId}/sources/{packageId}/{version}/revalidate":
     "$ref": "./management/nuget-preview.yaml#/source_revalidation"
   "/previews/nuget/groups":

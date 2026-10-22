@@ -20,6 +20,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/consoletheme"
 	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/ccsert/artifact-gateway/internal/evidence"
+	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
@@ -289,6 +290,14 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	if dependencies.APTSigner != nil {
 		aptPublisher = aptpublication.NewPublisher(store, objectStore, dependencies.APTSigner).WithMetrics(metrics).WithPublicationScanner(app.NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics))
 	}
+	var helmMaintenance *helmformat.Maintenance
+	if cfg.HelmPreviewEnabled {
+		helmMaintenance, err = helmformat.NewMaintenance(store, objectStore)
+		if err != nil {
+			slog.Error("configure Helm preview maintenance", "error", err)
+			return 1
+		}
+	}
 	var nugetMaintenance *nugetformat.Maintenance
 	if cfg.NuGetPreviewEnabled {
 		nugetMaintenance, err = nugetformat.NewMaintenance(store, objectStore)
@@ -305,6 +314,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		aptPublisher:     aptPublisher,
 		migration:        dependencies.MigrationService,
 		nugetMaintenance: nugetMaintenance,
+		helmMaintenance:  helmMaintenance,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
@@ -346,6 +356,11 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			},
 			Metrics:  metrics,
 			Upstream: app.UpstreamClient{OCIBearerCache: app.NewOCIBearerTokenCache()},
+		}
+		if cfg.HelmPreviewEnabled {
+			gatewayOptions.HelmPreviewEnabled = true
+			gatewayOptions.HelmStore = store
+			gatewayOptions.HelmObjects = objectStore
 		}
 		if cfg.NuGetPreviewEnabled {
 			gatewayOptions.NuGetPreviewEnabled = true

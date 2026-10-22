@@ -66,6 +66,7 @@ agree with executable tests and the
 - [APT Hosted roadmap](apt-hosted-roadmap.md) — ordered H1-H4 acceptance gates.
 - [Cargo client setup](cargo-usage.md) — Hosted, Proxy, and Group registry configuration and commands.
 - [Cargo repository research](cargo-repository-research.md) — sparse registry decisions and C0-C4 implementation record.
+- [Helm Hosted preview](helm-hosted-preview.md) — default-off traditional HTTP chart publication and verified cold consumption.
 - [NuGet Hosted preview](nuget-hosted-preview.md) — default-off native publication and verified restore.
 - [NuGet Proxy and Group preview](nuget-proxy-group-preview.md) — V3 source discovery, persistent authority and private verified caches.
 - [NuGet roadmap](nuget-roadmap.md) — preview acceptance and remaining lifecycle/admission work.
