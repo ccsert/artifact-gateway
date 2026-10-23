@@ -1,0 +1,44 @@
+RubyGemsPreviewRepositoryInput:
+  type: object
+  additionalProperties: false
+  required: [name]
+  properties:
+    name:
+      type: string
+      pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+    anonymousRead:
+      type: boolean
+      default: false
+RubyGemsPreviewRepository:
+  type: object
+  additionalProperties: false
+  required: [id, name, format, type, preview, version, anonymousRead, sourceUrl, publicationUrl]
+  properties:
+    id: {type: string, format: uuid}
+    name: {type: string}
+    format: {type: string, enum: [rubygems]}
+    type: {type: string, enum: [hosted]}
+    preview: {type: boolean, enum: [true]}
+    version: {type: string}
+    anonymousRead: {type: boolean}
+    sourceUrl: {type: string}
+    publicationUrl: {type: string}
+RubyGemsPreviewCapacity:
+  type: object
+  additionalProperties: false
+  required: [usedBytes, pendingBytes, objectCount, quotaBytes]
+  properties:
+    usedBytes: {type: integer, format: int64, minimum: 0}
+    pendingBytes: {type: integer, format: int64, minimum: 0}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    quotaBytes: {type: integer, format: int64, minimum: 0}
+RubyGemsPreviewQuotaInput:
+  type: object
+  additionalProperties: false
+  required: [quotaBytes]
+  properties:
+    quotaBytes:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Zero means no configured quota. Pending unexpired uploads reserve capacity.

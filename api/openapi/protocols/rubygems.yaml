@@ -1,0 +1,107 @@
+push:
+  parameters:
+    - {$ref: '#/repository'}
+  post:
+    operationId: pushRubyGemHostedPreview
+    description: >-
+      Explicitly enabled RubyGems Hosted preview. Posts original gem bytes using
+      Authorization with a local API key, Bearer token, or Basic password token.
+      The entire metadata/data/checksum closure must validate before discovery.
+      Same identity and bytes is idempotent; different bytes conflict. Not part
+      of the admitted Format catalog. Signed gem archives are not accepted.
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}]
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema: {type: string, format: binary, maxLength: 67108864}
+    responses:
+      '201': {description: Immutable original bytes committed with their audit}
+      '400': {description: Invalid or unsupported archive closure}
+      '401': {description: Authentication required}
+      '403': {description: Repository or gem-name permission denied}
+      '404': {description: Preview disabled or Hosted repository not found}
+      '409': {description: Immutable identity conflict or reserved capacity exceeded}
+      '413': {description: Gem exceeds the configured compressed-byte bound}
+      '500': {description: Persistence or verified-object failure; no partial index publication}
+index:
+  parameters:
+    - {$ref: '#/repository'}
+    - {name: index, in: path, required: true, schema: {type: string, enum: [names, versions, specs.4.8.gz, latest_specs.4.8.gz, prerelease_specs.4.8.gz]}}
+  get:
+    operationId: readRubyGemsHostedPreviewIndex
+    description: Authorized complete bounded compact or legacy Marshal 4.8 snapshot. Package-scoped grants filter every entry. Range requests receive the complete current 200 representation.
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Authorized index snapshot}
+      '304': {description: Same authorized ETag}
+      '401': {description: Authentication required}
+      '403': {description: Repository read permission denied}
+      '404': {description: Preview or repository not found}
+      '500': {description: Invalid or unavailable committed metadata}
+  head:
+    operationId: headRubyGemsHostedPreviewIndex
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Same headers as GET without body}
+      '304': {description: Same authorized ETag}
+      '401': {description: Authentication required}
+      '403': {description: Repository read permission denied}
+      '404': {description: Preview or repository not found}
+info:
+  parameters:
+    - {$ref: '#/repository'}
+    - {name: gemName, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+  get:
+    operationId: readRubyGemsHostedPreviewInfo
+    description: Compact info with runtime dependencies, Ruby/RubyGems requirements, platform and original gem SHA-256.
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Authorized compact dependency info}
+      '304': {description: Same authorized info ETag}
+      '401': {description: Authentication required}
+      '403': {description: Gem-name read permission denied}
+      '404': {description: Invalid name or missing preview repository}
+asset:
+  parameters:
+    - {$ref: '#/repository'}
+    - {name: gemFile, in: path, required: true, schema: {type: string, minLength: 1}}
+  get:
+    operationId: downloadRubyGemHostedPreview
+    description: Verified original gem bytes; all reads recheck complete size and SHA-256 before writing a response.
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Original complete immutable gem}
+      '304': {description: Same authorized gem digest}
+      '401': {description: Authentication required}
+      '403': {description: Gem-name read permission denied}
+      '404': {description: Gem not found}
+      '500': {description: Stored gem integrity verification failed}
+  head:
+    operationId: headRubyGemHostedPreview
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Same headers as GET without body}
+      '304': {description: Same authorized gem digest}
+      '401': {description: Authentication required}
+      '403': {description: Gem-name read permission denied}
+      '404': {description: Gem not found}
+quick:
+  parameters:
+    - {$ref: '#/repository'}
+    - {name: gemspecFile, in: path, required: true, schema: {type: string, minLength: 1}}
+  get:
+    operationId: readRubyGemsHostedPreviewGemspec
+    description: Server-serialized zlib Marshal 4.8 Gem::Specification preserving runtime/development dependencies and version requirements.
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Authorized immutable gemspec}
+      '304': {description: Same authorized gemspec ETag}
+      '401': {description: Authentication required}
+      '403': {description: Gem-name read permission denied}
+      '404': {description: Gem not found}
+repository:
+  name: repository
+  in: path
+  required: true
+  schema: {type: string, minLength: 1, maxLength: 63}

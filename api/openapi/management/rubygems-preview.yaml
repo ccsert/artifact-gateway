@@ -1,0 +1,75 @@
+repositories:
+  post:
+    tags: [RubyGemsPreview]
+    operationId: createRubyGemsPreviewRepository
+    summary: Create an opt-in RubyGems Hosted preview repository
+    description: Requires administrator authentication and explicit runtime preview enablement. Outside the admitted Format catalog; Proxy and Group are not supported.
+    parameters:
+      - {name: Idempotency-Key, in: header, schema: {type: string, maxLength: 200}}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewRepositoryInput'}
+    responses:
+      '201':
+        description: Created or replayed repository
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewRepository'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '409': {$ref: '../components/responses.yaml#/Problem'}
+repository:
+  parameters:
+    - {name: repositoryId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    tags: [RubyGemsPreview]
+    operationId: getRubyGemsPreviewRepository
+    summary: Read a RubyGems preview repository
+    responses:
+      '200':
+        description: Explicit preview repository
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewRepository'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+capacity:
+  parameters:
+    - {name: repositoryId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    tags: [RubyGemsPreview]
+    operationId: getRubyGemsPreviewCapacity
+    summary: Read preview capacity including pending reservations
+    responses:
+      '200':
+        description: Capacity, administrator only
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewCapacity'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+  put:
+    tags: [RubyGemsPreview]
+    operationId: setRubyGemsPreviewQuota
+    summary: Set administrator-managed preview quota atomically with its audit
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewQuotaInput'}
+    responses:
+      '200':
+        description: Updated quota; reservations and committed bytes remain covered
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewCapacity'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '409': {$ref: '../components/responses.yaml#/Problem'}
