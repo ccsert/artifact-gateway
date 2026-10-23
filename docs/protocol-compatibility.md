@@ -84,8 +84,10 @@ dry-run rendering against an owned read-only discovery fixture. It does not clai
 a real Kubernetes installation. Proxy/Group reads preserve persistent source
 authorities across reordering and use verified chart/provenance caches. Versioned
 tombstones and quarantine apply to indexes and assets, including old snapshot URLs;
-recovery verifies the complete original closure. Retention, distribution and full
-format admission remain under #292.
+recovery verifies the complete original closure. [Durable Hosted replication](helm-replication-preview.md)
+fixes complete chart/provenance plans and commits verified target-owned bytes with
+current authority, source governance and per-item checkpoints. Retention, promotion
+and full format admission remain under #292.
 
 ## NuGet Hosted, Proxy and Group preview
 
@@ -118,8 +120,12 @@ immutable name/version/platform identities, runtime dependencies and quota usage
 Compact indexes, legacy Marshal indexes and gemspecs describe the same committed
 packages. `make native-rubygems-e2e` checks fixed official RubyGems/Bundler clients
 using target-only empty caches and original package digests across service restart.
-Proxy/Group, signed archives, yank, full governance and formal admission are not
-part of this slice; #293 retains those requirements. The preview stays outside
+Native `gem yank` hides every package representation and original download while
+retaining immutable bytes and quota. Versioned repository-admin recovery verifies
+the retained closure and current authority, including after transaction lock waits.
+The client gate checks platform isolation, cold refusal and post-restart recovery.
+Proxy/Group, signed archives, the remaining governance and formal admission stay
+under #293. The preview stays outside
 the formal catalog, Console format selector and installation presets.
 
 ## Contract alignment

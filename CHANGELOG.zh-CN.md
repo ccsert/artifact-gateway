@@ -8,6 +8,12 @@
 
 ## Unreleased
 
+- Nexus 新增 [PyPI Hosted 迁移](docs/nexus-pypi-migration.zh-CN.md)（#461），将完整 wheel/sdist 版本与持久检查点原子提交，保留 Requires-Python 和文件 yank。提交前复查当前管理员、租约与源版本；固定 pip 必需门禁在停止合成源后仅从目标消费。
+
+- RubyGems Hosted 预览支持原生 `gem yank` 与版本化恢复（#462）。撤回隐藏索引、gemspec 和下载，保留字节及配额；恢复核验原包和当前仓库管理员权限。各 platform 版本独立，重启后状态保留。
+
+- Helm 预览新增 [Hosted 持久复制](docs/helm-replication-preview.zh-CN.md)（#463）。固定计划绑定 chart、可选 provenance、源治理和操作者权限；后台原子提交目标自有闭包、审计与逐项检查点，支持失败项精确重试。目标冷客户端在源文件删除和服务重启后核验复制签名。
+
 - Helm 预览为 Hosted 与已缓存 Proxy chart 增加版本化墓碑/恢复和隔离控制（#457）。索引、chart/provenance 资产及 Group 快照读取使用同一治理状态，恢复前重验原始字节；完整生命周期准入仍由 #292 承接。
 
 - NuGet 预览新增 [Hosted 持久复制](docs/nuget-replication-preview.zh-CN.md)（#458）：固定计划、当前主体/凭据和仓库权限重验、Worker 租约保护、目标自有完整验证字节与失败项精确重试。某项失败时，已完成包继续可见；完整准入仍由 #289 承接。

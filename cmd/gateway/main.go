@@ -266,7 +266,8 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		WithPublicationScanner(migrationScanner).
 		WithOCI(app.NewNexusOCIMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner)).
 		WithConan(app.NewNexusConanMigrationPublication(store, store, objectStore).WithPublicationScanner(migrationScanner)).
-		WithNPM(app.NewNexusNPMMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner))
+		WithNPM(app.NewNexusNPMMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner)).
+		WithPyPI(app.NewNexusPyPIMigrationPublication(store, objectStore).WithPublicationScanner(migrationScanner))
 	migrationLedger := migrationpg.New(databasePool)
 	dependencies.MigrationService = nexusmigration.New(migrationLedger, dependencies.SourceService, migrationPublication, nexusmigration.Options{TargetID: migrationTargetID, PoolID: cfg.MigrationStoragePoolID})
 	dependencies.MigrationSchedules = nexusmigration.NewSchedules(migrationLedger, dependencies.MigrationService)

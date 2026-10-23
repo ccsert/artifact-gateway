@@ -165,7 +165,7 @@ case "$job" in
     printf 'fast     : lint, vet, go test ./..., docs-check, CLI command map contract, openapi freshness, console typecheck/check/test\n'
     printf 'quality  : CI job quality\n'
     printf 'contract : core plus all native lanes, then the local CLI stack check\n'
-    printf 'lanes    : use --lane core|migration-clients|inventory|nuget|oci-migration|maven-oci-auth|six-format-auth|oci-discovery|npm-migration|helm|rubygems\n'
+    printf 'lanes    : use --lane core|migration-clients|inventory|nuget|oci-migration|maven-oci-auth|six-format-auth|oci-discovery|npm-migration|helm|rubygems|pypi-migration\n'
     printf 'console  : CI job console\n'
     printf 'all      : quality, contract, console\n'
     ;;

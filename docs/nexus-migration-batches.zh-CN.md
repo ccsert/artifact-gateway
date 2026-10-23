@@ -3,14 +3,15 @@
 [English](nexus-migration-batches.md) · [文档索引](README.zh-CN.md)
 
 管理员 API 将[只读源发现](nexus-source-discovery.zh-CN.md)接到原生 Maven release、
-Raw、OCI、Conan 2 与 npm Hosted 发布。批次统一使用 `native-v1`，不支持旧策略输入或历史
+Raw、OCI、Conan 2、npm 与 PyPI Hosted 发布。批次统一使用 `native-v1`，不支持旧策略输入或历史
 管理接口。生产切流、源删除、冲突覆盖、Proxy 历史缓存和在线 SNAPSHOT 历史不在此
 流程范围内。已交付的离线 SNAPSHOT 导入器保持独立。
 
 先应用 `000147_nexus_migration_batches.sql` 和
 `000148_nexus_migration_scan_diagnostics.sql`，以及追加的
 `000154_nexus_native_migration_formats.sql` 和
-`000155_nexus_migration_scan_checkpoints.sql` 和 `000162_nexus_npm_migration.sql`；统一使用标准迁移程序。将
+`000155_nexus_migration_scan_checkpoints.sql`、`000162_nexus_npm_migration.sql` 与
+`000186_nexus_pypi_migration.sql`；统一使用标准迁移程序。将
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` 配置为真实对象存储池标识；Compose 转发给所有
 继承的 Gateway 角色。不配置时仅禁止迁移写入，其他网关功能和迁移报告仍可读。
 源 HTTPS、凭据加密、精确内部地址 allowlist、DNS 固定及禁止重定向均复用源发现，
@@ -86,6 +87,13 @@ Conan 只从精确 revision storage path 识别身份，不从 Browse 展示推�
 提交响应丢失通过完整读回核对恢复，不生成第二份可见发布。源配置版本、映射或策略
 变化需要新批次；后续批次始终重新完整枚举：新增身份发布、相同身份重验、源删除只报告
 并保留目标，不使用仅基于时间水位的增量。
+
+## PyPI Hosted 发行文件
+
+[PyPI 迁移](nexus-pypi-migration.zh-CN.md) 保留同一 project/version 的完整 wheel 与
+`.tar.gz` 源包、Requires-Python 和 yank 元数据。该适配器要求当前有效的持久管理员身份或
+管理员 API key；仅有显示名的静态主体无法证明当前权限，因此明确拒绝。源码构建及其他
+归档形态仍在本切片之外；`make nexus-pypi-migration-e2e` 强制执行八项真实持久化/客户端验收。
 
 ## npm Hosted 包闭包
 

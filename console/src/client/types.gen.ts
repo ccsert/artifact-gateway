@@ -1872,7 +1872,9 @@ export type NexusMigrationScanFailure = {
     | "source_verification_digest"
     | "source_version_validation"
     | "oci_graph_validation"
-    | "npm_packument_validation";
+    | "npm_packument_validation"
+    | "pypi_simple_validation"
+    | "pypi_distribution_validation";
   sourceRepositories: Array<string>;
   sourceRepository: string;
   sourcePath: string;
@@ -1953,7 +1955,7 @@ export type NexusMigrationEntry = {
   batchId: string;
   sourceRepository: string;
   targetRepositoryId: string;
-  format: "maven" | "raw" | "oci" | "conan" | "npm";
+  format: "maven" | "raw" | "oci" | "conan" | "npm" | "pypi";
   identity: string;
   state:
     | "pending"
@@ -2079,7 +2081,7 @@ export type MigrationSourceDiscovery = {
 export type MigrationSourceMapping = {
   sourceRepository: string;
   targetName: string;
-  format: "raw" | "maven" | "oci" | "conan" | "npm";
+  format: "raw" | "maven" | "oci" | "conan" | "npm" | "pypi";
   type: "hosted" | "proxy" | "group";
   targetMembers?: Array<string>;
 };

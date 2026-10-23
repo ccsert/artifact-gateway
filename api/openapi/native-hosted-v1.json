@@ -377,8 +377,7 @@
             "description": "Current gem-name write authority required"
           },
           "404": {
-            "description": "Preview",
-            "repository or retained gem variant not found": null
+            "description": "Preview, repository or retained gem variant not found"
           },
           "409": {
             "description": "Concurrent publication or governance conflict"
@@ -15342,7 +15341,9 @@
               "source_verification_digest",
               "source_version_validation",
               "oci_graph_validation",
-              "npm_packument_validation"
+              "npm_packument_validation",
+              "pypi_simple_validation",
+              "pypi_distribution_validation"
             ]
           },
           "sourceRepositories": {
@@ -15641,7 +15642,8 @@
               "raw",
               "oci",
               "conan",
-              "npm"
+              "npm",
+              "pypi"
             ]
           },
           "identity": {
@@ -16164,7 +16166,8 @@
               "maven",
               "oci",
               "conan",
-              "npm"
+              "npm",
+              "pypi"
             ]
           },
           "type": {

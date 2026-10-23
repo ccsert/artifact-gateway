@@ -92,10 +92,11 @@ func TestHelmChartContractDistinguishesIndexMetadataFromVerifiedBytes(t *testing
 			t.Fatalf("cold index metadata must not require unknown byte counts: %v", err)
 		}
 		for key, value := range map[string]any{
-			"size":             float64(1),
-			"provenanceSize":   float64(0),
-			"provenanceDigest": "sha256:" + strings.Repeat("b", 64),
-			"provenanceUrl":    "/helm/example/chart.tgz.prov",
+			"governanceVersion": "1",
+			"size":              float64(1),
+			"provenanceSize":    float64(0),
+			"provenanceDigest":  "sha256:" + strings.Repeat("b", 64),
+			"provenanceUrl":     "/helm/example/chart.tgz.prov",
 		} {
 			metadata[key] = value
 			if err := schema.VisitJSON(metadata); err == nil {
@@ -109,6 +110,10 @@ func TestHelmChartContractDistinguishesIndexMetadataFromVerifiedBytes(t *testing
 		}
 		metadata["size"] = float64(512)
 		metadata["provenanceSize"] = float64(0)
+		if err := schema.VisitJSON(metadata); err == nil {
+			t.Fatal("verified chart receipt may omit the governance version needed to pin replication")
+		}
+		metadata["governanceVersion"] = "1"
 		if err := schema.VisitJSON(metadata); err != nil {
 			t.Fatalf("unsigned verified receipt: %v", err)
 		}

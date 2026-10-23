@@ -3,7 +3,7 @@
 [简体中文](nexus-migration-batches.zh-CN.md) · [Documentation index](README.md)
 
 The administrator API connects [read-only source discovery](nexus-source-discovery.md)
-to native Maven release, Raw, OCI, Conan 2 and npm Hosted publication. Batches use
+to native Maven release, Raw, OCI, Conan 2, npm and PyPI Hosted publication. Batches use
 `native-v1`; old policy inputs and historical management interfaces are not
 supported. Production cutover, source deletion, conflict overwrites, Proxy caches
 and online SNAPSHOT history are outside this workflow. The offline SNAPSHOT
@@ -12,7 +12,8 @@ importer remains independent.
 Apply migrations `000147_nexus_migration_batches.sql` and
 `000148_nexus_migration_scan_diagnostics.sql` and the appended
 `000154_nexus_native_migration_formats.sql` and
-`000155_nexus_migration_scan_checkpoints.sql` and `000162_nexus_npm_migration.sql` through the standard migration runner. Configure
+`000155_nexus_migration_scan_checkpoints.sql`, `000162_nexus_npm_migration.sql` and
+`000186_nexus_pypi_migration.sql` through the standard migration runner. Configure
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` with the real object-storage pool identity.
 Compose forwards it to every inherited Gateway role. Without it migration writes
 are disabled; the rest of Gateway and migration reports remain available. Source
@@ -115,6 +116,15 @@ readback, without a second visible publication. Source configuration version,
 mapping or policy changes require a new batch. Later batches fully enumerate
 again: new identities publish, identical identities reverify, and deletions are
 reported while retaining their target. There is no timestamp-only watermark.
+
+## PyPI Hosted release files
+
+[PyPI migration](nexus-pypi-migration.md) preserves a complete project/version's
+wheel and `.tar.gz` source files, Requires-Python and yank metadata. It requires a
+currently active durable administrator or administrator API key; static display-name
+actors cannot prove current authority and are refused for this adapter. Source
+builds and other archive shapes remain outside this slice. The dedicated
+`make nexus-pypi-migration-e2e` gate requires eight real persistence/client cases.
 
 ## npm Hosted package closures
 

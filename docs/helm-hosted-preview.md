@@ -281,9 +281,14 @@ fixed-client provenance, raw JSON test events, an explicit mandatory test list,
 required/summary results, raw CLI command outputs, original upstream source proof
 and exact owned-resource cleanup. Missing or skipped mandatory cases fail.
 
+[Durable Hosted replication](helm-replication-preview.md) adds fixed chart/provenance
+plans, current-authority publication and target-owned bytes with per-item checkpoints.
+The same mandatory client gate verifies target-only cold consumption after source
+removal and service restart.
+
 This preview does not expose Proxy/Group publication, Console creation/
 upload/browse, agctl commands, retention of visible charts, scanning,
-promotion/replication, full backup/upgrade acceptance or Nexus
+promotion, full backup/upgrade acceptance or Nexus
 Helm migration. These remain #292 or their migration dependencies. There is
 no production routing or source migration/cutover in this delivery.
 

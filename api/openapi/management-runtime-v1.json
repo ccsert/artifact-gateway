@@ -17061,7 +17061,9 @@
               "source_verification_digest",
               "source_version_validation",
               "oci_graph_validation",
-              "npm_packument_validation"
+              "npm_packument_validation",
+              "pypi_simple_validation",
+              "pypi_distribution_validation"
             ]
           },
           "sourceRepositories": {
@@ -17360,7 +17362,8 @@
               "raw",
               "oci",
               "conan",
-              "npm"
+              "npm",
+              "pypi"
             ]
           },
           "identity": {
@@ -17883,7 +17886,8 @@
               "maven",
               "oci",
               "conan",
-              "npm"
+              "npm",
+              "pypi"
             ]
           },
           "type": {

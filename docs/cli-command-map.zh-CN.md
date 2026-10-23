@@ -508,3 +508,9 @@ agctl 命令。NuGet 重试保留原持久主体与凭据身份，并重新检�
 | `GET /rubygems/{repository}/quick/Marshal.4.8/{gemspecFile}`<br>`readRubyGemsHostedPreviewGemspec` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
 | `HEAD /rubygems/{repository}/info/{gemName}`<br>`headRubyGemsHostedPreviewInfo` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
 | `HEAD /rubygems/{repository}/quick/Marshal.4.8/{gemspecFile}`<br>`headRubyGemsHostedPreviewGemspec` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `POST /previews/helm/replication-jobs`<br>`createHelmPreviewReplicationJob` | `helm preview replication create --file <plan.json>` | #463 | M2 planned | source R + target W | W |
+| `GET /previews/helm/replication-jobs/{jobId}`<br>`getHelmPreviewReplicationJob` | `helm preview replication show <job-id>` | #463 | M2 planned | source R + target R | Q |
+| `POST /previews/helm/replication-jobs/{jobId}/retry`<br>`retryHelmPreviewReplicationJob` | `helm preview replication retry <job-id> --file <retry.json>` | #463 | M2 planned | original actor + source R + target W | C |
+| `GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance`<br>`getRubyGemsPreviewGovernance` | 显式 RubyGems 预览 API | #462 | N/A | RA for the exact package | N：此 Hosted 预览提供版本化治理 API，尚未注册或验证对应 agctl 命令 |
+| `POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance`<br>`changeRubyGemsPreviewGovernance` | 显式 RubyGems 预览 API | #462 | N/A | RA for the exact package | N：此 Hosted 预览提供版本化治理 API，尚未注册或验证对应 agctl 命令 |
+| `DELETE /rubygems/{repository}/api/v1/gems/yank`<br>`yankRubyGemHostedPreview` | native `gem yank` | #462 | N/A | W for the exact package | N：官方 RubyGems 客户端发送原生 yank，agctl 不另行实现协议客户端 |

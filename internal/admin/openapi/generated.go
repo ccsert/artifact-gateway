@@ -2285,6 +2285,7 @@ const (
 	MigrationSourceMappingFormatMaven MigrationSourceMappingFormat = "maven"
 	MigrationSourceMappingFormatNpm   MigrationSourceMappingFormat = "npm"
 	MigrationSourceMappingFormatOci   MigrationSourceMappingFormat = "oci"
+	MigrationSourceMappingFormatPypi  MigrationSourceMappingFormat = "pypi"
 	MigrationSourceMappingFormatRaw   MigrationSourceMappingFormat = "raw"
 )
 
@@ -2298,6 +2299,8 @@ func (e MigrationSourceMappingFormat) Valid() bool {
 	case MigrationSourceMappingFormatNpm:
 		return true
 	case MigrationSourceMappingFormatOci:
+		return true
+	case MigrationSourceMappingFormatPypi:
 		return true
 	case MigrationSourceMappingFormatRaw:
 		return true
@@ -2477,6 +2480,7 @@ const (
 	NexusMigrationEntryFormatMaven NexusMigrationEntryFormat = "maven"
 	NexusMigrationEntryFormatNpm   NexusMigrationEntryFormat = "npm"
 	NexusMigrationEntryFormatOci   NexusMigrationEntryFormat = "oci"
+	NexusMigrationEntryFormatPypi  NexusMigrationEntryFormat = "pypi"
 	NexusMigrationEntryFormatRaw   NexusMigrationEntryFormat = "raw"
 )
 
@@ -2490,6 +2494,8 @@ func (e NexusMigrationEntryFormat) Valid() bool {
 	case NexusMigrationEntryFormatNpm:
 		return true
 	case NexusMigrationEntryFormatOci:
+		return true
+	case NexusMigrationEntryFormatPypi:
 		return true
 	case NexusMigrationEntryFormatRaw:
 		return true
@@ -2542,14 +2548,16 @@ func (e NexusMigrationEntryState) Valid() bool {
 
 // Defines values for NexusMigrationScanFailureStage.
 const (
-	ManifestPlanning         NexusMigrationScanFailureStage = "manifest_planning"
-	MetadataDiscovery        NexusMigrationScanFailureStage = "metadata_discovery"
-	NpmPackumentValidation   NexusMigrationScanFailureStage = "npm_packument_validation"
-	OciGraphValidation       NexusMigrationScanFailureStage = "oci_graph_validation"
-	SourceVerificationDigest NexusMigrationScanFailureStage = "source_verification_digest"
-	SourceVerificationOpen   NexusMigrationScanFailureStage = "source_verification_open"
-	SourceVerificationRead   NexusMigrationScanFailureStage = "source_verification_read"
-	SourceVersionValidation  NexusMigrationScanFailureStage = "source_version_validation"
+	ManifestPlanning           NexusMigrationScanFailureStage = "manifest_planning"
+	MetadataDiscovery          NexusMigrationScanFailureStage = "metadata_discovery"
+	NpmPackumentValidation     NexusMigrationScanFailureStage = "npm_packument_validation"
+	OciGraphValidation         NexusMigrationScanFailureStage = "oci_graph_validation"
+	PypiDistributionValidation NexusMigrationScanFailureStage = "pypi_distribution_validation"
+	PypiSimpleValidation       NexusMigrationScanFailureStage = "pypi_simple_validation"
+	SourceVerificationDigest   NexusMigrationScanFailureStage = "source_verification_digest"
+	SourceVerificationOpen     NexusMigrationScanFailureStage = "source_verification_open"
+	SourceVerificationRead     NexusMigrationScanFailureStage = "source_verification_read"
+	SourceVersionValidation    NexusMigrationScanFailureStage = "source_version_validation"
 )
 
 // Valid indicates whether the value is a known member of the NexusMigrationScanFailureStage enum.
@@ -2562,6 +2570,10 @@ func (e NexusMigrationScanFailureStage) Valid() bool {
 	case NpmPackumentValidation:
 		return true
 	case OciGraphValidation:
+		return true
+	case PypiDistributionValidation:
+		return true
+	case PypiSimpleValidation:
 		return true
 	case SourceVerificationDigest:
 		return true
