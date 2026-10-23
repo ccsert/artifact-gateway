@@ -112,6 +112,7 @@ type Asset struct {
 	SHA512     string `json:"-"`
 	// NPMPackument preserves exact frozen bytes privately in the ledger.
 	NPMPackument []byte `json:"-"`
+	PyPISimple   []byte `json:"-"`
 }
 type Entry struct {
 	ID                 string    `json:"id"`

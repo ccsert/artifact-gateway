@@ -138,12 +138,13 @@ type savedAsset struct {
 	MD5          string `json:"md5"`
 	SHA512       string `json:"sha512,omitempty"`
 	NPMPackument []byte `json:"npmPackument,omitempty"`
+	PyPISimple   []byte `json:"pypiSimple,omitempty"`
 }
 
 func encodeAssets(in []m.Asset) []byte {
 	out := make([]savedAsset, len(in))
 	for i, a := range in {
-		out[i] = savedAsset{a, a.SHA1, a.MD5, a.SHA512, a.NPMPackument}
+		out[i] = savedAsset{a, a.SHA1, a.MD5, a.SHA512, a.NPMPackument, a.PyPISimple}
 	}
 	b, _ := json.Marshal(out)
 	return b
@@ -169,6 +170,7 @@ func scanEntry(row scanner) (m.Entry, error) {
 		e.Assets[i].MD5 = a.MD5
 		e.Assets[i].SHA512 = a.SHA512
 		e.Assets[i].NPMPackument = a.NPMPackument
+		e.Assets[i].PyPISimple = a.PyPISimple
 	}
 	return e, nil
 }
@@ -392,7 +394,21 @@ func (s *Store) Seal(ctx context.Context, b m.Batch, entries []m.Entry, hash str
 	return tx.Commit()
 }
 func (s *Store) Checkpoint(ctx context.Context, e m.Entry, token string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE nexus_migration_entries e SET state=$4,assets=$5,session_id=$6,attempts=$7,verified_bytes=$8,visible_identities=$9,last_error=$10,updated_at=clock_timestamp() FROM nexus_migration_batches b WHERE e.batch_id=b.id AND e.id::text=$1 AND b.id::text=$2 AND b.lease_token=$3 AND b.lease_expires_at>clock_timestamp() AND b.state IN ('running','pausing') AND (SELECT jsonb_agg(a-'uploaded'-'verified') FROM jsonb_array_elements(e.assets) a)=(SELECT jsonb_agg(a-'uploaded'-'verified') FROM jsonb_array_elements($5::jsonb) a)`, e.ID, e.BatchID, token, e.State, encodeAssets(e.Assets), e.SessionID, e.Attempts, e.VerifiedBytes, e.VisibleIdentities, e.LastError)
+	result, err := s.db.ExecContext(ctx, `UPDATE nexus_migration_entries e SET state=$4,assets=$5,session_id=$6,attempts=$7,verified_bytes=$8,visible_identities=$9,last_error=$10,updated_at=clock_timestamp() FROM nexus_migration_batches b WHERE e.batch_id=b.id AND e.id::text=$1 AND b.id::text=$2 AND b.lease_token=$3 AND b.lease_expires_at>clock_timestamp() AND b.state IN ('running','pausing') AND NOT (e.format='pypi' AND e.state='committed' AND $4 NOT IN ('committed','skipped')) AND (SELECT jsonb_agg(a-'uploaded'-'verified') FROM jsonb_array_elements(e.assets) a)=(SELECT jsonb_agg(a-'uploaded'-'verified') FROM jsonb_array_elements($5::jsonb) a)`, e.ID, e.BatchID, token, e.State, encodeAssets(e.Assets), e.SessionID, e.Attempts, e.VerifiedBytes, e.VisibleIdentities, e.LastError)
+	if err == nil && e.Format == "pypi" && e.State != "committed" && e.State != "skipped" {
+		if n, countErr := result.RowsAffected(); countErr == nil && n == 0 {
+			// A commit may succeed even when its acknowledgement is lost. Revalidation
+			// checkpoints and the error path cannot erase the atomically committed receipt.
+			var committed bool
+			checkErr := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nexus_migration_entries e JOIN nexus_migration_batches b ON b.id=e.batch_id WHERE e.id::text=$1 AND b.id::text=$2 AND b.lease_token=$3 AND b.lease_expires_at>clock_timestamp() AND b.state IN ('running','pausing') AND e.format='pypi' AND e.state='committed' AND (SELECT jsonb_agg(a-'uploaded'-'verified') FROM jsonb_array_elements(e.assets) a)=(SELECT jsonb_agg(a-'uploaded'-'verified') FROM jsonb_array_elements($4::jsonb) a))`, e.ID, e.BatchID, token, encodeAssets(e.Assets)).Scan(&committed)
+			if checkErr != nil {
+				return checkErr
+			}
+			if committed {
+				return nil
+			}
+		}
+	}
 	return changed(result, err)
 }
 func (s *Store) AddTransferred(ctx context.Context, id, batch, token string, n int64) error {

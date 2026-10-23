@@ -40,6 +40,11 @@ func (p *NexusMigrationPublication) WithConan(publication NexusFormatMigrationPu
 	return p
 }
 
+func (p *NexusMigrationPublication) WithPyPI(publication NexusFormatMigrationPublication) *NexusMigrationPublication {
+	p.pypi = publication
+	return p
+}
+
 func (p *NexusMigrationPublication) WithNPM(publication NexusFormatMigrationPublication) *NexusMigrationPublication {
 	p.npm = publication
 	return p
@@ -57,6 +62,8 @@ func (p *NexusMigrationPublication) formatPublication(format string) NexusFormat
 		publication = p.conan
 	case "npm":
 		publication = p.npm
+	case "pypi":
+		publication = p.pypi
 	}
 	if nilDependency(publication) {
 		return nil
@@ -92,4 +99,28 @@ func (p *NexusMigrationPublication) capacityAsset(ctx context.Context, entry nex
 		return MigrationPublicationAsset{}, err
 	}
 	return MigrationPublicationAsset{Path: asset.Path, ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}, nil
+}
+
+// ValidateMigrationActor rejects non-durable/expired authority before writing a
+// PyPI batch. Legacy format admission remains separate.
+func (p *NexusMigrationPublication) ValidateMigrationActor(ctx context.Context, actor string, mappings []nexusmigration.Mapping) error {
+	for _, m := range mappings {
+		repo, err := p.store.GetHostedRepository(ctx, m.TargetRepositoryID)
+		if err != nil {
+			return err
+		}
+		if repo.Format != repository.FormatPyPI {
+			continue
+		}
+		check, ok := p.pypi.(interface {
+			CheckActor(context.Context, string) error
+		})
+		if !ok {
+			return nexusmigration.Failed("pypi_actor_not_current_admin")
+		}
+		if err = check.CheckActor(ctx, actor); err != nil {
+			return err
+		}
+	}
+	return nil
 }
