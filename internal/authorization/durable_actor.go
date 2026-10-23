@@ -21,7 +21,10 @@ func (a Authenticator) DurablePrincipal(actor string, kind AuthenticationKind, r
 		}
 	case AuthenticationLocalSession, AuthenticationOIDC, AuthenticationAPIKey:
 		p.Role = Role(role)
-		if !validGatewayRole(p.Role) {
+		// Standalone keys can rely entirely on repository grants. Their current
+		// credential snapshot still has to be active; persisted users require
+		// an approved Gateway role as well as their account-state checks.
+		if !validGatewayRole(p.Role) && (kind != AuthenticationAPIKey || p.Role != "") {
 			return Principal{}, false
 		}
 		p.Admin = p.Role == RoleAdmin

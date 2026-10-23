@@ -63,6 +63,9 @@ Durable execution supports the currently configured static administrator and
 resolver, persisted active local/OIDC users, active standalone API keys and
 active service-account credentials with their original non-secret credential
 ID. It reloads current roles, account/password state and repository grants.
+Standalone API keys may have no global role: explicit source-read and
+target-write grants are sufficient. Missing, revoked or expired keys cannot
+submit or finish a package, even if their repository grants remain.
 Unpersisted external OIDC subjects and derived service-account tokens without a
 revocable credential identity cannot submit a durable task. Replacing the
 configured static actor does not keep the old actor's queued authority alive.

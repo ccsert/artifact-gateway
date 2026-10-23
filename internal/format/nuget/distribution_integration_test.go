@@ -22,6 +22,16 @@ type lostReplicationReply struct {
 	cancel context.CancelFunc
 }
 
+func TestPostgresRustFSNuGetReplicationRepositoryOnlyKeyAuthority(t *testing.T) {
+	f := newDurableFixture(t)
+	testNuGetReplicationRepositoryOnlyKeyAuthority(t, f.module, f.store, f.objects, f.repo)
+}
+
+func TestPostgresRustFSNuGetReplicationBlockedCurrentUserAuthority(t *testing.T) {
+	f := newDurableFixture(t)
+	testNuGetReplicationBlockedCurrentUserAuthority(t, f.module, f.store, f.objects, f.repo)
+}
+
 func (s lostReplicationReply) CompleteNuGetReplicationItem(ctx context.Context, lease dist.Lease, index int, proof dist.Commit, check dist.Check) (dist.Job, error) {
 	j, err := s.Store.CompleteNuGetReplicationItem(ctx, lease, index, proof, check)
 	if err != nil {
