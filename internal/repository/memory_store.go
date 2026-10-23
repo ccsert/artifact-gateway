@@ -4,12 +4,15 @@ import (
 	"sync"
 	"time"
 
+	helmdist "github.com/ccsert/artifact-gateway/internal/helmdistribution"
 	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
 
 	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
 )
 
 type MemoryStore struct {
+	helmJobs             map[string]helmdist.Job
+	helmRetries          map[string]string
 	helmDocuments        map[string]HelmSourceDocument
 	helmSnapshots        map[string]HelmSourceSnapshot
 	helmAuthorities      map[string]HelmGroupAuthority
