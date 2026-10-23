@@ -166,6 +166,16 @@ export const nexusBatchZhCN = {
   "nexusBatch.scanDigest": "核对源资产摘要",
   "nexusBatch.scanVersion": "重新验证源连接版本",
   "nexusBatch.scanNPM": "核对 npm 包元数据与完整版本集合",
+  "nexusBatch.scanPyPISimple": "核对 Python 包索引",
+  "nexusBatch.scanPyPIDistribution": "校验 Python 发行文件身份",
+  "nexusBatch.pypiClosure":
+    "PyPI 发行文件或索引元数据不完整、不一致。请核实源版本后重新扫描。",
+  "nexusBatch.pypiIdentity":
+    "包内元数据与 PyPI 项目和版本不一致。请核实源发行文件后重新扫描。",
+  "nexusBatch.pypiAdministrator":
+    "PyPI 迁移需要有效的管理员账号或管理员 API key。请核实批次或计划所有者的当前权限。",
+  "nexusBatch.pypiAuthorityOrTarget":
+    "PyPI 迁移所有者或目标不可用。请核实所有者的当前权限，以及目标是否为活跃的 Hosted 仓库。",
   "nexusBatch.npmClosure":
     "npm 元数据与版本集合不完整或不一致。请核实所选源仓库的读取权限和全部版本后重新扫描。",
   "nexusBatch.npmIntegrity":
