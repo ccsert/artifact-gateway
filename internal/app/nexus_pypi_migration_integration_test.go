@@ -383,6 +383,7 @@ func (f *pypiMigrationPG) noPublication() {
 }
 
 func TestPostgresRustFSNexusPyPIMigrationClosureAndRestart(t *testing.T) {
+	t.Run("existing-replication-objects", testPyPIMigrationExistingObjects)
 	f := newPyPIMigrationPG(t)
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{MigrationService: f.service}, Store: f.store, Adapter: TestAdapter{}, Authenticator: Authenticator{APIKeys: f.store}})
 	raw, _ := json.Marshal(f.input())

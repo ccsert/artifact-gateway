@@ -95,6 +95,7 @@ type pypiMigrationLockKey struct{}
 type pypiMigrationLock struct {
 	owner            *NexusPyPIMigrationPublication
 	fingerprint      string
+	objectKeys       map[string]bool
 	active, verified atomic.Bool
 }
 
@@ -117,21 +118,53 @@ func (p *NexusPyPIMigrationPublication) Lock(ctx context.Context, e nexusmigrati
 	if err := p.CheckActor(ctx, e.Actor, e.ActorKind, e.OwnerID); err != nil {
 		return ctx, nil, err
 	}
-	assets, err := p.NativeAssets(e)
+	closure, err := pypiMigrationClosure(e)
 	if err != nil {
 		return ctx, nil, err
 	}
-	keys := make([]string, 0, len(assets))
-	for _, a := range assets {
-		keys = append(keys, a.ObjectKey)
+	keys := make([]string, 0, 2*len(closure.Files))
+	heldKeys := make(map[string]bool, 2*len(closure.Files))
+	for _, file := range closure.Files {
+		keys = append(keys, file.ObjectKey)
+		heldKeys[file.ObjectKey] = true
+		stored, lookupErr := p.store.GetPyPIFile(ctx, e.TargetRepositoryID, file.Filename)
+		if lookupErr != nil && !errors.Is(lookupErr, repository.ErrNotFound) {
+			return ctx, nil, lookupErr
+		}
+		if lookupErr == nil && stored.ObjectKey != "" {
+			keys = append(keys, stored.ObjectKey)
+			heldKeys[stored.ObjectKey] = true
+		}
 	}
-	ctx, release, err := repository.LockObjectKeys(ctx, keys, p.store, repository.FormatPyPI, p.store.LockPyPIObject)
+	ctx, releaseObjects, err := repository.LockObjectKeys(ctx, keys, p.store, repository.FormatPyPI, p.store.LockPyPIObject)
 	if err != nil {
 		return ctx, nil, err
 	}
-	lock := &pypiMigrationLock{owner: p, fingerprint: pypiMigrationFingerprint(e)}
+	// Keep object -> coordinate ordering. Holding the coordinate also prevents
+	// a new matching row from substituting an unverified key after final Verify.
+	ctx, releaseCoordinate, err := repository.LockArtifactDistributionCoordinates(ctx, p.store, []repository.ArtifactDistributionCoordinate{{RepositoryID: e.TargetRepositoryID, Format: repository.FormatPyPI, Coordinate: e.Identity}})
+	if err != nil {
+		releaseObjects()
+		return ctx, nil, err
+	}
+	lock := &pypiMigrationLock{owner: p, fingerprint: pypiMigrationFingerprint(e), objectKeys: heldKeys}
 	lock.active.Store(true)
-	return context.WithValue(ctx, pypiMigrationLockKey{}, lock), func() { lock.active.Store(false); release() }, nil
+	ctx = context.WithValue(ctx, pypiMigrationLockKey{}, lock)
+	release := func() {
+		if lock.active.Swap(false) {
+			releaseCoordinate()
+			releaseObjects()
+		}
+	}
+	// A copy may have published between the snapshot and coordinate acquisition.
+	// Refuse an unprotected key instead of extending object locks in reverse order.
+	for _, file := range closure.Files {
+		if _, _, err = p.targetObjectKey(ctx, e, file); err != nil {
+			release()
+			return ctx, nil, err
+		}
+	}
+	return ctx, release, nil
 }
 func (p *NexusPyPIMigrationPublication) held(ctx context.Context, e nexusmigration.Entry) (*pypiMigrationLock, error) {
 	lock, _ := ctx.Value(pypiMigrationLockKey{}).(*pypiMigrationLock)
@@ -139,6 +172,27 @@ func (p *NexusPyPIMigrationPublication) held(ctx context.Context, e nexusmigrati
 		return nil, nexusmigration.Failed("target_coordination_required")
 	}
 	return lock, nil
+}
+
+func (p *NexusPyPIMigrationPublication) targetObjectKey(ctx context.Context, e nexusmigration.Entry, want repository.PyPIFile) (string, bool, error) {
+	lock, err := p.held(ctx, e)
+	if err != nil {
+		return "", false, err
+	}
+	got, err := p.store.GetPyPIFile(ctx, e.TargetRepositoryID, want.Filename)
+	if errors.Is(err, repository.ErrNotFound) {
+		return want.ObjectKey, false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if !repository.PyPIImportFileMatches(got, want) {
+		return "", false, nexusmigration.Failed("target_conflict")
+	}
+	if !lock.objectKeys[got.ObjectKey] {
+		return "", false, nexusmigration.Failed("target_coordination_required")
+	}
+	return got.ObjectKey, true, nil
 }
 func (p *NexusPyPIMigrationPublication) Begin(ctx context.Context, e nexusmigration.Entry) (string, error) {
 	if _, err := p.held(ctx, e); err != nil {
@@ -167,7 +221,24 @@ func (p *NexusPyPIMigrationPublication) Stage(ctx context.Context, e nexusmigrat
 	if a.TargetPath == nexusmigration.PyPISimplePath {
 		return nil
 	}
+	closure, err := pypiMigrationClosure(e)
+	if err != nil {
+		return err
+	}
 	key := "native/pypi/sha256/" + a.SHA256
+	for _, file := range closure.Files {
+		if file.Filename != a.TargetPath {
+			continue
+		}
+		var exists bool
+		key, exists, err = p.targetObjectKey(ctx, e, file)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return p.verifyFile(ctx, e, a, key)
+		}
+	}
 	if stat, err := p.objects.Stat(ctx, key); err == nil {
 		if stat.Size != a.Size {
 			return nexusmigration.Failed("target_bytes_mismatch")
@@ -227,9 +298,21 @@ func (p *NexusPyPIMigrationPublication) Verify(ctx context.Context, e nexusmigra
 	if err = p.target(ctx, e); err != nil {
 		return err
 	}
+	closure, err := pypiMigrationClosure(e)
+	if err != nil {
+		return err
+	}
+	keys := make(map[string]string, len(closure.Files))
+	for _, file := range closure.Files {
+		key, _, err := p.targetObjectKey(ctx, e, file)
+		if err != nil {
+			return err
+		}
+		keys[file.Filename] = key
+	}
 	for _, a := range e.Assets {
 		if a.TargetPath != nexusmigration.PyPISimplePath {
-			if err = p.verifyFile(ctx, e, a, "native/pypi/sha256/"+a.SHA256); err != nil {
+			if err = p.verifyFile(ctx, e, a, keys[a.TargetPath]); err != nil {
 				return err
 			}
 		}
