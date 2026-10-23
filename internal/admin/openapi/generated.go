@@ -3605,6 +3605,24 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 	}
 }
 
+// Defines values for RubyGemsPreviewGovernanceChangeAction.
+const (
+	RubyGemsPreviewGovernanceChangeActionRestore RubyGemsPreviewGovernanceChangeAction = "restore"
+	RubyGemsPreviewGovernanceChangeActionYank    RubyGemsPreviewGovernanceChangeAction = "yank"
+)
+
+// Valid indicates whether the value is a known member of the RubyGemsPreviewGovernanceChangeAction enum.
+func (e RubyGemsPreviewGovernanceChangeAction) Valid() bool {
+	switch e {
+	case RubyGemsPreviewGovernanceChangeActionRestore:
+		return true
+	case RubyGemsPreviewGovernanceChangeActionYank:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RubyGemsPreviewRepositoryFormat.
 const (
 	RubyGemsPreviewRepositoryFormatRubygems RubyGemsPreviewRepositoryFormat = "rubygems"
@@ -7803,6 +7821,31 @@ type RubyGemsPreviewCapacity struct {
 	UsedBytes    int64 `json:"usedBytes"`
 }
 
+// RubyGemsPreviewGovernance Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
+type RubyGemsPreviewGovernance struct {
+	Digest            string             `json:"digest"`
+	GovernanceVersion string             `json:"governanceVersion"`
+	Name              string             `json:"name"`
+	Platform          string             `json:"platform"`
+	Reason            *string            `json:"reason,omitempty"`
+	RepositoryId      openapi_types.UUID `json:"repositoryId"`
+	UpdatedAt         *time.Time         `json:"updatedAt,omitempty"`
+	UpdatedBy         *string            `json:"updatedBy,omitempty"`
+	Version           string             `json:"version"`
+	Yanked            bool               `json:"yanked"`
+}
+
+// RubyGemsPreviewGovernanceChange defines model for RubyGemsPreviewGovernanceChange.
+type RubyGemsPreviewGovernanceChange struct {
+	Action                    RubyGemsPreviewGovernanceChangeAction `json:"action"`
+	ExpectedDigest            string                                `json:"expectedDigest"`
+	ExpectedGovernanceVersion string                                `json:"expectedGovernanceVersion"`
+	Reason                    string                                `json:"reason"`
+}
+
+// RubyGemsPreviewGovernanceChangeAction defines model for RubyGemsPreviewGovernanceChange.Action.
+type RubyGemsPreviewGovernanceChangeAction string
+
 // RubyGemsPreviewQuotaInput defines model for RubyGemsPreviewQuotaInput.
 type RubyGemsPreviewQuotaInput struct {
 	// QuotaBytes Zero means no configured quota. Pending unexpired uploads reserve capacity.
@@ -9318,6 +9361,9 @@ type CreateRubyGemsPreviewRepositoryJSONRequestBody = RubyGemsPreviewRepositoryI
 // SetRubyGemsPreviewQuotaJSONRequestBody defines body for SetRubyGemsPreviewQuota for application/json ContentType.
 type SetRubyGemsPreviewQuotaJSONRequestBody = RubyGemsPreviewQuotaInput
 
+// ChangeRubyGemsPreviewGovernanceJSONRequestBody defines body for ChangeRubyGemsPreviewGovernance for application/json ContentType.
+type ChangeRubyGemsPreviewGovernanceJSONRequestBody = RubyGemsPreviewGovernanceChange
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
 
@@ -10077,6 +10123,12 @@ type ServerInterface interface {
 	// SetRubyGemsPreviewQuota Set administrator-managed preview quota atomically with its audit
 	// (PUT /previews/rubygems/repositories/{repositoryId}/capacity)
 	SetRubyGemsPreviewQuota(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string)
+
+	// (POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
@@ -15090,6 +15142,112 @@ func (siw *ServerInterfaceWrapper) SetRubyGemsPreviewQuota(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetRubyGemsPreviewQuota(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRubyGemsPreviewGovernance operation middleware
+func (siw *ServerInterfaceWrapper) GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemName" -------------
+	var gemName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemName", r.PathValue("gemName"), &gemName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemVersion" -------------
+	var gemVersion string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemVersion", r.PathValue("gemVersion"), &gemVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemVersion", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "platform" -------------
+	var platform string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "platform", r.PathValue("platform"), &platform, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRubyGemsPreviewGovernance(w, r, repositoryId, gemName, gemVersion, platform)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeRubyGemsPreviewGovernance operation middleware
+func (siw *ServerInterfaceWrapper) ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemName" -------------
+	var gemName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemName", r.PathValue("gemName"), &gemName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemVersion" -------------
+	var gemVersion string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemVersion", r.PathValue("gemVersion"), &gemVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemVersion", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "platform" -------------
+	var platform string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "platform", r.PathValue("platform"), &platform, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeRubyGemsPreviewGovernance(w, r, repositoryId, gemName, gemVersion, platform)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20673,6 +20831,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}", wrapper.GetRubyGemsPreviewRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/capacity", wrapper.GetRubyGemsPreviewCapacity)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/capacity", wrapper.SetRubyGemsPreviewQuota)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.GetRubyGemsPreviewGovernance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.ChangeRubyGemsPreviewGovernance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
@@ -31350,6 +31510,215 @@ func (response SetRubyGemsPreviewQuota409ApplicationProblemPlusJSONResponse) Vis
 	return err
 }
 
+type GetRubyGemsPreviewGovernanceRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	GemName      string             `json:"gemName"`
+	GemVersion   string             `json:"gemVersion"`
+	Platform     string             `json:"platform"`
+}
+
+type GetRubyGemsPreviewGovernanceResponseObject interface {
+	VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error
+}
+
+type GetRubyGemsPreviewGovernance200JSONResponse RubyGemsPreviewGovernance
+
+func (response GetRubyGemsPreviewGovernance200JSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernanceRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	GemName      string             `json:"gemName"`
+	GemVersion   string             `json:"gemVersion"`
+	Platform     string             `json:"platform"`
+	Body         *ChangeRubyGemsPreviewGovernanceJSONRequestBody
+}
+
+type ChangeRubyGemsPreviewGovernanceResponseObject interface {
+	VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error
+}
+
+type ChangeRubyGemsPreviewGovernance200JSONResponse RubyGemsPreviewGovernance
+
+func (response ChangeRubyGemsPreviewGovernance200JSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ChangeRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance409ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance409ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetPublishSessionRequestObject struct {
 	SessionId SessionId `json:"sessionId"`
 }
@@ -40812,6 +41181,12 @@ type StrictServerInterface interface {
 	// (PUT /previews/rubygems/repositories/{repositoryId}/capacity)
 	SetRubyGemsPreviewQuota(ctx context.Context, request SetRubyGemsPreviewQuotaRequestObject) (SetRubyGemsPreviewQuotaResponseObject, error)
 
+	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	GetRubyGemsPreviewGovernance(ctx context.Context, request GetRubyGemsPreviewGovernanceRequestObject) (GetRubyGemsPreviewGovernanceResponseObject, error)
+
+	// (POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	ChangeRubyGemsPreviewGovernance(ctx context.Context, request ChangeRubyGemsPreviewGovernanceRequestObject) (ChangeRubyGemsPreviewGovernanceResponseObject, error)
+
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
 
@@ -44821,6 +45196,71 @@ func (sh *strictHandler) SetRubyGemsPreviewQuota(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetRubyGemsPreviewQuotaResponseObject); ok {
 		if err := validResponse.VisitSetRubyGemsPreviewQuotaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRubyGemsPreviewGovernance operation middleware
+func (sh *strictHandler) GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string) {
+	var request GetRubyGemsPreviewGovernanceRequestObject
+
+	request.RepositoryId = repositoryId
+	request.GemName = gemName
+	request.GemVersion = gemVersion
+	request.Platform = platform
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRubyGemsPreviewGovernance(ctx, request.(GetRubyGemsPreviewGovernanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRubyGemsPreviewGovernance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRubyGemsPreviewGovernanceResponseObject); ok {
+		if err := validResponse.VisitGetRubyGemsPreviewGovernanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeRubyGemsPreviewGovernance operation middleware
+func (sh *strictHandler) ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string) {
+	var request ChangeRubyGemsPreviewGovernanceRequestObject
+
+	request.RepositoryId = repositoryId
+	request.GemName = gemName
+	request.GemVersion = gemVersion
+	request.Platform = platform
+
+	var body ChangeRubyGemsPreviewGovernanceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeRubyGemsPreviewGovernance(ctx, request.(ChangeRubyGemsPreviewGovernanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeRubyGemsPreviewGovernance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeRubyGemsPreviewGovernanceResponseObject); ok {
+		if err := validResponse.VisitChangeRubyGemsPreviewGovernanceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

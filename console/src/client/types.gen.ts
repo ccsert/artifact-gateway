@@ -4,6 +4,29 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+/**
+ * Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
+ */
+export type RubyGemsPreviewGovernance = {
+  repositoryId: string;
+  name: string;
+  version: string;
+  platform: string;
+  digest: string;
+  governanceVersion: string;
+  yanked: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  reason?: string;
+};
+
+export type RubyGemsPreviewGovernanceChange = {
+  expectedDigest: string;
+  expectedGovernanceVersion: string;
+  action: "yank" | "restore";
+  reason: string;
+};
+
 export type RubyGemsPreviewRepositoryInput = {
   name: string;
   anonymousRead?: boolean;
@@ -3762,6 +3785,106 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type GetRubyGemsPreviewGovernanceData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    gemName: string;
+    gemVersion: string;
+    platform: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance";
+};
+
+export type GetRubyGemsPreviewGovernanceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type GetRubyGemsPreviewGovernanceError =
+  GetRubyGemsPreviewGovernanceErrors[keyof GetRubyGemsPreviewGovernanceErrors];
+
+export type GetRubyGemsPreviewGovernanceResponses = {
+  /**
+   * Retained gem governance
+   */
+  200: RubyGemsPreviewGovernance;
+};
+
+export type GetRubyGemsPreviewGovernanceResponse =
+  GetRubyGemsPreviewGovernanceResponses[keyof GetRubyGemsPreviewGovernanceResponses];
+
+export type ChangeRubyGemsPreviewGovernanceData = {
+  body: RubyGemsPreviewGovernanceChange;
+  path: {
+    repositoryId: string;
+    gemName: string;
+    gemVersion: string;
+    platform: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance";
+};
+
+export type ChangeRubyGemsPreviewGovernanceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type ChangeRubyGemsPreviewGovernanceError =
+  ChangeRubyGemsPreviewGovernanceErrors[keyof ChangeRubyGemsPreviewGovernanceErrors];
+
+export type ChangeRubyGemsPreviewGovernanceResponses = {
+  /**
+   * Current retained gem governance
+   */
+  200: RubyGemsPreviewGovernance;
+};
+
+export type ChangeRubyGemsPreviewGovernanceResponse =
+  ChangeRubyGemsPreviewGovernanceResponses[keyof ChangeRubyGemsPreviewGovernanceResponses];
 
 export type CreateRubyGemsPreviewRepositoryData = {
   body: RubyGemsPreviewRepositoryInput;

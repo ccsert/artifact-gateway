@@ -9,6 +9,8 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance":
+    "$ref": "./management/rubygems-preview.yaml#/governance"
   "/previews/rubygems/repositories":
     "$ref": "./management/rubygems-preview.yaml#/repositories"
   "/previews/rubygems/repositories/{repositoryId}":
@@ -375,6 +377,10 @@ paths:
     "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_commit"
 components:
   schemas:
+    RubyGemsPreviewGovernance:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernance"
+    RubyGemsPreviewGovernanceChange:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernanceChange"
     RubyGemsPreviewRepositoryInput:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewRepositoryInput"
     RubyGemsPreviewRepository:

@@ -1,3 +1,51 @@
+governance:
+  parameters:
+    - {name: repositoryId, in: path, required: true, schema: {type: string, format: uuid}}
+    - {name: gemName, in: path, required: true, schema: {type: string}}
+    - {name: gemVersion, in: path, required: true, schema: {type: string}}
+    - {name: platform, in: path, required: true, schema: {type: string}}
+  get:
+    tags: [RubyGemsPreview]
+    operationId: getRubyGemsPreviewGovernance
+    description: Repository administrator reads the exact retained gem variant, including yanked publications. The package-name grant and current credential are checked.
+    responses:
+      '200':
+        description: Retained gem governance
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewGovernance'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '500': {$ref: '../components/responses.yaml#/Problem'}
+  post:
+    tags: [RubyGemsPreview]
+    operationId: changeRubyGemsPreviewGovernance
+    description: >-
+      Repository administrator compares the immutable digest and governance version.
+      Yank hides the exact version/platform from every index, gemspec and download.
+      Restore verifies complete original bytes, archive identity and metadata before
+      rechecking current authority and atomically committing state and audit. A current
+      same-state request is an unaudited no-op; a stale version conflicts. Retained
+      identity and capacity are not released by yank, and pushing cannot restore a gem.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewGovernanceChange'}
+    responses:
+      '200':
+        description: Current retained gem governance
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewGovernance'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '409': {$ref: '../components/responses.yaml#/Problem'}
+      '500': {$ref: '../components/responses.yaml#/Problem'}
 repositories:
   post:
     tags: [RubyGemsPreview]

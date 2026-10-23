@@ -9,6 +9,10 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance":
+    "$ref": "./management/rubygems-preview.yaml#/governance"
+  "/rubygems/{repository}/api/v1/gems/yank":
+    "$ref": "./protocols/rubygems.yaml#/yank"
   "/previews/rubygems/repositories":
     "$ref": "./management/rubygems-preview.yaml#/repositories"
   "/previews/rubygems/repositories/{repositoryId}":
@@ -307,6 +311,10 @@ paths:
     "$ref": "./protocols/npm.yaml#/npm_repository_tarball_revision"
 components:
   schemas:
+    RubyGemsPreviewGovernance:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernance"
+    RubyGemsPreviewGovernanceChange:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernanceChange"
     RubyGemsPreviewRepositoryInput:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewRepositoryInput"
     RubyGemsPreviewRepository:

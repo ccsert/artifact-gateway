@@ -1,3 +1,43 @@
+yank:
+  servers: [{url: https://gateway.example.com}]
+  parameters:
+    - {$ref: '#/repository'}
+  delete:
+    operationId: yankRubyGemHostedPreview
+    description: >-
+      Yank one immutable Hosted version/platform using the official gem client form.
+      An absent or empty platform means ruby; other variants remain visible. All
+      indexes, gemspecs, original downloads and conditional reads hide the yanked gem.
+      The original bytes, identity and capacity remain retained. Current package-name
+      write authority is rechecked after the publication lock; same-state replay is
+      idempotent. Unknown or repeated form fields, including ruby_abi, are rejected.
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}]
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [gem_name, version]
+            properties:
+              gem_name: {type: string, minLength: 1}
+              version: {type: string, minLength: 1}
+              platform: {type: string, default: ruby}
+    responses:
+      '200':
+        description: Gem variant yanked, or already yanked
+        content:
+          text/plain:
+            schema: {type: string}
+      '400': {description: Invalid or ambiguous form or gem identity}
+      '401': {description: Authentication required}
+      '403': {description: Current gem-name write authority required}
+      '404': {description: Preview, repository or retained gem variant not found}
+      '409': {description: Concurrent publication or governance conflict}
+      '413': {description: Form exceeds the configured byte limit}
+      '415': {description: Form URL encoded content type required}
+      '500': {description: Persistence or audit failure}
 push:
   servers: [{url: https://gateway.example.com}]
   parameters:
