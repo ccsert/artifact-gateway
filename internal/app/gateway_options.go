@@ -10,6 +10,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/rubygemspublication"
 )
 
 // ObjectStore is the format-independent byte-store port used by native
@@ -53,21 +54,24 @@ type GatewayOptions struct {
 	NPMRestore        repository.NPMRestoreStore
 	OCIDiscoveryStore ocidiscovery.Store
 	Storage           ObjectStores
-	// NuGet is an opt-in preview, outside the admitted format catalog.
-	// Its persistent ports are supplied explicitly, never inferred from Store.
-	HelmPreviewEnabled  bool
-	HelmStore           repository.NativeHelmStore
-	HelmSources         repository.HelmSourceStore
-	HelmUpstream        helmformat.Upstream
-	HelmObjects         ObjectStore
-	NuGetPreviewEnabled bool
-	NuGetStore          repository.NativeNuGetStore
-	NuGetSources        repository.NuGetSourceStore
-	NuGetUpstream       nugetformat.Upstream
-	NuGetObjects        ObjectStore
-	Adapter             Adapter
-	Authenticator       Authenticator
-	Caches              GatewayCaches
+	// Preview formats stay outside the admitted format catalog. Their persistent
+	// ports are supplied explicitly, never inferred from Store.
+	HelmPreviewEnabled     bool
+	HelmStore              repository.NativeHelmStore
+	HelmSources            repository.HelmSourceStore
+	HelmUpstream           helmformat.Upstream
+	HelmObjects            ObjectStore
+	NuGetPreviewEnabled    bool
+	NuGetStore             repository.NativeNuGetStore
+	NuGetSources           repository.NuGetSourceStore
+	NuGetUpstream          nugetformat.Upstream
+	NuGetObjects           ObjectStore
+	RubyGemsPreviewEnabled bool
+	RubyGemsStore          rubygemspublication.Store
+	RubyGemsObjects        ObjectStore
+	Adapter                Adapter
+	Authenticator          Authenticator
+	Caches                 GatewayCaches
 	// Upstream defaults to the standard HTTP transport. If it also implements
 	// another format's client port, that implementation is used for that format.
 	Upstream OCIClient
@@ -107,6 +111,16 @@ func (o GatewayOptions) validate() error {
 		}
 	} else if o.NuGetStore != nil || o.NuGetObjects != nil || o.NuGetSources != nil || o.NuGetUpstream != nil {
 		failures = append(failures, errors.New("NuGet preview dependencies require explicit enablement"))
+	}
+	if o.RubyGemsPreviewEnabled {
+		if nilDependency(o.RubyGemsStore) {
+			failures = append(failures, errors.New("RubyGems preview publication store is required"))
+		}
+		if err := objectstore.Validate(o.RubyGemsObjects); err != nil {
+			failures = append(failures, fmt.Errorf("RubyGems preview %w", err))
+		}
+	} else if o.RubyGemsStore != nil || o.RubyGemsObjects != nil {
+		failures = append(failures, errors.New("RubyGems preview dependencies require explicit enablement"))
 	}
 	if nilDependency(o.Store) {
 		failures = append(failures, errors.New("metadata store is required"))

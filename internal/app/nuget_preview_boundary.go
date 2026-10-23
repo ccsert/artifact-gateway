@@ -21,7 +21,7 @@ func runtimeWorkerFormatProjection(input []repository.Format) ([]adminopenapi.Fo
 	formal := make([]adminopenapi.Format, 0, len(input))
 	var previews *[]adminopenapi.PreviewWorkerFormat
 	for _, format := range input {
-		if format == repository.FormatNuGet || format == repository.FormatHelm {
+		if format == repository.FormatNuGet || format == repository.FormatHelm || format == repository.FormatRubyGems {
 			if previews == nil {
 				previews = &[]adminopenapi.PreviewWorkerFormat{}
 			}

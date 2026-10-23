@@ -22,6 +22,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/evidence"
 	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
+	rubygemsformat "github.com/ccsert/artifact-gateway/internal/format/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	migrationpg "github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"
@@ -31,6 +32,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/preflight"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	rubygemspg "github.com/ccsert/artifact-gateway/internal/rubygemspublication/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
 	"github.com/google/uuid"
@@ -309,16 +311,31 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			return 1
 		}
 	}
+	var rubyGemsStore *rubygemspg.Store
+	var rubyGemsMaintenance *rubygemsformat.Maintenance
+	if cfg.RubyGemsPreviewEnabled {
+		rubyGemsStore, err = rubygemspg.New(databasePool, artifactLockPool)
+		if err != nil {
+			slog.Error("configure RubyGems preview publication store", "error", err)
+			return 1
+		}
+		rubyGemsMaintenance, err = rubygemsformat.NewMaintenance(rubyGemsStore, objectStore)
+		if err != nil {
+			slog.Error("configure RubyGems preview maintenance", "error", err)
+			return 1
+		}
+	}
 	(backgroundRuntime{
 		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
 		scanner: dependencies.ArtifactScanner, scanResolver: dependencies.ArtifactScanResolver,
-		scannerFormats:     dependencies.ArtifactScannerFormats,
-		workerSessionID:    runtimeSessionID,
-		aptPublisher:       aptPublisher,
-		migration:          dependencies.MigrationService,
-		migrationSchedules: dependencies.MigrationSchedules,
-		nugetMaintenance:   nugetMaintenance,
-		helmMaintenance:    helmMaintenance,
+		scannerFormats:      dependencies.ArtifactScannerFormats,
+		workerSessionID:     runtimeSessionID,
+		aptPublisher:        aptPublisher,
+		migration:           dependencies.MigrationService,
+		migrationSchedules:  dependencies.MigrationSchedules,
+		nugetMaintenance:    nugetMaintenance,
+		helmMaintenance:     helmMaintenance,
+		rubyGemsMaintenance: rubyGemsMaintenance,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
@@ -372,6 +389,11 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			gatewayOptions.NuGetStore = store
 			gatewayOptions.NuGetSources = store
 			gatewayOptions.NuGetObjects = objectStore
+		}
+		if cfg.RubyGemsPreviewEnabled {
+			gatewayOptions.RubyGemsPreviewEnabled = true
+			gatewayOptions.RubyGemsStore = rubyGemsStore
+			gatewayOptions.RubyGemsObjects = objectStore
 		}
 		handler, err = app.NewGatewayHandler(gatewayOptions)
 		if err != nil {
