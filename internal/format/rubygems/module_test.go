@@ -174,7 +174,7 @@ type interrupted struct {
 func (s *interrupted) PutVerifiedReader(ctx context.Context, key string, r io.Reader, size int64, digest string) error {
 	if s.fail.Load() {
 		data, _ := io.ReadAll(io.LimitReader(r, 100))
-		_ = s.Store.Put(ctx, key, data)
+		_ = s.Put(ctx, key, data)
 		return errors.New("owned upload interruption")
 	}
 	return s.Store.PutVerifiedReader(ctx, key, r, size, digest)

@@ -71,7 +71,7 @@ export GEM_HOST_API_KEY='<local publication credential>'
 gem push owned_top-1.2.0.gem \
   --host https://gateway.example.com/rubygems/ruby-internal
 
-gem install owned_top --version 1.2.0 --clear-sources \
+gem install owned_top --version 1.2.0 --remote --clear-sources \
   --source 'https://gateway:<local read credential>@gateway.example.com/rubygems/ruby-internal/' \
   --no-document
 ```
@@ -105,6 +105,15 @@ noncanonical aliases and host-dependent `current` are unsupported. YAML
 dependency types must be the actual plain `:runtime`/`:development` symbols,
 preserving the original gem semantics; strings that only spell the same word are
 rejected.
+Specification dates may be absent/null, valid ISO calendar dates, or timestamps
+understood by the fixed official YAML parser; quoted date strings follow the
+official `date=` string grammar, which rejects a quoted ISO `T` timestamp.
+Other date coercions are unsupported. `require_paths` may be absent/null, a
+string array, or the official legacy nested string-array form. Scalars and
+non-string entries are rejected. Known Ruby object tags are checked throughout
+the metadata tree, including otherwise unused tail fields, because the official
+YAML loader initializes those nodes too. Ordinary bounded tail fields remain
+supported and cannot hide malformed active date/version initializers.
 Platform packages are indexed and downloadable; server-side extension execution
 and verification of every target operating system are outside this slice.
 
@@ -155,10 +164,20 @@ performs network-isolated `gem build`, native push, empty-cache gem and Bundler
 three-level installs through compact and full indexes, explicit prerelease
 installation and platform fetch, and repeats cold consumers after physically
 restarting Gateway, PostgreSQL and object storage. A transparent forwarding
-observer records HTTP paths without mocking authentication, protocol responses,
-bytes or persistence. Five original size/SHA/identity closures, raw client
+observer records HTTP responses without mocking authentication, protocol
+responses, bytes or persistence. Build/push alone mount the original package
+directory. Each consumer has a separate initially empty working directory,
+HOME and cache tree; gem installs explicitly require remote resolution. Each
+phase separately proves full target `.gem` GETs with matching original size,
+SHA-256, parsed identity and dependencies, including both cold clients after
+restart; requests from another phase cannot satisfy its assertions.
+Five original size/SHA/identity closures, per-phase response proofs, raw client
 outputs, JSON test results, source/tool provenance and cleanup receipts are
 written under `output/native-rubygems-e2e/<run>/`. Its mandatory client test
 cannot pass by skipping unavailable tools. These are fixture/local or CI
 acceptance results; they do not constitute production deployment or every
-RubyGems platform's extension validation.
+RubyGems platform's extension validation. Cancellation by SIGTERM/SIGINT keeps
+a nonzero result, reaps owned command groups and performs bounded cleanup with
+a receipt. The offline cancellation regression runs the unchanged producer in
+a temporary repository with a Docker substitute; it never uses a real daemon
+or adds deliberate failed runs to the native evidence directory.

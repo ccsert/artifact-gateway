@@ -60,7 +60,7 @@ export GEM_HOST_API_KEY='<本地发布凭据>'
 gem push owned_top-1.2.0.gem \
   --host https://gateway.example.com/rubygems/ruby-internal
 
-gem install owned_top --version 1.2.0 --clear-sources \
+gem install owned_top --version 1.2.0 --remote --clear-sources \
   --source 'https://gateway:<本地读取凭据>@gateway.example.com/rubygems/ruby-internal/' \
   --no-document
 ```
@@ -87,6 +87,14 @@ null 或空值按固定官方解析器映射为 `ruby`；序列/对象编码、�
 宿主的 `current` 不支持。依赖类型必须是原始普通 `:runtime`/`:development`
 symbol，只有同名拼写的字符串会被拒绝，以保持原 gem 语义。平台包可索引、下载；服务端执行扩展及验证所有目标操作系统不在
 本切片范围。
+
+date 支持缺失/null、合法 ISO 日历日期，以及固定官方 YAML 解析器理解的时间戳。
+带引号的日期字符串遵循官方 `date=` 字符串语法，其中带引号的 ISO `T` 时间戳
+会被拒绝；其他日期类型强转不在预览支持范围。`require_paths` 支持缺失/null、
+字符串数组及官方旧版嵌套字符串数组，标量及非字符串项会被拒绝。已知 Ruby
+对象 tag 会在整个 metadata 树检查，包括未使用的尾字段，因为官方 YAML
+loader 同样会初始化这些节点。普通有界尾字段继续受支持，不能隐藏畸形的
+日期或版本初始化数据。
 
 原生 push 先预留容量与唯一对象键，暂存完整原字节，再重新打开并计算全对象
 摘要、验证身份和 metadata、重新检查发布权限，最后在一个事务中提交索引
@@ -126,9 +134,17 @@ GET/HEAD 使用相同授权，支持 ETag 条件读取；Range 请求获得当�
 门禁构建真实 Gateway 二进制，启动自有 PostgreSQL/RustFS，以断网容器执行
 `gem build`，再执行原生 push、空缓存 gem/Bundler 三层依赖安装、compact 和
 full-index 两种消费、显式预发布安装与平台包 fetch；物理重启 Gateway、
-PostgreSQL 和对象存储后再次冷消费。透明 HTTP 转发 observer 记录路径，
-不 mock 认证、协议响应、字节或持久化。五个原包的大小/SHA/身份、原始客户端
+PostgreSQL 和对象存储后再次冷消费。透明 HTTP 转发 observer 记录响应，
+不 mock 认证、协议响应、字节或持久化。原包目录只供 build/push 挂载，每个
+消费者使用独立、初始为空的工作目录、HOME 和缓存树，gem install 显式要求
+远端解析。每阶段独立断言完整目标 `.gem` GET 的大小、SHA-256、解析后的身份
+和依赖与原包一致，重启后的两个冷客户端也分别验证，不能借其他阶段的请求
+通过断言。五个原包的大小/SHA/身份、分阶段响应证据、原始客户端
 输出、JSON 测试结果、源码/工具来源和资源清理回执保存在
 `output/native-rubygems-e2e/<run>/`。缺失客户端不能通过 skip 放行。
 这些是 fixture 本地或 CI 验收结果，不代表生产部署，也不代表已验证所有
 RubyGems 平台的扩展执行。
+
+SIGTERM/SIGINT 取消保留非零结果，收齐自有命令进程组，并在有界清理后写回执。
+离线取消回归把原字节 producer 复制到临时仓库，以 Docker 替身运行，不使用
+真实 daemon，也不向原生证据目录加入故意失败的运行。

@@ -120,7 +120,7 @@ func Inspect(r io.Reader) (Inspection, error) {
 		if err != nil {
 			return empty, ErrInvalid
 		}
-		if h.Format != tar.FormatUSTAR || len(h.PAXRecords) != 0 || len(h.Xattrs) != 0 || h.Typeflag != tar.TypeReg || h.Size < 1 || h.Size > MaxGemBytes || len(parts) >= 3 || parts[h.Name] != nil {
+		if h.Format != tar.FormatUSTAR || len(h.PAXRecords) != 0 || h.Typeflag != tar.TypeReg || h.Size < 1 || h.Size > MaxGemBytes || len(parts) >= 3 || parts[h.Name] != nil {
 			return empty, ErrInvalid
 		}
 		if h.Name != "metadata.gz" && h.Name != "data.tar.gz" && h.Name != "checksums.yaml.gz" {
@@ -193,7 +193,7 @@ func Inspect(r io.Reader) (Inspection, error) {
 		if err == io.EOF {
 			break
 		}
-		if err != nil || h.Format != tar.FormatUSTAR || len(h.PAXRecords) != 0 || len(h.Xattrs) != 0 || count >= 10000 || !SafePath(h.Name) || seen[h.Name] || h.Typeflag != tar.TypeReg || h.Size < 0 || h.Size > MaxExpandedBytes-total {
+		if err != nil || h.Format != tar.FormatUSTAR || len(h.PAXRecords) != 0 || count >= 10000 || !SafePath(h.Name) || seen[h.Name] || h.Typeflag != tar.TypeReg || h.Size < 0 || h.Size > MaxExpandedBytes-total {
 			return empty, ErrInvalid
 		}
 		seen[h.Name] = true
@@ -269,7 +269,7 @@ func parseYAML(data []byte) (*yaml.Node, error) {
 				return false
 			}
 		}
-		return true
+		return validRubyYAMLObject(n)
 	}
 	if !walk(doc.Content[0], 0) {
 		return nil, ErrInvalid
@@ -375,15 +375,7 @@ func ParseMetadata(y []byte) (Metadata, error) {
 		return out, e
 	}
 	out.Name, out.Version = stringScalar(m["name"]), version(m["version"])
-	out.Platform = "ruby"
-	if platform := m["platform"]; platform != nil {
-		if platform.Kind != yaml.ScalarNode || (platform.Tag != "!!str" && platform.Tag != "!!null") {
-			return out, ErrInvalid
-		}
-		if platform.Tag == "!!str" && platform.Value != "" {
-			out.Platform = platform.Value
-		}
-	}
+	out.Platform, _ = specificationPlatform(m["platform"])
 	specificationVersion := m["specification_version"]
 	if !ValidName(out.Name) || !ValidVersion(out.Version) || !ValidPlatform(out.Platform) || specificationVersion == nil || specificationVersion.Tag != "!!int" || scalar(specificationVersion) != "4" {
 		return out, ErrInvalid

@@ -2,10 +2,14 @@ package rubygems
 
 import (
 	"bytes"
+	"compress/gzip"
+	"io"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	gemfixture "github.com/ccsert/artifact-gateway/internal/testsupport/rubygemsfixture"
 )
 
 func TestRubyGemsHeadConditionalAndRangeKeepAuthorizedRepresentation(t *testing.T) {
@@ -45,6 +49,54 @@ func TestRubyGemsHeadConditionalAndRangeKeepAuthorizedRepresentation(t *testing.
 		if a.Status == 304 && a.Bytes != 0 || a.Status == 200 && a.Bytes != 0 && a.Bytes != int64(len(body)) {
 			t.Fatalf("wrong response bytes %+v", a)
 		}
+	}
+}
+
+func TestRubyGemsInvalidSpecificationIsRejectedBeforePublication(t *testing.T) {
+	for _, tail := range []string{"date: definitely-not-a-date\n", "date: ''\n", "date: '2026-13-01'\n", "require_paths: lib\n", "extra_tail: !ruby/object:Gem::Version\n  version: [bad]\n", "extra_tail: !ruby/object:Gem::Specification\n  date: definitely-not-a-date\n", "extra_tail: !ruby/object:Gem::Requirement\n  invalid-key: value\n"} {
+		t.Run(strings.TrimSpace(tail), func(t *testing.T) {
+			f := setup(t)
+			yaml := append(gemfixture.YAML("owned", "1.0.0", "ruby", "fixture", gemfixture.Dependency("leaf", "runtime")), tail...)
+			if w := push(f, gemfixture.Build(t, yaml, "lib/owned.rb")); w.Code != 400 {
+				t.Fatalf("invalid native specification published: %d %s", w.Code, w.Body.String())
+			}
+			for _, path := range []string{"names", "versions", "info/owned", "specs.4.8.gz", "latest_specs.4.8.gz", "prerelease_specs.4.8.gz", "quick/Marshal.4.8/owned-1.0.0.gemspec.rz", "gems/owned-1.0.0.gem"} {
+				w := request(f.module, "GET", "/rubygems/owned-gems/"+path, nil, "owned-admin")
+				if strings.HasPrefix(path, "quick/") || strings.HasPrefix(path, "gems/") {
+					if w.Code != 404 {
+						t.Fatalf("invalid specification discoverable at %s: %d", path, w.Code)
+					}
+				} else {
+					body := w.Body.Bytes()
+					if strings.HasSuffix(path, ".gz") {
+						reader, err := gzip.NewReader(bytes.NewReader(body))
+						if err != nil {
+							t.Fatal(err)
+						}
+						body, err = io.ReadAll(reader)
+						_ = reader.Close()
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+					if w.Code != 200 || bytes.Contains(body, []byte("owned")) || strings.HasPrefix(path, "info/") && string(body) != "---\n" {
+						t.Fatalf("invalid specification indexed at %s: %d %q", path, w.Code, body)
+					}
+				}
+			}
+			rows, err := f.store.List(t.Context(), f.repo.ID, 100)
+			if err != nil || len(rows) != 0 {
+				t.Fatalf("invalid specification visible: %v %v", rows, err)
+			}
+			keys, err := f.objects.List(t.Context(), "native/rubygems/")
+			if err != nil || len(keys) != 0 {
+				t.Fatalf("invalid specification wrote objects: %v %v", keys, err)
+			}
+			audits, err := f.repos.ListAudits(t.Context(), repository.AuditQuery{Operation: "rubygems.publish", Limit: 100})
+			if err != nil || len(audits) != 0 {
+				t.Fatalf("invalid specification success audit: %v %v", audits, err)
+			}
+		})
 	}
 }
 func TestRubyGemsAnonymousRequiresBothPoliciesAndExplicitInvalidKeyNeverFallsBack(t *testing.T) {

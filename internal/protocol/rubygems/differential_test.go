@@ -24,6 +24,12 @@ func TestRubyGemRejectsYamlAndTarParserDifferentials(t *testing.T) {
 		"dependency-name-bool":              bytes.Replace(base, []byte("name: leaf"), []byte("name: true"), 1),
 		"specification-version-string":      bytes.Replace(base, []byte("specification_version: 4"), []byte("specification_version: '4'"), 1),
 		"version-float":                     bytes.Replace(base, []byte("version: '1.0.0'"), []byte("version: 1.2"), 1),
+		"invalid-date":                      append(append([]byte{}, base...), "date: definitely-not-a-date\n"...),
+		"date-quoted-iso-timestamp":         append(append([]byte{}, base...), "date: '2026-10-23T00:00:00Z'\n"...),
+		"date-symbol":                       append(append([]byte{}, base...), "date: :runtime\n"...),
+		"date-structured-coercion":          append(append([]byte{}, base...), "date: [2026, 10, 23]\n"...),
+		"require-path-scalar":               append(append([]byte{}, base...), "require_paths: lib\n"...),
+		"require-path-non-string":           append(append([]byte{}, base...), "require_paths: [true]\n"...),
 	}
 	for name, yaml := range cases {
 		t.Run(name, func(t *testing.T) {

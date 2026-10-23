@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -31,6 +32,42 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/testsupport"
 	"github.com/google/uuid"
 )
+
+type rubyNativeObservation struct {
+	Phase    string             `json:"phase"`
+	Method   string             `json:"method"`
+	Path     string             `json:"path"`
+	Status   int                `json:"status"`
+	Size     int                `json:"size"`
+	SHA256   string             `json:"sha256,omitempty"`
+	Metadata *protocol.Metadata `json:"metadata,omitempty"`
+	Error    string             `json:"error,omitempty"`
+}
+
+type rubyObservedResponse struct {
+	http.ResponseWriter
+	status int
+	body   bytes.Buffer
+}
+
+func (w *rubyObservedResponse) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+func (w *rubyObservedResponse) Write(data []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	n, err := w.ResponseWriter.Write(data)
+	_, _ = w.body.Write(data[:n])
+	return n, err
+}
+func (w *rubyObservedResponse) Flush() {
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
+}
+func (w *rubyObservedResponse) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func ownedFile(t *testing.T, root, name, body string) {
 	t.Helper()
@@ -65,29 +102,66 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	commands := []map[string]any{}
 	var mu sync.Mutex
 	paths := []string{}
+	observations := []rubyNativeObservation{}
+	phaseProofs := []map[string]any{}
+	isolation := []map[string]any{}
+	phaseStarts := map[string]int{}
+	phaseRoots := map[string]string{}
+	activePhase := ""
+	gemfileBody := ""
+	var observing sync.WaitGroup
 	t.Cleanup(func() {
-		b, _ := json.MarshalIndent(map[string]any{"clientCommands": commands, "nativeRequestPaths": paths}, "", "  ")
+		observing.Wait()
+		mu.Lock()
+		defer mu.Unlock()
+		b, _ := json.MarshalIndent(map[string]any{"clientCommands": commands, "nativeRequestPaths": paths, "nativeResponses": observations, "phaseOriginalClosureProofs": phaseProofs, "consumerIsolation": isolation}, "", "  ")
 		_ = os.WriteFile(filepath.Join(evidence, "official-client-evidence.json"), append(b, '\n'), 0600)
 	})
 	run := func(phase, name string, offline bool, args ...string) string {
 		t.Helper()
-		for _, dir := range []string{phase + "/home", phase + "/gems", phase + "/bundle", phase + "/bundle-user", phase + "/bundle-cache"} {
-			if e := os.MkdirAll(filepath.Join(work, dir), 0700); e != nil {
-				t.Fatal(e)
+		consumer := phase != "pack" && phase != "push"
+		root, initialized := phaseRoots[phase]
+		if !initialized {
+			root = filepath.Join(work, "consumers", phase)
+			if !consumer {
+				root = filepath.Join(work, "producer")
+			} else if _, err := os.Stat(root); !os.IsNotExist(err) {
+				t.Fatalf("consumer phase must start with an absent independent root: %s %v", phase, err)
 			}
-		}
-		container := project + "-cli-" + strings.ToLower(uuid.NewString())
-		dockerArgs := []string{"run", "--rm", "--name", container, "--label", "com.artifact-gateway.rubygems-e2e.run=" + project, "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()), "--mount", "type=bind,src=" + work + ",dst=/work", "--workdir", "/work", "--env", "HOME=/work/" + phase + "/home", "--env", "GEM_HOME=/work/" + phase + "/gems", "--env", "GEM_PATH=/work/" + phase + "/gems", "--env", "GEM_SPEC_CACHE=/work/" + phase + "/specs", "--env", "BUNDLE_PATH=/work/" + phase + "/bundle", "--env", "BUNDLE_USER_HOME=/work/" + phase + "/bundle-user", "--env", "BUNDLE_USER_CACHE=/work/" + phase + "/bundle-cache", "--env", "BUNDLE_IGNORE_CONFIG=1", "--env", "BUNDLE_DISABLE_SHARED_GEMS=true", "--env", "BUNDLE_RETRY=0", "--env", "BUNDLE_TIMEOUT=30", "--env", "GEM_HOST_API_KEY=" + admin}
-		if strings.HasPrefix(phase, "bundle-") {
-			gemfile := filepath.Join(work, phase, "Gemfile")
-			if _, e := os.Stat(gemfile); os.IsNotExist(e) {
-				data, e := os.ReadFile(filepath.Join(work, "Gemfile"))
-				if e != nil {
+			for _, dir := range []string{"project", "home", "gems", "specs", "bundle", "bundle-user", "bundle-cache"} {
+				if e := os.MkdirAll(filepath.Join(root, dir), 0700); e != nil {
 					t.Fatal(e)
 				}
-				ownedFile(t, work, phase+"/Gemfile", string(data))
 			}
-			dockerArgs = append(dockerArgs, "--env", "BUNDLE_GEMFILE=/work/"+phase+"/Gemfile")
+			if consumer {
+				entries, err := os.ReadDir(filepath.Join(root, "project"))
+				if err != nil || len(entries) != 0 {
+					t.Fatalf("consumer project is not empty: %s %v", phase, err)
+				}
+				isolation = append(isolation, map[string]any{"phase": phase, "independentEmptyRoot": true, "cwdInitiallyEmpty": true, "emptyHomeAndCaches": true, "producerDirectoryMounted": false, "containerCwd": "/work/project", "targetOnlySource": true})
+			}
+			ownedFile(t, root, "home/gemrc", "---\n:sources: []\n:update_sources: false\n")
+			if strings.HasPrefix(phase, "bundle-") {
+				if gemfileBody == "" {
+					t.Fatal("target-only Gemfile required")
+				}
+				ownedFile(t, root, "project/Gemfile", gemfileBody)
+			}
+			phaseRoots[phase] = root
+		}
+		mu.Lock()
+		activePhase = phase
+		if _, exists := phaseStarts[phase]; !exists {
+			phaseStarts[phase] = len(observations)
+		}
+		mu.Unlock()
+		container := project + "-cli-" + strings.ToLower(uuid.NewString())
+		dockerArgs := []string{"run", "--rm", "--name", container, "--label", "com.artifact-gateway.rubygems-e2e.run=" + project, "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()), "--mount", "type=bind,src=" + root + ",dst=/work", "--workdir", "/work/project", "--env", "HOME=/work/home", "--env", "GEMRC=/work/home/gemrc", "--env", "GEM_HOME=/work/gems", "--env", "GEM_PATH=/work/gems", "--env", "GEM_SPEC_CACHE=/work/specs", "--env", "BUNDLE_PATH=/work/bundle", "--env", "BUNDLE_USER_HOME=/work/bundle-user", "--env", "BUNDLE_USER_CACHE=/work/bundle-cache", "--env", "BUNDLE_IGNORE_CONFIG=1", "--env", "BUNDLE_DISABLE_SHARED_GEMS=true", "--env", "BUNDLE_RETRY=0", "--env", "BUNDLE_TIMEOUT=30"}
+		if !consumer {
+			dockerArgs = append(dockerArgs, "--env", "GEM_HOST_API_KEY="+admin)
+		}
+		if strings.HasPrefix(phase, "bundle-") {
+			dockerArgs = append(dockerArgs, "--env", "BUNDLE_GEMFILE=/work/project/Gemfile")
 		}
 		if offline {
 			dockerArgs = append(dockerArgs, "--network", "none")
@@ -106,9 +180,10 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 			_ = exec.CommandContext(cleanup, "docker", "rm", "-f", container).Run()
 			c()
 		}
+		observing.Wait()
 		safe := strings.ReplaceAll(strings.ReplaceAll(string(output), admin, "[owned-admin-key]"), reader, "[owned-reader-key]")
 		safeArgs := strings.ReplaceAll(strings.ReplaceAll(strings.Join(args, " "), admin, "[owned-admin-key]"), reader, "[owned-reader-key]")
-		commands = append(commands, map[string]any{"phase": phase, "command": safeArgs, "output": safe, "exitSuccess": err == nil, "networkNone": offline})
+		commands = append(commands, map[string]any{"phase": phase, "command": safeArgs, "output": safe, "exitSuccess": err == nil, "networkNone": offline, "consumerOnlyMount": consumer, "containerCwd": "/work/project"})
 		if err != nil {
 			t.Fatalf("official %s: %v\n%s", name, err, safe)
 		}
@@ -119,17 +194,19 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		t.Fatalf("fixed official toolchain required, got %q", versions)
 	}
 	proof := []map[string]any{}
+	originalMetadata := map[string]protocol.Metadata{}
+	producer := filepath.Join(work, "producer", "project")
 	for _, spec := range []struct{ name, version, platform, dep, expr string }{{"owned_leaf", "1.0.0", "ruby", "", "'leaf'"}, {"owned_middle", "1.1.0", "ruby", "s.add_runtime_dependency('owned_leaf','>= 1.0','< 2.0')", "require 'owned_leaf'; 'middle-' + OWNED_LEAF"}, {"owned_top", "1.2.0", "ruby", "s.add_runtime_dependency('owned_middle','~> 1.1')", "require 'owned_middle'; 'top-' + OWNED_MIDDLE"}, {"owned_top", "1.3.0.pre", "ruby", "s.add_runtime_dependency('owned_middle','>= 1.1','< 2.0')", "require 'owned_middle'; 'pre-' + OWNED_MIDDLE"}, {"owned_platform", "1.0.0", "x86_64-linux", "s.add_runtime_dependency('owned_leaf','= 1.0.0')", "'platform'"}} {
 		file := spec.name + "-" + spec.version + "-" + spec.platform + ".gemspec"
 		content := "Gem::Specification.new do |s|\ns.name=" + strconv.Quote(spec.name) + ";s.version=" + strconv.Quote(spec.version) + ";s.platform=" + strconv.Quote(spec.platform) + ";s.summary='Owned fixture';s.authors=['Gateway'];s.licenses=['MIT'];s.files=['lib/" + spec.name + ".rb'];s.require_paths=['lib'];s.required_ruby_version='>= 3.0';s.metadata={'source_code_uri'=>'https://example.invalid/owned','changelog_uri'=>'https://example.invalid/tail'};" + spec.dep + "\ns.description='Benign tail after dependency fields';s.post_install_message='owned metadata tail';\nend\n"
-		ownedFile(t, work, file, content)
-		ownedFile(t, work, "lib/"+spec.name+".rb", strings.ToUpper(spec.name)+" = begin "+spec.expr+" end\n")
+		ownedFile(t, producer, file, content)
+		ownedFile(t, producer, "lib/"+spec.name+".rb", strings.ToUpper(spec.name)+" = begin "+spec.expr+" end\n")
 		run("pack", "build-"+spec.name, true, "gem", "build", file)
 		full := spec.name + "-" + spec.version
 		if spec.platform != "ruby" {
 			full += "-" + spec.platform
 		}
-		data, e := os.ReadFile(filepath.Join(work, full+".gem"))
+		data, e := os.ReadFile(filepath.Join(producer, full+".gem"))
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -142,6 +219,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		}
 		sum := sha256.Sum256(data)
 		proof = append(proof, map[string]any{"name": spec.name, "version": spec.version, "platform": spec.platform, "filename": full + ".gem", "size": len(data), "sha256": hex.EncodeToString(sum[:]), "dependencies": in.Metadata.Dependencies})
+		originalMetadata[full+".gem"] = in.Metadata
 	}
 	encoded, _ := json.MarshalIndent(proof, "", "  ")
 	if e := os.WriteFile(filepath.Join(evidence, "original-gem-closures.json"), append(encoded, '\n'), 0600); e != nil {
@@ -177,10 +255,28 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		}
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			observing.Add(1)
+			defer observing.Done()
 			mu.Lock()
+			phase := activePhase
 			paths = append(paths, r.Method+" "+r.URL.Path)
 			mu.Unlock()
-			proxy.ServeHTTP(w, r)
+			observed := &rubyObservedResponse{ResponseWriter: w}
+			proxy.ServeHTTP(observed, r)
+			entry := rubyNativeObservation{Phase: phase, Method: r.Method, Path: r.URL.Path, Status: observed.status, Size: observed.body.Len()}
+			if r.Method == "GET" && strings.HasSuffix(r.URL.Path, ".gem") {
+				sum := sha256.Sum256(observed.body.Bytes())
+				entry.SHA256 = hex.EncodeToString(sum[:])
+				parsed, err := protocol.Inspect(bytes.NewReader(observed.body.Bytes()))
+				if err != nil {
+					entry.Error = err.Error()
+				} else {
+					entry.Metadata = &parsed.Metadata
+				}
+			}
+			mu.Lock()
+			observations = append(observations, entry)
+			mu.Unlock()
 		}))
 		_ = server.Listener.Close()
 		if address == "" {
@@ -241,23 +337,86 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 			t.Fatalf("original closure %v status %d", record["filename"], w.Code)
 		}
 	}
+	verifyPhase := func(phase string, filenames, requiredPaths []string) {
+		t.Helper()
+		observing.Wait()
+		mu.Lock()
+		start, exists := phaseStarts[phase]
+		if !exists {
+			mu.Unlock()
+			t.Fatalf("consumer phase was never started: %s", phase)
+		}
+		window := append([]rubyNativeObservation{}, observations[start:]...)
+		mu.Unlock()
+		expected := map[string]map[string]any{}
+		for _, filename := range filenames {
+			for _, record := range proof {
+				if record["filename"] == filename {
+					expected[filename] = record
+				}
+			}
+			if expected[filename] == nil {
+				t.Fatalf("unknown original required by %s: %s", phase, filename)
+			}
+		}
+		seen := map[string]int{}
+		for _, response := range window {
+			if response.Phase != phase {
+				t.Fatalf("observer window crossed consumer phases: %s contains %s", phase, response.Phase)
+			}
+			if response.Method != "GET" || !strings.HasSuffix(response.Path, ".gem") {
+				continue
+			}
+			filename := strings.TrimPrefix(response.Path, "/rubygems/"+repo.Name+"/gems/")
+			original := expected[filename]
+			if original == nil || response.Status != http.StatusOK || response.Size != original["size"] || response.SHA256 != original["sha256"] || response.Error != "" || response.Metadata == nil || !reflect.DeepEqual(*response.Metadata, originalMetadata[filename]) {
+				t.Fatalf("phase %s did not receive a complete matching original: %+v", phase, response)
+			}
+			seen[filename]++
+		}
+		for _, filename := range filenames {
+			if seen[filename] == 0 {
+				t.Fatalf("phase %s made no full original GET for %s", phase, filename)
+			}
+		}
+		for _, path := range requiredPaths {
+			found := false
+			for _, response := range window {
+				if response.Method == "GET" && response.Status == http.StatusOK && response.Path == "/rubygems/"+repo.Name+"/"+path {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("phase %s did not exercise native branch %s", phase, path)
+			}
+		}
+		phaseProofs = append(phaseProofs, map[string]any{"phase": phase, "observerWindowStart": start, "observerWindowLength": len(window), "originals": expected, "verifiedFullOriginalGETs": seen, "identityAndDependenciesMatchOriginals": true, "requiredNativePaths": requiredPaths})
+	}
+	stable := []string{"owned_top-1.2.0.gem", "owned_middle-1.1.0.gem", "owned_leaf-1.0.0.gem"}
+	compact := []string{"versions", "info/owned_top", "info/owned_middle", "info/owned_leaf"}
+	legacy := []string{"specs.4.8.gz", "quick/Marshal.4.8/owned_top-1.2.0.gemspec.rz"}
 	install := func(phase string) {
 		t.Helper()
-		run(phase, "gem-install", false, "gem", "install", "owned_top", "--version", "1.2.0", "--clear-sources", "--source", readSource, "--no-document", "--verbose")
+		run(phase, "gem-install", false, "gem", "install", "owned_top", "--version", "1.2.0", "--remote", "--clear-sources", "--source", readSource, "--no-document", "--verbose")
 		out := run(phase, "execute-transitive", true, "ruby", "-e", `require 'owned_top'; abort OWNED_TOP unless OWNED_TOP == 'top-middle-leaf'; puts OWNED_TOP`)
 		if !strings.Contains(out, "top-middle-leaf") {
 			t.Fatal(out)
 		}
+		verifyPhase(phase, stable, legacy)
 	}
 	install("gem-cold-before")
-	ownedFile(t, work, "Gemfile", "source "+strconv.Quote(readSource)+"\ngem 'owned_top', '= 1.2.0'\n")
+	gemfileBody = "source " + strconv.Quote(readSource) + "\ngem 'owned_top', '= 1.2.0'\n"
 	run("bundle-cold-before", "bundle-install", false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
 	run("bundle-cold-before", "bundle-execute", true, "bundle", "_2.6.7_", "exec", "ruby", "-e", `require 'owned_top'; abort unless OWNED_TOP == 'top-middle-leaf'; puts OWNED_TOP`)
+	verifyPhase("bundle-cold-before", stable, compact)
 	// Explicit full-index proves the legacy list and generated Gem::Specification
 	// path, independently of the compact index used by the previous install.
 	run("bundle-full-index", "legacy-bundle-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
-	run("pre-cold", "prerelease-install", false, "gem", "install", "owned_top", "--version", "1.3.0.pre", "--prerelease", "--clear-sources", "--source", readSource, "--no-document")
+	verifyPhase("bundle-full-index", stable, legacy)
+	run("pre-cold", "prerelease-install", false, "gem", "install", "owned_top", "--version", "1.3.0.pre", "--prerelease", "--remote", "--clear-sources", "--source", readSource, "--no-document")
+	verifyPhase("pre-cold", []string{"owned_top-1.3.0.pre.gem", "owned_middle-1.1.0.gem", "owned_leaf-1.0.0.gem"}, []string{"prerelease_specs.4.8.gz", "quick/Marshal.4.8/owned_top-1.3.0.pre.gemspec.rz"})
 	run("platform-cold", "platform-fetch", false, "gem", "fetch", "owned_platform", "--version", "1.0.0", "--platform", "x86_64-linux", "--clear-sources", "--source", readSource)
+	verifyPhase("platform-cold", []string{"owned_platform-1.0.0-x86_64-linux.gem"}, nil)
 	audits, e := repos.ListAudits(t.Context(), repository.AuditQuery{Repository: repo.Name, Operation: "rubygems.publish", Limit: 100})
 	if e != nil || len(audits) != len(proof) {
 		t.Fatalf("durable idempotent audit %d %v", len(audits), e)
@@ -297,14 +456,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	install("gem-cold-after")
 	run("bundle-cold-after", "restarted-bundle-install", false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
 	run("bundle-cold-after", "restarted-bundle-execute", true, "bundle", "_2.6.7_", "exec", "ruby", "-e", `require 'owned_top'; abort unless OWNED_TOP == 'top-middle-leaf'; puts OWNED_TOP`)
-	mu.Lock()
-	all := strings.Join(paths, "\n")
-	mu.Unlock()
-	for _, required := range []string{"/versions", "/info/owned_top", "/info/owned_middle", "/info/owned_leaf", "/specs.4.8.gz", "/quick/Marshal.4.8/owned_top-1.2.0.gemspec.rz", "/gems/owned_leaf-1.0.0.gem"} {
-		if !strings.Contains(all, required) {
-			t.Fatalf("native protocol branch not exercised: %s", required)
-		}
-	}
+	verifyPhase("bundle-cold-after", stable, compact)
 	t.Logf("official toolchain %s; %d original closures verified; real compact and legacy cold three-level installs survived owned PostgreSQL/RustFS restart", versions, len(proof))
 }
 

@@ -4,11 +4,14 @@ umask 077
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 exec python3 -B - "$repo_root" <<'PY'
-import hashlib,json,os,pathlib,secrets,shutil,socket,subprocess,sys,tempfile,time,urllib.request
+import hashlib,json,os,pathlib,secrets,shutil,signal,socket,subprocess,sys,tempfile,time,urllib.request
+gate_signals={signal.SIGTERM,signal.SIGINT}
+initial_signal_mask=signal.pthread_sigmask(signal.SIG_BLOCK,gate_signals)
 root=pathlib.Path(sys.argv[1]);run_id='ag459-rubygems-'+secrets.token_hex(6)
 evidence=root/'output/native-rubygems-e2e'/run_id;evidence.mkdir(parents=True)
 work=pathlib.Path(tempfile.mkdtemp(prefix=run_id+'-'));work.chmod(0o700)
 env=dict(os.environ);containers=[];volumes=[];network=run_id+'-net';exit_code=1
+cancelled_signal=None;cleaning=False;cleanup_deadline=None;active_processes={};process_receipts=[];cleanup_errors=[]
 label='com.artifact-gateway.rubygems-e2e.run='+run_id
 image='ruby:3.4.4-alpine@sha256:81096866ac15f906adc79867da3ed97a2aa271d6149363e216a174701345c53b'
 rust_image='rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21'
@@ -29,15 +32,65 @@ required={
 'TestRubyGemsHeadConditionalAndRangeKeepAuthorizedRepresentation',
 'TestRubyGemsAnonymousRequiresBothPoliciesAndExplicitInvalidKeyNeverFallsBack',
 'TestRubyGemsInvalidAndOversizedUploadsCreateNoObjectsOrVisibleIndex',
+'TestRubyGemsInvalidSpecificationIsRejectedBeforePublication',
+'TestRubyGemsFixedOfficialSpecificationDateAndRequirePaths',
 'TestRubyGemsPostgresPublicationStoreContract',
 'TestRubyGemsPostgresRustFSAtomicAuditInterruptionQuotaAndRestart',
 'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart',
 }
+class GateCancelled(Exception):
+    def __init__(self,signum):self.signum=signum
+def cancel_gate(signum,_frame):
+    global cancelled_signal
+    cancelled_signal=signum
+    for sig in gate_signals:signal.signal(sig,signal.SIG_IGN)
+    raise GateCancelled(signum)
+def cancel_during_cleanup(signum,_frame):
+    global cancelled_signal,exit_code
+    cancelled_signal=signum;exit_code=128+signum
+    for sig in gate_signals:signal.signal(sig,signal.SIG_IGN)
+for sig in gate_signals:signal.signal(sig,cancel_gate)
 def write(name,value):(evidence/name).write_text(json.dumps(value,indent=2)+'\n')
+def stop_process_group(process):
+    # Each command has an owned process group, including Go's test/Gateway
+    # descendants. Reap the direct child and stop the complete group on cancel.
+    for sig in (signal.SIGTERM,signal.SIGKILL):
+        try:os.killpg(process.pid,sig)
+        except ProcessLookupError:pass
+        try:process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:continue
+    if process.poll() is None:process.wait(timeout=2)
 def command(args,*,input=None,output=None,check=True,timeout=None):
-    if output:
-        with (evidence/output).open('w') as log:return subprocess.run(args,input=input,env=env,stdout=log,stderr=subprocess.STDOUT,text=True,check=check,timeout=timeout)
-    return subprocess.run(args,input=input,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,check=check,timeout=timeout)
+    process=None;log=None;interrupted=False
+    if cleaning:
+        remaining=cleanup_deadline-time.monotonic()
+        if remaining<=0:
+            cleanup_errors.append({'command':args[:2],'errorType':'CleanupDeadlineExceeded'})
+            return subprocess.CompletedProcess(args,124,'','owned cleanup deadline exceeded')
+        timeout=min(timeout or 5,remaining)
+    try:
+        if output:log=(evidence/output).open('w')
+        previous=signal.pthread_sigmask(signal.SIG_BLOCK,gate_signals)
+        try:
+            process=subprocess.Popen(args,env=env,stdin=subprocess.PIPE if input is not None else None,stdout=log or subprocess.PIPE,stderr=subprocess.STDOUT if log else subprocess.PIPE,text=True,start_new_session=True)
+            active_processes[process.pid]=process
+        finally:signal.pthread_sigmask(signal.SIG_SETMASK,previous)
+        stdout,stderr=process.communicate(input=input,timeout=timeout)
+        result=subprocess.CompletedProcess(args,process.returncode,stdout,stderr)
+        if check:result.check_returncode()
+        return result
+    except BaseException as error:
+        interrupted=True
+        if process is not None:stop_process_group(process)
+        if cleaning:
+            cleanup_errors.append({'command':args[:2],'errorType':type(error).__name__})
+            return subprocess.CompletedProcess(args,124,'','owned cleanup command failed')
+        raise
+    finally:
+        if process is not None:
+            active_processes.pop(process.pid,None)
+            process_receipts.append({'pid':process.pid,'command':args[:2],'exitCode':process.returncode,'waitReturned':process.returncode is not None,'processGroupStopped':interrupted,'cleanup':cleaning})
+        if log:log.close()
 def inspect(name):
     r=command(['docker','inspect',name],check=False)
     return json.loads(r.stdout)[0] if r.returncode==0 else None
@@ -46,6 +99,7 @@ def start(name,args):
 write('mandatory-test-cases.json',{'target':'native-rubygems-e2e','mandatoryCount':len(required),'required':sorted(required)})
 write('summary.json',{'target':'native-rubygems-e2e','mandatoryCount':len(required),'mandatoryPassedCount':0,'passed':False,'state':'not-yet-executed'})
 try:
+    signal.pthread_sigmask(signal.SIG_SETMASK,initial_signal_mask)
     for binary in ('go','docker','curl'):
         if not shutil.which(binary):raise RuntimeError('RubyGems preview gate requires '+binary)
     endpoint=env.get('DOCKER_HOST')
@@ -107,12 +161,18 @@ try:
         except ValueError:pass
     passed={x['Test'] for x in events if x.get('Action')=='pass' and 'Test' in x};bad=[x for x in events if x.get('Action') in ('skip','fail')];report={'target':'native-rubygems-e2e','exitCode':result.returncode,'required':sorted(required),'requiredPassed':sorted(required&passed),'missing':sorted(required-passed),'mandatoryCount':len(required),'mandatoryPassedCount':len(required&passed),'passedTests':len(passed),'passedTopLevelTests':len([n for n in passed if '/' not in n]),'failOrSkip':bad,'resultsSHA256':hashlib.sha256((evidence/'results.jsonl').read_bytes()).hexdigest()};write('required.json',report);exit_code=0 if result.returncode==0 and not bad and not required-passed else 1
     write('summary.json',{'target':'native-rubygems-e2e','mandatoryCount':len(required),'mandatoryPassedCount':len(required&passed),'missing':sorted(required-passed),'failOrSkipCount':len(bad),'passed':exit_code==0,'toolchain':probe,'scope':'hosted-preview','formalAdmission':False})
+except GateCancelled as error:
+    exit_code=128+error.signum
+    write('failure.json',{'message':'Owned RubyGems gate cancelled','cancelledBySignal':error.signum,'exitCode':exit_code})
 except Exception as error:
     message='Owned RubyGems gate failed: '+type(error).__name__
     if isinstance(error,RuntimeError):message+=': '+str(error)
     if isinstance(error,subprocess.CalledProcessError):message+=': '+str(error.cmd[:3])+' exit='+str(error.returncode)
     write('failure.json',{'message':message});print(message,file=sys.stderr)
 finally:
+    cleaning=True;cleanup_deadline=time.monotonic()+30
+    for sig in gate_signals:signal.signal(sig,cancel_during_cleanup if cancelled_signal is None else signal.SIG_IGN)
+    for process in list(active_processes.values()):stop_process_group(process)
     cleanup={'runId':run_id,'containers':[],'volumes':[],'network':None,'privateWorkRemoved':False,'remainingOwnedContainers':[]}
     for name in reversed(containers):
         state=inspect(name)
@@ -142,6 +202,12 @@ finally:
     cleanup['network']={'name':network,'absent':command(['docker','network','inspect',network],check=False).returncode!=0}
     shutil.rmtree(work);cleanup['privateWorkRemoved']=not work.exists();cleanup['passed']=all(x['absent'] for x in cleanup['containers']+cleanup['volumes']) and cleanup['network']['absent'] and cleanup['privateWorkRemoved'] and not cleanup['remainingOwnedContainers']
     if not cleanup['passed']:exit_code=1
+    if cancelled_signal is not None:
+        exit_code=128+cancelled_signal
+        write('failure.json',{'message':'Owned RubyGems gate cancelled','cancelledBySignal':cancelled_signal,'exitCode':exit_code})
+        summary=json.loads((evidence/'summary.json').read_text());summary.update(passed=False,cancelledBySignal=cancelled_signal);write('summary.json',summary)
+    cleanup['processes']=process_receipts;cleanup['cleanupErrors']=cleanup_errors;cleanup['allCommandChildrenReaped']=all(x['waitReturned'] for x in process_receipts);cleanup['cancelledBySignal']=cancelled_signal
+    if cleanup_errors or not cleanup['allCommandChildrenReaped']:cleanup['passed']=False;exit_code=exit_code or 1
     cleanup['exitCode']=int(exit_code);write('cleanup.json',cleanup)
     manifest={str(p.relative_to(evidence)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(evidence.rglob('*')) if p.is_file()};write('manifest.json',{'target':'native-rubygems-e2e','files':manifest})
 print(str(evidence));raise SystemExit(exit_code)
