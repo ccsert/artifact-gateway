@@ -90,8 +90,12 @@ func Tar(t testing.TB, names []string, bodies [][]byte) []byte {
 }
 func Build(t testing.TB, metadata []byte, payloadName string) []byte {
 	t.Helper()
+	return BuildPayload(t, metadata, Tar(t, []string{payloadName}, [][]byte{[]byte("OWNED = true\n")}))
+}
+func BuildPayload(t testing.TB, metadata, payload []byte) []byte {
+	t.Helper()
 	meta := gzipBytes(t, metadata)
-	data := gzipBytes(t, Tar(t, []string{payloadName}, [][]byte{[]byte("OWNED = true\n")}))
+	data := gzipBytes(t, payload)
 	shaMeta := sha256.Sum256(meta)
 	shaData := sha256.Sum256(data)
 	sha512Meta := sha512.Sum512(meta)

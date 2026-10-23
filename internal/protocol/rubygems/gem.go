@@ -64,8 +64,10 @@ type Inspection struct {
 func ValidName(s string) bool {
 	return nameRE.MatchString(s) && strings.IndexFunc(s, func(r rune) bool { return r > 127 }) < 0 && strings.IndexFunc(s, func(r rune) bool { return r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' }) >= 0
 }
-func ValidVersion(s string) bool  { return len(s) <= 128 && versionRE.MatchString(s) }
-func ValidPlatform(s string) bool { return len(s) > 0 && len(s) <= 128 && platformRE.MatchString(s) }
+func ValidVersion(s string) bool { return len(s) <= 128 && versionRE.MatchString(s) }
+func ValidPlatform(s string) bool {
+	return len(s) > 0 && len(s) <= 128 && platformRE.MatchString(s) && canonicalPlatform(s) == s
+}
 func (m Metadata) FullName() string {
 	s := m.Name + "-" + m.Version
 	if m.Platform != "ruby" {
@@ -118,7 +120,7 @@ func Inspect(r io.Reader) (Inspection, error) {
 		if err != nil {
 			return empty, ErrInvalid
 		}
-		if h.Typeflag != tar.TypeReg || h.Size < 1 || h.Size > MaxGemBytes || len(parts) >= 3 || parts[h.Name] != nil {
+		if h.Format != tar.FormatUSTAR || len(h.PAXRecords) != 0 || len(h.Xattrs) != 0 || h.Typeflag != tar.TypeReg || h.Size < 1 || h.Size > MaxGemBytes || len(parts) >= 3 || parts[h.Name] != nil {
 			return empty, ErrInvalid
 		}
 		if h.Name != "metadata.gz" && h.Name != "data.tar.gz" && h.Name != "checksums.yaml.gz" {
@@ -191,7 +193,7 @@ func Inspect(r io.Reader) (Inspection, error) {
 		if err == io.EOF {
 			break
 		}
-		if err != nil || count >= 10000 || !SafePath(h.Name) || seen[h.Name] || h.Typeflag != tar.TypeReg || h.Size < 0 || h.Size > MaxExpandedBytes-total {
+		if err != nil || h.Format != tar.FormatUSTAR || len(h.PAXRecords) != 0 || len(h.Xattrs) != 0 || count >= 10000 || !SafePath(h.Name) || seen[h.Name] || h.Typeflag != tar.TypeReg || h.Size < 0 || h.Size > MaxExpandedBytes-total {
 			return empty, ErrInvalid
 		}
 		seen[h.Name] = true
@@ -256,7 +258,7 @@ func parseYAML(data []byte) (*yaml.Node, error) {
 			keys := map[string]bool{}
 			for i := 0; i < len(n.Content); i += 2 {
 				k := n.Content[i]
-				if k.Kind != yaml.ScalarNode || k.Tag != "!!str" || keys[k.Value] || k.Value == "<<" {
+				if !isRubyString(k) || keys[k.Value] || k.Value == "<<" {
 					return false
 				}
 				keys[k.Value] = true
@@ -292,10 +294,27 @@ func scalar(n *yaml.Node) string {
 }
 
 func stringScalar(n *yaml.Node) string {
-	if n == nil || n.Kind != yaml.ScalarNode || n.Tag != "!!str" {
+	if !isRubyString(n) {
 		return ""
 	}
 	return n.Value
+}
+
+func isRubyString(n *yaml.Node) bool {
+	if n == nil || n.Kind != yaml.ScalarNode || n.Tag != "!!str" {
+		return false
+	}
+	if n.Style != 0 {
+		return true
+	}
+	if strings.HasPrefix(n.Value, ":") {
+		return false
+	}
+	switch strings.ToLower(n.Value) {
+	case "yes", "no", "on", "off":
+		return false
+	}
+	return true
 }
 func stringList(n *yaml.Node) ([]string, error) {
 	out := []string{}
@@ -306,7 +325,7 @@ func stringList(n *yaml.Node) ([]string, error) {
 		return nil, ErrInvalid
 	}
 	for _, v := range n.Content {
-		if v.Kind != yaml.ScalarNode || v.Tag != "!!str" {
+		if !isRubyString(v) {
 			return nil, ErrInvalid
 		}
 		out = append(out, v.Value)
@@ -355,11 +374,18 @@ func ParseMetadata(y []byte) (Metadata, error) {
 	if e != nil {
 		return out, e
 	}
-	out.Name, out.Version, out.Platform = stringScalar(m["name"]), version(m["version"]), stringScalar(m["platform"])
-	if out.Platform == "" {
-		out.Platform = "ruby"
+	out.Name, out.Version = stringScalar(m["name"]), version(m["version"])
+	out.Platform = "ruby"
+	if platform := m["platform"]; platform != nil {
+		if platform.Kind != yaml.ScalarNode || (platform.Tag != "!!str" && platform.Tag != "!!null") {
+			return out, ErrInvalid
+		}
+		if platform.Tag == "!!str" && platform.Value != "" {
+			out.Platform = platform.Value
+		}
 	}
-	if !ValidName(out.Name) || !ValidVersion(out.Version) || !ValidPlatform(out.Platform) || scalar(m["specification_version"]) != "4" {
+	specificationVersion := m["specification_version"]
+	if !ValidName(out.Name) || !ValidVersion(out.Version) || !ValidPlatform(out.Platform) || specificationVersion == nil || specificationVersion.Tag != "!!int" || scalar(specificationVersion) != "4" {
 		return out, ErrInvalid
 	}
 	out.Summary, out.Description = stringScalar(m["summary"]), stringScalar(m["description"])
@@ -389,11 +415,22 @@ func ParseMetadata(y []byte) (Metadata, error) {
 			if err != nil || dep.Tag != "!ruby/object:Gem::Dependency" {
 				return out, ErrInvalid
 			}
-			v := Dependency{Name: scalar(d["name"]), Type: strings.TrimPrefix(scalar(d["type"]), ":")}
+			typeNode := d["type"]
+			if typeNode == nil || typeNode.Kind != yaml.ScalarNode || typeNode.Tag != "!!str" || typeNode.Style != 0 {
+				return out, ErrInvalid
+			}
+			typeValue := typeNode.Value
+			if typeValue != ":runtime" && typeValue != ":development" {
+				return out, ErrInvalid
+			}
+			v := Dependency{Name: stringScalar(d["name"]), Type: strings.TrimPrefix(typeValue, ":")}
 			if !ValidName(v.Name) || seen[v.Name] || (v.Type != "runtime" && v.Type != "development") {
 				return out, ErrInvalid
 			}
 			seen[v.Name] = true
+			if d["requirement"] == nil {
+				return out, ErrInvalid
+			}
 			v.Requirements, err = requirements(d["requirement"])
 			if err != nil {
 				return out, err
@@ -420,7 +457,7 @@ func ParseMetadata(y []byte) (Metadata, error) {
 			return out, ErrInvalid
 		}
 		for k, v := range items {
-			if len(k) > 128 || v.Kind != yaml.ScalarNode || v.Tag != "!!str" || len(v.Value) > 1024 {
+			if len(k) > 128 || !isRubyString(v) || len(v.Value) > 1024 {
 				return out, ErrInvalid
 			}
 			out.Extra[k] = v.Value

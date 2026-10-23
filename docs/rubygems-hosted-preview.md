@@ -97,7 +97,14 @@ erase recognized runtime/development dependencies or their constraints.
 Limits are 64 MiB original gem bytes, 1 MiB expanded metadata, 256 MiB expanded
 payload, 10,000 regular payload files, 256 dependencies, 32 constraints per
 requirement and 4,096 active reserved/committed identities per repository.
-Signed archives and symlink payloads are outside this preview and are rejected.
+Both outer and payload tar archives must use USTAR, including valid USTAR prefix
+paths; PAX/GNU extensions, signed archives and symlink payloads are rejected.
+Platform must be a canonical RubyGems string; missing, null or empty platform
+means `ruby`, matching the fixed official parser. Sequence/object platforms,
+noncanonical aliases and host-dependent `current` are unsupported. YAML
+dependency types must be the actual plain `:runtime`/`:development` symbols,
+preserving the original gem semantics; strings that only spell the same word are
+rejected.
 Platform packages are indexed and downloadable; server-side extension execution
 and verification of every target operating system are outside this slice.
 

@@ -14,6 +14,8 @@ image='ruby:3.4.4-alpine@sha256:81096866ac15f906adc79867da3ed97a2aa271d6149363e2
 rust_image='rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21'
 required={
 'TestRubyGemArchivePreservesDependenciesAcrossBenignTrailingFields',
+'TestRubyGemRejectsYamlAndTarParserDifferentials',
+'TestRubyGemPlatformDefaultsAndLongUSTARPathsKeepDependencies',
 'TestRubyGemArchiveRejectsUnsafeIncompleteAmbiguousAndUnboundedInput',
 'TestRubyGemLegacyAndCompactVersionPlatformIndexesAgree',
 'TestRubyGemsHostedPublishesImmutableBytesAndMatchingIndexes',
@@ -59,8 +61,8 @@ try:
     probe=command(['docker','run','--rm','--network','none','--label',label,image,'ruby','-e','require "rubygems";require "bundler";puts [RUBY_VERSION,Gem::VERSION,Bundler::VERSION].join(" ")']).stdout.strip()
     if probe!='3.4.4 3.6.7 2.6.7':raise RuntimeError('Fixed official Ruby/RubyGems/Bundler identity mismatch: '+probe)
     source_proof={}
-    source_files=['lib/rubygems/specification.rb','lib/rubygems/version.rb','lib/rubygems/requirement.rb','lib/rubygems/package.rb','lib/rubygems/commands/push_command.rb','lib/rubygems/gemcutter_utilities.rb','bundler/lib/bundler/compact_index_client/parser.rb']
-    expected_source_hashes={'lib/rubygems/specification.rb':'bcf89944d63f082c54474af101c6419605ac5c2534384debce11eab0e6eae434','lib/rubygems/version.rb':'712bca6acd43c9a6cc226afc65a44cfc38e3eb9737a4b357f734c5e1ed20f519','lib/rubygems/requirement.rb':'76b56c47ca3372cdcc85829d96296cbb5923504ff464f6556de9c9fccbcdc913','lib/rubygems/package.rb':'712310184686c9a2bb692a86f544fd7e2f0fbe911eabdbe34e35fe39ee9b4686','lib/rubygems/commands/push_command.rb':'4bbaa13cf60df4f65c7a40932add4fc34640d4ecef1465138773b5bbcedab282','lib/rubygems/gemcutter_utilities.rb':'edcb9cdaf3826c7c781d057e9cb0e77f9f6bf0173b5fe148713bf71543686476','bundler/lib/bundler/compact_index_client/parser.rb':'ea6d6d5698731ebed1e2e7523db81d8556c4b4772f35bba9d6f36f9e6a7841eb'}
+    source_files=['lib/rubygems/specification.rb','lib/rubygems/version.rb','lib/rubygems/requirement.rb','lib/rubygems/package.rb','lib/rubygems/platform.rb','lib/rubygems/commands/push_command.rb','lib/rubygems/gemcutter_utilities.rb','bundler/lib/bundler/compact_index_client/parser.rb']
+    expected_source_hashes={'lib/rubygems/platform.rb':'741d03e920690639402c5a39a84abd27e9b5f9e93d5569170d3a23aa62677bb4','lib/rubygems/specification.rb':'bcf89944d63f082c54474af101c6419605ac5c2534384debce11eab0e6eae434','lib/rubygems/version.rb':'712bca6acd43c9a6cc226afc65a44cfc38e3eb9737a4b357f734c5e1ed20f519','lib/rubygems/requirement.rb':'76b56c47ca3372cdcc85829d96296cbb5923504ff464f6556de9c9fccbcdc913','lib/rubygems/package.rb':'712310184686c9a2bb692a86f544fd7e2f0fbe911eabdbe34e35fe39ee9b4686','lib/rubygems/commands/push_command.rb':'4bbaa13cf60df4f65c7a40932add4fc34640d4ecef1465138773b5bbcedab282','lib/rubygems/gemcutter_utilities.rb':'edcb9cdaf3826c7c781d057e9cb0e77f9f6bf0173b5fe148713bf71543686476','bundler/lib/bundler/compact_index_client/parser.rb':'ea6d6d5698731ebed1e2e7523db81d8556c4b4772f35bba9d6f36f9e6a7841eb'}
     for path in source_files:
         url='https://raw.githubusercontent.com/rubygems/rubygems/v3.6.7/'+path;filename='official-source-'+path.replace('/','_')
         command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','45',url,'-o',str(evidence/filename)],output=filename+'.log')
@@ -138,8 +140,9 @@ finally:
     r=command(['docker','network','inspect',network],check=False)
     if r.returncode==0 and json.loads(r.stdout)[0].get('Labels',{}).get(label.split('=')[0])==run_id:command(['docker','network','rm',network],check=False)
     cleanup['network']={'name':network,'absent':command(['docker','network','inspect',network],check=False).returncode!=0}
-    shutil.rmtree(work);cleanup['privateWorkRemoved']=not work.exists();cleanup['passed']=all(x['absent'] for x in cleanup['containers']+cleanup['volumes']) and cleanup['network']['absent'] and cleanup['privateWorkRemoved'] and not cleanup['remainingOwnedContainers'];write('cleanup.json',cleanup)
+    shutil.rmtree(work);cleanup['privateWorkRemoved']=not work.exists();cleanup['passed']=all(x['absent'] for x in cleanup['containers']+cleanup['volumes']) and cleanup['network']['absent'] and cleanup['privateWorkRemoved'] and not cleanup['remainingOwnedContainers']
     if not cleanup['passed']:exit_code=1
+    cleanup['exitCode']=int(exit_code);write('cleanup.json',cleanup)
     manifest={str(p.relative_to(evidence)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(evidence.rglob('*')) if p.is_file()};write('manifest.json',{'target':'native-rubygems-e2e','files':manifest})
 print(str(evidence));raise SystemExit(exit_code)
 PY
