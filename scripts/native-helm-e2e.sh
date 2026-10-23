@@ -124,7 +124,8 @@ try:
     start(rust,['--env-file',str(rust_env),'--tmpfs','/data:rw,mode=1777','--tmpfs','/logs:rw,mode=1777','-p','127.0.0.1::9000',rust_image])
     deadline=time.monotonic()+90
     while time.monotonic()<deadline:
-        if command(['docker','exec',pg,'pg_isready','-U','gateway','-d','gateway_test'],check=False).returncode==0: break
+        ready=command(['docker','exec',pg,'psql','-X','-h','127.0.0.1','-U','gateway','-d','gateway_test','-v','ON_ERROR_STOP=1','-Atqc','SELECT 1'],check=False)
+        if ready.returncode==0 and ready.stdout.strip()=='1': break
         time.sleep(0.5)
     else: raise RuntimeError('Owned PostgreSQL failed readiness')
     pg_address=command(['docker','port',pg,'5432/tcp']).stdout.strip();rust_address=command(['docker','port',rust,'9000/tcp']).stdout.strip()

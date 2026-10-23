@@ -1,19 +1,113 @@
-"""Exercise the real producer's cancellation path without Docker or networking."""
+"""Exercise native producer startup and cancellation without Docker or networking."""
 
+import ast
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import shlex
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "native-rubygems-e2e.sh"
+ROOT = SCRIPT.parents[1]
+
+
+def producer_ast(path):
+    source = path.read_text().partition("<<'PY'\n")[2].rsplit("\nPY", 1)[0]
+    return ast.parse(source, filename=str(path))
+
+
+class NativeProducerStartupTest(unittest.TestCase):
+    def test_postgres_probes_wait_for_authenticated_tcp_query(self):
+        for name in ("native-rubygems-e2e.sh", "native-helm-e2e.sh"):
+            with self.subTest(producer=name):
+                script = SCRIPT.parent / name
+                # Execute the actual producer loop, preserving its original
+                # deadline/interval. Model the official entrypoint's Unix-only
+                # init phase, then TCP rejection, then a usable database.
+                loop = next(node for node in ast.walk(producer_ast(script))
+                            if isinstance(node, ast.While) and any(
+                                isinstance(value, ast.Constant) and value.value in ("pg_isready", "SELECT 1")
+                                for value in ast.walk(node)))
+                phase = 0
+                attempts = []
+
+                def query(args, **_kwargs):
+                    attempts.append(args)
+                    if "pg_isready" in args and "-h" not in args:
+                        return subprocess.CompletedProcess(args, 0, "Unix socket accepting connections\n", "")
+                    expected = {"-h": "127.0.0.1", "-U": "gateway", "-d": "gateway_test"}
+                    authenticated_tcp = "psql" in args and all(
+                        flag in args and args[args.index(flag) + 1] == value
+                        for flag, value in expected.items())
+                    if authenticated_tcp and "SELECT 1" in args and phase >= 2:
+                        return subprocess.CompletedProcess(args, 0, "1\n", "")
+                    return subprocess.CompletedProcess(args, 2, "", "TCP connection or authentication rejected\n")
+
+                def sleep(_seconds):
+                    nonlocal phase
+                    phase += 1
+
+                scope = {"command": query, "pg": "owned-postgres", "deadline": 10,
+                         "time": SimpleNamespace(monotonic=lambda: phase, sleep=sleep)}
+                exec(compile(ast.Module(body=[loop], type_ignores=[]), str(script), "exec"), scope)
+                self.assertGreaterEqual(phase, 2, "producer accepted the temporary Unix-only init server")
+                self.assertGreaterEqual(len(attempts), 3)
+
+    def test_compose_postgres_healthchecks_reject_unix_only_server(self):
+        for name, database in (("compose.integration.yml", "gateway_test"), ("compose.yml", "gateway")):
+            with self.subTest(compose=name):
+                text = (ROOT / name).read_text()
+                healthcheck = re.search(r'test: (\["CMD-SHELL", "pg_isready[^\n]+\])', text)
+                self.assertIsNotNone(healthcheck)
+                args = shlex.split(json.loads(healthcheck.group(1))[1])
+                # pg_isready defaults to a Unix socket; only an explicit host
+                # observes the TCP server used by dependent migrate services.
+                self.assertIn("-h", args, "healthcheck accepts the Unix-only init server")
+                self.assertEqual(args[args.index("-h") + 1], "127.0.0.1")
+                self.assertEqual(args[args.index("-U") + 1], "gateway")
+                self.assertEqual(args[args.index("-d") + 1], database)
+
+    def command_scope(self, evidence):
+        functions = [node for node in producer_ast(SCRIPT).body
+                     if isinstance(node, ast.FunctionDef) and node.name in ("stop_process_group", "command")]
+        scope = {"os": os, "signal": signal, "subprocess": subprocess, "time": time,
+                 "env": dict(os.environ), "evidence": evidence, "cleaning": False,
+                 "gate_signals": {signal.SIGTERM, signal.SIGINT}, "active_processes": {},
+                 "process_receipts": [], "cleanup_errors": []}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(SCRIPT), "exec"), scope)
+        return scope
+
+    def test_failed_stdin_command_preserves_real_exit_and_output(self):
+        with tempfile.TemporaryDirectory(prefix="native-rubygems-command-failure-") as directory:
+            scope = self.command_scope(Path(directory))
+            args = [sys.executable, "-c", "import sys;sys.stdin.read();print('migration TCP connection refused');sys.exit(2)"]
+            with self.assertRaises(subprocess.CalledProcessError) as raised:
+                scope["command"](args, input="owned migration input\n", output="migration.log")
+            self.assertEqual(raised.exception.returncode, 2)
+            self.assertIn("migration TCP connection refused", (Path(directory) / "migration.log").read_text())
+            self.assertFalse(scope["active_processes"])
+            self.assertTrue(scope["process_receipts"][-1]["waitReturned"])
+            self.assertEqual(scope["process_receipts"][-1]["exitCode"], 2)
+
+    def test_timed_out_stdin_command_preserves_timeout_and_reaps_child(self):
+        with tempfile.TemporaryDirectory(prefix="native-rubygems-command-timeout-") as directory:
+            scope = self.command_scope(Path(directory))
+            args = [sys.executable, "-c", "import sys,time;sys.stdin.read();time.sleep(10)"]
+            with self.assertRaises(subprocess.TimeoutExpired):
+                scope["command"](args, input="owned migration input\n", output="migration.log", timeout=0.1)
+            self.assertFalse(scope["active_processes"])
+            self.assertTrue(scope["process_receipts"][-1]["waitReturned"])
+            self.assertTrue(scope["process_receipts"][-1]["processGroupStopped"])
 
 # The deterministic boundary models an owned native client and network, then
 # blocks Docker's first context query. The actual unmodified producer must

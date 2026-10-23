@@ -54,6 +54,9 @@ def write(name,value):(evidence/name).write_text(json.dumps(value,indent=2)+'\n'
 def stop_process_group(process):
     # Each command has an owned process group, including Go's test/Gateway
     # descendants. Reap the direct child and stop the complete group on cancel.
+    # A completed input command has already closed stdin. Retrying communicate
+    # must not replace its real failure with a flush of that closed stream.
+    if process.stdin is not None and process.stdin.closed:process.stdin=None
     for sig in (signal.SIGTERM,signal.SIGKILL):
         try:os.killpg(process.pid,sig)
         except ProcessLookupError:pass
@@ -140,7 +143,8 @@ try:
     start(rust,['--env-file',str(rust_env),'--mount','type=volume,src='+volumes[1]+',dst=/data','--mount','type=volume,src='+volumes[2]+',dst=/logs','-p','127.0.0.1:'+str(rust_port)+':9000',rust_image])
     deadline=time.monotonic()+45
     while time.monotonic()<deadline:
-        if command(['docker','exec',pg,'pg_isready','-U','gateway','-d','gateway_test'],check=False).returncode==0:break
+        ready=command(['docker','exec',pg,'psql','-X','-h','127.0.0.1','-U','gateway','-d','gateway_test','-v','ON_ERROR_STOP=1','-Atqc','SELECT 1'],check=False)
+        if ready.returncode==0 and ready.stdout.strip()=='1':break
         time.sleep(0.2)
     else:raise RuntimeError('Owned PostgreSQL readiness failed')
     pg_address=command(['docker','port',pg,'5432/tcp']).stdout.strip();rust_address=command(['docker','port',rust,'9000/tcp']).stdout.strip();deadline=time.monotonic()+45
