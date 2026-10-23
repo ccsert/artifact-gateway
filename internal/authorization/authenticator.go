@@ -28,6 +28,8 @@ type Principal struct {
 	MustChangePassword bool
 	UserID             string
 	SessionID          string
+	// CredentialID is a non-secret revocable service credential identity.
+	CredentialID string
 }
 
 // AuthenticationKind is the bounded credential source retained after
@@ -230,6 +232,7 @@ func (a Authenticator) apiKeyPrincipal(ctx context.Context, token string) (Princ
 		}
 		return Principal{
 			Actor:              "service-account:" + account.ID,
+			CredentialID:       key.ID,
 			AuthenticationKind: AuthenticationServiceAccountCredential,
 		}, true
 	}

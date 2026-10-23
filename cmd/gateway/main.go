@@ -14,6 +14,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/app"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/authorization"
 	"github.com/ccsert/artifact-gateway/internal/backupops"
 	"github.com/ccsert/artifact-gateway/internal/buildinfo"
 	"github.com/ccsert/artifact-gateway/internal/config"
@@ -28,6 +29,7 @@ import (
 	migrationpg "github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/nexussource"
 	sourcepg "github.com/ccsert/artifact-gateway/internal/nexussource/pgstore"
+	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/preflight"
@@ -304,12 +306,25 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		}
 	}
 	var nugetMaintenance *nugetformat.Maintenance
+	var nugetReplication *dist.Worker
 	if cfg.NuGetPreviewEnabled {
 		nugetMaintenance, err = nugetformat.NewMaintenance(store, objectStore)
 		if err != nil {
 			slog.Error("configure NuGet preview maintenance", "error", err)
 			return 1
 		}
+		authority := authorization.Authenticator{AdminToken: cfg.AdminToken, AdminActor: cfg.AdminActor, ResolverToken: cfg.ResolverToken, ResolverActor: cfg.ResolverActor, RepositoryReaders: cfg.RepositoryReaders, LegacyReadPermissive: cfg.LegacyReadPermissive}
+		module, setupErr := nugetformat.New(nugetformat.Options{Distribution: store, Store: store, Repositories: store, Objects: objectStore, Authenticator: authority, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: authority}, Audit: store})
+		if setupErr != nil {
+			slog.Error("configure NuGet preview replication", "error", setupErr)
+			return 1
+		}
+		worker, setupErr := module.ReplicationWorker(cfg.InstanceID + "/" + runtimeSessionID)
+		if setupErr != nil {
+			slog.Error("configure NuGet preview replication worker", "error", setupErr)
+			return 1
+		}
+		nugetReplication = &worker
 	}
 	var rubyGemsStore *rubygemspg.Store
 	var rubyGemsMaintenance *rubygemsformat.Maintenance
@@ -334,6 +349,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		migration:           dependencies.MigrationService,
 		migrationSchedules:  dependencies.MigrationSchedules,
 		nugetMaintenance:    nugetMaintenance,
+		nugetReplication:    nugetReplication,
 		helmMaintenance:     helmMaintenance,
 		rubyGemsMaintenance: rubyGemsMaintenance,
 	}).Start(runtimeContext, cfg)
@@ -388,6 +404,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		if cfg.NuGetPreviewEnabled {
 			gatewayOptions.NuGetPreviewEnabled = true
 			gatewayOptions.NuGetStore = store
+			gatewayOptions.NuGetDistribution = store
 			gatewayOptions.NuGetSources = store
 			gatewayOptions.NuGetObjects = objectStore
 		}

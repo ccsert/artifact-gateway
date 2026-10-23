@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
+
 	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
 )
 
@@ -92,6 +94,8 @@ type MemoryStore struct {
 	cargoProxyCrates       map[string]CargoProxyCrate
 	cargoGroupVersions     map[string]CargoGroupVersion
 	cargoObjectLocks       map[string]*sync.Mutex
+	nugetJobs              map[string]dist.Job
+	nugetRetries           map[string]string
 	nugetSessions          map[string]NuGetSession
 	nugetPublications      map[string]NuGetPublication
 	nugetPublicationLocks  map[string]chan struct{}

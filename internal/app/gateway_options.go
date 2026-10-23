@@ -7,6 +7,7 @@ import (
 
 	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
+	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -63,6 +64,7 @@ type GatewayOptions struct {
 	HelmUpstream           helmformat.Upstream
 	HelmObjects            ObjectStore
 	NuGetPreviewEnabled    bool
+	NuGetDistribution      dist.Store
 	NuGetStore             repository.NativeNuGetStore
 	NuGetSources           repository.NuGetSourceStore
 	NuGetUpstream          nugetformat.Upstream
@@ -107,13 +109,16 @@ func (o GatewayOptions) validate() error {
 		if nilDependency(o.NuGetSources) {
 			failures = append(failures, errors.New("NuGet preview source store is required"))
 		}
+		if o.NuGetDistribution != nil && nilDependency(o.NuGetDistribution) {
+			failures = append(failures, errors.New("NuGet replication store is typed nil"))
+		}
 		if o.NuGetUpstream != nil && nilDependency(o.NuGetUpstream) {
 			failures = append(failures, errors.New("NuGet preview upstream client is typed nil"))
 		}
 		if err := objectstore.Validate(o.NuGetObjects); err != nil {
 			failures = append(failures, fmt.Errorf("NuGet preview %w", err))
 		}
-	} else if o.NuGetStore != nil || o.NuGetObjects != nil || o.NuGetSources != nil || o.NuGetUpstream != nil {
+	} else if o.NuGetStore != nil || o.NuGetObjects != nil || o.NuGetSources != nil || o.NuGetUpstream != nil || o.NuGetDistribution != nil {
 		failures = append(failures, errors.New("NuGet preview dependencies require explicit enablement"))
 	}
 	if o.RubyGemsPreviewEnabled {

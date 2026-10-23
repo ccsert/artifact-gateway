@@ -14,6 +14,7 @@ import (
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	rubygemsformat "github.com/ccsert/artifact-gateway/internal/format/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
+	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -35,6 +36,7 @@ type backgroundRuntime struct {
 	aptPublisher        *aptpublication.Publisher
 	helmMaintenance     *helmformat.Maintenance
 	nugetMaintenance    *nugetformat.Maintenance
+	nugetReplication    *dist.Worker
 	rubyGemsMaintenance *rubygemsformat.Maintenance
 }
 
@@ -46,6 +48,9 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 		r.startWorkers(ctx, cfg, app.NativeRepositoryRetention{Store: r.store, Metrics: r.metrics, WorkerFormats: cfg.WorkerFormats})
 		if r.helmMaintenance != nil && cfg.WorkerEnabled("helm", "retention") {
 			r.helmMaintenance.Start(ctx, time.Minute)
+		}
+		if r.nugetReplication != nil && cfg.WorkerEnabled("nuget", "replication") {
+			r.nugetReplication.Start(ctx, 5*time.Second)
 		}
 		if r.nugetMaintenance != nil && cfg.WorkerEnabled("nuget", "retention") {
 			// This preview only reclaims expired, never-visible uploads. It

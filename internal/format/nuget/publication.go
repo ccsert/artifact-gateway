@@ -72,6 +72,9 @@ func inspectSpool(spool *uploadspool.Spool) (packageMetadata, []byte, error) {
 }
 
 func (m *Module) stage(ctx context.Context, session repository.NuGetSession, spool *uploadspool.Spool) (repository.NuGetSession, error) {
+	return m.stageWithListing(ctx, session, spool, nil)
+}
+func (m *Module) stageWithListing(ctx context.Context, session repository.NuGetSession, spool *uploadspool.Spool, listed *bool) (repository.NuGetSession, error) {
 	if session.State != "committed" && (session.State == "expired" || !session.ExpiresAt.After(time.Now())) {
 		return repository.NuGetSession{}, repository.ErrNuGetSessionExpired
 	}
@@ -86,6 +89,7 @@ func (m *Module) stage(ctx context.Context, session repository.NuGetSession, spo
 		_, err := m.commit(ctx, session, session.Actor)
 		return session, err
 	}
+	meta.Listed = listed
 	encoded, err := json.Marshal(meta)
 	if err != nil {
 		return repository.NuGetSession{}, err
@@ -134,6 +138,13 @@ func (m *Module) commit(ctx context.Context, session repository.NuGetSession, ac
 	if err != nil {
 		return repository.NuGetPublication{}, err
 	}
+	var initialListing struct {
+		Listed *bool `json:"listed"`
+	}
+	if json.Unmarshal(session.MetadataJSON, &initialListing) != nil {
+		return repository.NuGetPublication{}, repository.ErrNuGetPublicationConflict
+	}
+	meta.Listed = initialListing.Listed
 	encoded, err := json.Marshal(meta)
 	if err != nil {
 		return repository.NuGetPublication{}, err

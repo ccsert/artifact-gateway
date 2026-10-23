@@ -15,6 +15,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/authorization"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
@@ -52,6 +53,7 @@ type Upstream interface {
 }
 
 type Options struct {
+	Distribution    dist.Store
 	Store           repository.NativeNuGetStore
 	Repositories    RepositoryStore
 	Objects         objectstore.Store
@@ -67,6 +69,7 @@ type Options struct {
 	Upstream        Upstream
 }
 type Module struct {
+	distribution  dist.Store
 	store         repository.NativeNuGetStore
 	repos         RepositoryStore
 	objects       objectstore.Store
@@ -97,7 +100,7 @@ func New(o Options) (*Module, error) {
 	if nilPort(o.Store) || nilPort(o.Repositories) || nilPort(o.Audit) {
 		return nil, errors.New("NuGet preview requires publication, repository and audit ports")
 	}
-	for _, port := range []any{o.Anonymous, o.Capacities, o.Authorizer.Grants, o.Sources, o.Configuration, o.Groups, o.Upstream} {
+	for _, port := range []any{o.Anonymous, o.Capacities, o.Authorizer.Grants, o.Sources, o.Configuration, o.Groups, o.Upstream, o.Distribution} {
 		if port != nil && nilPort(port) {
 			return nil, errors.New("NuGet optional capability is typed nil")
 		}
@@ -114,7 +117,7 @@ func New(o Options) (*Module, error) {
 	if o.Sources != nil && (o.Configuration == nil || o.Groups == nil || o.Upstream == nil) {
 		return nil, errors.New("NuGet Proxy/Group requires explicit source, configuration, Group and upstream ports")
 	}
-	return &Module{store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxPackageBytes, sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream}, nil
+	return &Module{distribution: o.Distribution, store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxPackageBytes, sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream}, nil
 }
 func (*Module) Format() repository.Format { return repository.FormatNuGet }
 func (m *Module) Routes() []formatmodule.Route {
