@@ -4,7 +4,7 @@ umask 077
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 exec python3 -B - "$repo_root" <<'PY'
-import hashlib,json,os,pathlib,platform,secrets,shutil,subprocess,sys,tempfile,time,urllib.request
+import hashlib,json,os,pathlib,platform,secrets,shutil,signal,subprocess,sys,tempfile,time,urllib.request
 root=pathlib.Path(sys.argv[1])
 for binary in ('docker','go','curl','node'):
     if not shutil.which(binary): raise SystemExit('Helm preview gate requires '+binary)
@@ -17,8 +17,17 @@ base=dict(os.environ)
 env=dict(base)
 docker_ready=False
 label='com.artifact-gateway.helm-e2e.run='+run_id
-containers=[];volumes=set();exit_code=1
+containers=[];volumes=set();exit_code=1;bounded_process_receipts=[]
 required={
+ 'TestHelmMemoryGovernanceStoreContract',
+ 'TestPostgresHelmGovernanceStoreContract',
+ 'TestPostgresHelmGovernanceAuditRollbackAndReopen',
+ 'TestPostgresRustFSHelmGovernanceHTTPRestartAndCorruptClosure',
+ 'TestHelmGovernanceHTTPHidesIndexAssetsBrowseAndRetainsClosure',
+ 'TestHelmGovernanceMixedGroupNeverRevivesHiddenAuthority',
+ 'TestHelmGovernanceRequiresExplicitPortAndPolicyFailureStaysClosed',
+ 'TestHelmGovernanceConcurrentHTTPUsesOneCASAndNoOpAudit',
+ 'TestHelmGovernanceRestoreRejectsRetainedIdentityAndMetadataCorruption',
  'TestHelmProxyInterruptedOldSourceCannotBlockRotatedClosureOrCollectReplacement',
  'TestHelmProxySnapshotCacheConditionalOfflineAndProvenance',
  'TestHelmProxyMissingCorruptOrCrossIdentityClosureNeverBecomesVisible',
@@ -49,7 +58,33 @@ required={
 def write_json(name,value): (evidence/name).write_text(json.dumps(value,indent=2)+'\n')
 write_json('mandatory-test-cases.json',{'target':'native-helm-e2e','mandatoryCount':len(required),'required':sorted(required)})
 write_json('summary.json',{'target':'native-helm-e2e','mandatoryCount':len(required),'mandatoryPassedCount':0,'passed':False,'state':'not-yet-executed'})
-def command(args,*,input=None,output=None,check=True):
+def stop_process_group(process):
+    if process.stdin is not None and process.stdin.closed:process.stdin=None
+    for sig in (signal.SIGTERM,signal.SIGKILL):
+        try:os.killpg(process.pid,sig)
+        except ProcessLookupError:pass
+        try:process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:continue
+    if process.poll() is None:process.wait(timeout=2)
+def command(args,*,input=None,output=None,check=True,timeout=None):
+    if timeout is not None:
+        process=None;log=None;interrupted=False;error_type=None;started=time.monotonic()
+        try:
+            if output:log=(evidence/output).open('w')
+            process=subprocess.Popen(args,env=env,stdin=subprocess.PIPE if input is not None else None,stdout=log or subprocess.PIPE,stderr=subprocess.STDOUT if log else subprocess.PIPE,text=True,start_new_session=True)
+            stdout,stderr=process.communicate(input=input,timeout=timeout)
+            result=subprocess.CompletedProcess(args,process.returncode,stdout,stderr)
+            if check:result.check_returncode()
+            return result
+        except BaseException as error:
+            interrupted=True;error_type=type(error).__name__
+            if process is not None:stop_process_group(process)
+            raise
+        finally:
+            if process is not None:
+                bounded_process_receipts.append({'pid':process.pid,'command':args[:2],'timeoutSeconds':timeout,'durationSeconds':time.monotonic()-started,'exitCode':process.returncode,'waitReturned':process.returncode is not None,'processGroupStopped':interrupted,'errorType':error_type})
+                write_json('postgres-readiness-processes.json',bounded_process_receipts)
+            if log:log.close()
     if output:
         with (evidence/output).open('w') as log:
             return subprocess.run(args,env=env,input=input,stdout=log,stderr=subprocess.STDOUT,text=True,check=check)
@@ -78,7 +113,11 @@ try:
     hashes={'darwin-arm64':'31513e1193da4eb4ae042eb5f98ef9aca7890cfa136f4707c8d4f70e2115bef6','linux-amd64':'a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496','linux-arm64':'440cf7add0aee27ebc93fada965523c1dc2e0ab340d4348da2215737fc0d76ad'}
     if host_platform not in hashes: raise RuntimeError('Unsupported fixed Helm client platform: '+host_platform)
     archive=work/'helm.tar.gz';url='https://get.helm.sh/helm-v3.19.0-'+host_platform+'.tar.gz'
-    command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','120','--retry','2','--retry-all-errors',url,'-o',str(archive)],output='helm-download.log')
+    command(['python3','-B','-m','unittest','discover','-s','scripts/tests','-p','test_helm_client_download.py'],output='helm-download-control-tests.log')
+    sys.path.insert(0,str(root/'scripts'))
+    from helm_client_download import download_archive
+    download_receipt=download_archive(url,archive,hashes[host_platform])
+    write_json('helm-download.json',download_receipt)
     actual=hashlib.sha256(archive.read_bytes()).hexdigest()
     if actual!=hashes[host_platform]: raise RuntimeError('Official Helm archive differs from reviewed fixed SHA-256')
     # Extract only the verified Helm executable from the official archive.
@@ -93,7 +132,7 @@ try:
     source_proof={}
     for filename,relative in [('helm-install-action.go.txt','pkg/action/install.go'),('helm-install-command.go.txt','cmd/helm/install.go'),('helm-template-command.go.txt','cmd/helm/template.go')]:
         source_url='https://raw.githubusercontent.com/helm/helm/'+client_version[1]+'/'+relative
-        command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','90','--retry','2','--retry-all-errors',source_url,'-o',str(evidence/filename)],output=filename+'.log')
+        command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','45','--retry','0',source_url,'-o',str(evidence/filename)],output=filename+'.log')
         source_proof[relative]={'url':source_url,'sha256':hashlib.sha256((evidence/filename).read_bytes()).hexdigest()}
     action=(evidence/'helm-install-action.go.txt').read_text()
     if 'if !i.ClientOnly {' not in action or 'i.cfg.KubeClient.IsReachable()' not in action: raise RuntimeError('Pinned Helm reachability source branch changed')
@@ -111,8 +150,12 @@ try:
     start(rust,['--env-file',str(rust_env),'--tmpfs','/data:rw,mode=1777','--tmpfs','/logs:rw,mode=1777','-p','127.0.0.1::9000',rust_image])
     deadline=time.monotonic()+90
     while time.monotonic()<deadline:
-        if command(['docker','exec',pg,'pg_isready','-U','gateway','-d','gateway_test'],check=False).returncode==0: break
-        time.sleep(0.5)
+        remaining=deadline-time.monotonic()
+        if remaining<=0:raise RuntimeError('Owned PostgreSQL failed readiness')
+        ready=command(['docker','exec',pg,'psql','-X','-h','127.0.0.1','-U','gateway','-d','gateway_test','-v','ON_ERROR_STOP=1','-Atqc','SELECT 1'],check=False,timeout=remaining)
+        if time.monotonic()>=deadline:raise RuntimeError('Owned PostgreSQL failed readiness')
+        if ready.returncode==0 and ready.stdout.strip()=='1': break
+        time.sleep(min(0.5,max(0,deadline-time.monotonic())))
     else: raise RuntimeError('Owned PostgreSQL failed readiness')
     pg_address=command(['docker','port',pg,'5432/tcp']).stdout.strip();rust_address=command(['docker','port',rust,'9000/tcp']).stdout.strip()
     deadline=time.monotonic()+90
@@ -146,6 +189,7 @@ except Exception as error:
     # deliberately excluded from evidence and error reports.
     message='Owned Helm gate failed: '+type(error).__name__
     if isinstance(error,RuntimeError): message+=': '+str(error)
+    if isinstance(error,subprocess.TimeoutExpired): message+=': '+str(error.cmd[:3])+' timeout='+str(error.timeout)
     if isinstance(error,subprocess.CalledProcessError):
         message+=': '+str(error.cmd[:3])+' exit='+str(error.returncode)
         detail=error.stderr or ''
@@ -174,8 +218,9 @@ finally:
     try: shutil.rmtree(work)
     except Exception: cleanup_ok=False
     work_removed=not work.exists()
-    if leftovers or remaining or remaining_volumes or not cleanup_ok or not work_removed: exit_code=1
-    write_json('cleanup.json',{'runId':run_id,'exitCode':int(exit_code),'ownedContainers':containers,'remainingContainers':remaining+leftovers,'ownedVolumes':sorted(volumes),'remainingVolumes':remaining_volumes,'createdNetworks':[],'remainingNetworks':[],'networkMode':'existing-default-bridge','workDirectoryRemoved':work_removed,'cleanupReadBackSucceeded':cleanup_ok})
+    bounded_reaped=all(x['waitReturned'] for x in bounded_process_receipts)
+    if leftovers or remaining or remaining_volumes or not cleanup_ok or not work_removed or not bounded_reaped: exit_code=1
+    write_json('cleanup.json',{'runId':run_id,'exitCode':int(exit_code),'ownedContainers':containers,'remainingContainers':remaining+leftovers,'ownedVolumes':sorted(volumes),'remainingVolumes':remaining_volumes,'createdNetworks':[],'remainingNetworks':[],'networkMode':'existing-default-bridge','workDirectoryRemoved':work_removed,'cleanupReadBackSucceeded':cleanup_ok,'allBoundedCommandChildrenReaped':bounded_reaped,'boundedCommandProcesses':bounded_process_receipts})
     print('Helm preview evidence: '+str(evidence)+'; cleanup exit='+str(exit_code))
 sys.exit(exit_code)
 PY

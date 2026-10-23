@@ -479,3 +479,32 @@ dotnet CLI 提供 relist 命令。本映射不将 #289 其余准入工作标为�
 | `PUT /previews/nuget/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceNuGetPreviewQuarantineReadPolicy` | `nuget preview quarantine-policy set --repo <id>` | #449 | M2 planned | RA | C |
 | `DELETE /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`unlistNuGetHostedPackage` | 原生 NuGet PackagePublish unlist；不另建 agctl Registry 客户端 | #449 | N/A | W | N：NuGet 客户端使用原生 unlist 端点；agctl 不注册或发送此协议动作 |
 | `POST /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`relistNuGetHostedPackage` | 原生 NuGet PackagePublish relist API；不另建 agctl Registry 客户端 | #449 | N/A | W | N：使用原生 relist API，不声称提供 agctl 或官方 dotnet CLI relist 命令 |
+
+## Helm 治理、NuGet 复制与 RubyGems Hosted 预览 (#457–#459)
+
+下面七个命令名仍为 M2 计划。对应 API 需要显式启用预览；此处没有新增或验收
+agctl 命令。NuGet 重试保留原持久主体与凭据身份，并重新检查当前权限。RubyGems
+使用预览 API 与官方客户端；完整格式准入仍分别由 #292、#289、#293 承接。
+
+| API / operationId | 计划命令 | 承接 | 阶段 | 权限 | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| `GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance`<br>`getHelmPreviewGovernance` | `helm preview governance show --repo <id> --chart <name> --version <version>` | #457 | M2 planned | RA | Q |
+| `POST /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance`<br>`applyHelmPreviewGovernance` | `helm preview governance apply --repo <id> --chart <name> --version <version>` | #457 | M2 planned | RA | C |
+| `GET /previews/helm/repositories/{repositoryId}/quarantine-read-policy`<br>`getHelmPreviewQuarantineReadPolicy` | `helm preview quarantine-policy show --repo <id>` | #457 | M2 planned | RA | Q |
+| `PUT /previews/helm/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceHelmPreviewQuarantineReadPolicy` | `helm preview quarantine-policy set --repo <id>` | #457 | M2 planned | RA | C |
+| `POST /previews/nuget/replication-jobs`<br>`createNuGetPreviewReplicationJob` | `nuget preview replication create --file <plan.json>` | #458 | M2 planned | source R + target W | W |
+| `GET /previews/nuget/replication-jobs/{jobId}`<br>`getNuGetPreviewReplicationJob` | `nuget preview replication show <job-id>` | #458 | M2 planned | source R + target R | Q |
+| `POST /previews/nuget/replication-jobs/{jobId}/retry`<br>`retryNuGetPreviewReplicationJob` | `nuget preview replication retry <job-id> --file <retry.json>` | #458 | M2 planned | original actor + source R + target W | C |
+| `POST /previews/rubygems/repositories`<br>`createRubyGemsPreviewRepository` | 显式 RubyGems 预览 API | #459 | N/A | A | N：此 Hosted 预览提供独立管理 API，尚未注册或验证对应 agctl 命令 |
+| `GET /previews/rubygems/repositories/{repositoryId}`<br>`getRubyGemsPreviewRepository` | 显式 RubyGems 预览 API | #459 | N/A | R | N：此 Hosted 预览提供独立管理 API，尚未注册或验证对应 agctl 命令 |
+| `GET /previews/rubygems/repositories/{repositoryId}/capacity`<br>`getRubyGemsPreviewCapacity` | 显式 RubyGems 预览 API | #459 | N/A | A | N：此 Hosted 预览提供独立管理 API，尚未注册或验证对应 agctl 命令 |
+| `PUT /previews/rubygems/repositories/{repositoryId}/capacity`<br>`setRubyGemsPreviewQuota` | 显式 RubyGems 预览 API | #459 | N/A | A | N：此 Hosted 预览提供独立管理 API，尚未注册或验证对应 agctl 命令 |
+| `POST /rubygems/{repository}/api/v1/gems`<br>`pushRubyGemHostedPreview` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | W | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `GET /rubygems/{repository}/{index}`<br>`readRubyGemsHostedPreviewIndex` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `HEAD /rubygems/{repository}/{index}`<br>`headRubyGemsHostedPreviewIndex` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `GET /rubygems/{repository}/info/{gemName}`<br>`readRubyGemsHostedPreviewInfo` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `GET /rubygems/{repository}/gems/{gemFile}`<br>`downloadRubyGemHostedPreview` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `HEAD /rubygems/{repository}/gems/{gemFile}`<br>`headRubyGemHostedPreview` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `GET /rubygems/{repository}/quick/Marshal.4.8/{gemspecFile}`<br>`readRubyGemsHostedPreviewGemspec` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `HEAD /rubygems/{repository}/info/{gemName}`<br>`headRubyGemsHostedPreviewInfo` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |
+| `HEAD /rubygems/{repository}/quick/Marshal.4.8/{gemspecFile}`<br>`headRubyGemsHostedPreviewGemspec` | 官方 RubyGems/Bundler 客户端 | #459 | N/A | R* | N：官方 RubyGems/Bundler 使用原生端点；agctl 不注册或发送此操作 |

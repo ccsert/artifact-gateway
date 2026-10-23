@@ -1,4 +1,80 @@
 # Opt-in Hosted/Proxy/Group preview, outside the public format catalog.
+governance:
+  parameters:
+    - {$ref: '#/repositoryId'}
+    - {name: chartName, in: path, required: true, schema: {type: string}}
+    - {name: version, in: path, required: true, schema: {type: string}}
+  get:
+    operationId: getHelmPreviewGovernance
+    description: Repository administrator reads retained Hosted or cached Proxy governance, including tombstoned charts. Uncached upstream index entries have no durable governance record.
+    responses:
+      '200':
+        description: Retained chart governance
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGovernance'}
+      '401': {description: Authentication required}
+      '403': {description: Repository administrator required}
+      '404': {description: No retained publication}
+      '503': {description: Preview disabled or storage unavailable}
+  post:
+    operationId: applyHelmPreviewGovernance
+    description: Compare-and-set the immutable digest and governance version. delete creates a retained tombstone; restore and release verify complete original chart/provenance bytes and metadata before relaxing state. An unchanged action at the current version is an unaudited no-op; a stale version conflicts. State and audit commit atomically. Fixed Group authority never falls through to another member.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGovernanceChange'}
+    responses:
+      '200':
+        description: Current chart governance
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewGovernance'}
+      '400': {description: Invalid action or request}
+      '401': {description: Authentication required}
+      '403': {description: Repository administrator required}
+      '404': {description: No retained publication}
+      '409': {description: Digest or governance version conflict}
+      '502': {description: Original chart/provenance closure failed verification}
+      '503': {description: Preview disabled or storage/audit unavailable}
+quarantine_read_policy:
+  parameters:
+    - {$ref: '#/repositoryId'}
+  get:
+    operationId: getHelmPreviewQuarantineReadPolicy
+    responses:
+      '200':
+        description: Independent repository quarantine read policy
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewQuarantineReadPolicy'}
+      '401': {description: Authentication required}
+      '403': {description: Repository administrator required}
+      '404': {description: Repository not found}
+      '503': {description: Preview disabled or storage unavailable}
+  put:
+    operationId: replaceHelmPreviewQuarantineReadPolicy
+    description: Repository administrator compares the independent policy version. enabled=true blocks quarantined charts in indexes, browse responses and assets. Disabling a previously enabled block first verifies every retained non-tombstoned quarantined closure that would become readable. No-op writes preserve the version and audit count. Tombstones always remain hidden.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewQuarantineReadPolicyChange'}
+    responses:
+      '200':
+        description: Current independent quarantine read policy
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewQuarantineReadPolicy'}
+      '400': {description: Invalid policy request}
+      '401': {description: Authentication required}
+      '403': {description: Repository administrator required}
+      '404': {description: Repository not found}
+      '409': {description: Policy version conflict}
+      '422': {description: Preview inventory limit prevents complete verification}
+      '502': {description: Original chart/provenance closure failed verification}
+      '503': {description: Preview disabled or storage/audit unavailable}
 groups:
   post:
     operationId: createHelmPreviewGroup

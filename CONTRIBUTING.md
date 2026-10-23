@@ -44,9 +44,12 @@ Compose stack without deleting its PostgreSQL and RustFS volumes.
 6. Run the smallest relevant check while developing, then the required checks
    below before committing.
 
-Generated files must not be edited by hand. The editable OpenAPI root is
-`api/openapi/native-hosted.yaml`; `make openapi-check` regenerates and verifies
-the JSON bundle, Console client, and Go management contract.
+Generated files must not be edited by hand. The editable OpenAPI roots are
+`api/openapi/native-hosted.yaml` for the native/Console contract and
+`api/openapi/management-runtime.yaml` for the Go management boundary. Keep shared
+management paths and schemas consistent in both roots. `make openapi-check`
+regenerates and verifies both JSON bundles, the Console client, and the Go
+management contract.
 
 Install the pinned generators before running the contract check:
 
@@ -196,7 +199,7 @@ The CI workflow is the final source of truth for the complete required matrix.
 
 ### Contract lanes and performance evidence
 
-`contract-and-test` is the stable required aggregate. `contract-core` and the nine
+`contract-and-test` is the stable required aggregate. `contract-core` and the ten
 native lanes start independently; the native matrix uses `fail-fast: false` and
 at most three concurrent jobs. Publication still waits for the aggregate,
 quality and Console. The aggregate rejects failed, skipped, cancelled, missing,
@@ -217,12 +220,13 @@ The editable target/timeout inventory is `scripts/ci-contract-lanes.json`:
 | oci-discovery | `native-oci-discovery-e2e` | 15 minutes |
 | npm-migration | `nexus-npm-migration-e2e` | 15 minutes |
 | helm | `native-helm-e2e` | 15 minutes |
+| rubygems | `native-rubygems-e2e` | 15 minutes |
 
 Every native lane first runs `go mod download` with a five-minute preparation limit. Its log is separate from the unchanged target: first-download Go diagnostics must not enter the existing strict producer JSONL stream. Both cold benchmark modes start with empty private Go caches and include this preparation in the measured critical path; build and protocol-client caches retain their original behavior.
 
 Core retains the other existing targets, including the 15-minute published
 backup and 10-minute upgrade checks. Run one lane with
-`./scripts/ci-local.sh --lane inventory`; `--job contract` runs core and all nine
+`./scripts/ci-local.sh --lane inventory`; `--job contract` runs core and all ten
 lanes plus the existing additional local CLI stack check. Local OpenAPI freshness
 regenerates and compares file hashes so uncommitted generated changes remain
 reviewable. The orchestration controls run with
@@ -271,7 +275,7 @@ Once `contract-benchmark.yml` is on the default branch, run
 lanes twice on the same commit: a one-slot serial matrix and a matrix capped at
 three slots, both with fresh private Go caches and the same pinned clients.
 `benchmarkOrder` fixes this comparison to the original six native lanes;
-the additional OCI discovery, npm migration, and Helm lanes remain mandatory
+the additional OCI discovery, npm migration, Helm and RubyGems lanes remain mandatory
 in normal CI and local contract runs, outside that six-lane performance claim.
 Each mode has its own strict aggregate. The final report reads completed job
 metadata and includes checkout/setup, execution, artifact upload, cleanup,

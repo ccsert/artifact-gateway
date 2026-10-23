@@ -96,6 +96,9 @@ func xmlText(s string) string {
 }
 
 func startNuGetGatewayBinary(t *testing.T, c nugetOfficialClient, bucket, address string) func() {
+	return startNuGetGatewayBinaryWithRoles(t, c, bucket, address, "api")
+}
+func startNuGetGatewayBinaryWithRoles(t *testing.T, c nugetOfficialClient, bucket, address, roles string) func() {
 	t.Helper()
 	file, err := os.OpenFile(filepath.Join(c.evidence, "gateway.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
@@ -107,7 +110,7 @@ func startNuGetGatewayBinary(t *testing.T, c nugetOfficialClient, bucket, addres
 			cmd.Env = append(cmd.Env, e)
 		}
 	}
-	cmd.Env = append(cmd.Env, "GATEWAY_DATABASE_URL="+os.Getenv("TEST_DATABASE_URL"), "GATEWAY_RUSTFS_ENDPOINT="+os.Getenv("TEST_RUSTFS_ENDPOINT"), "GATEWAY_RUSTFS_ACCESS_KEY="+os.Getenv("TEST_RUSTFS_ACCESS_KEY"), "GATEWAY_RUSTFS_SECRET_KEY="+os.Getenv("TEST_RUSTFS_SECRET_KEY"), "GATEWAY_RUSTFS_BUCKET="+bucket, "GATEWAY_ADMIN_TOKEN="+c.admin, "GATEWAY_ADMIN_ACTOR=nuget-gate-operator", "GATEWAY_RESOLVER_TOKEN="+c.reader, "GATEWAY_RESOLVER_ACTOR=nuget-gate-reader", "GATEWAY_NUGET_PREVIEW_ENABLED=true", "GATEWAY_NODE_ROLES=api", "GATEWAY_LISTEN_ADDRESS="+address, "GATEWAY_ACCESS_LOG=limited")
+	cmd.Env = append(cmd.Env, "GATEWAY_DATABASE_URL="+os.Getenv("TEST_DATABASE_URL"), "GATEWAY_RUSTFS_ENDPOINT="+os.Getenv("TEST_RUSTFS_ENDPOINT"), "GATEWAY_RUSTFS_ACCESS_KEY="+os.Getenv("TEST_RUSTFS_ACCESS_KEY"), "GATEWAY_RUSTFS_SECRET_KEY="+os.Getenv("TEST_RUSTFS_SECRET_KEY"), "GATEWAY_RUSTFS_BUCKET="+bucket, "GATEWAY_ADMIN_TOKEN="+c.admin, "GATEWAY_ADMIN_ACTOR=nuget-gate-operator", "GATEWAY_RESOLVER_TOKEN="+c.reader, "GATEWAY_RESOLVER_ACTOR=nuget-gate-reader", "GATEWAY_NUGET_PREVIEW_ENABLED=true", "GATEWAY_NODE_ROLES="+roles, "GATEWAY_LISTEN_ADDRESS="+address, "GATEWAY_ACCESS_LOG=limited")
 	cmd.Stdout, cmd.Stderr = file, file
 	if err = cmd.Start(); err != nil {
 		_ = file.Close()

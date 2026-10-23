@@ -11,11 +11,13 @@ import (
 	sourceapi "github.com/ccsert/artifact-gateway/internal/admin/nexussource"
 	nugetapi "github.com/ccsert/artifact-gateway/internal/admin/nuget"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	rubygemsapi "github.com/ccsert/artifact-gateway/internal/admin/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
 	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
+	rubygemsformat "github.com/ccsert/artifact-gateway/internal/format/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -270,7 +272,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		} else if configured, ok := upstreamClient.(helmformat.Upstream); ok {
 			client = configured
 		}
-		helmModule, err := helmformat.New(helmformat.Options{Store: options.HelmStore, Sources: options.HelmSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.HelmObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		helmModule, err := helmformat.New(helmformat.Options{Store: options.HelmStore, Governance: options.HelmGovernance, Sources: options.HelmSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.HelmObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
 		if err != nil {
 			return nil, err
 		}
@@ -285,12 +287,21 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		} else if configured, ok := upstreamClient.(nugetformat.Upstream); ok {
 			client = configured
 		}
-		nugetModule, err := nugetformat.New(nugetformat.Options{Store: options.NuGetStore, Sources: options.NuGetSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.NuGetObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		nugetModule, err := nugetformat.New(nugetformat.Options{Distribution: options.NuGetDistribution, Store: options.NuGetStore, Sources: options.NuGetSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.NuGetObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
 		if err != nil {
 			return nil, err
 		}
 		modules = append(modules, nugetModule)
 		nugetPreview = nugetModule.Preview()
+	}
+	var rubyGemsPreview http.Handler
+	if options.RubyGemsPreviewEnabled {
+		rubyGemsModule, err := rubygemsformat.New(rubygemsformat.Options{Store: options.RubyGemsStore, Repositories: store, Objects: options.RubyGemsObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store})
+		if err != nil {
+			return nil, err
+		}
+		modules = append(modules, rubyGemsModule)
+		rubyGemsPreview = rubyGemsModule.Preview()
 	}
 	formatModules, err := formatmodule.New(modules...)
 	if err != nil {
@@ -370,7 +381,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	}
 	identityAPI := newIdentityManagementHandler(identityManagementOptions{Scope: scope, Users: store, APIKeys: store, ServiceAccounts: store, OIDC: identityOIDC})
 	legacyAPI := generatedRepositoryAPIAdapter{BatchAdapter: migrationapi.New(dependencies.MigrationService, authenticator, store).WithSchedules(dependencies.MigrationSchedules), Adapter: sourceapi.New(dependencies.SourceService, authenticator, store), managementScope: scope, store: store, sessions: nativeMaven, npmRestore: options.NPMRestore, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, replication: store, oci: store, cargo: store, conan: store, audit: store, maintenance: maintenance, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, quotaAlerts: store, queueStats: store, diagnostics: dependencies, objects: options.Storage, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}
-	adminopenapi.HandlerWithOptions(managementServer{Boundary: helmapi.New(helmPreview), Adapter: nugetapi.New(nugetPreview), repositoryManagementHandler: repositoriesAPI, artifactManagementHandler: artifactsAPI, accessManagementHandler: accessAPI, identityManagementHandler: identityAPI, pypiYankManagementHandler: pypiYankAPI, generatedRepositoryAPIAdapter: legacyAPI}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(managementServer{Boundary: helmapi.New(helmPreview), Adapter: nugetapi.New(nugetPreview), RubyGemsBoundary: rubygemsapi.New(rubyGemsPreview), repositoryManagementHandler: repositoriesAPI, artifactManagementHandler: artifactsAPI, accessManagementHandler: accessAPI, identityManagementHandler: identityAPI, pypiYankManagementHandler: pypiYankAPI, generatedRepositoryAPIAdapter: legacyAPI}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

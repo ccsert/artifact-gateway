@@ -86,3 +86,12 @@ func (a *Adapter) StageNuGetPublicationSession(w http.ResponseWriter, r *http.Re
 func (a *Adapter) CommitNuGetPublicationSession(w http.ResponseWriter, r *http.Request, _, _ openapi_types.UUID) {
 	a.serve(w, r)
 }
+func (a *Adapter) CreateNuGetPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ api.CreateNuGetPreviewReplicationJobParams) {
+	a.serve(w, r)
+}
+func (a *Adapter) GetNuGetPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Adapter) RetryNuGetPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _ api.RetryNuGetPreviewReplicationJobParams) {
+	a.serve(w, r)
+}

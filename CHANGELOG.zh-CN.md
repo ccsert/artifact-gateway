@@ -8,6 +8,12 @@
 
 ## Unreleased
 
+- Helm 预览为 Hosted 与已缓存 Proxy chart 增加版本化墓碑/恢复和隔离控制（#457）。索引、chart/provenance 资产及 Group 快照读取使用同一治理状态，恢复前重验原始字节；完整生命周期准入仍由 #292 承接。
+
+- NuGet 预览新增 [Hosted 持久复制](docs/nuget-replication-preview.zh-CN.md)（#458）：固定计划、当前主体/凭据和仓库权限重验、Worker 租约保护、目标自有完整验证字节与失败项精确重试。某项失败时，已完成包继续可见；完整准入仍由 #289 承接。
+
+- 新增默认关闭的 [RubyGems Hosted 预览](docs/rubygems-hosted-preview.zh-CN.md)（#459），包含原生 gem 发布、有界归档验证、不可变包身份、compact/legacy 依赖索引、配额预留及原始字节下载。官方 RubyGems/Bundler 门禁纳入日常 CI 必需项；Proxy/Group 与正式准入仍由 #293 承接。
+
 - 默认关闭的 Helm 预览增加传统 HTTP Proxy 与有序 Group 读取（#291）：有界索引条件重验、不可变来源快照、chart/provenance 完整校验缓存、私有上游凭据和持久 chart 来源绑定。Group 重排不会替换已选身份的来源；正式格式准入仍由 #292 承接。
 
 - NuGet 预览治理支持 Hosted 原生 unlist/relist、版本化墓碑/恢复，以及独立隔离状态与读取策略（#449）。撤架版本从搜索隐藏，registration、flat-container 版本清单和精确下载遵循 NuGet 语义；墓碑与启用的隔离读取同时约束缓存包和 Group 固定来源，恢复前重新核验原始字节。正式准入仍由 #289 承接。

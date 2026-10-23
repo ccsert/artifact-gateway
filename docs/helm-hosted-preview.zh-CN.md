@@ -5,7 +5,7 @@
 传统 HTTP Helm Hosted/Proxy/Group 是 #290/#291 下默认关闭的预览，提供 `index.yaml`、原始 chart/
 provenance 下载、明确的 multipart 上传 API、有界浏览、仓库授权及容量预留。它不进入
 正式 Format 枚举、格式档案、仓库列表、active capabilities 或 Console 选择器。现有
-OCI chart 存储属于另一协议。生命周期与正式准入仍由 #292 跟踪。
+OCI chart 存储属于另一协议。预览墓碑/恢复和隔离治理由 #457 跟踪；其余生命周期与正式准入仍属于 #292。
 
 ## 启用与创建
 
@@ -135,9 +135,55 @@ Group 以显式建立新来源；此预览不会在轮换后自动重绑定已�
 返回来源仓库/version、digest、可选上游 URL 和完整闭包是否已缓存；逐个检查成员的 chart
 读取权限，不隐式获取索引或下载资产。尚未选源的身份返回 404。快照只追加，每个 view 最多
 128 份，每份最多 4096 条/8 MiB 序列化元数据，新增超界返回 422；预览没有快照修剪 API。
-Proxy/Group 写入均返回 405；不可变冲突或来源版本变化返回 409，上游缺包/拒绝/坏内容返回
-502，缓存边界返回 422，临时存储/传输失败返回 503。正式生命周期、扫描/隔离/分发和可见缓存
-淘汰仍由 #292 承接，不会隐式执行不支持的治理操作。
+Proxy/Group 协议发布返回 405；已缓存 Proxy 的治理使用下文独立管理员接口。不可变冲突或来源版本变化返回 409，上游缺包/拒绝/坏内容返回
+502，缓存边界返回 422，临时存储/传输失败返回 503。正式生命周期、扫描、分发和可见缓存
+淘汰仍由 #292 承接。
+
+## 保留 chart 的治理
+
+启用预览前，应用迁移 `000183_native_helm_governance.sql`。仓库管理员通过
+`GET /api/v2/previews/helm/repositories/{id}/charts/{name}/{version}/governance`
+查看已提交 Hosted 或已缓存 Proxy 的状态。结果包含不可变 `digest`、独立的
+`governanceVersion`、`tombstoned`、`quarantined`，以及最近操作者、理由和时间。
+尚未缓存的上游索引元数据在此返回 404；来源索引不等于持久 publication，不能伪造治理对象。
+
+对相同治理 URL 执行 POST，提交：
+
+```json
+{
+  "expectedDigest": "sha256:<64 个小写十六进制字符>",
+  "expectedGovernanceVersion": "1",
+  "action": "delete",
+  "reason": "已批准移除此 chart"
+}
+```
+
+动作仅为 `delete`、`restore`、`quarantine`、`release`。不可变摘要和当前治理版本必须同时
+匹配，过期请求返回 409。实际状态变化会推进治理版本，并在同一事务记录操作者和理由审计。
+若动作已满足且提交当前版本，则以 200 返回原状态，版本和审计条数不变；重用旧版本仍然
+冲突。治理检查完整 chart 名称的仓库管理员权限，仅有读取或写入授权不足以操作。
+
+`delete` 创建墓碑，使该版本从 `index.yaml`、预览列表、chart 详情和固定来源解释中隐藏。
+原 chart、provenance URL 和旧快照的 GET/HEAD、Range、条件请求均返回 404；不增加原生
+Helm DELETE 别名。Group 先选择持久来源，再应用治理；成员重排、上游删包、离线/过期
+索引或另一成员的相同身份都不能复活隐藏来源。墓碑不会改写字节、释放容量、来源绑定或
+对象引用；原上传的完全相同重放也不会清除墓碑。
+
+`quarantine` 记录独立隔离标记。仓库策略通过
+`GET /api/v2/previews/helm/repositories/{id}/quarantine-read-policy` 读取，默认为
+`{"version":"1","enabled":false}`。PUT 提交
+`{"expectedVersion":"1","enabled":true}` 后，同一发现和资产路径会拒绝隔离版本。
+该策略版本独立于仓库配置版本与 chart 治理版本。关闭策略后墓碑仍然阻止读取；恢复墓碑
+不会清除隔离标记。策略状态与审计也在同一事务提交，过期 CAS 被拒绝；当前状态的无变化
+写入不会推进版本或增加审计。
+
+`restore` 或 `release` 放宽标记前，Gateway 在 publication 锁内完整重开保留的 chart/
+provenance，检查原 size/SHA-256、规范名称/版本、`Chart.yaml`、持久元数据及 provenance
+绑定。字节或元数据损坏返回 502；对象缺失或存储不可用返回 503，治理状态不变。把已启用
+的隔离拦截关闭之前，也会完整重验所有即将恢复可见、没有墓碑的隔离 chart；库存超出
+预览上限返回 422。治理动作与该策略放宽串行，避免并发隔离绕过校验。读取始终重查
+持久状态，不信任旧浏览结果或快照。PostgreSQL 行锁与事务使治理、独立策略、保留容量
+和审计在节点/进程重启后保持一致。这些属于预览专属控制，不等于正式生命周期准入或物理删除。
 
 ## 可重复验收与剩余范围
 
@@ -148,7 +194,8 @@ Proxy/Group 写入均返回 405；不可变冲突或来源版本变化返回 409
 空且只指向目标的 Helm 配置/缓存、合成签名 chart 及消费者独占公钥环。场景经过完整 Gateway
 路由，覆盖带签名 `helm package`、声明的上传/重放、数据库和 handler 重启、`repo add/update`、
 冷 `pull --verify`、独立 `verify`、私有上游缓存、混合 Hosted/Proxy Group 冲突及重排、
-上游离线后的重启读取、权限拒绝以及真实凭据轮换/撤销。压缩后超过 1 MiB 的 chart
+上游离线后的重启读取、权限拒绝、真实凭据轮换/撤销、旧缓存与空缓存客户端的墓碑/隔离
+拒绝、恢复前完整闭包校验，以及治理在 PostgreSQL/handler 重启后的持久读回。压缩后超过 1 MiB 的 chart
 还验证真实管理上传请求不会受到通用 JSON body 上限干扰。
 
 Helm 3.19.0 的 `install --dry-run=client` 仍会在渲染前检查 Kubernetes 可达性。本验收提供
@@ -160,8 +207,8 @@ commit 与对应上游源码分支。该场景证明冷 chart 消费与 dry-run 
 测试事件、明确的 mandatory 清单、required/summary 结果、原始 CLI 输出、上游源码证据
 及精确自有资源清理结果。mandatory 缺失或 skip 均使验收失败。
 
-预览不提供 Proxy/Group 发布、Console 创建/上传/浏览、agctl 命令、墓碑/恢复、可见 chart
-保留策略、隔离/扫描、晋升/复制、完整备份/升级验收或 Nexus Helm 迁移。这些仍属于 #292 或其迁移依赖。本交付不改变生产路由，不执行源迁移或切流。
+预览不提供 Proxy/Group 发布、Console 创建/上传/浏览、agctl 命令、可见 chart
+保留策略、扫描、晋升/复制、完整备份/升级验收或 Nexus Helm 迁移。这些仍属于 #292 或其迁移依赖。本交付不改变生产路由，不执行源迁移或切流。
 
 协议依据：[Helm chart 仓库指南](https://helm.sh/docs/topics/chart_repository/)、
 [Helm provenance](https://helm.sh/docs/topics/provenance/)、

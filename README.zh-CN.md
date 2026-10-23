@@ -65,8 +65,12 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 | APT | 仅预览 | ✓ | ✓ | 生产密钥托管门禁通过前不公开声明 Hosted 能力 |
 
 NuGet 提供默认关闭的 [Hosted](docs/nuget-hosted-preview.zh-CN.md) 与
-[Proxy/Group](docs/nuget-proxy-group-preview.zh-CN.md) 预览；正式格式准入与本地
-Hosted 治理继续由 #289 推进。OCI 支持经授权的
+[Proxy/Group](docs/nuget-proxy-group-preview.zh-CN.md) 预览，正式格式准入继续由 #289
+推进。[Hosted 持久复制预览](docs/nuget-replication-preview.zh-CN.md) 将验证后的包复制到
+目标自有存储。默认关闭的 [Helm HTTP 预览](docs/helm-hosted-preview.zh-CN.md) 提供
+Hosted/Proxy/Group 读取和版本化治理；[RubyGems Hosted](docs/rubygems-hosted-preview.zh-CN.md)
+增加原生发布与依赖索引。这些预览独立于表中的正式格式；完整 Helm 与 RubyGems
+准入仍由 #292、#293 承接。OCI 支持经授权的
 [Catalog 与 Referrers 发现](docs/oci-discovery.zh-CN.md)，显式报告上游覆盖范围并
 校验完整内容闭包。准确且受测试约束的说明以
 [协议兼容性基线](docs/protocol-compatibility.zh-CN.md)为准。

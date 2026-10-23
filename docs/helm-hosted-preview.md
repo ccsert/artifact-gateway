@@ -7,7 +7,8 @@ Traditional HTTP Helm Hosted/Proxy/Group is a default-off preview under #290/#29
 API, bounded browsing, repository grants and capacity reservations. It remains
 absent from the formal Format enum, format profiles, repository lists, active
 capabilities and Console selectors. Existing OCI chart storage is a separate
-protocol. Lifecycle and formal admission remain #292.
+protocol. Preview tombstone/restore and quarantine governance are tracked in
+#457; the remaining lifecycle and formal admission stay under #292.
 
 ## Enable and provision
 
@@ -184,11 +185,72 @@ member's chart permission and performs no implicit source fetch/download. An
 unselected coordinate returns 404. Snapshots are create-only and bounded to 128
 per view (each at most 4096 entries/8 MiB serialized metadata); new snapshots beyond
 that limit return 422. There is no snapshot pruning API in this preview. All
-Proxy/Group write operations return 405. Cached immutable conflicts/source version
+Proxy/Group protocol publication returns 405; cached Proxy governance uses the
+explicit administrator endpoints below. Cached immutable conflicts/source version
 changes return 409, upstream missing/denied/corrupt inputs return 502, cache bounds
 return 422, and transient storage/transport failures return 503. Formal lifecycle,
-scan/quarantine/distribution and visible-cache eviction stay unavailable under
-#292; there is no implicit unsupported governance operation.
+scanning, distribution and visible-cache eviction stay unavailable under #292.
+
+## Retained chart governance
+
+Apply migration `000183_native_helm_governance.sql` before enabling this preview.
+A repository administrator reads a committed Hosted or cached Proxy chart through
+`GET /api/v2/previews/helm/repositories/{id}/charts/{name}/{version}/governance`.
+The receipt contains the immutable `digest`, independent `governanceVersion`,
+`tombstoned` and `quarantined` flags, plus the latest operator, reason and time.
+Uncached upstream index metadata returns 404 here; a source index is not a durable
+publication and cannot receive a fabricated governance record.
+
+POST on that same governance URL accepts:
+
+```json
+{
+  "expectedDigest": "sha256:<64 lowercase hexadecimal characters>",
+  "expectedGovernanceVersion": "1",
+  "action": "delete",
+  "reason": "Approved chart removal"
+}
+```
+
+Actions are `delete`, `restore`, `quarantine` and `release`. Both the immutable
+digest and current governance version must match; stale requests return 409.
+A changed action advances the governance version and commits its operator/reason
+audit in the same transaction. Repeating an already satisfied action with the
+current version is a 200 no-op that changes neither the version nor audit count;
+repeating an old version still conflicts. Governance requires repository admin
+permission for the complete chart name; read or write grants alone are insufficient.
+
+`delete` adds a tombstone. It removes the version from `index.yaml`, preview lists,
+chart details and fixed-source explanations. Original chart and provenance URLs,
+including old snapshots, HEAD, Range and conditional requests, return 404. There
+is no native Helm DELETE alias. Group resolution selects the durable source first
+and then applies governance, so reordering, upstream removal, offline metadata,
+expired index caches and another member's identical coordinate cannot revive the
+hidden owner. Tombstoning neither rewrites bytes nor releases capacity, source
+bindings or object references. An exact upload replay also keeps the tombstone.
+
+`quarantine` records a separate flag. The independent repository policy at
+`GET /api/v2/previews/helm/repositories/{id}/quarantine-read-policy` defaults to
+`{"version":"1","enabled":false}`. PUT accepts
+`{"expectedVersion":"1","enabled":true}` to block quarantined versions in the
+same discovery and asset paths. Its policy version is distinct from the repository
+configuration and chart governance versions. A tombstone always blocks, including
+when this policy is disabled; restoring a tombstone does not clear quarantine.
+Policy state and its audit also commit atomically, with stale CAS rejected and
+current no-op writes preserving the version and audit count.
+
+Before `restore` or `release` relaxes a flag, Gateway acquires the publication lock
+and reopens the complete retained chart/provenance closure. It checks original
+size/SHA-256, canonical name/version, `Chart.yaml`, stored metadata and provenance
+binding. Damaged bytes or metadata fail with 502; missing objects or unavailable
+storage fail with 503, while governance stays unchanged. Disabling an enabled
+quarantine block first verifies every non-tombstoned quarantined chart that would
+become readable; an over-limit inventory fails with 422. Governance operations
+serialize that relaxation with quarantine changes. Reads recheck persisted state
+instead of trusting a stale browse result or snapshot. PostgreSQL row locks and
+transactions preserve the overlay, independent policy, retained capacity and audit
+across node/process restarts. These are preview-local controls, not a claim of
+formal lifecycle admission or physical deletion.
 
 ## Reproducible acceptance and remaining scope
 
@@ -203,8 +265,9 @@ consumer-owned public keyring. It exercises the full Gateway routes, signed
 `helm package`, declared upload/replay, database/handler restart, `repo add/update`,
 cold `pull --verify`, independent `verify`, private upstream source caching, mixed
 Hosted/Proxy Group source conflicts/reordering, upstream-offline reads after restart,
-permission failures and real credential
-rotation/revocation. A chart above 1 MiB compressed also exercises the upload body
+permission failures, real credential rotation/revocation, tombstone/quarantine
+denial for both stale and cold Helm caches, full-closure restore verification and
+governance persistence across PostgreSQL/handler restarts. A chart above 1 MiB compressed also exercises the upload body
 boundary.
 
 Helm 3.19.0's `install --dry-run=client` still checks Kubernetes reachability before
@@ -219,8 +282,8 @@ required/summary results, raw CLI command outputs, original upstream source proo
 and exact owned-resource cleanup. Missing or skipped mandatory cases fail.
 
 This preview does not expose Proxy/Group publication, Console creation/
-upload/browse, agctl commands, tombstones/restore, retention of visible charts,
-quarantine/scanning, promotion/replication, full backup/upgrade acceptance or Nexus
+upload/browse, agctl commands, retention of visible charts, scanning,
+promotion/replication, full backup/upgrade acceptance or Nexus
 Helm migration. These remain #292 or their migration dependencies. There is
 no production routing or source migration/cutover in this delivery.
 

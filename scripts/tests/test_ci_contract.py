@@ -756,7 +756,8 @@ class ContractGateTests(unittest.TestCase):
         # New native gates extend the matrix without removing any original
         # target from the fixed six-lane performance scope.
         self.assertCountEqual(actual, [*expected, 'native-oci-discovery-e2e',
-                                     'nexus-npm-migration-e2e', 'native-helm-e2e'])
+                                     'nexus-npm-migration-e2e', 'native-helm-e2e',
+                                     'native-rubygems-e2e'])
         self.assertEqual(ci.PLAN['lanes']['oci-discovery']['steps'][-1]['timeoutSeconds'], 900)
         self.assertEqual(ci.PLAN['lanes']['nuget']['steps'][-1]['timeoutSeconds'], 900)
         self.assertEqual(ci.PLAN['lanes']['six-format-auth']['steps'][-1]['timeoutSeconds'], 900)
@@ -795,10 +796,14 @@ class ContractGateTests(unittest.TestCase):
             self.assertEqual(matrix.split(', '), list(ci.BENCHMARK_LANES))
         self.assertEqual(workflow.count('--benchmark-only'), 2)
 
-    def test_npm_migration_and_helm_are_required_without_expanding_benchmark(self):
+    def test_preview_and_migration_lanes_are_required_without_expanding_benchmark(self):
+        self.assertEqual(ci.BENCHMARK_LANES, (
+            'migration-clients', 'inventory', 'nuget', 'oci-migration',
+            'maven-oci-auth', 'six-format-auth'))
         for lane, target, directory in (
                 ('npm-migration', 'nexus-npm-migration-e2e', 'output/nexus-npm-migration-e2e'),
-                ('helm', 'native-helm-e2e', 'output/native-helm-e2e')):
+                ('helm', 'native-helm-e2e', 'output/native-helm-e2e'),
+                ('rubygems', 'native-rubygems-e2e', 'output/native-rubygems-e2e')):
             with self.subTest(lane=lane):
                 self.assertIn(lane, ci.LANES)
                 self.assertIn(lane, ci.PLAN['nativeOrder'])

@@ -211,7 +211,18 @@ func snapshotPath(view, snapshot string, e repository.HelmSourceEntry) string {
 	return "/helm/" + url.PathEscape(view) + "/snapshots/" + snapshot + "/" + assetRelative(e.Name, e.Version, false)
 }
 func (m *Module) sourceIndex(w http.ResponseWriter, r *http.Request, view repository.HostedRepository, entries []repository.HelmSourceEntry) {
-	snap, e := m.freeze(r.Context(), view, entries)
+	visible := make([]repository.HelmSourceEntry, 0, len(entries))
+	for _, entry := range entries {
+		blocked, err := m.entryBlocked(r.Context(), entry)
+		if err != nil {
+			m.failure(w, err)
+			return
+		}
+		if !blocked {
+			visible = append(visible, entry)
+		}
+	}
+	snap, e := m.freeze(r.Context(), view, visible)
 	if e != nil {
 		m.failure(w, e)
 		return
@@ -396,7 +407,11 @@ func (m *Module) previewCharts(r *http.Request, repo repository.HostedRepository
 	}
 	filtered := []repository.HelmSourceEntry{}
 	for _, entry := range entries {
-		if m.allowed(r.Context(), p, repo, entry.Name) {
+		blocked, err := m.entryBlocked(r.Context(), entry)
+		if err != nil {
+			return nil, err
+		}
+		if !blocked && m.allowed(r.Context(), p, repo, entry.Name) {
 			filtered = append(filtered, entry)
 		}
 	}
@@ -423,7 +438,15 @@ func (m *Module) previewCharts(r *http.Request, repo repository.HostedRepository
 }
 func (m *Module) previewChart(r *http.Request, repo repository.HostedRepository, name, version string) (repository.HelmPublication, error) {
 	if repo.Type == repository.RepositoryTypeHosted {
-		return m.store.GetHelmPublication(r.Context(), repo.ID, name, version)
+		p, err := m.store.GetHelmPublication(r.Context(), repo.ID, name, version)
+		if err != nil {
+			return p, err
+		}
+		blocked, err := m.publicationBlocked(r.Context(), p)
+		if err == nil && blocked {
+			err = repository.ErrNotFound
+		}
+		return p, err
 	}
 	p, _ := m.principal(r)
 	all, e := m.previewCharts(r, repo, p)

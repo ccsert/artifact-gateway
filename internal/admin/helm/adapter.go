@@ -68,3 +68,16 @@ func (a *Boundary) GetHelmPreviewCapacity(w http.ResponseWriter, r *http.Request
 func (a *Boundary) ReplaceHelmPreviewQuota(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
 	a.serve(w, r)
 }
+
+func (a *Boundary) GetHelmPreviewGovernance(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
+	a.serve(w, r)
+}
+func (a *Boundary) ApplyHelmPreviewGovernance(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _ string) {
+	a.serve(w, r)
+}
+func (a *Boundary) GetHelmPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Boundary) ReplaceHelmPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}

@@ -36,7 +36,7 @@ Proxy。所有入口保持鉴权，匿名读取默认关闭；用户和 CI 身�
 
 希望从空目录开始时，在所有 API/standalone 节点设置
 `GATEWAY_REPOSITORY_PRESETS=none`。该设置不删除任何仓库；之后显式改回 `standard`
-时，仅仍为空且尚未初始化的目录可创建预置。NuGet/Helm 预览、APT 签名发布和需要
+时，仅仍为空且尚未初始化的目录可创建预置。NuGet/Helm/RubyGems 预览、APT 签名发布和需要
 额外上游凭据的仓库继续按各自准入条件配置。
 
 公共源参考：[npm Registry](https://docs.npmjs.com/cli/v11/using-npm/registry/)、

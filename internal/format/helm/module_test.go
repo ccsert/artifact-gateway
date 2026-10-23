@@ -39,7 +39,7 @@ type fixture struct {
 
 func moduleOptions(store *repository.MemoryStore, objects objectstore.Store) Options {
 	auth := authorization.Authenticator{AdminToken: "helm-owned-admin", AdminActor: "operator", ResolverToken: "helm-owned-reader", ResolverActor: "reader", RepositoryReaders: map[string][]string{"reader": {"helm-test"}}}
-	return Options{Store: store, Repositories: store, Objects: objects, Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Audit: store, Anonymous: store, Capacities: store}
+	return Options{Store: store, Governance: store, Repositories: store, Objects: objects, Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Audit: store, Anonymous: store, Capacities: store}
 }
 func newFixture(t *testing.T) fixture {
 	t.Helper()

@@ -70,7 +70,13 @@ byte plane, and Gateway connects the two without adding a middleware fleet.
 
 NuGet offers default-off [Hosted](docs/nuget-hosted-preview.md) and
 [Proxy/Group](docs/nuget-proxy-group-preview.md) previews; formal format admission
-and local Hosted governance remain under #289. OCI supports authorized
+remains under #289. Its [durable Hosted replication preview](docs/nuget-replication-preview.md)
+copies verified packages into target-owned storage. The default-off
+[Helm HTTP preview](docs/helm-hosted-preview.md) covers Hosted/Proxy/Group reads
+with versioned governance, while [RubyGems Hosted](docs/rubygems-hosted-preview.md)
+adds native publication and dependency indexes. These previews remain outside
+the table's admitted formats; full Helm and RubyGems admission remain under
+#292 and #293. OCI supports authorized
 [Catalog and Referrers discovery](docs/oci-discovery.md), with explicit upstream
 coverage and verified content closures. The detailed, test-bound statement lives in the
 [protocol compatibility baseline](docs/protocol-compatibility.md).

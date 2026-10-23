@@ -73,3 +73,46 @@ func TestNuGetPreviewProxyGroupContractRequiresExplicitVersionsAndReadOnlySource
 		requireResponse(t, operation(t, spec, route.path, route.method), "405")
 	}
 }
+
+func TestNuGetPreviewReplicationContractAcceptsCompleteItemAndRejectsPlanExtras(t *testing.T) {
+	spec := loadManagementRuntimeSpec(t)
+	for _, route := range []struct{ path, method string }{{"/previews/nuget/replication-jobs", "POST"}, {"/previews/nuget/replication-jobs/{jobId}", "GET"}, {"/previews/nuget/replication-jobs/{jobId}/retry", "POST"}} {
+		op := operation(t, spec, route.path, route.method)
+		if route.method == "POST" && !hasParameter(op.Parameters, "Idempotency-Key", "header") {
+			t.Fatalf("%s lacks exact idempotency", route.path)
+		}
+		for _, code := range []string{"401", "403", "404", "503"} {
+			requireResponse(t, op, code)
+		}
+	}
+	identity := map[string]any{"packageId": "acme.app", "version": "1.0.0", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "size": float64(123), "sourceGovernanceVersion": "2"}
+	item := map[string]any{}
+	for k, v := range identity {
+		item[k] = v
+	}
+	item["index"] = float64(0)
+	item["state"] = "succeeded"
+	item["attempts"] = float64(2)
+	item["targetSessionId"] = "33333333-3333-4333-8333-333333333333"
+	item["result"] = "published"
+	item["listed"] = false
+	item["completedAt"] = "2026-10-23T02:00:00Z"
+	job := map[string]any{"id": "44444444-4444-4444-8444-444444444444", "planDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "sourceRepositoryId": "11111111-1111-4111-8111-111111111111", "targetRepositoryId": "22222222-2222-4222-8222-222222222222", "actor": "operator", "version": "7", "state": "succeeded", "items": []any{item}, "createdAt": "2026-10-23T01:00:00Z", "updatedAt": "2026-10-23T02:00:00Z"}
+	if err := spec.Components.Schemas["NuGetPreviewReplicationJob"].Value.VisitJSON(job); err != nil {
+		t.Fatalf("actual completed job shape rejected: %v", err)
+	}
+	request := map[string]any{"sourceRepositoryId": job["sourceRepositoryId"], "targetRepositoryId": job["targetRepositoryId"], "items": []any{identity}}
+	schema := spec.Components.Schemas["NuGetPreviewReplicationRequest"].Value
+	if err := schema.VisitJSON(request); err != nil {
+		t.Fatal(err)
+	}
+	identity["objectKey"] = "must-not-be-client-controlled"
+	if err := schema.VisitJSON(request); err == nil {
+		t.Fatal("source object-key injection entered a bounded identity")
+	}
+	delete(identity, "objectKey")
+	job["credentialId"] = "must-not-be-exposed"
+	if err := spec.Components.Schemas["NuGetPreviewReplicationJob"].Value.VisitJSON(job); err == nil {
+		t.Fatal("credential identity escaped the job response")
+	}
+}

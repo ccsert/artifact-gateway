@@ -10,8 +10,8 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-// Maintenance collects only expired, never-visible upload closures. Visible
-// chart governance remains outside this explicitly bounded Hosted preview.
+// Maintenance collects only expired, never-visible upload closures. Committed
+// chart references remain retained through tombstone and quarantine changes.
 type Maintenance struct {
 	store   repository.NativeHelmStore
 	objects objectstore.Store

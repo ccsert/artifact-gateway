@@ -189,7 +189,7 @@ func TestHelmFixedOfficialCLIProxyGroupFrozenSourceOfflinePostgresRustFSRestart(
 	requests := []string{}
 	compose := func() *httptest.Server {
 		auth := authorization.Authenticator{AdminToken: token, AdminActor: "helm-proxy-fixture"}
-		handler, e := app.NewGatewayHandler(app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: app.SharedObjectStores(objects), Adapter: ownedAdapter{}, Authenticator: auth, HelmPreviewEnabled: true, HelmStore: store, HelmSources: store, HelmUpstream: helmOwnedUpstream{feed.Client()}, HelmObjects: objects})
+		handler, e := app.NewGatewayHandler(app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: app.SharedObjectStores(objects), Adapter: ownedAdapter{}, Authenticator: auth, HelmPreviewEnabled: true, HelmStore: store, HelmGovernance: store, HelmSources: store, HelmUpstream: helmOwnedUpstream{feed.Client()}, HelmObjects: objects})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -331,6 +331,50 @@ func TestHelmFixedOfficialCLIProxyGroupFrozenSourceOfflinePostgresRustFSRestart(
 	}
 	gateway = compose()
 	consume("cold-offline-after-restart")
+	governancePath := "/api/v2/previews/helm/repositories/" + proxy.ID + "/charts/owned/1.2.3/governance"
+	govern := func(action, version string) {
+		t.Helper()
+		body, _ := json.Marshal(map[string]string{"expectedDigest": chartSHA, "expectedGovernanceVersion": version, "action": action, "reason": "Owned mixed Group official Helm governance fixture"})
+		send("POST", governancePath, body, "application/json", 200)
+	}
+	govern("delete", "1")
+	for _, path := range []string{frozenPath, frozenPath + ".prov"} {
+		send("GET", path, nil, "", 404)
+	}
+	if index := send("GET", "/helm/"+groupName+"/index.yaml", nil, "", 200); bytes.Contains(index, []byte("owned:")) {
+		t.Fatal("mixed Group tombstone fell through to reordered Hosted member")
+	}
+	hiddenEnv := envFor("cold-governed-group-tombstone")
+	run(hiddenEnv, true, "repo", "add", "owned", gateway.URL+"/helm/"+groupName, "--username", "owned", "--password", token)
+	run(hiddenEnv, false, "pull", "owned/owned", "--version", "1.2.3", "--destination", filepath.Join(work, "denied-group-tombstone"))
+	// Governance, independent read policy and immutable authority survive a
+	// second real PostgreSQL/handler restart with the original source offline.
+	gateway.Close()
+	if e = store.Close(); e != nil {
+		t.Fatal(e)
+	}
+	store, e = repository.NewPostgresStore(dsn)
+	if e != nil {
+		t.Fatal(e)
+	}
+	gateway = compose()
+	var state struct {
+		GovernanceVersion string
+		Tombstoned        bool
+	}
+	if json.Unmarshal(send("GET", governancePath, nil, "", 200), &state) != nil || state.GovernanceVersion != "2" || !state.Tombstoned {
+		t.Fatal("tombstone lost across restart")
+	}
+	send("GET", frozenPath, nil, "", 404)
+	govern("restore", "2")
+	govern("quarantine", "3")
+	send("PUT", "/api/v2/previews/helm/repositories/"+proxy.ID+"/quarantine-read-policy", []byte(`{"expectedVersion":"1","enabled":true}`), "application/json", 200)
+	send("GET", frozenPath, nil, "", 404)
+	if index := send("GET", "/helm/"+groupName+"/index.yaml", nil, "", 200); bytes.Contains(index, []byte("owned:")) {
+		t.Fatal("quarantined mixed Group fell through")
+	}
+	govern("release", "4")
+	consume("cold-restored-governance-after-restart")
 	// A caller with an empty target-only cache and no credential cannot discover.
 	run(envFor("unauthorized"), false, "repo", "add", "owned", gateway.URL+"/helm/"+groupName)
 	metadata, e := store.GetHelmPublication(t.Context(), proxy.ID, "owned", "1.2.3")
@@ -347,7 +391,7 @@ func TestHelmFixedOfficialCLIProxyGroupFrozenSourceOfflinePostgresRustFSRestart(
 		t.Fatalf("duplicate or unfrozen source fetches=%v", sourceRequests)
 	}
 	if dir := os.Getenv("HELM_OWNED_EVIDENCE_DIR"); dir != "" {
-		evidence := map[string]any{"client": "Helm v3.19.0", "scope": "Gateway/PostgreSQL/RustFS private Proxy and mixed Group", "chartSha256": chartSHA, "chartSize": chartSize, "provenanceSha256": provSHA, "provenanceSize": provSize, "commands": commands, "gatewayRequests": gatewayRequests, "upstreamRequests": sourceRequests, "fixedSource": proxy.ID, "sourceReorderPreserved": true, "offlineAfterRestart": true, "emptyClientCache": true, "targetOnlyConfig": true, "clusterInstallVerified": false, "rendering": "helm install client dry-run with owned GET-only discovery"}
+		evidence := map[string]any{"client": "Helm v3.19.0", "scope": "Gateway/PostgreSQL/RustFS private Proxy and mixed Group", "chartSha256": chartSHA, "chartSize": chartSize, "provenanceSha256": provSHA, "provenanceSize": provSize, "commands": commands, "gatewayRequests": gatewayRequests, "upstreamRequests": sourceRequests, "fixedSource": proxy.ID, "sourceReorderPreserved": true, "governanceTombstoneQuarantineAndRestore": true, "governanceRestartReadBack": true, "coldGovernedGroupNoFallback": true, "offlineAfterRestart": true, "emptyClientCache": true, "targetOnlyConfig": true, "clusterInstallVerified": false, "rendering": "helm install client dry-run with owned GET-only discovery"}
 		data, _ := json.MarshalIndent(evidence, "", "  ")
 		if e = os.WriteFile(filepath.Join(dir, "helm-proxy-group-client.json"), append(data, '\n'), 0600); e != nil {
 			t.Fatal(e)

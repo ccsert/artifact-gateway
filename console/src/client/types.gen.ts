@@ -4,6 +4,131 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+export type RubyGemsPreviewRepositoryInput = {
+  name: string;
+  anonymousRead?: boolean;
+};
+
+export type RubyGemsPreviewRepository = {
+  id: string;
+  name: string;
+  format: "rubygems";
+  type: "hosted";
+  preview: true;
+  version: string;
+  anonymousRead: boolean;
+  sourceUrl: string;
+  /**
+   * Base URI for gem push --host, without a trailing slash. The official client appends /api/v1/gems.
+   */
+  pushHost: string;
+  publicationUrl: string;
+};
+
+export type RubyGemsPreviewCapacity = {
+  usedBytes: number;
+  pendingBytes: number;
+  objectCount: number;
+  quotaBytes: number;
+};
+
+export type RubyGemsPreviewQuotaInput = {
+  /**
+   * Zero means no configured quota. Pending unexpired uploads reserve capacity.
+   */
+  quotaBytes: number;
+};
+
+/**
+ * Retained immutable chart governance. This record exists only after a full publication closure is committed or cached; hiding never releases capacity or Group authority.
+ */
+export type HelmPreviewGovernance = {
+  repositoryId: string;
+  name: string;
+  version: string;
+  digest: string;
+  governanceVersion: string;
+  tombstoned: boolean;
+  quarantined: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  reason?: string;
+};
+
+export type HelmPreviewGovernanceChange = {
+  expectedDigest: string;
+  expectedGovernanceVersion: string;
+  action: "delete" | "restore" | "quarantine" | "release";
+  reason: string;
+};
+
+/**
+ * Independently versioned policy. enabled=true blocks quarantined chart discovery and assets; the default is false. Tombstones always block.
+ */
+export type HelmPreviewQuarantineReadPolicy = {
+  version: string;
+  enabled: boolean;
+};
+
+export type HelmPreviewQuarantineReadPolicyChange = {
+  expectedVersion: string;
+  enabled: boolean;
+};
+
+export type NuGetPreviewReplicationRequest = {
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  items: Array<NuGetPreviewReplicationIdentity>;
+};
+
+export type NuGetPreviewReplicationJob = {
+  id: string;
+  planDigest: string;
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  actor: string;
+  version: string;
+  state: "queued" | "running" | "succeeded" | "failed";
+  items: Array<NuGetPreviewReplicationItem>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NuGetPreviewReplicationRetry = {
+  expectedVersion: string;
+  itemIndexes: Array<number>;
+};
+
+export type NuGetPreviewReplicationIdentity = {
+  packageId: string;
+  version: string;
+  digest: string;
+  size: number;
+  sourceGovernanceVersion: string;
+};
+
+export type NuGetPreviewReplicationItem = {
+  packageId: string;
+  version: string;
+  digest: string;
+  size: number;
+  sourceGovernanceVersion: string;
+  index: number;
+  state: "pending" | "running" | "succeeded" | "failed";
+  attempts: number;
+  code?:
+    | "access_denied"
+    | "source_changed"
+    | "target_conflict"
+    | "identity_conflict"
+    | "quota_exceeded"
+    | "transfer_failed";
+  targetSessionId?: string;
+  result?: "published" | "already_present";
+  listed?: boolean;
+  completedAt?: string;
+};
+
 export type HelmPreviewRepositoryCreate = {
   name: string;
   anonymousRead?: boolean;
@@ -243,6 +368,10 @@ export type NuGetPreviewPackage = {
   repositoryId: string;
   packageId: string;
   version: string;
+  /**
+   * Read-only current governance pin for a Hosted replication plan; mutations retain separate administrator authority.
+   */
+  governanceVersion: string;
   digest: string;
   size: number;
   publishedAt: string;
@@ -328,9 +457,9 @@ export type Format =
   "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "cargo" | "apt";
 
 /**
- * Opt-in preview upload cleanup formats; these do not enter the formal format catalog.
+ * Opt-in preview worker formats outside the formal format catalog.
  */
-export type PreviewWorkerFormat = "nuget" | "helm";
+export type PreviewWorkerFormat = "nuget" | "helm" | "rubygems";
 
 export type FormatProfile = {
   format: Format;
@@ -3605,12 +3734,12 @@ export type IdempotencyKey = string;
 
 export type IfMatch = string;
 
+export type RepositoryId2 = string;
+
 /**
  * Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
  */
 export type HelmPreviewIdempotencyKey = string;
-
-export type RepositoryId2 = string;
 
 /**
  * Explicit coordinate matching. contains is a case-insensitive literal substring; prefix is a case-sensitive literal prefix. Omitting match preserves the legacy behavior of each format (Cargo name substring; other formats prefix). Complete SHA-256 queries in global search remain exact digest matches. Contains requests have a five-second server budget; narrow the query if it expires.
@@ -3633,6 +3762,485 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type CreateRubyGemsPreviewRepositoryData = {
+  body: RubyGemsPreviewRepositoryInput;
+  headers?: {
+    "Idempotency-Key"?: string;
+  };
+  path?: never;
+  query?: never;
+  url: "/previews/rubygems/repositories";
+};
+
+export type CreateRubyGemsPreviewRepositoryErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type CreateRubyGemsPreviewRepositoryError =
+  CreateRubyGemsPreviewRepositoryErrors[keyof CreateRubyGemsPreviewRepositoryErrors];
+
+export type CreateRubyGemsPreviewRepositoryResponses = {
+  /**
+   * Created or replayed repository
+   */
+  201: RubyGemsPreviewRepository;
+};
+
+export type CreateRubyGemsPreviewRepositoryResponse =
+  CreateRubyGemsPreviewRepositoryResponses[keyof CreateRubyGemsPreviewRepositoryResponses];
+
+export type GetRubyGemsPreviewRepositoryData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}";
+};
+
+export type GetRubyGemsPreviewRepositoryErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetRubyGemsPreviewRepositoryError =
+  GetRubyGemsPreviewRepositoryErrors[keyof GetRubyGemsPreviewRepositoryErrors];
+
+export type GetRubyGemsPreviewRepositoryResponses = {
+  /**
+   * Explicit preview repository
+   */
+  200: RubyGemsPreviewRepository;
+};
+
+export type GetRubyGemsPreviewRepositoryResponse =
+  GetRubyGemsPreviewRepositoryResponses[keyof GetRubyGemsPreviewRepositoryResponses];
+
+export type GetRubyGemsPreviewCapacityData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/capacity";
+};
+
+export type GetRubyGemsPreviewCapacityErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetRubyGemsPreviewCapacityError =
+  GetRubyGemsPreviewCapacityErrors[keyof GetRubyGemsPreviewCapacityErrors];
+
+export type GetRubyGemsPreviewCapacityResponses = {
+  /**
+   * Capacity, administrator only
+   */
+  200: RubyGemsPreviewCapacity;
+};
+
+export type GetRubyGemsPreviewCapacityResponse =
+  GetRubyGemsPreviewCapacityResponses[keyof GetRubyGemsPreviewCapacityResponses];
+
+export type SetRubyGemsPreviewQuotaData = {
+  body: RubyGemsPreviewQuotaInput;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/capacity";
+};
+
+export type SetRubyGemsPreviewQuotaErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type SetRubyGemsPreviewQuotaError =
+  SetRubyGemsPreviewQuotaErrors[keyof SetRubyGemsPreviewQuotaErrors];
+
+export type SetRubyGemsPreviewQuotaResponses = {
+  /**
+   * Updated quota; reservations and committed bytes remain covered
+   */
+  200: RubyGemsPreviewCapacity;
+};
+
+export type SetRubyGemsPreviewQuotaResponse =
+  SetRubyGemsPreviewQuotaResponses[keyof SetRubyGemsPreviewQuotaResponses];
+
+export type GetHelmPreviewGovernanceData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    chartName: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance";
+};
+
+export type GetHelmPreviewGovernanceErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * No retained publication
+   */
+  404: unknown;
+  /**
+   * Preview disabled or storage unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewGovernanceResponses = {
+  /**
+   * Retained chart governance
+   */
+  200: HelmPreviewGovernance;
+};
+
+export type GetHelmPreviewGovernanceResponse =
+  GetHelmPreviewGovernanceResponses[keyof GetHelmPreviewGovernanceResponses];
+
+export type ApplyHelmPreviewGovernanceData = {
+  body: HelmPreviewGovernanceChange;
+  path: {
+    repositoryId: string;
+    chartName: string;
+    version: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance";
+};
+
+export type ApplyHelmPreviewGovernanceErrors = {
+  /**
+   * Invalid action or request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * No retained publication
+   */
+  404: unknown;
+  /**
+   * Digest or governance version conflict
+   */
+  409: unknown;
+  /**
+   * Original chart/provenance closure failed verification
+   */
+  502: unknown;
+  /**
+   * Preview disabled or storage/audit unavailable
+   */
+  503: unknown;
+};
+
+export type ApplyHelmPreviewGovernanceResponses = {
+  /**
+   * Current chart governance
+   */
+  200: HelmPreviewGovernance;
+};
+
+export type ApplyHelmPreviewGovernanceResponse =
+  ApplyHelmPreviewGovernanceResponses[keyof ApplyHelmPreviewGovernanceResponses];
+
+export type GetHelmPreviewQuarantineReadPolicyData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type GetHelmPreviewQuarantineReadPolicyErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * Repository not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or storage unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewQuarantineReadPolicyResponses = {
+  /**
+   * Independent repository quarantine read policy
+   */
+  200: HelmPreviewQuarantineReadPolicy;
+};
+
+export type GetHelmPreviewQuarantineReadPolicyResponse =
+  GetHelmPreviewQuarantineReadPolicyResponses[keyof GetHelmPreviewQuarantineReadPolicyResponses];
+
+export type ReplaceHelmPreviewQuarantineReadPolicyData = {
+  body: HelmPreviewQuarantineReadPolicyChange;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/helm/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type ReplaceHelmPreviewQuarantineReadPolicyErrors = {
+  /**
+   * Invalid policy request
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Repository administrator required
+   */
+  403: unknown;
+  /**
+   * Repository not found
+   */
+  404: unknown;
+  /**
+   * Policy version conflict
+   */
+  409: unknown;
+  /**
+   * Preview inventory limit prevents complete verification
+   */
+  422: unknown;
+  /**
+   * Original chart/provenance closure failed verification
+   */
+  502: unknown;
+  /**
+   * Preview disabled or storage/audit unavailable
+   */
+  503: unknown;
+};
+
+export type ReplaceHelmPreviewQuarantineReadPolicyResponses = {
+  /**
+   * Current independent quarantine read policy
+   */
+  200: HelmPreviewQuarantineReadPolicy;
+};
+
+export type ReplaceHelmPreviewQuarantineReadPolicyResponse =
+  ReplaceHelmPreviewQuarantineReadPolicyResponses[keyof ReplaceHelmPreviewQuarantineReadPolicyResponses];
+
+export type CreateNuGetPreviewReplicationJobData = {
+  body: NuGetPreviewReplicationRequest;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/previews/nuget/replication-jobs";
+};
+
+export type CreateNuGetPreviewReplicationJobErrors = {
+  /**
+   * Invalid or duplicate package identity, unbounded plan or key
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Active NuGet Hosted repository or exact source package not found
+   */
+  404: unknown;
+  /**
+   * Different plan for the key, source governance changed, conflict or capacity denied
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type CreateNuGetPreviewReplicationJobResponses = {
+  /**
+   * Queued plan, or the same plan on an exact idempotent replay
+   */
+  202: NuGetPreviewReplicationJob;
+};
+
+export type CreateNuGetPreviewReplicationJobResponse =
+  CreateNuGetPreviewReplicationJobResponses[keyof CreateNuGetPreviewReplicationJobResponses];
+
+export type GetNuGetPreviewReplicationJobData = {
+  body?: never;
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/replication-jobs/{jobId}";
+};
+
+export type GetNuGetPreviewReplicationJobErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Source and target read authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type GetNuGetPreviewReplicationJobResponses = {
+  /**
+   * Durable job and package checkpoints without secrets or physical object keys
+   */
+  200: NuGetPreviewReplicationJob;
+};
+
+export type GetNuGetPreviewReplicationJobResponse =
+  GetNuGetPreviewReplicationJobResponses[keyof GetNuGetPreviewReplicationJobResponses];
+
+export type RetryNuGetPreviewReplicationJobData = {
+  body: NuGetPreviewReplicationRetry;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/nuget/replication-jobs/{jobId}/retry";
+};
+
+export type RetryNuGetPreviewReplicationJobErrors = {
+  /**
+   * Invalid retry key or item set
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Original actor with current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Job version, retry payload, state or selected item conflicts
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type RetryNuGetPreviewReplicationJobResponses = {
+  /**
+   * Selected failed items queued, or an exact retry replay
+   */
+  202: NuGetPreviewReplicationJob;
+};
+
+export type RetryNuGetPreviewReplicationJobResponse =
+  RetryNuGetPreviewReplicationJobResponses[keyof RetryNuGetPreviewReplicationJobResponses];
 
 export type CreateHelmPreviewGroupData = {
   body: HelmPreviewGroupInput;

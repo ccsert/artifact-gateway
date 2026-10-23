@@ -39,7 +39,7 @@ func TestPostgresRustFSHelmProxyInterruptedClosureRestartAndOffline(t *testing.T
 	}
 	compose := func(object objectstore.Store) *Module {
 		auth := authorization.Authenticator{AdminToken: "helm-owned-admin", AdminActor: "operator"}
-		m, e := New(Options{Store: store, Repositories: store, Objects: object, Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Audit: store, Anonymous: store, Capacities: store, Sources: store, Configuration: store, Groups: store, Upstream: helmSourceClient{feed.server.Client()}})
+		m, e := New(Options{Store: store, Governance: store, Repositories: store, Objects: object, Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Audit: store, Anonymous: store, Capacities: store, Sources: store, Configuration: store, Groups: store, Upstream: helmSourceClient{feed.server.Client()}})
 		if e != nil {
 			t.Fatal(e)
 		}

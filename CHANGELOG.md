@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+- Helm preview adds versioned tombstone/restore and quarantine controls for Hosted and cached Proxy charts (#457). Indexes, chart/provenance assets and Group snapshot reads share the same governance; recovery revalidates original bytes. Full lifecycle admission remains under #292.
+
+- NuGet preview adds [durable Hosted replication](docs/nuget-replication-preview.md) (#458): fixed plans, current actor/credential and repository authority checks, fenced workers, verified target-owned bytes and exact failed-item retry. Completed packages remain visible when another item fails; full admission remains under #289.
+
+- Add a default-off [RubyGems Hosted preview](docs/rubygems-hosted-preview.md) (#459) with native gem publication, bounded archive validation, immutable package identities, compact/legacy dependency indexes, quota reservations and original-byte downloads. Its official RubyGems/Bundler gate is required in daily CI; Proxy/Group and formal admission remain under #293.
+
 - The default-off Helm preview adds traditional HTTP Proxy and ordered Group reads (#291): conditionally revalidated bounded indexes, immutable source snapshots, verified chart/provenance caches, private upstream credentials and persistent chart authorities. Group reordering never substitutes another source after an identity has been selected. Formal admission remains under #292.
 
 - NuGet preview governance now supports native Hosted unlist/relist, versioned tombstone/restore and independent quarantine/read-policy controls (#449). Search omits unlisted versions while registration, flat-container versions and exact downloads retain NuGet semantics. Tombstones and enforced quarantine apply consistently to cached packages and Group authorities; recovery verifies original bytes before changing state. Formal admission remains under #289.

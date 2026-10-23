@@ -167,3 +167,43 @@ HelmPreviewCapacity:
     usedBytes: {type: integer, format: int64, minimum: 0}
     objectCount: {type: integer, format: int64, minimum: 0}
     quotaBytes: {type: integer, format: int64, minimum: 0}
+HelmPreviewGovernance:
+  type: object
+  additionalProperties: false
+  description: Retained immutable chart governance. This record exists only after a full publication closure is committed or cached; hiding never releases capacity or Group authority.
+  required: [repositoryId, name, version, digest, governanceVersion, tombstoned, quarantined]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    name: {type: string}
+    version: {type: string}
+    digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    governanceVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+    tombstoned: {type: boolean}
+    quarantined: {type: boolean}
+    updatedAt: {type: string, format: date-time}
+    updatedBy: {type: string}
+    reason: {type: string}
+HelmPreviewGovernanceChange:
+  type: object
+  additionalProperties: false
+  required: [expectedDigest, expectedGovernanceVersion, action, reason]
+  properties:
+    expectedDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    expectedGovernanceVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+    action: {type: string, enum: [delete, restore, quarantine, release]}
+    reason: {type: string, minLength: 1, maxLength: 2048}
+HelmPreviewQuarantineReadPolicy:
+  type: object
+  additionalProperties: false
+  description: Independently versioned policy. enabled=true blocks quarantined chart discovery and assets; the default is false. Tombstones always block.
+  required: [version, enabled]
+  properties:
+    version: {type: string, pattern: '^[1-9][0-9]*$'}
+    enabled: {type: boolean}
+HelmPreviewQuarantineReadPolicyChange:
+  type: object
+  additionalProperties: false
+  required: [expectedVersion, enabled]
+  properties:
+    expectedVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+    enabled: {type: boolean}

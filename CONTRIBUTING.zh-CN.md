@@ -39,9 +39,11 @@ RustFS 数据卷。
 5. 用户可见变化记录在 `CHANGELOG.md` 的 `Unreleased` 下。
 6. 开发时执行最小相关检查，提交前再执行下方必需检查。
 
-禁止手工修改生成文件。可编辑 OpenAPI 根文件是
-`api/openapi/native-hosted.yaml`；`make openapi-check` 会重新生成并校验 JSON bundle、
-Console 客户端与 Go 管理契约。
+禁止手工修改生成文件。可编辑 OpenAPI 根文件包括面向原生协议及 Console 的
+`api/openapi/native-hosted.yaml`，以及面向 Go 管理边界的
+`api/openapi/management-runtime.yaml`。共享管理路径和 schema 必须在两个根文件中
+保持一致。`make openapi-check` 会重新生成并校验两个 JSON bundle、Console 客户端
+与 Go 管理契约。
 
 运行契约检查前安装固定版本生成器：
 
@@ -165,7 +167,7 @@ CI workflow 为最终事实来源。
 
 ### 契约 lane 与性能证据
 
-`contract-and-test` 保持稳定的 required 汇总门禁。`contract-core` 与九条原生
+`contract-and-test` 保持稳定的 required 汇总门禁。`contract-core` 与十条原生
 lane 独立启动；原生 matrix 使用 `fail-fast: false`，最多同时调度三个 job。
 主线制品仍等待汇总、quality 和 Console。汇总拒绝失败、跳过、取消、缺失、
 过期或损坏的结果。同一 run/head 的定向重跑可复用较早 attempt 的成功工件，
@@ -184,12 +186,13 @@ lane 独立启动；原生 matrix 使用 `fail-fast: false`，最多同时调度
 | oci-discovery | `native-oci-discovery-e2e` | 15 分钟 |
 | npm-migration | `nexus-npm-migration-e2e` | 15 分钟 |
 | helm | `native-helm-e2e` | 15 分钟 |
+| rubygems | `native-rubygems-e2e` | 15 分钟 |
 
 每条原生 lane 先执行限时五分钟的 `go mod download`，单独保存准备日志，防止首次下载诊断混入原脚本严格解析的 JSONL 测试流。两组冷缓存性能对照均从空的私有 Go 缓存开始，并将该准备耗时计入关键路径；构建与协议客户端缓存保留原有行为。
 
 核心保留其它既有目标，包括发布备份 15 分钟、升级 10 分钟的检查。
 `./scripts/ci-local.sh --lane inventory` 单独执行一条 lane；`--job contract`
-执行核心、全部九条 lane，以及原来额外的本地 CLI 栈检查。本地 OpenAPI
+执行核心、全部十条 lane，以及原来额外的本地 CLI 栈检查。本地 OpenAPI
 新鲜度通过再生成和文件摘要比较验证，允许审查未提交的生成改动。编排控制测试：
 `python3 -B -m unittest discover -s scripts/tests -p test_ci_contract.py`。
 
@@ -225,7 +228,7 @@ fixture 自有清理报告，不把其它并行开发者资源当作自己所有
 `gh workflow run contract-benchmark.yml --ref main`。它在同一提交调用两组相同
 的六条 lane：串行 matrix 限一槽，并行 matrix 最多三槽；两组均使用全新私有
 Go 缓存和相同固定客户端，各自经过严格汇总。
-`benchmarkOrder` 将此对照固定为原有六条原生 lane；新增 OCI 发现、npm 迁移与 Helm lane 仍在
+`benchmarkOrder` 将此对照固定为原有六条原生 lane；新增 OCI 发现、npm 迁移、Helm 与 RubyGems lane 仍在
 日常 CI 与本地契约中强制执行，但不计入这项六 lane 性能声明。最终报告读取已结束的 job 元数据，
 记录 checkout/setup、执行、工件上传、清理、汇总、排队及实际获分配并发数。
 业务文件摘要、缓存条件、runner 架构或 CPU/内存等级不一致时拒绝对照。

@@ -12,7 +12,7 @@ import (
 func TestHelmGroupPreviewStaysOutsideFormalDiscoveryAndDeepLinks(t *testing.T) {
 	o := explicitGatewayOptions()
 	store := o.Store.(*repository.MemoryStore)
-	o.HelmPreviewEnabled, o.HelmStore, o.HelmSources, o.HelmObjects = true, store, store, objectstore.NewMemoryStore()
+	o.HelmPreviewEnabled, o.HelmStore, o.HelmGovernance, o.HelmSources, o.HelmObjects = true, store, store, store, objectstore.NewMemoryStore()
 	if _, err := store.ReplaceAnonymousAccessPolicy(t.Context(), repository.AnonymousAccessPolicy{Enabled: true}, "1"); err != nil {
 		t.Fatal(err)
 	}

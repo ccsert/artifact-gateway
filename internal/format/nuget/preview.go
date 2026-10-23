@@ -47,6 +47,7 @@ type previewSession struct {
 	CommittedAt  *time.Time `json:"committedAt,omitempty"`
 }
 type previewPackage struct {
+	GovernanceVersion       string    `json:"governanceVersion"`
 	RepositoryID            string    `json:"repositoryId"`
 	PackageID               string    `json:"packageId"`
 	Version                 string    `json:"version"`
@@ -81,7 +82,7 @@ func sessionDTO(in repository.NuGetSession) previewSession {
 	return out
 }
 func packageDTO(r *http.Request, repo repository.HostedRepository, in repository.NuGetPublication) previewPackage {
-	return previewPackage{RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, Size: in.Size, PublishedAt: in.PublishedAt, PackageURL: packageURL(r, repo, in.PackageID, in.Version), RegistrationURL: sourceBase(r, repo) + "registration/" + in.PackageID + "/" + in.Version + ".json", SourceVersion: in.SourceVersion, UpstreamPackageURL: in.SourceURL, UpstreamRegistrationURL: in.RegistrationURL}
+	return previewPackage{GovernanceVersion: in.Governance.Version, RepositoryID: in.RepositoryID, PackageID: in.PackageID, Version: in.Version, Digest: in.Digest, Size: in.Size, PublishedAt: in.PublishedAt, PackageURL: packageURL(r, repo, in.PackageID, in.Version), RegistrationURL: sourceBase(r, repo) + "registration/" + in.PackageID + "/" + in.Version + ".json", SourceVersion: in.SourceVersion, UpstreamPackageURL: in.SourceURL, UpstreamRegistrationURL: in.RegistrationURL}
 }
 func decodeBody(w http.ResponseWriter, r *http.Request, target any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -108,6 +109,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	if reason := p.AccountStateReason(); reason != "" {
 		m.problem(w, 403, reason)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v2/previews/nuget/replication-jobs") {
+		m.previewReplication(w, r, p)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/v2/previews/nuget/groups") {

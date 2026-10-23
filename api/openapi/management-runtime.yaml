@@ -9,6 +9,22 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/rubygems/repositories":
+    "$ref": "./management/rubygems-preview.yaml#/repositories"
+  "/previews/rubygems/repositories/{repositoryId}":
+    "$ref": "./management/rubygems-preview.yaml#/repository"
+  "/previews/rubygems/repositories/{repositoryId}/capacity":
+    "$ref": "./management/rubygems-preview.yaml#/capacity"
+  "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance":
+    "$ref": "./management/helm-preview.yaml#/governance"
+  "/previews/helm/repositories/{repositoryId}/quarantine-read-policy":
+    "$ref": "./management/helm-preview.yaml#/quarantine_read_policy"
+  "/previews/nuget/replication-jobs":
+    "$ref": "./management/nuget-preview.yaml#/replication_jobs"
+  "/previews/nuget/replication-jobs/{jobId}":
+    "$ref": "./management/nuget-preview.yaml#/replication_job"
+  "/previews/nuget/replication-jobs/{jobId}/retry":
+    "$ref": "./management/nuget-preview.yaml#/replication_retry"
   "/previews/helm/groups":
     "$ref": "./management/helm-preview.yaml#/groups"
   "/previews/helm/groups/{groupId}":
@@ -359,6 +375,32 @@ paths:
     "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_commit"
 components:
   schemas:
+    RubyGemsPreviewRepositoryInput:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewRepositoryInput"
+    RubyGemsPreviewRepository:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewRepository"
+    RubyGemsPreviewCapacity:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewCapacity"
+    RubyGemsPreviewQuotaInput:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewQuotaInput"
+    HelmPreviewGovernance:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGovernance"
+    HelmPreviewGovernanceChange:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewGovernanceChange"
+    HelmPreviewQuarantineReadPolicy:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewQuarantineReadPolicy"
+    HelmPreviewQuarantineReadPolicyChange:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewQuarantineReadPolicyChange"
+    NuGetPreviewReplicationRequest:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewReplicationRequest"
+    NuGetPreviewReplicationJob:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewReplicationJob"
+    NuGetPreviewReplicationRetry:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewReplicationRetry"
+    NuGetPreviewReplicationIdentity:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewReplicationIdentity"
+    NuGetPreviewReplicationItem:
+      "$ref": "./components/nuget-preview.yaml#/NuGetPreviewReplicationItem"
     HelmPreviewRepositoryCreate:
       "$ref": "./components/helm-preview.yaml#/HelmPreviewRepositoryCreate"
     HelmPreviewRepositoryReplace:

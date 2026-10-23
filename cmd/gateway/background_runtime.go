@@ -12,7 +12,9 @@ import (
 	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
+	rubygemsformat "github.com/ccsert/artifact-gateway/internal/format/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
+	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -20,20 +22,22 @@ import (
 )
 
 type backgroundRuntime struct {
-	migration          *nexusmigration.Service
-	migrationSchedules *nexusmigration.ScheduleService
-	store              *repository.PostgresStore
-	objects            app.ObjectStore
-	taskQueue          *app.PostgresCacheTaskQueue
-	maintenance        *app.CacheMaintenance
-	metrics            *app.Metrics
-	scanner            scanning.Scanner
-	scanResolver       app.ArtifactScanResolver
-	scannerFormats     []repository.Format
-	workerSessionID    string
-	aptPublisher       *aptpublication.Publisher
-	helmMaintenance    *helmformat.Maintenance
-	nugetMaintenance   *nugetformat.Maintenance
+	migration           *nexusmigration.Service
+	migrationSchedules  *nexusmigration.ScheduleService
+	store               *repository.PostgresStore
+	objects             app.ObjectStore
+	taskQueue           *app.PostgresCacheTaskQueue
+	maintenance         *app.CacheMaintenance
+	metrics             *app.Metrics
+	scanner             scanning.Scanner
+	scanResolver        app.ArtifactScanResolver
+	scannerFormats      []repository.Format
+	workerSessionID     string
+	aptPublisher        *aptpublication.Publisher
+	helmMaintenance     *helmformat.Maintenance
+	nugetMaintenance    *nugetformat.Maintenance
+	nugetReplication    *dist.Worker
+	rubyGemsMaintenance *rubygemsformat.Maintenance
 }
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
@@ -45,10 +49,16 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 		if r.helmMaintenance != nil && cfg.WorkerEnabled("helm", "retention") {
 			r.helmMaintenance.Start(ctx, time.Minute)
 		}
+		if r.nugetReplication != nil && cfg.WorkerEnabled("nuget", "replication") {
+			r.nugetReplication.Start(ctx, 5*time.Second)
+		}
 		if r.nugetMaintenance != nil && cfg.WorkerEnabled("nuget", "retention") {
 			// This preview only reclaims expired, never-visible uploads. It
 			// does not advertise NuGet lifecycle/retention capability.
 			r.nugetMaintenance.Start(ctx, time.Minute)
+		}
+		if r.rubyGemsMaintenance != nil && cfg.RubyGemsPreviewEnabled && cfg.WorkerEnabled("rubygems", "retention") {
+			r.rubyGemsMaintenance.Start(ctx, time.Minute)
 		}
 	}
 	app.BackgroundOperationQueueObserver{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)

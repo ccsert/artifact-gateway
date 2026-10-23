@@ -169,6 +169,14 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		m.capacity(w, r, repo)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "quarantine-read-policy" {
+		m.previewQuarantineReadPolicy(w, r, repo)
+		return
+	}
+	if len(parts) == 5 && parts[1] == "charts" && parts[4] == "governance" {
+		m.previewGovernance(w, r, repo, parts[2], parts[3])
+		return
+	}
 	if parts[1] != "charts" {
 		m.problem(w, 404, "not_found")
 		return

@@ -72,7 +72,7 @@ secret or explicit `scheme: none`; otherwise PATCH fails with
 `400 upstream_credential_rebind_required` and preserves the existing version
 and ciphertext.
 
-## Helm Hosted preview
+## Helm Hosted, Proxy and Group preview
 
 The default-off [traditional Helm Hosted preview](helm-hosted-preview.md) provides
 atomic chart/provenance multipart publication, an authorized deterministic
@@ -81,8 +81,11 @@ atomic chart/provenance multipart publication, an authorized deterministic
 format profiles, repository catalogs, active capabilities and Console selectors
 remain unchanged. The fixed official Helm 3.19.0 gate checks cold pull/verify and
 dry-run rendering against an owned read-only discovery fixture. It does not claim
-a real Kubernetes installation. Proxy/Group (#291) and lifecycle/admission (#292)
-remain separate work.
+a real Kubernetes installation. Proxy/Group reads preserve persistent source
+authorities across reordering and use verified chart/provenance caches. Versioned
+tombstones and quarantine apply to indexes and assets, including old snapshot URLs;
+recovery verifies the complete original closure. Retention, distribution and full
+format admission remain under #292.
 
 ## NuGet Hosted, Proxy and Group preview
 
@@ -100,7 +103,24 @@ unlisted exact versions remain readable; search/autocomplete omit them.
 transitive restore, complete package identities, cold/hot/source-stopped reads,
 and Gateway/PostgreSQL/RustFS restart recovery and offline execution. The preview
 remains absent from the formal format catalog and Console selector. Local
-Hosted unlist/governance and formal admission remain under #289.
+unlist/relist, tombstones and quarantine are implemented as independent governance
+controls. The [durable replication preview](nuget-replication-preview.md) fixes
+Hosted-to-Hosted plans and source governance versions, rechecks current authority,
+and commits verified target-owned bytes with per-item checkpoints. Exact retry
+retains completed items. Remaining lifecycle and formal admission stay under #289.
+
+## RubyGems Hosted preview
+
+The default-off [RubyGems Hosted preview](rubygems-hosted-preview.md) uses
+`/api/v2/previews/rubygems` management and `/rubygems/<repository>` native routes.
+It validates original unsigned `.gem` archives before atomically publishing
+immutable name/version/platform identities, runtime dependencies and quota usage.
+Compact indexes, legacy Marshal indexes and gemspecs describe the same committed
+packages. `make native-rubygems-e2e` checks fixed official RubyGems/Bundler clients
+using target-only empty caches and original package digests across service restart.
+Proxy/Group, signed archives, yank, full governance and formal admission are not
+part of this slice; #293 retains those requirements. The preview stays outside
+the formal catalog, Console format selector and installation presets.
 
 ## Contract alignment
 
