@@ -22,9 +22,9 @@ const MaxItems = 100
 
 var (
 	ErrInvalid       = errors.New("invalid Helm replication plan")
-	ErrConflict      = errors.New("Helm replication version or idempotency conflict")
-	ErrNotFound      = errors.New("Helm replication not found")
-	ErrLeaseLost     = errors.New("Helm replication lease lost")
+	ErrConflict      = errors.New("helm replication version or idempotency conflict")
+	ErrNotFound      = errors.New("helm replication not found")
+	ErrLeaseLost     = errors.New("helm replication lease lost")
 	ErrAccessDenied  = errors.New("Helm replication access denied")
 	ErrSourceChanged = errors.New("Helm replication source changed or governed")
 	ErrTargetBlocked = errors.New("Helm replication target identity governed or conflicting")
