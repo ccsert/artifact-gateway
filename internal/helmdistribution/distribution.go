@@ -8,13 +8,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/Masterminds/semver/v3"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
 )
 

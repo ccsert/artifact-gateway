@@ -187,15 +187,27 @@ func TestHelmReplicationRejectsMutatedWorkerPlan(t *testing.T) {
 	if w := replicationUpload(t, f.fixture, chartFixture(t, "app", "1.0.0", "copy")); w.Code != 201 {
 		t.Fatal(w.Body.String())
 	}
-	job := createReplication(t, f, replicationPlan(t, f, "app"), uuid.NewString(), "helm-owned-admin", 202)
+	if w := replicationUpload(t, f.fixture, chartFixture(t, "second", "1.0.0", "copy")); w.Code != 201 {
+		t.Fatal(w.Body.String())
+	}
+	job := createReplication(t, f, replicationPlan(t, f, "app", "second"), uuid.NewString(), "helm-owned-admin", 202)
 	claim, err := f.store.ClaimHelmReplication(t.Context(), "worker", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"empty-plan", "wrong-digest", "different-item"} {
+	for _, mode := range []string{"empty-plan", "wrong-digest", "different-item", "narrowed-plan-and-digest", "wrong-job", "wrong-lease-job", "credential"} {
 		bad := dist.Clone(claim)
 		item := claim.Items[0]
 		switch mode {
+		case "narrowed-plan-and-digest":
+			bad.Items = bad.Items[:1]
+			_, bad.PlanDigest, _ = dist.CanonicalPlan(dist.Plan{SourceRepositoryID: bad.SourceRepositoryID, TargetRepositoryID: bad.TargetRepositoryID, Items: []dist.Identity{bad.Items[0].Identity}})
+		case "wrong-job":
+			bad.ID = uuid.NewString()
+		case "wrong-lease-job":
+			bad.Lease.JobID = uuid.NewString()
+		case "credential":
+			bad.CredentialID = uuid.NewString()
 		case "empty-plan":
 			bad.Items = nil
 		case "wrong-digest":

@@ -205,6 +205,23 @@ func (m *Module) ReplicateHelmItem(ctx context.Context, job dist.Job, item dist.
 	if err != nil || digest != job.PlanDigest || item.Index < 0 || item.Index >= len(job.Items) || job.Items[item.Index].Identity != item.Identity {
 		return dist.ErrInvalid
 	}
+	// Bind the exported transfer request to the server-owned immutable plan.
+	// Recomputing a caller-supplied digest alone would allow a narrowed grant check.
+	if job.ID != job.Lease.JobID {
+		return dist.ErrInvalid
+	}
+	persisted, err := m.distribution.GetHelmReplication(ctx, job.ID)
+	if err != nil {
+		return err
+	}
+	if persisted.PlanDigest != job.PlanDigest || persisted.Actor != job.Actor || persisted.ActorKind != job.ActorKind || persisted.CredentialID != job.CredentialID || persisted.SourceRepositoryID != job.SourceRepositoryID || persisted.TargetRepositoryID != job.TargetRepositoryID || len(persisted.Items) != len(job.Items) {
+		return dist.ErrInvalid
+	}
+	for i, v := range persisted.Items {
+		if v.Index != job.Items[i].Index || v.Identity != job.Items[i].Identity {
+			return dist.ErrInvalid
+		}
+	}
 	check := m.replicationCheck(job)
 	if err = m.distribution.AuthorizeHelmReplicationItem(ctx, job.Lease, item.Index, check); err != nil {
 		return err
