@@ -465,8 +465,16 @@ func TestPostgresRustFSNexusPyPIMigrationRecovery(t *testing.T) {
 			if phase == "publish" || phase == "transport-ack" {
 				var rows int
 				err := f.db.QueryRow(`SELECT count(*) FROM nexus_migration_entries WHERE batch_id=$1 AND state='committed' AND visible_identities=1`, b.ID).Scan(&rows)
-				if err != nil || rows != 1 {
-					t.Fatalf("commit ACK loss lost atomic progress=%d %v", rows, err)
+				want := 1
+				if phase == "transport-ack" {
+					want = 4
+				}
+				if err != nil || rows != want {
+					t.Fatalf("commit ACK loss lost atomic progress=%d want=%d %v", rows, want, err)
+				}
+				var audits int
+				if err = f.db.QueryRow(`SELECT count(*) FROM resolver_audit_log WHERE repository=$1 AND operation='publish'`, f.repo.Name).Scan(&audits); err != nil || audits != want {
+					t.Fatalf("atomic progress/audit mismatch=%d want=%d %v", audits, want, err)
 				}
 			}
 			f.reopen()
