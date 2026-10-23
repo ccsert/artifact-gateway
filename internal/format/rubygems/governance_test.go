@@ -205,9 +205,10 @@ func (a *failingGovernanceAudit) RecordAudit(ctx context.Context, r repository.A
 
 func (s retainedCorruption) GetRetained(ctx context.Context, repo, name, version, platform string) (domain.Publication, error) {
 	p, err := s.Store.GetRetained(ctx, repo, name, version, platform)
-	if s.mode == "metadata" {
+	switch s.mode {
+	case "metadata":
 		p.MetadataJSON = []byte(`{}`)
-	} else if s.mode == "identity" {
+	case "identity":
 		p.Name = "different"
 	}
 	return p, err
