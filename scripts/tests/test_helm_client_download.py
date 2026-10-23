@@ -9,6 +9,29 @@ from helm_client_download import download_archive
 
 
 class HelmClientDownloadTests(unittest.TestCase):
+    def test_default_requests_use_one_mebibyte_without_changing_whole_digest(self):
+        original = b"a" * ((2 << 20) + 17)
+        calls = []
+
+        def fetch(url, start, end):
+            calls.append((start, end))
+            end = min(end, len(original) - 1)
+            body = original[start:end + 1]
+            return 206, {"content-range": [f"bytes {start}-{end}/{len(original)}"],
+                         "content-length": [str(len(body))]}, body
+
+        with tempfile.TemporaryDirectory() as work:
+            path = pathlib.Path(work) / "archive"
+            receipt = download_archive("https://owned.invalid/archive", path,
+                                       hashlib.sha256(original).hexdigest(), fetch_range=fetch)
+            self.assertEqual(calls, [(0, (1 << 20) - 1),
+                                     (1 << 20, (2 << 20) - 1),
+                                     (2 << 20, len(original) - 1)])
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(receipt["sha256"], hashlib.sha256(original).hexdigest())
+            self.assertEqual(receipt["requestDeadlineSeconds"], 45)
+            self.assertEqual(receipt["retries"], 0)
+
     def test_existing_file_is_never_replaced_or_deleted(self):
         with tempfile.TemporaryDirectory() as work:
             path = pathlib.Path(work) / "archive"

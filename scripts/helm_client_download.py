@@ -39,11 +39,12 @@ def _curl_range(url, start, end):
 
 
 def download_archive(url, destination, expected_sha256, *, fetch_range=None,
-                     part_bytes=8 << 20, max_bytes=64 << 20):
+                     part_bytes=1 << 20, max_bytes=64 << 20):
     """Require complete ordered 206 ranges and the original pinned whole SHA.
 
     fetch_range is an explicit transport seam for offline control tests. Each
-    production request has curl's 45-second total deadline and no retry.
+    production request has curl's 45-second total deadline and no retry. Small
+    ranges keep that bound practical for slower official archive connections.
     """
     fetch_range = fetch_range or _curl_range
     if not url.startswith("https://") or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256) or not 1 <= part_bytes <= max_bytes:
