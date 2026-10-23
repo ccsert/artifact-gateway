@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -53,12 +54,15 @@ func TestPostgresRustFSOCIDiscoveryDescriptorAnnotationsFromVerifiedManifest(t *
 
 type catalogVersionSwitchPostgresStore struct {
 	*repository.PostgresStore
+	repositoryID        string
 	afterRepositoryPage func()
 }
 
 func (s *catalogVersionSwitchPostgresStore) ListHostedRepositories(ctx context.Context, size int, after string) ([]repository.HostedRepository, string, error) {
 	items, next, err := s.PostgresStore.ListHostedRepositories(ctx, size, after)
-	if s.afterRepositoryPage != nil {
+	if err == nil && s.afterRepositoryPage != nil && slices.ContainsFunc(items, func(repo repository.HostedRepository) bool {
+		return repo.ID == s.repositoryID
+	}) {
 		action := s.afterRepositoryPage
 		s.afterRepositoryPage = nil
 		action()
@@ -84,7 +88,7 @@ func TestPostgresRustFSOCIDiscoveryCatalogConflictingVersions(t *testing.T) {
 	if _, _, err := f.store.CreateHostedGroupIdempotently(t.Context(), repository.HostedGroup{ID: uuid.NewString(), Name: "z-group-" + uuid.NewString()[:8], Format: repository.FormatOCI, Members: []repository.GroupMember{{RepositoryID: repo.ID}}}, "fixture-admin", uuid.NewString(), "fixture"); err != nil {
 		t.Fatal(err)
 	}
-	controlled := &catalogVersionSwitchPostgresStore{PostgresStore: f.store, afterRepositoryPage: func() {
+	controlled := &catalogVersionSwitchPostgresStore{PostgresStore: f.store, repositoryID: repo.ID, afterRepositoryPage: func() {
 		repo.Endpoint += "/new"
 		var err error
 		repo, err = f.store.UpdateHostedRepository(t.Context(), repo, repo.Version)
@@ -94,6 +98,9 @@ func TestPostgresRustFSOCIDiscoveryCatalogConflictingVersions(t *testing.T) {
 	}}
 	handler := newTestGateway(t, GatewayOptions{Store: controlled, OCIDiscoveryStore: f.store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: f.objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(f.control, []string{redirectOrigin, redirectCDN})}, Upstream: fixture.client})
 	changed := discoveryRequest(t, handler, "/v2/_catalog", token)
+	if controlled.afterRepositoryPage != nil {
+		t.Fatal("source version switch did not observe the owned repository page")
+	}
 	if changed.Code != 409 || !strings.Contains(changed.Body.String(), "DISCOVERY_CHANGED") || strings.Contains(changed.Body.String(), "team/") {
 		t.Fatalf("mixed durable source versions became successful: %d %s", changed.Code, changed.Body.String())
 	}

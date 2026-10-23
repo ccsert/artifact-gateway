@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -121,12 +123,15 @@ func TestOCICatalogProxyGroupSnapshotAndAuthorization(t *testing.T) {
 // fresh member read. The old page must never be sealed under the new guard.
 type catalogVersionSwitchStore struct {
 	*repository.MemoryStore
+	repositoryID        string
 	afterRepositoryPage func()
 }
 
 func (s *catalogVersionSwitchStore) ListHostedRepositories(ctx context.Context, size int, after string) ([]repository.HostedRepository, string, error) {
 	items, next, err := s.MemoryStore.ListHostedRepositories(ctx, size, after)
-	if s.afterRepositoryPage != nil {
+	if err == nil && s.afterRepositoryPage != nil && slices.ContainsFunc(items, func(repo repository.HostedRepository) bool {
+		return repo.ID == s.repositoryID
+	}) {
 		action := s.afterRepositoryPage
 		s.afterRepositoryPage = nil
 		action()
@@ -135,6 +140,15 @@ func (s *catalogVersionSwitchStore) ListHostedRepositories(ctx context.Context, 
 }
 
 func TestOCICatalogRejectsConflictingSourceVersionsAcrossViews(t *testing.T) {
+	for _, preceding := range []int{0, 200} {
+		t.Run(fmt.Sprintf("preceding=%d", preceding), func(t *testing.T) {
+			testOCICatalogConflictingVersions(t, preceding)
+		})
+	}
+}
+
+func testOCICatalogConflictingVersions(t *testing.T, preceding int) {
+	t.Helper()
 	var calls atomic.Int32
 	fixture := newProxyRedirectFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -145,9 +159,20 @@ func TestOCICatalogRejectsConflictingSourceVersionsAcrossViews(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"repositories": []string{name}})
 	})
 	store := repository.NewMemoryStore()
-	repo := catalogProxy(t, store, "a-source-version")
+	// Fixed IDs force the source onto a later page without consuming OCI's
+	// discovery budget. The update must wait for the page containing this source.
+	for i := range preceding {
+		_, err := store.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: fmt.Sprintf("%08x-0000-4000-8000-000000000000", i+1), Name: fmt.Sprintf("filler-%03d", i), Format: repository.FormatRaw, Type: repository.RepositoryTypeHosted})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo, err := store.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: "ffffffff-ffff-4fff-8fff-ffffffffffff", Name: "a-source-version", Format: repository.FormatOCI, Type: repository.RepositoryTypeProxy, Endpoint: "https://" + redirectOrigin, AllowedHosts: []string{redirectOrigin, redirectCDN}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	createV2Group(t, store, "z-group-version", repository.FormatOCI, repository.GroupMember{RepositoryID: repo.ID})
-	controlled := &catalogVersionSwitchStore{MemoryStore: store, afterRepositoryPage: func() {
+	controlled := &catalogVersionSwitchStore{MemoryStore: store, repositoryID: repo.ID, afterRepositoryPage: func() {
 		repo.Endpoint += "/new"
 		var err error
 		repo, err = store.UpdateHostedRepository(t.Context(), repo, repo.Version)
@@ -158,6 +183,9 @@ func TestOCICatalogRejectsConflictingSourceVersionsAcrossViews(t *testing.T) {
 	objects := objectstore.NewMemoryStore()
 	handler := newTestGateway(t, GatewayOptions{Store: controlled, OCIDiscoveryStore: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objects, []string{redirectOrigin, redirectCDN})}, Upstream: fixture.client})
 	changed := discoveryRequest(t, handler, "/v2/_catalog", "admin-secret")
+	if controlled.afterRepositoryPage != nil {
+		t.Fatal("source version switch did not observe the owned repository page")
+	}
 	if changed.Code != 409 || !strings.Contains(changed.Body.String(), "DISCOVERY_CHANGED") || strings.Contains(changed.Body.String(), "team/") {
 		t.Fatalf("mixed source versions became a successful Catalog: %d %s", changed.Code, changed.Body.String())
 	}
