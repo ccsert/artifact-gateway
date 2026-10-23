@@ -27,6 +27,12 @@ def producer_ast(path):
 
 
 class NativeProducerStartupTest(unittest.TestCase):
+    def postgres_loop(self, script):
+        return next(node for node in ast.walk(producer_ast(script))
+                    if isinstance(node, ast.While) and any(
+                        isinstance(value, ast.Constant) and value.value in ("pg_isready", "SELECT 1")
+                        for value in ast.walk(node)))
+
     def test_postgres_probes_wait_for_authenticated_tcp_query(self):
         for name in ("native-rubygems-e2e.sh", "native-helm-e2e.sh"):
             with self.subTest(producer=name):
@@ -34,10 +40,7 @@ class NativeProducerStartupTest(unittest.TestCase):
                 # Execute the actual producer loop, preserving its original
                 # deadline/interval. Model the official entrypoint's Unix-only
                 # init phase, then TCP rejection, then a usable database.
-                loop = next(node for node in ast.walk(producer_ast(script))
-                            if isinstance(node, ast.While) and any(
-                                isinstance(value, ast.Constant) and value.value in ("pg_isready", "SELECT 1")
-                                for value in ast.walk(node)))
+                loop = self.postgres_loop(script)
                 phase = 0
                 attempts = []
 
@@ -77,15 +80,133 @@ class NativeProducerStartupTest(unittest.TestCase):
                 self.assertEqual(args[args.index("-U") + 1], "gateway")
                 self.assertEqual(args[args.index("-d") + 1], database)
 
-    def command_scope(self, evidence):
-        functions = [node for node in producer_ast(SCRIPT).body
+    def command_scope(self, evidence, script=SCRIPT):
+        functions = [node for node in producer_ast(script).body
                      if isinstance(node, ast.FunctionDef) and node.name in ("stop_process_group", "command")]
         scope = {"os": os, "signal": signal, "subprocess": subprocess, "time": time,
                  "env": dict(os.environ), "evidence": evidence, "cleaning": False,
                  "gate_signals": {signal.SIGTERM, signal.SIGINT}, "active_processes": {},
-                 "process_receipts": [], "cleanup_errors": []}
-        exec(compile(ast.Module(body=functions, type_ignores=[]), str(SCRIPT), "exec"), scope)
+                 "process_receipts": [], "bounded_process_receipts": [], "cleanup_errors": []}
+        scope["write_json"] = lambda name, value: (evidence / name).write_text(json.dumps(value) + "\n")
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(script), "exec"), scope)
         return scope
+
+    def test_blocked_postgres_probe_times_out_and_reaps_owned_process_group(self):
+        for name, blocked in ((name, blocked) for name in ("native-rubygems-e2e.sh", "native-helm-e2e.sh") for blocked in (False, True)):
+            with self.subTest(producer=name, blockedSignalMask=blocked), tempfile.TemporaryDirectory(prefix="native-postgres-watchdog-") as directory:
+                evidence = Path(directory)
+                docker = evidence / "docker"
+                # Exercise each actual command helper with a real, owned
+                # process group. Both the CLI and its child would outlive the
+                # readiness deadline if only the outer while were bounded.
+                docker.write_text("#!" + sys.executable + "\n" + r'''
+import json,os,pathlib,signal,subprocess,sys,time
+root=pathlib.Path(os.environ['WATCHDOG_TEST_ROOT'])
+# Docker's Go runtime handles its own signal mask. Give this Python stand-in
+# that TERM path, and separately test an intentionally blocked mask so the
+# producer's bounded TERM-to-KILL cleanup is also exercised.
+blocked=os.environ['WATCHDOG_KEEP_MASK']=='1'
+signal.pthread_sigmask(signal.SIG_BLOCK if blocked else signal.SIG_UNBLOCK,{signal.SIGTERM,signal.SIGINT})
+child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(10)'])
+(root/'children.json').write_text(json.dumps([os.getpid(),child.pid]))
+def stop(_signum,_frame):
+    child.wait(timeout=2)
+    raise SystemExit(143)
+signal.signal(signal.SIGTERM,stop)
+time.sleep(3.5 if blocked else .6)
+child.kill();child.wait(timeout=2)
+print('1')
+''')
+                docker.chmod(0o700)
+                script = SCRIPT.parent / name
+                scope = self.command_scope(evidence, script)
+                scope["env"].update(PATH=directory + os.pathsep + os.environ["PATH"], WATCHDOG_TEST_ROOT=directory,
+                                    WATCHDOG_KEEP_MASK="1" if blocked else "0")
+                scope.update(pg="owned-postgres", deadline=time.monotonic() + 0.3)
+                started = time.monotonic()
+                try:
+                    with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                        exec(compile(ast.Module(body=[self.postgres_loop(script)], type_ignores=[]), str(script), "exec"), scope)
+                finally:
+                    children_path = evidence / "children.json"
+                    children = json.loads(children_path.read_text()) if children_path.exists() else []
+                    try:
+                        for pid in children:
+                            state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+                            reap_deadline = time.monotonic() + 0.5
+                            while state.startswith(("Z", "X")) and time.monotonic() < reap_deadline:
+                                time.sleep(0.01)
+                                state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+                            self.assertFalse(state and not state.startswith(("Z", "X")), f"owned readiness process still running: {pid}")
+                            self.assertFalse(state, f"owned readiness process was not reaped: {pid}")
+                    finally:
+                        if children:
+                            try: os.killpg(children[0], signal.SIGKILL)
+                            except ProcessLookupError: pass
+                self.assertTrue(children, "blocking command did not reach its owned child boundary")
+                duration = time.monotonic() - started
+                self.assertLess(duration, 4 if blocked else 2)
+                self.assertGreater(raised.exception.timeout, 0)
+                self.assertLessEqual(raised.exception.timeout, 0.3)
+                receipts = scope["process_receipts"] or scope["bounded_process_receipts"]
+                self.assertTrue(receipts[-1]["waitReturned"])
+                self.assertTrue(receipts[-1]["processGroupStopped"])
+                report = {"producer": name, "blockedSignalMask": blocked, "exceptionType": type(raised.exception).__name__,
+                          "timeoutSeconds": raised.exception.timeout, "durationSeconds": duration,
+                          "cleanupGraceSecondsPerSignal": 2,
+                          "ownedChildren": children, "allOwnedChildrenStopped": True, "allOwnedChildPidsAbsent": True,
+                          "processes": receipts,
+                          "realDockerAndNetworkUsed": False}
+                print(json.dumps(report, sort_keys=True), flush=True)
+                destination = os.environ.get("RUBYGEMS_CLEANUP_TEST_EVIDENCE_DIR")
+                if destination:
+                    target = Path(destination)
+                    target.mkdir(parents=True, exist_ok=True)
+                    with (target / ("watchdog-" + ("blocked-" if blocked else "unblocked-") + name + ".json")).open("x") as output:
+                        output.write(json.dumps(report, indent=2) + "\n")
+
+    def test_postgres_probe_rejects_success_at_deadline(self):
+        for name in ("native-rubygems-e2e.sh", "native-helm-e2e.sh"):
+            with self.subTest(producer=name):
+                script = SCRIPT.parent / name
+                now = 0
+                timeouts = []
+
+                def query(args, **kwargs):
+                    nonlocal now
+                    timeouts.append(kwargs.get("timeout"))
+                    now = 1
+                    return subprocess.CompletedProcess(args, 0, "1\n", "")
+
+                scope = {"command": query, "pg": "owned-postgres", "deadline": 1,
+                         "time": SimpleNamespace(monotonic=lambda: now, sleep=lambda _seconds: None)}
+                with self.assertRaises(RuntimeError):
+                    exec(compile(ast.Module(body=[self.postgres_loop(script)], type_ignores=[]), str(script), "exec"), scope)
+                self.assertEqual(timeouts, [1])
+
+    def test_postgres_retry_sleep_does_not_extend_remaining_budget(self):
+        for name in ("native-rubygems-e2e.sh", "native-helm-e2e.sh"):
+            with self.subTest(producer=name):
+                script = SCRIPT.parent / name
+                now = 0
+                sleeps = []
+
+                def query(args, **_kwargs):
+                    nonlocal now
+                    now = 0.9
+                    return subprocess.CompletedProcess(args, 2, "", "connection refused")
+
+                def sleep(seconds):
+                    nonlocal now
+                    sleeps.append(seconds)
+                    now += seconds
+
+                scope = {"command": query, "pg": "owned-postgres", "deadline": 1,
+                         "time": SimpleNamespace(monotonic=lambda: now, sleep=sleep)}
+                with self.assertRaises(RuntimeError):
+                    exec(compile(ast.Module(body=[self.postgres_loop(script)], type_ignores=[]), str(script), "exec"), scope)
+                self.assertEqual(len(sleeps), 1)
+                self.assertAlmostEqual(sleeps[0], 0.1)
 
     def test_failed_stdin_command_preserves_real_exit_and_output(self):
         with tempfile.TemporaryDirectory(prefix="native-rubygems-command-failure-") as directory:

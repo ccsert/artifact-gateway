@@ -143,9 +143,12 @@ try:
     start(rust,['--env-file',str(rust_env),'--mount','type=volume,src='+volumes[1]+',dst=/data','--mount','type=volume,src='+volumes[2]+',dst=/logs','-p','127.0.0.1:'+str(rust_port)+':9000',rust_image])
     deadline=time.monotonic()+45
     while time.monotonic()<deadline:
-        ready=command(['docker','exec',pg,'psql','-X','-h','127.0.0.1','-U','gateway','-d','gateway_test','-v','ON_ERROR_STOP=1','-Atqc','SELECT 1'],check=False)
+        remaining=deadline-time.monotonic()
+        if remaining<=0:raise RuntimeError('Owned PostgreSQL readiness failed')
+        ready=command(['docker','exec',pg,'psql','-X','-h','127.0.0.1','-U','gateway','-d','gateway_test','-v','ON_ERROR_STOP=1','-Atqc','SELECT 1'],check=False,timeout=remaining)
+        if time.monotonic()>=deadline:raise RuntimeError('Owned PostgreSQL readiness failed')
         if ready.returncode==0 and ready.stdout.strip()=='1':break
-        time.sleep(0.2)
+        time.sleep(min(0.2,max(0,deadline-time.monotonic())))
     else:raise RuntimeError('Owned PostgreSQL readiness failed')
     pg_address=command(['docker','port',pg,'5432/tcp']).stdout.strip();rust_address=command(['docker','port',rust,'9000/tcp']).stdout.strip();deadline=time.monotonic()+45
     while time.monotonic()<deadline:
@@ -172,6 +175,7 @@ except Exception as error:
     message='Owned RubyGems gate failed: '+type(error).__name__
     if isinstance(error,RuntimeError):message+=': '+str(error)
     if isinstance(error,subprocess.CalledProcessError):message+=': '+str(error.cmd[:3])+' exit='+str(error.returncode)
+    if isinstance(error,subprocess.TimeoutExpired):message+=': '+str(error.cmd[:3])+' timeout='+str(error.timeout)
     write('failure.json',{'message':message});print(message,file=sys.stderr)
 finally:
     cleaning=True;cleanup_deadline=time.monotonic()+30
