@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 
@@ -32,6 +33,10 @@ func repositoryDTO(r repository.HostedRepository) any {
 	return map[string]any{"id": r.ID, "name": r.Name, "format": "rubygems", "type": "hosted", "preview": true, "version": r.Version, "anonymousRead": r.AnonymousRead, "sourceUrl": "/rubygems/" + r.Name + "/", "pushHost": "/rubygems/" + r.Name, "publicationUrl": "/rubygems/" + r.Name + "/api/v1/gems"}
 }
 func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != path.Clean(r.URL.Path) || r.URL.RawQuery != "" || strings.ContainsAny(r.URL.Path, "\\\x00\r\n") {
+		m.problem(w, 404, "not_found")
+		return
+	}
 	p, ok := m.auth.AuthenticateContext(r.Context(), r.Header.Get("Authorization"))
 	if !ok {
 		m.problem(w, 401, "authentication_required")
@@ -97,6 +102,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		if _, ok = m.authorize(w, r, repo, authorization.RepositoryRead, "", true); ok {
 			jsonResponse(w, 200, repositoryDTO(repo))
 		}
+		return
+	}
+	if validGovernancePath(parts) {
+		m.previewGovernance(w, r, repo, parts[2], parts[3], parts[4])
 		return
 	}
 	if len(parts) == 2 && parts[1] == "capacity" {

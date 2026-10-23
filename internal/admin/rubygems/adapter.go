@@ -43,3 +43,10 @@ func (a *RubyGemsBoundary) GetRubyGemsPreviewCapacity(w http.ResponseWriter, r *
 func (a *RubyGemsBoundary) SetRubyGemsPreviewQuota(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
 	a.serve(w, r)
 }
+
+func (a *RubyGemsBoundary) GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _, _ string) {
+	a.serve(w, r)
+}
+func (a *RubyGemsBoundary) ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _, _ string) {
+	a.serve(w, r)
+}

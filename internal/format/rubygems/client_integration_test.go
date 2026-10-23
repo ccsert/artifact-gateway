@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -107,6 +108,8 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	isolation := []map[string]any{}
 	phaseStarts := map[string]int{}
 	phaseRoots := map[string]string{}
+	phaseLocks := map[string]string{}
+	governanceEvidence := map[string]any{}
 	activePhase := ""
 	gemfileBody := ""
 	var observing sync.WaitGroup
@@ -114,10 +117,10 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		observing.Wait()
 		mu.Lock()
 		defer mu.Unlock()
-		b, _ := json.MarshalIndent(map[string]any{"clientCommands": commands, "nativeRequestPaths": paths, "nativeResponses": observations, "phaseOriginalClosureProofs": phaseProofs, "consumerIsolation": isolation}, "", "  ")
+		b, _ := json.MarshalIndent(map[string]any{"clientCommands": commands, "nativeRequestPaths": paths, "nativeResponses": observations, "phaseOriginalClosureProofs": phaseProofs, "consumerIsolation": isolation, "governance": governanceEvidence}, "", "  ")
 		_ = os.WriteFile(filepath.Join(evidence, "official-client-evidence.json"), append(b, '\n'), 0600)
 	})
-	run := func(phase, name string, offline bool, args ...string) string {
+	runExpected := func(phase, name string, offline, wantSuccess bool, args ...string) string {
 		t.Helper()
 		consumer := phase != "pack" && phase != "push"
 		root, initialized := phaseRoots[phase]
@@ -146,6 +149,9 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 					t.Fatal("target-only Gemfile required")
 				}
 				ownedFile(t, root, "project/Gemfile", gemfileBody)
+				if lock := phaseLocks[phase]; lock != "" {
+					ownedFile(t, root, "project/Gemfile.lock", lock)
+				}
 			}
 			phaseRoots[phase] = root
 		}
@@ -157,7 +163,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		mu.Unlock()
 		container := project + "-cli-" + strings.ToLower(uuid.NewString())
 		dockerArgs := []string{"run", "--rm", "--name", container, "--label", "com.artifact-gateway.rubygems-e2e.run=" + project, "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()), "--mount", "type=bind,src=" + root + ",dst=/work", "--workdir", "/work/project", "--env", "HOME=/work/home", "--env", "GEMRC=/work/home/gemrc", "--env", "GEM_HOME=/work/gems", "--env", "GEM_PATH=/work/gems", "--env", "GEM_SPEC_CACHE=/work/specs", "--env", "BUNDLE_PATH=/work/bundle", "--env", "BUNDLE_USER_HOME=/work/bundle-user", "--env", "BUNDLE_USER_CACHE=/work/bundle-cache", "--env", "BUNDLE_IGNORE_CONFIG=1", "--env", "BUNDLE_DISABLE_SHARED_GEMS=true", "--env", "BUNDLE_RETRY=0", "--env", "BUNDLE_TIMEOUT=30"}
-		if !consumer {
+		if !consumer || strings.HasPrefix(phase, "yank-") {
 			dockerArgs = append(dockerArgs, "--env", "GEM_HOST_API_KEY="+admin)
 		}
 		if strings.HasPrefix(phase, "bundle-") {
@@ -183,11 +189,21 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		observing.Wait()
 		safe := strings.ReplaceAll(strings.ReplaceAll(string(output), admin, "[owned-admin-key]"), reader, "[owned-reader-key]")
 		safeArgs := strings.ReplaceAll(strings.ReplaceAll(strings.Join(args, " "), admin, "[owned-admin-key]"), reader, "[owned-reader-key]")
-		commands = append(commands, map[string]any{"phase": phase, "command": safeArgs, "output": safe, "exitSuccess": err == nil, "networkNone": offline, "consumerOnlyMount": consumer, "containerCwd": "/work/project"})
-		if err != nil {
+		commands = append(commands, map[string]any{"phase": phase, "command": safeArgs, "output": safe, "exitSuccess": err == nil, "expectedSuccess": wantSuccess, "networkNone": offline, "consumerOnlyMount": consumer, "containerCwd": "/work/project"})
+		if wantSuccess && err != nil {
 			t.Fatalf("official %s: %v\n%s", name, err, safe)
 		}
+		if !wantSuccess {
+			var exit *exec.ExitError
+			if ctx.Err() != nil || !errors.As(err, &exit) || exit.ExitCode() <= 0 {
+				t.Fatalf("official %s expected native rejection, got %v\n%s", name, err, safe)
+			}
+			commands[len(commands)-1]["expectedNonzeroExitCode"] = exit.ExitCode()
+		}
 		return safe
+	}
+	run := func(phase, name string, offline bool, args ...string) string {
+		return runExpected(phase, name, offline, true, args...)
 	}
 	versions := strings.TrimSpace(run("pack", "versions", true, "ruby", "-e", `require "rubygems"; require "bundler"; puts [RUBY_VERSION,Gem::VERSION,Bundler::VERSION].join(" ")`))
 	if versions != "3.4.4 3.6.7 2.6.7" {
@@ -196,7 +212,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	proof := []map[string]any{}
 	originalMetadata := map[string]protocol.Metadata{}
 	producer := filepath.Join(work, "producer", "project")
-	for _, spec := range []struct{ name, version, platform, dep, expr string }{{"owned_leaf", "1.0.0", "ruby", "", "'leaf'"}, {"owned_middle", "1.1.0", "ruby", "s.add_runtime_dependency('owned_leaf','>= 1.0','< 2.0')", "require 'owned_leaf'; 'middle-' + OWNED_LEAF"}, {"owned_top", "1.2.0", "ruby", "s.add_runtime_dependency('owned_middle','~> 1.1')", "require 'owned_middle'; 'top-' + OWNED_MIDDLE"}, {"owned_top", "1.3.0.pre", "ruby", "s.add_runtime_dependency('owned_middle','>= 1.1','< 2.0')", "require 'owned_middle'; 'pre-' + OWNED_MIDDLE"}, {"owned_platform", "1.0.0", "x86_64-linux", "s.add_runtime_dependency('owned_leaf','= 1.0.0')", "'platform'"}} {
+	for _, spec := range []struct{ name, version, platform, dep, expr string }{{"owned_leaf", "1.0.0", "ruby", "", "'leaf'"}, {"owned_middle", "1.1.0", "ruby", "s.add_runtime_dependency('owned_leaf','>= 1.0','< 2.0')", "require 'owned_leaf'; 'middle-' + OWNED_LEAF"}, {"owned_top", "1.2.0", "ruby", "s.add_runtime_dependency('owned_middle','~> 1.1')", "require 'owned_middle'; 'top-' + OWNED_MIDDLE"}, {"owned_top", "1.3.0.pre", "ruby", "s.add_runtime_dependency('owned_middle','>= 1.1','< 2.0')", "require 'owned_middle'; 'pre-' + OWNED_MIDDLE"}, {"owned_platform", "1.0.0", "x86_64-linux", "s.add_runtime_dependency('owned_leaf','= 1.0.0')", "'platform'"}, {"owned_variant", "1.0.0", "ruby", "", "'variant'"}, {"owned_variant", "1.0.0", "java", "", "'variant'"}} {
 		file := spec.name + "-" + spec.version + "-" + spec.platform + ".gemspec"
 		content := "Gem::Specification.new do |s|\ns.name=" + strconv.Quote(spec.name) + ";s.version=" + strconv.Quote(spec.version) + ";s.platform=" + strconv.Quote(spec.platform) + ";s.summary='Owned fixture';s.authors=['Gateway'];s.licenses=['MIT'];s.files=['lib/" + spec.name + ".rb'];s.require_paths=['lib'];s.required_ruby_version='>= 3.0';s.metadata={'source_code_uri'=>'https://example.invalid/owned','changelog_uri'=>'https://example.invalid/tail'};" + spec.dep + "\ns.description='Benign tail after dependency fields';s.post_install_message='owned metadata tail';\nend\n"
 		ownedFile(t, producer, file, content)
@@ -429,6 +445,66 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	if e != nil || len(audits) != len(proof) {
 		t.Fatalf("durable idempotent audit %d %v", len(audits), e)
 	}
+	// Native yank uses the same fixed official client and an independently
+	// empty client root. No target consumer can see the producer's gem files.
+	lockBytes, err := os.ReadFile(filepath.Join(phaseRoots["bundle-cold-before"], "project/Gemfile.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	phaseLocks["bundle-yanked-before"] = string(lockBytes)
+	phaseLocks["bundle-yanked-after"] = string(lockBytes)
+	run("yank-variant-ruby", "yank-default-ruby", false, "gem", "yank", "owned_variant", "--version", "1.0.0", "--host", strings.TrimSuffix(source, "/"))
+	if w := request(server.Config.Handler, "GET", "/rubygems/"+repo.Name+"/gems/owned_variant-1.0.0.gem", nil, admin); w.Code != 404 {
+		t.Fatal("default yank ruby", w.Code)
+	}
+	if w := request(server.Config.Handler, "GET", "/rubygems/"+repo.Name+"/gems/owned_variant-1.0.0-java.gem", nil, admin); w.Code != 200 {
+		t.Fatal("default yank changed java", w.Code)
+	}
+	run("yank-variant-java", "yank-explicit-java", false, "gem", "yank", "owned_variant", "--version", "1.0.0", "--platform", "java", "--host", strings.TrimSuffix(source, "/"))
+	run("yank-leaf", "yank-transitive-leaf", false, "gem", "yank", "owned_leaf", "--version", "1.0.0", "--host", strings.TrimSuffix(source, "/"))
+	run("yank-leaf-replay", "yank-idempotent-retry", false, "gem", "yank", "owned_leaf", "--version", "1.0.0", "--host", strings.TrimSuffix(source, "/"))
+	assertRejectedPhase := func(phase string) {
+		t.Helper()
+		observing.Wait()
+		mu.Lock()
+		defer mu.Unlock()
+		start, exists := phaseStarts[phase]
+		if !exists {
+			t.Fatal("missing denial phase")
+		}
+		observed := 0
+		for _, response := range observations[start:] {
+			if response.Phase != phase {
+				continue
+			}
+			observed++
+			if strings.HasSuffix(response.Path, "/owned_leaf-1.0.0.gem") && (response.Status == 200 || response.Status == 206 || response.Status == 304) {
+				t.Fatalf("yanked leaf delivered: %+v", response)
+			}
+		}
+		if observed == 0 {
+			t.Fatal("client failed before reaching target Gateway")
+		}
+		governanceEvidence[phase] = map[string]any{"targetRequests": observed, "yankedOriginalUnavailable": true, "emptyCache": true, "targetOnly": true, "producerDirectoryMounted": false}
+	}
+	deniedConsumers := func(suffix string) {
+		t.Helper()
+		phase := "gem-yanked-" + suffix
+		out := runExpected(phase, "yanked-gem-install", false, false, "gem", "install", "owned_top", "--version", "1.2.0", "--remote", "--clear-sources", "--source", readSource, "--no-document", "--verbose")
+		if !strings.Contains(out, "owned_leaf") {
+			t.Fatal("missing rejected dependency identity", out)
+		}
+		assertRejectedPhase(phase)
+		phase = "bundle-yanked-" + suffix
+		out = runExpected(phase, "locked-yanked-bundle-install", false, false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
+		if !strings.Contains(out, "owned_leaf") {
+			t.Fatal("missing rejected locked dependency identity", out)
+		}
+		assertRejectedPhase(phase)
+	}
+	deniedConsumers("before")
+	governanceEvidence["officialYankRubyAndJavaIsolated"] = true
+	governanceEvidence["lockedConsumerSource"] = "Gemfile.lock from successful owned cold install; no installed gems copied"
 	server.Close()
 	stopGateway()
 	_ = repos.Close()
@@ -461,10 +537,35 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		time.Sleep(200 * time.Millisecond)
 	}
 	start()
+	deniedConsumers("after")
+	statePath := governancePath(repo.ID, "owned_leaf", "1.0.0", "ruby")
+	w := request(server.Config.Handler, "GET", statePath, nil, "Bearer "+admin)
+	var state governanceReceipt
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &state) != nil || !state.Yanked || state.GovernanceVersion != "2" {
+		t.Fatalf("restarted governance %d %s", w.Code, w.Body.String())
+	}
+	g := governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, state.GovernanceVersion, "restore", "Bearer "+admin, 200)
+	if g.Yanked || g.GovernanceVersion != "3" {
+		t.Fatal(g)
+	}
+	governanceEvidence["restartRetainedYank"] = true
+	governanceEvidence["verifiedRestoreGovernanceVersion"] = g.GovernanceVersion
 	install("gem-cold-after")
 	run("bundle-cold-after", "restarted-bundle-install", false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
 	run("bundle-cold-after", "restarted-bundle-execute", true, "bundle", "_2.6.7_", "exec", "ruby", "-e", `require 'owned_top'; abort unless OWNED_TOP == 'top-middle-leaf'; puts OWNED_TOP`)
 	verifyPhase("bundle-cold-after", stable, compact)
+	governanceEvidence["restoredColdClientsOriginalClosureVerified"] = true
+	for _, op := range []string{"rubygems.yank", "rubygems.restore"} {
+		auditRows, err := repos.ListAudits(t.Context(), repository.AuditQuery{Repository: repo.Name, Operation: op, Limit: 100})
+		want := 3
+		if op == "rubygems.restore" {
+			want = 1
+		}
+		if err != nil || len(auditRows) != want {
+			t.Fatalf("governance audit %s: %d %v", op, len(auditRows), err)
+		}
+		governanceEvidence[op+"AuditCount"] = len(auditRows)
+	}
 	t.Logf("official toolchain %s; %d original closures verified; real compact and legacy cold three-level installs survived owned PostgreSQL/RustFS restart", versions, len(proof))
 }
 

@@ -26,12 +26,14 @@ type Session struct {
 	Size                                                                       int64
 	MetadataJSON, MetadataYAML                                                 []byte
 	CreatedAt, ExpiresAt, CommittedAt, CollectedAt                             time.Time
+	Governance                                                                 Governance
 }
 type Publication struct {
 	SessionID, RepositoryID, Name, Version, Platform, Digest, Publisher, ObjectKey string
 	Size                                                                           int64
 	MetadataJSON, MetadataYAML                                                     []byte
 	PublishedAt                                                                    time.Time
+	Governance                                                                     Governance
 }
 type Capacity struct {
 	UsedBytes    int64 `json:"usedBytes"`
@@ -44,6 +46,8 @@ type Store interface {
 	Reserve(context.Context, Session) (Session, bool, error)
 	Commit(context.Context, string, string) (Publication, bool, error)
 	Get(context.Context, string, string) (Publication, error)
+	GetRetained(context.Context, string, string, string, string) (Publication, error)
+	TransitionGovernance(context.Context, GovernanceChange) (Publication, error)
 	List(context.Context, string, int) ([]Publication, error)
 	GetSession(context.Context, string) (Session, error)
 	Expire(context.Context, time.Time, int) ([]Session, error)
@@ -99,5 +103,5 @@ func ObjectKey(in Session) string {
 	return "native/rubygems/" + in.RepositoryID + "/" + in.ID + "/package.gem"
 }
 func Visible(in Session) Publication {
-	return Publication{SessionID: in.ID, RepositoryID: in.RepositoryID, Name: in.Name, Version: in.Version, Platform: in.Platform, Digest: in.Digest, Publisher: in.Actor, ObjectKey: in.ObjectKey, Size: in.Size, MetadataJSON: append([]byte(nil), in.MetadataJSON...), MetadataYAML: append([]byte(nil), in.MetadataYAML...), PublishedAt: in.CommittedAt}
+	return Publication{SessionID: in.ID, RepositoryID: in.RepositoryID, Name: in.Name, Version: in.Version, Platform: in.Platform, Digest: in.Digest, Publisher: in.Actor, ObjectKey: in.ObjectKey, Size: in.Size, MetadataJSON: append([]byte(nil), in.MetadataJSON...), MetadataYAML: append([]byte(nil), in.MetadataYAML...), PublishedAt: in.CommittedAt, Governance: in.Governance}
 }
