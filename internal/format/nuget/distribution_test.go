@@ -227,7 +227,7 @@ func (o *replicationHookObjects) PutVerifiedReader(ctx context.Context, key stri
 		if len(body) > 0 {
 			body[0] ^= 1
 		}
-		return o.Store.Put(ctx, key, body)
+		return o.Put(ctx, key, body)
 	}
 	err := o.Store.PutVerifiedReader(ctx, key, r, n, d)
 	if err == nil && o.hook != nil {
