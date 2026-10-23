@@ -4,7 +4,7 @@ umask 077
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 exec python3 -B - "$repo_root" <<'PY'
-import hashlib,json,os,pathlib,secrets,shutil,signal,socket,subprocess,sys,tempfile,time,urllib.request
+import hashlib,ipaddress,json,os,pathlib,secrets,shutil,signal,socket,subprocess,sys,tempfile,time,urllib.request
 gate_signals={signal.SIGTERM,signal.SIGINT}
 initial_signal_mask=signal.pthread_sigmask(signal.SIG_BLOCK,gate_signals)
 root=pathlib.Path(sys.argv[1]);run_id='ag459-rubygems-'+secrets.token_hex(6)
@@ -137,7 +137,25 @@ try:
     write('tool-provenance.json',{'toolchain':probe,'image':image,'imageId':ruby_inspect['Id'],'repoDigests':ruby_inspect.get('RepoDigests',[]),'platform':ruby_inspect['Os']+'/'+ruby_inspect['Architecture'],'rubyGemsSourceTag':'v3.6.7','bundlerVersion':'2.6.7','sources':source_proof,'packaging':'official gem build in network-none container','consumers':'owned-empty GEM_HOME/GEM_PATH/GEM_SPEC_CACHE/Bundler caches and target-only source','formalAdmission':False})
     files=command(['git','ls-files','-co','--exclude-standard','-z']).stdout.split('\0');hashes={name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in sorted(set(files)) if name and (root/name).is_file()}
     write('source.json',{'head':command(['git','rev-parse','HEAD']).stdout.strip(),'tree':command(['git','rev-parse','HEAD^{tree}']).stdout.strip(),'dirty':bool(command(['git','status','--porcelain']).stdout),'fileHashes':hashes,'goVersion':command(['go','version']).stdout.strip()})
-    command(['docker','network','create','--label',label,network]);password=secrets.token_hex(24);access='ruby'+secrets.token_hex(8);secret=secrets.token_hex(24)
+    network_args=['docker','network','create','--label',label]
+    # An explicit fixture-only subnet avoids changing the daemon or deleting
+    # other projects when Docker's automatic address pools are exhausted.
+    explicit_subnet=env.get('RUBYGEMS_OWNED_SUBNET','')
+    if explicit_subnet:
+        selected=ipaddress.ip_network(explicit_subnet,strict=True)
+        private_ranges=[ipaddress.ip_network(cidr) for cidr in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16')]
+        if selected.version!=4 or not 24<=selected.prefixlen<=28 or not any(selected.subnet_of(parent) for parent in private_ranges):raise RuntimeError('Owned fixture subnet must be a canonical RFC1918 IPv4 /24 through /28')
+        network_ids=command(['docker','network','ls','-q'],timeout=20).stdout.split()
+        current=json.loads(command(['docker','network','inspect',*network_ids],timeout=30).stdout) if network_ids else []
+        subnets=[]
+        for item in current:
+            for config in item.get('IPAM',{}).get('Config',[]) or []:
+                if not config.get('Subnet'):continue
+                existing=ipaddress.ip_network(config['Subnet'],strict=False);subnets.append(str(existing))
+                if existing.version==4 and existing.overlaps(selected):raise RuntimeError('Owned fixture subnet overlaps an existing Docker network')
+        write('network-subnet-check.json',{'requested':str(selected),'observedDockerSubnets':sorted(subnets),'overlap':False,'daemonConfigurationChanged':False})
+        network_args+=['--subnet',str(selected)]
+    command([*network_args,network],timeout=30);password=secrets.token_hex(24);access='ruby'+secrets.token_hex(8);secret=secrets.token_hex(24)
     for suffix in ('pg','rust','logs'):
         name=run_id+'-'+suffix+'-data';volumes.append(name);command(['docker','volume','create','--label',label,name])
     pg_env=work/'pg.env';pg_env.write_text('POSTGRES_DB=gateway_test\nPOSTGRES_USER=gateway\nPOSTGRES_PASSWORD='+password+'\nPGPASSWORD='+password+'\n')
