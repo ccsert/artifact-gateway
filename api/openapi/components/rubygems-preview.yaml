@@ -12,7 +12,7 @@ RubyGemsPreviewRepositoryInput:
 RubyGemsPreviewRepository:
   type: object
   additionalProperties: false
-  required: [id, name, format, type, preview, version, anonymousRead, sourceUrl, publicationUrl]
+  required: [id, name, format, type, preview, version, anonymousRead, sourceUrl, pushHost, publicationUrl]
   properties:
     id: {type: string, format: uuid}
     name: {type: string}
@@ -22,6 +22,9 @@ RubyGemsPreviewRepository:
     version: {type: string}
     anonymousRead: {type: boolean}
     sourceUrl: {type: string}
+    pushHost:
+      type: string
+      description: Base URI for gem push --host, without a trailing slash. The official client appends /api/v1/gems.
     publicationUrl: {type: string}
 RubyGemsPreviewCapacity:
   type: object

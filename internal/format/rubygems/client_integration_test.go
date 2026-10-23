@@ -8,9 +8,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,12 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ccsert/artifact-gateway/internal/authorization"
 	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	protocol "github.com/ccsert/artifact-gateway/internal/protocol/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/repository"
-	"github.com/ccsert/artifact-gateway/internal/rubygemspublication/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/testsupport"
 	"github.com/google/uuid"
 )
@@ -77,6 +78,17 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		}
 		container := project + "-cli-" + strings.ToLower(uuid.NewString())
 		dockerArgs := []string{"run", "--rm", "--name", container, "--label", "com.artifact-gateway.rubygems-e2e.run=" + project, "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()), "--mount", "type=bind,src=" + work + ",dst=/work", "--workdir", "/work", "--env", "HOME=/work/" + phase + "/home", "--env", "GEM_HOME=/work/" + phase + "/gems", "--env", "GEM_PATH=/work/" + phase + "/gems", "--env", "GEM_SPEC_CACHE=/work/" + phase + "/specs", "--env", "BUNDLE_PATH=/work/" + phase + "/bundle", "--env", "BUNDLE_USER_HOME=/work/" + phase + "/bundle-user", "--env", "BUNDLE_USER_CACHE=/work/" + phase + "/bundle-cache", "--env", "BUNDLE_IGNORE_CONFIG=1", "--env", "BUNDLE_DISABLE_SHARED_GEMS=true", "--env", "BUNDLE_RETRY=0", "--env", "BUNDLE_TIMEOUT=30", "--env", "GEM_HOST_API_KEY=" + admin}
+		if strings.HasPrefix(phase, "bundle-") {
+			gemfile := filepath.Join(work, phase, "Gemfile")
+			if _, e := os.Stat(gemfile); os.IsNotExist(e) {
+				data, e := os.ReadFile(filepath.Join(work, "Gemfile"))
+				if e != nil {
+					t.Fatal(e)
+				}
+				ownedFile(t, work, phase+"/Gemfile", string(data))
+			}
+			dockerArgs = append(dockerArgs, "--env", "BUNDLE_GEMFILE=/work/"+phase+"/Gemfile")
+		}
 		if offline {
 			dockerArgs = append(dockerArgs, "--network", "none")
 		} else if runtime.GOOS == "linux" {
@@ -140,6 +152,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	var server *httptest.Server
 	var address string
 	bucket := "ruby-owned-" + uuid.NewString()
+	var stopGateway func()
 	start := func() {
 		t.Helper()
 		var e error
@@ -147,19 +160,8 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		if e != nil {
 			t.Fatal(e)
 		}
-		db, e := database.OpenPostgres(dsn, database.DefaultPoolConfig())
-		if e != nil {
-			t.Fatal(e)
-		}
-		locks, e := database.OpenPostgres(dsn, database.DefaultArtifactLockPoolConfig())
-		if e != nil {
-			t.Fatal(e)
-		}
-		t.Cleanup(func() { _ = db.Close(); _ = locks.Close(); _ = repos.Close() })
-		store, e := pgstore.New(db, locks)
-		if e != nil {
-			t.Fatal(e)
-		}
+		ownedRepos := repos
+		t.Cleanup(func() { _ = ownedRepos.Close() })
 		objects, e := objectstore.NewRustFSStore(os.Getenv("TEST_RUSTFS_ENDPOINT"), os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY"), bucket)
 		if e != nil {
 			t.Fatal(e)
@@ -167,23 +169,20 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		if e = objects.EnsureBucket(t.Context()); e != nil {
 			t.Fatal(e)
 		}
-		if repo.ID == "" {
-			repo, e = repos.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: "ruby-owned-" + uuid.NewString(), Format: repository.FormatRubyGems, Type: repository.RepositoryTypeHosted})
-			if e != nil {
-				t.Fatal(e)
-			}
-		}
-		auth := authorization.Authenticator{AdminToken: admin, AdminActor: "ruby-gate-operator", ResolverToken: reader, ResolverActor: "ruby-gate-reader", RepositoryReaders: map[string][]string{"ruby-gate-reader": {repo.Name}}}
-		module, e := New(Options{Store: store, Repositories: repos, Objects: objects, Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: repos, Legacy: auth}, Audit: repos, Anonymous: repos})
+		var backend string
+		stopGateway, backend = startRealRubyGateway(t, admin, reader, bucket, evidence)
+		target, e := url.Parse(backend)
 		if e != nil {
 			t.Fatal(e)
 		}
+		proxy := httputil.NewSingleHostReverseProxy(target)
 		server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			mu.Lock()
 			paths = append(paths, r.Method+" "+r.URL.Path)
 			mu.Unlock()
-			module.ServeHTTP(w, r)
+			proxy.ServeHTTP(w, r)
 		}))
+		_ = server.Listener.Close()
 		if address == "" {
 			server.Listener, e = net.Listen("tcp", "0.0.0.0:0")
 		} else {
@@ -194,17 +193,47 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		}
 		address = server.Listener.Addr().String()
 		server.Start()
+		server.URL = "http://127.0.0.1:" + strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
 		t.Cleanup(server.Close)
+		if repo.ID == "" {
+			name := "ruby-owned-" + uuid.NewString()
+			r, e := http.NewRequestWithContext(t.Context(), "POST", server.URL+"/api/v2/previews/rubygems/repositories", strings.NewReader(`{"name":"`+name+`"}`))
+			if e != nil {
+				t.Fatal(e)
+			}
+			r.Header.Set("Authorization", "Bearer "+admin)
+			r.Header.Set("Content-Type", "application/json")
+			res, e := (&http.Client{Timeout: 30 * time.Second}).Do(r)
+			if e != nil {
+				t.Fatal(e)
+			}
+			raw, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			if res.StatusCode != 201 {
+				t.Fatalf("production preview creation %d %s", res.StatusCode, raw)
+			}
+			var result struct{ ID string }
+			if e = json.Unmarshal(raw, &result); e != nil || result.ID == "" {
+				t.Fatal("missing production repository id")
+			}
+			repo, e = repos.GetHostedRepository(t.Context(), result.ID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, e = repos.ReplaceRepositoryGrants(t.Context(), repo.ID, []repository.RepositoryGrant{{Principal: "ruby-gate-reader", Scopes: []string{"repositories:read"}}}, "1"); e != nil {
+				t.Fatal(e)
+			}
+		}
 	}
 	start()
 	port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
 	source := "http://host.docker.internal:" + port + "/rubygems/" + repo.Name + "/"
 	readSource := strings.Replace(source, "http://", "http://gateway:"+reader+"@", 1)
 	for _, record := range proof {
-		run("push", "push-"+record["filename"].(string), false, "gem", "push", record["filename"].(string), "--host", source)
+		run("push", "push-"+record["filename"].(string), false, "gem", "push", record["filename"].(string), "--host", strings.TrimSuffix(source, "/"))
 	}
 	// Native retries retain exactly the same original closure and one audit.
-	run("push", "idempotent-push", false, "gem", "push", "owned_top-1.2.0.gem", "--host", source)
+	run("push", "idempotent-push", false, "gem", "push", "owned_top-1.2.0.gem", "--host", strings.TrimSuffix(source, "/"))
 	for _, record := range proof {
 		w := request(server.Config.Handler, "GET", "/rubygems/"+repo.Name+"/gems/"+record["filename"].(string), nil, admin)
 		sum := sha256.Sum256(w.Body.Bytes())
@@ -234,6 +263,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		t.Fatalf("durable idempotent audit %d %v", len(audits), e)
 	}
 	server.Close()
+	stopGateway()
 	_ = repos.Close()
 	for _, service := range strings.Split(os.Getenv("RUBYGEMS_OWNED_RESTART_CONTAINERS"), ",") {
 		if service == "" {
@@ -265,7 +295,6 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	}
 	start()
 	install("gem-cold-after")
-	_ = os.Remove(filepath.Join(work, "Gemfile.lock"))
 	run("bundle-cold-after", "restarted-bundle-install", false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
 	run("bundle-cold-after", "restarted-bundle-execute", true, "bundle", "_2.6.7_", "exec", "ruby", "-e", `require 'owned_top'; abort unless OWNED_TOP == 'top-middle-leaf'; puts OWNED_TOP`)
 	mu.Lock()
@@ -277,4 +306,76 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		}
 	}
 	t.Logf("official toolchain %s; %d original closures verified; real compact and legacy cold three-level installs survived owned PostgreSQL/RustFS restart", versions, len(proof))
+}
+
+func startRealRubyGateway(t *testing.T, admin, reader, bucket, evidence string) (func(), string) {
+	t.Helper()
+	binary := os.Getenv("RUBYGEMS_GATEWAY_BIN")
+	if binary == "" {
+		t.Fatal("full production gateway binary required")
+	}
+	listener, e := net.Listen("tcp", "127.0.0.1:0")
+	if e != nil {
+		t.Fatal(e)
+	}
+	address := listener.Addr().String()
+	_ = listener.Close()
+	log, e := os.OpenFile(filepath.Join(evidence, "production-gateway.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if e != nil {
+		t.Fatal(e)
+	}
+	cmd := exec.Command(binary)
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, "GATEWAY_") {
+			cmd.Env = append(cmd.Env, value)
+		}
+	}
+	cmd.Env = append(cmd.Env, "GATEWAY_DATABASE_URL="+os.Getenv("TEST_DATABASE_URL"), "GATEWAY_RUSTFS_ENDPOINT="+os.Getenv("TEST_RUSTFS_ENDPOINT"), "GATEWAY_RUSTFS_ACCESS_KEY="+os.Getenv("TEST_RUSTFS_ACCESS_KEY"), "GATEWAY_RUSTFS_SECRET_KEY="+os.Getenv("TEST_RUSTFS_SECRET_KEY"), "GATEWAY_RUSTFS_BUCKET="+bucket, "GATEWAY_ADMIN_TOKEN="+admin, "GATEWAY_ADMIN_ACTOR=ruby-gate-operator", "GATEWAY_RESOLVER_TOKEN="+reader, "GATEWAY_RESOLVER_ACTOR=ruby-gate-reader", "GATEWAY_RUBYGEMS_PREVIEW_ENABLED=true", "GATEWAY_REPOSITORY_PRESETS=none", "GATEWAY_NODE_ROLES=api", "GATEWAY_LISTEN_ADDRESS="+address, "GATEWAY_ACCESS_LOG=limited")
+	cmd.Stdout, cmd.Stderr = log, log
+	if e = cmd.Start(); e != nil {
+		_ = log.Close()
+		t.Fatal(e)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	stopped := false
+	stop := func() {
+		if stopped {
+			return
+		}
+		stopped = true
+		_ = cmd.Process.Signal(os.Interrupt)
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			_ = cmd.Process.Kill()
+			<-done
+		}
+		_ = log.Close()
+		b, _ := json.Marshal(map[string]any{"pid": cmd.Process.Pid, "waitReturned": true, "productionBinary": true, "observer": "owned transparent forwarding HTTP server; no protocol, authentication, persistence or byte responses mocked"})
+		_ = os.WriteFile(filepath.Join(evidence, "gateway-process-"+strconv.Itoa(cmd.Process.Pid)+".json"), append(b, '\n'), 0600)
+	}
+	t.Cleanup(stop)
+	base := "http://" + address
+	client := &http.Client{Timeout: time.Second}
+	deadline := time.Now().Add(25 * time.Second)
+	for time.Now().Before(deadline) {
+		res, e := client.Get(base + "/readyz")
+		if e == nil {
+			_ = res.Body.Close()
+			if res.StatusCode == 200 || res.StatusCode == 204 {
+				return stop, base
+			}
+		}
+		select {
+		case e := <-done:
+			stopped = true
+			_ = log.Close()
+			t.Fatalf("production gateway exited before ready: %v", e)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	stop()
+	t.Fatal("production gateway did not become ready")
+	return stop, base
 }

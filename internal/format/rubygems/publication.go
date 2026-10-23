@@ -72,6 +72,14 @@ func (m *Module) push(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		m.failure(w, errIntegrity)
 		return
 	}
+	current, allowed := m.authorize(w, r, repo, authorization.RepositoryWrite, meta.Name, false)
+	if !allowed {
+		return
+	}
+	if current.Actor != p.Actor {
+		m.problem(w, 403, "access_denied")
+		return
+	}
 	pub, _, e := m.store.Commit(ctx, session.ID, p.Actor)
 	if e != nil {
 		m.failure(w, e)

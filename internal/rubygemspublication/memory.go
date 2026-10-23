@@ -86,7 +86,7 @@ func (m *Memory) Reserve(ctx context.Context, in Session) (Session, bool, error)
 		if s.ID == in.ID && (!Same(s, in) || s.Actor != in.Actor) {
 			return Session{}, false, ErrConflict
 		}
-		if s.RepositoryID == in.RepositoryID && s.Identity() == in.Identity() && (s.State == "pending" || s.State == "committed") {
+		if s.RepositoryID == in.RepositoryID && (s.Identity() == in.Identity() || Visible(s).FullName() == Visible(in).FullName()) && (s.State == "pending" || s.State == "committed") {
 			if !Same(s, in) || s.State == "pending" && s.Actor != in.Actor {
 				return Session{}, false, ErrConflict
 			}
@@ -100,7 +100,13 @@ func (m *Memory) Reserve(ctx context.Context, in Session) (Session, bool, error)
 	if c.QuotaBytes > 0 && (c.UsedBytes+c.PendingBytes > c.QuotaBytes || in.Size > c.QuotaBytes-c.UsedBytes-c.PendingBytes) {
 		return Session{}, false, repository.ErrQuotaExceeded
 	}
-	if c.ObjectCount >= protocolIndexLimit {
+	activeCount := 0
+	for _, s := range m.sessions {
+		if s.RepositoryID == in.RepositoryID && (s.State == "pending" || s.State == "committed") {
+			activeCount++
+		}
+	}
+	if activeCount >= protocolIndexLimit {
 		return Session{}, false, repository.ErrQuotaExceeded
 	}
 	in.State = "pending"

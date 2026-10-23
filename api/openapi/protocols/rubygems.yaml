@@ -1,4 +1,5 @@
 push:
+  servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
   post:
@@ -25,6 +26,7 @@ push:
       '413': {description: Gem exceeds the configured compressed-byte bound}
       '500': {description: Persistence or verified-object failure; no partial index publication}
 index:
+  servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
     - {name: index, in: path, required: true, schema: {type: string, enum: [names, versions, specs.4.8.gz, latest_specs.4.8.gz, prerelease_specs.4.8.gz]}}
@@ -49,6 +51,7 @@ index:
       '403': {description: Repository read permission denied}
       '404': {description: Preview or repository not found}
 info:
+  servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
     - {name: gemName, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
@@ -62,7 +65,17 @@ info:
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}
       '404': {description: Invalid name or missing preview repository}
+  head:
+    operationId: headRubyGemsHostedPreviewInfo
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Same authorized compact info headers without body}
+      '304': {description: Same authorized info ETag}
+      '401': {description: Authentication required}
+      '403': {description: Gem-name read permission denied}
+      '404': {description: Invalid name or missing preview repository}
 asset:
+  servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
     - {name: gemFile, in: path, required: true, schema: {type: string, minLength: 1}}
@@ -87,6 +100,7 @@ asset:
       '403': {description: Gem-name read permission denied}
       '404': {description: Gem not found}
 quick:
+  servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
     - {name: gemspecFile, in: path, required: true, schema: {type: string, minLength: 1}}
@@ -96,6 +110,15 @@ quick:
     security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
     responses:
       '200': {description: Authorized immutable gemspec}
+      '304': {description: Same authorized gemspec ETag}
+      '401': {description: Authentication required}
+      '403': {description: Gem-name read permission denied}
+      '404': {description: Gem not found}
+  head:
+    operationId: headRubyGemsHostedPreviewGemspec
+    security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
+    responses:
+      '200': {description: Same authorized gemspec headers without body}
       '304': {description: Same authorized gemspec ETag}
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}

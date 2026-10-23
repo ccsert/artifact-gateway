@@ -53,6 +53,7 @@ type Metadata struct {
 	RequiredRuby     []Requirement     `json:"requiredRuby"`
 	RequiredRubyGems []Requirement     `json:"requiredRubyGems"`
 	Extra            map[string]string `json:"metadata"`
+	Files            []string          `json:"files"`
 }
 type Inspection struct {
 	Metadata     Metadata
@@ -202,6 +203,14 @@ func Inspect(r io.Reader) (Inspection, error) {
 	if len(seen) == 0 || len(payload)%512 != 0 || !zeroTail(payload[len(payload)-payloadReader.Len():]) {
 		return empty, ErrInvalid
 	}
+	if len(meta.Files) != len(seen) {
+		return empty, ErrInvalid
+	}
+	for _, name := range meta.Files {
+		if !seen[name] {
+			return empty, ErrInvalid
+		}
+	}
 	b, _ := json.Marshal(meta)
 	return Inspection{meta, b, y}, nil
 }
@@ -281,6 +290,13 @@ func scalar(n *yaml.Node) string {
 	}
 	return n.Value
 }
+
+func stringScalar(n *yaml.Node) string {
+	if n == nil || n.Kind != yaml.ScalarNode || n.Tag != "!!str" {
+		return ""
+	}
+	return n.Value
+}
 func stringList(n *yaml.Node) ([]string, error) {
 	out := []string{}
 	if n == nil || n.Tag == "!!null" {
@@ -302,7 +318,7 @@ func version(n *yaml.Node) string {
 	if e != nil || n.Tag != "!ruby/object:Gem::Version" || len(m) != 1 {
 		return ""
 	}
-	return scalar(m["version"])
+	return stringScalar(m["version"])
 }
 func requirements(n *yaml.Node) ([]Requirement, error) {
 	if n == nil {
@@ -321,7 +337,7 @@ func requirements(n *yaml.Node) ([]Requirement, error) {
 		if entry.Kind != yaml.SequenceNode || len(entry.Content) != 2 {
 			return nil, ErrInvalid
 		}
-		r := Requirement{scalar(entry.Content[0]), version(entry.Content[1])}
+		r := Requirement{stringScalar(entry.Content[0]), version(entry.Content[1])}
 		if !operators[r.Operator] || !ValidVersion(r.Version) {
 			return nil, ErrInvalid
 		}
@@ -339,14 +355,14 @@ func ParseMetadata(y []byte) (Metadata, error) {
 	if e != nil {
 		return out, e
 	}
-	out.Name, out.Version, out.Platform = scalar(m["name"]), version(m["version"]), scalar(m["platform"])
+	out.Name, out.Version, out.Platform = stringScalar(m["name"]), version(m["version"]), stringScalar(m["platform"])
 	if out.Platform == "" {
 		out.Platform = "ruby"
 	}
 	if !ValidName(out.Name) || !ValidVersion(out.Version) || !ValidPlatform(out.Platform) || scalar(m["specification_version"]) != "4" {
 		return out, ErrInvalid
 	}
-	out.Summary, out.Description = scalar(m["summary"]), scalar(m["description"])
+	out.Summary, out.Description = stringScalar(m["summary"]), stringScalar(m["description"])
 	if out.Summary == "" {
 		return out, ErrInvalid
 	}
@@ -418,6 +434,16 @@ func ParseMetadata(y []byte) (Metadata, error) {
 		for _, s := range values {
 			if !SafePath(s) {
 				return out, ErrInvalid
+			}
+		}
+		if field == "files" {
+			out.Files = values
+			seen := map[string]bool{}
+			for _, s := range values {
+				if seen[s] {
+					return out, ErrInvalid
+				}
+				seen[s] = true
 			}
 		}
 	}

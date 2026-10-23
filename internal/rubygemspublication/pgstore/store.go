@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -56,6 +57,7 @@ func (s *Store) Lock(ctx context.Context, repo, identity string) (context.Contex
 	key := "native-rubygems:" + hex.EncodeToString(sum[:])
 	_, e = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1,0))`, key)
 	if e != nil {
+		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 		_ = conn.Close()
 		return ctx, func() {}, e
 	}
@@ -65,7 +67,7 @@ func (s *Store) Lock(ctx context.Context, repo, identity string) (context.Contex
 			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if _, err := conn.ExecContext(cleanup, `SELECT pg_advisory_unlock(hashtextextended($1,0))`, key); err != nil {
-				_ = conn.Raw(func(any) error { return sql.ErrConnDone })
+				_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 			}
 			_ = conn.Close()
 		})
@@ -117,7 +119,7 @@ func (s *Store) Reserve(ctx context.Context, in domain.Session) (domain.Session,
 	if !errors.Is(e, repository.ErrNotFound) {
 		return domain.Session{}, false, e
 	}
-	prior, e = scan(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND name=$2 AND canonical_version=$3 AND platform=$4 AND state IN ('pending','committed')`, in.RepositoryID, in.Name, protocol.CanonicalVersion(in.Version), in.Platform))
+	prior, e = scan(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND ((name=$2 AND canonical_version=$3 AND platform=$4) OR full_name=$5) AND state IN ('pending','committed')`, in.RepositoryID, in.Name, protocol.CanonicalVersion(in.Version), in.Platform, domain.Visible(in).FullName()))
 	if e == nil {
 		if !domain.Same(prior, in) || prior.State == "pending" && prior.Actor != in.Actor {
 			return domain.Session{}, false, domain.ErrConflict
@@ -290,7 +292,7 @@ func insertAudit(ctx context.Context, tx *sql.Tx, a repository.AuditRecord) erro
 		a.RequestID = ids.RequestID
 		a.TraceID = ids.TraceID
 	}
-	_, e = tx.ExecContext(ctx, `INSERT INTO resolver_audit_log(group_name,repository,outcome,actor,occurred_at,format,resource,operation,http_status,bytes,request_id,trace_id,evidence)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)`, a.GroupName, a.Repository, a.Outcome, a.Actor, a.OccurredAt, a.Format, a.Resource, a.Operation, a.Status, a.Bytes, a.RequestID, a.TraceID, evidence)
+	_, e = tx.ExecContext(ctx, `INSERT INTO resolver_audit_log(group_name,repository,member_name,outcome,actor,occurred_at,format,resource,representation,member_type,upstream_host,operation,http_status,cache_disposition,bytes,authorization_source,authorization_reason,request_id,trace_id,evidence)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)`, a.GroupName, a.Repository, a.MemberName, a.Outcome, a.Actor, a.OccurredAt, a.Format, a.Resource, a.Representation, a.MemberType, a.UpstreamHost, a.Operation, a.Status, a.CacheDisposition, a.Bytes, a.AuthorizationSource, a.AuthorizationReason, a.RequestID, a.TraceID, evidence)
 	return e
 }
 

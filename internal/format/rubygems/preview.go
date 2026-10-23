@@ -29,7 +29,7 @@ func jsonResponse(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 func repositoryDTO(r repository.HostedRepository) any {
-	return map[string]any{"id": r.ID, "name": r.Name, "format": "rubygems", "type": "hosted", "preview": true, "version": r.Version, "anonymousRead": r.AnonymousRead, "sourceUrl": "/rubygems/" + r.Name + "/", "publicationUrl": "/rubygems/" + r.Name + "/api/v1/gems"}
+	return map[string]any{"id": r.ID, "name": r.Name, "format": "rubygems", "type": "hosted", "preview": true, "version": r.Version, "anonymousRead": r.AnonymousRead, "sourceUrl": "/rubygems/" + r.Name + "/", "pushHost": "/rubygems/" + r.Name, "publicationUrl": "/rubygems/" + r.Name + "/api/v1/gems"}
 }
 func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 	p, ok := m.auth.AuthenticateContext(r.Context(), r.Header.Get("Authorization"))
