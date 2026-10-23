@@ -61,6 +61,9 @@ func TestRubyGemsPostgresGovernanceStoreContract(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer func() { _ = db.Close() }()
+	// Authority reads and CAS must finish with the publication pool restricted to one connection.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	locks, e := database.OpenPostgres(dsn, database.DefaultArtifactLockPoolConfig())
 	if e != nil {
 		t.Fatal(e)

@@ -153,6 +153,8 @@ func (m *Module) failure(w http.ResponseWriter, e error) {
 	switch {
 	case errors.Is(e, repository.ErrNotFound), errors.Is(e, objectstore.ErrNotFound):
 		m.problem(w, 404, "not_found")
+	case errors.Is(e, domain.ErrAccessDenied):
+		m.problem(w, 403, "access_denied")
 	case errors.Is(e, repository.ErrVersionConflict):
 		m.problem(w, 409, "governance_version_conflict")
 	case errors.Is(e, domain.ErrConflict), errors.Is(e, repository.ErrNameExists), errors.Is(e, repository.ErrIdempotencyConflict):

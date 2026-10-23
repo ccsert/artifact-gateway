@@ -1,6 +1,7 @@
 package rubygemspublication
 
 import (
+	"context"
 	"math"
 	"strconv"
 	"strings"
@@ -19,7 +20,22 @@ type Governance struct {
 	UpdatedBy, Reason string
 }
 
+// GovernanceCheck revalidates current request authority after all persistence
+// locks have been acquired, before either a state change or an idempotent reply.
+type GovernanceCheck func(context.Context, repository.RubyGemsGovernanceAuthority) error
+
+func CheckGovernance(ctx context.Context, check GovernanceCheck, a repository.RubyGemsGovernanceAuthority) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if check == nil || !a.Active || !a.ValidUntil.IsZero() && !a.ValidUntil.After(time.Now()) {
+		return ErrAccessDenied
+	}
+	return check(ctx, a)
+}
+
 type GovernanceChange struct {
+	Identity                                               repository.RubyGemsGovernanceIdentity
 	RepositoryID, Name, Version, Platform                  string
 	ExpectedDigest, ExpectedVersion, Action, Actor, Reason string
 }

@@ -4,6 +4,8 @@ package rubygems
 
 import (
 	"bytes"
+	"context"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -144,6 +146,8 @@ func TestRubyGemsPostgresRustFSGovernanceAtomicAuditAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = otherDB.Close() }()
+	otherDB.SetMaxOpenConns(1)
+	otherDB.SetMaxIdleConns(1)
 	store, err = pgstore.New(otherDB, locks)
 	if err != nil {
 		t.Fatal(err)
@@ -167,4 +171,76 @@ func TestRubyGemsPostgresRustFSGovernanceAtomicAuditAndRestart(t *testing.T) {
 			t.Fatal(rows, err)
 		}
 	}
+	t.Run("revoked-key-during-transaction-lock-wait", func(t *testing.T) {
+		token := "owned-row-wait-key"
+		key, err := repos.CreateAPIKey(t.Context(), repository.APIKey{ID: uuid.NewString(), Name: "owned-row-wait", SecretHash: authorization.HashAPIKey(token), Roles: []string{"member"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = repos.ReplaceRepositoryGrants(t.Context(), repo.ID, []repository.RepositoryGrant{{Principal: "api-key:" + key.ID, Scopes: []string{"repositories:write"}, ResourcePrefix: "durable"}}, "1"); err != nil {
+			t.Fatal(err)
+		}
+		auth.APIKeys = repos
+		m = compose()
+		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+		defer cancel()
+		block, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = block.Rollback() }()
+		if _, err = block.ExecContext(ctx, `SELECT id FROM native_rubygems_sessions WHERE id::text=$1 FOR UPDATE`, p.SessionID); err != nil {
+			t.Fatal(err)
+		}
+		result := make(chan int, 1)
+		go func() {
+			r := httptest.NewRequest("DELETE", "/rubygems/"+repo.Name+"/api/v1/gems/yank", strings.NewReader("gem_name=durable&version=1.0.0")).WithContext(ctx)
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			r.Header.Set("Authorization", token)
+			w := httptest.NewRecorder()
+			m.ServeHTTP(w, r)
+			result <- w.Code
+		}()
+		defer func() {
+			cancel()
+			_ = block.Rollback()
+			select {
+			case <-result:
+			case <-time.After(2 * time.Second):
+			}
+		}()
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			var waiting int
+			err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%native_rubygems_sessions%FOR UPDATE%'`).Scan(&waiting)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if waiting > 0 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("request did not reach PostgreSQL row-lock wait")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if _, err = repos.RevokeAPIKey(ctx, key.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err = block.Rollback(); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case code := <-result:
+			if code != 403 {
+				t.Fatalf("revoked key passed commit boundary: %d", code)
+			}
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		got, err := store.GetRetained(t.Context(), repo.ID, "durable", "1.0.0", "ruby")
+		if err != nil || got.Governance.Yanked || got.Governance.Version != "3" {
+			t.Fatal(got, err)
+		}
+	})
 }

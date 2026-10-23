@@ -12,7 +12,7 @@ func (s *Store) GetRetained(ctx context.Context, repo, name, version, platform s
 	return domain.Visible(in), err
 }
 
-func (s *Store) TransitionGovernance(ctx context.Context, c domain.GovernanceChange) (domain.Publication, error) {
+func (s *Store) TransitionGovernance(ctx context.Context, c domain.GovernanceChange, check domain.GovernanceCheck) (domain.Publication, error) {
 	if !domain.ValidGovernanceChange(c) {
 		return domain.Publication{}, domain.ErrInvalid
 	}
@@ -29,6 +29,13 @@ func (s *Store) TransitionGovernance(ctx context.Context, c domain.GovernanceCha
 	if err != nil {
 		return domain.Publication{}, err
 	}
+	a, err := governanceAuthorityTx(ctx, tx, c)
+	if err != nil {
+		return domain.Publication{}, err
+	}
+	if err := domain.CheckGovernance(ctx, check, a); err != nil {
+		return domain.Publication{}, err
+	}
 	if !changed {
 		return domain.Visible(in), tx.Commit()
 	}
@@ -38,6 +45,9 @@ func (s *Store) TransitionGovernance(ctx context.Context, c domain.GovernanceCha
 	}
 	p := domain.Visible(in)
 	if err = insertAudit(ctx, tx, domain.GovernanceAudit(p, name, c.Action)); err != nil {
+		return domain.Publication{}, err
+	}
+	if err := domain.CheckGovernance(ctx, check, a); err != nil {
 		return domain.Publication{}, err
 	}
 	return p, tx.Commit()

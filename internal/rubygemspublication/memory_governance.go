@@ -25,7 +25,7 @@ func (m *Memory) GetRetained(ctx context.Context, repo, name, version, platform 
 	return Visible(s), err
 }
 
-func (m *Memory) TransitionGovernance(ctx context.Context, c GovernanceChange) (Publication, error) {
+func (m *Memory) TransitionGovernance(ctx context.Context, c GovernanceChange, check GovernanceCheck) (Publication, error) {
 	if !ValidGovernanceChange(c) {
 		return Publication{}, ErrInvalid
 	}
@@ -41,6 +41,19 @@ func (m *Memory) TransitionGovernance(ctx context.Context, c GovernanceChange) (
 	}
 	g, changed, err := ApplyGovernance(Visible(s), c)
 	if err != nil {
+		return Publication{}, err
+	}
+	reader, ok := m.repositories.(interface {
+		ReadRubyGemsGovernanceAuthority(context.Context, string, repository.RubyGemsGovernanceIdentity) (repository.RubyGemsGovernanceAuthority, error)
+	})
+	if !ok || c.Identity.Actor != c.Actor {
+		return Publication{}, ErrAccessDenied
+	}
+	a, err := reader.ReadRubyGemsGovernanceAuthority(ctx, c.RepositoryID, c.Identity)
+	if err != nil {
+		return Publication{}, err
+	}
+	if err := CheckGovernance(ctx, check, a); err != nil {
 		return Publication{}, err
 	}
 	if !changed {

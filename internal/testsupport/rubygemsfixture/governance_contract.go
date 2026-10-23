@@ -1,6 +1,7 @@
 package rubygemsfixture
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -13,7 +14,9 @@ import (
 
 func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepository) {
 	t.Helper()
-	ctx := t.Context()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	check := func(ctx context.Context, _ repository.RubyGemsGovernanceAuthority) error { return ctx.Err() }
 	in := Session(t, repo.ID)
 	s, _, err := store.Reserve(ctx, in)
 	if err != nil {
@@ -23,8 +26,14 @@ func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepos
 	if err != nil || p.Governance.Version != "1" {
 		t.Fatalf("initial state %+v %v", p, err)
 	}
-	c := d.GovernanceChange{RepositoryID: repo.ID, Name: p.Name, Version: "1.0", Platform: p.Platform, ExpectedDigest: p.Digest, ExpectedVersion: "1", Action: "yank", Actor: in.Actor, Reason: "Owned contract withdrawal"}
-	yanked, err := store.TransitionGovernance(ctx, c)
+	c := d.GovernanceChange{Identity: repository.RubyGemsGovernanceIdentity{Actor: in.Actor, Kind: "static_admin"}, RepositoryID: repo.ID, Name: p.Name, Version: "1.0", Platform: p.Platform, ExpectedDigest: p.Digest, ExpectedVersion: "1", Action: "yank", Actor: in.Actor, Reason: "Owned contract withdrawal"}
+	if _, err := store.TransitionGovernance(ctx, c, nil); !errors.Is(err, d.ErrAccessDenied) {
+		t.Fatalf("nil authority check accepted %v", err)
+	}
+	if _, err := store.TransitionGovernance(ctx, c, func(context.Context, repository.RubyGemsGovernanceAuthority) error { return d.ErrAccessDenied }); !errors.Is(err, d.ErrAccessDenied) {
+		t.Fatalf("denied authority check accepted %v", err)
+	}
+	yanked, err := store.TransitionGovernance(ctx, c, check)
 	if err != nil || !yanked.Governance.Yanked || yanked.Governance.Version != "2" {
 		t.Fatalf("yank %+v %v", yanked, err)
 	}
@@ -39,11 +48,11 @@ func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepos
 	if err != nil || retained.ObjectKey != p.ObjectKey || retained.Digest != p.Digest {
 		t.Fatalf("retained closure %+v %v", retained, err)
 	}
-	if _, err = store.TransitionGovernance(ctx, c); !errors.Is(err, repository.ErrVersionConflict) {
+	if _, err = store.TransitionGovernance(ctx, c, check); !errors.Is(err, repository.ErrVersionConflict) {
 		t.Fatalf("stale CAS %v", err)
 	}
 	c.ExpectedVersion = "2"
-	replay, err := store.TransitionGovernance(ctx, c)
+	replay, err := store.TransitionGovernance(ctx, c, check)
 	if err != nil || replay.Governance != yanked.Governance {
 		t.Fatalf("no-op changed state %+v %v", replay, err)
 	}
@@ -66,7 +75,7 @@ func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepos
 		t.Fatalf("collector selected retained gem %+v %v", expired, err)
 	}
 	c.Action = "restore"
-	restored, err := store.TransitionGovernance(ctx, c)
+	restored, err := store.TransitionGovernance(ctx, c, check)
 	if err != nil || restored.Governance.Yanked || restored.Governance.Version != "3" {
 		t.Fatalf("restore %+v %v", restored, err)
 	}
@@ -79,7 +88,7 @@ func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepos
 	errorsCh := make(chan error, 8)
 	for range 8 {
 		wg.Add(1)
-		go func() { defer wg.Done(); _, err := store.TransitionGovernance(ctx, c); errorsCh <- err }()
+		go func() { defer wg.Done(); _, err := store.TransitionGovernance(ctx, c, check); errorsCh <- err }()
 	}
 	wg.Wait()
 	close(errorsCh)

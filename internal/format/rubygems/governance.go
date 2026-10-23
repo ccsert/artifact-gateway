@@ -111,7 +111,12 @@ func (m *Module) nativeYank(w http.ResponseWriter, r *http.Request, repo reposit
 		m.problem(w, 403, "access_denied")
 		return
 	}
-	_, err = m.store.TransitionGovernance(ctx, domain.GovernanceChange{RepositoryID: repo.ID, Name: name, Version: version, Platform: platform, ExpectedDigest: before.Digest, ExpectedVersion: before.Governance.Version, Action: "yank", Actor: current.Actor, Reason: "Native gem yank"})
+	identity, err := m.governanceIdentity(r, p)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	_, err = m.store.TransitionGovernance(ctx, domain.GovernanceChange{Identity: identity, RepositoryID: repo.ID, Name: name, Version: version, Platform: platform, ExpectedDigest: before.Digest, ExpectedVersion: before.Governance.Version, Action: "yank", Actor: current.Actor, Reason: "Native gem yank"}, m.governanceAuthorityCheck(identity, repo.ID, name, authorization.RepositoryWrite))
 	if err != nil {
 		m.failure(w, err)
 		return
@@ -155,7 +160,12 @@ func (m *Module) previewGovernance(w http.ResponseWriter, r *http.Request, repo 
 		m.problem(w, 400, "invalid_governance_request")
 		return
 	}
-	c := domain.GovernanceChange{RepositoryID: repo.ID, Name: name, Version: version, Platform: platform, ExpectedDigest: input.ExpectedDigest, ExpectedVersion: input.ExpectedGovernanceVersion, Action: input.Action, Actor: p.Actor, Reason: input.Reason}
+	identity, err := m.governanceIdentity(r, p)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	c := domain.GovernanceChange{Identity: identity, RepositoryID: repo.ID, Name: name, Version: version, Platform: platform, ExpectedDigest: input.ExpectedDigest, ExpectedVersion: input.ExpectedGovernanceVersion, Action: input.Action, Actor: p.Actor, Reason: input.Reason}
 	if !domain.ValidGovernanceChange(c) {
 		m.problem(w, 400, "invalid_governance_request")
 		return
@@ -185,7 +195,7 @@ func (m *Module) previewGovernance(w http.ResponseWriter, r *http.Request, repo 
 		m.problem(w, 403, "access_denied")
 		return
 	}
-	pub, err := m.store.TransitionGovernance(ctx, c)
+	pub, err := m.store.TransitionGovernance(ctx, c, m.governanceAuthorityCheck(identity, repo.ID, name, authorization.RepositoryAdmin))
 	if err != nil {
 		m.failure(w, err)
 		return

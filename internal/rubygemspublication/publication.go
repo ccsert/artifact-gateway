@@ -19,6 +19,7 @@ import (
 var ErrInvalid = errors.New("invalid RubyGems publication")
 var ErrConflict = errors.New("RubyGem identity already contains different bytes")
 var ErrExpired = errors.New("RubyGem upload session expired")
+var ErrAccessDenied = errors.New("current RubyGems governance authority denied")
 var ErrState = errors.New("RubyGem upload session state prevents this operation")
 
 type Session struct {
@@ -47,7 +48,7 @@ type Store interface {
 	Commit(context.Context, string, string) (Publication, bool, error)
 	Get(context.Context, string, string) (Publication, error)
 	GetRetained(context.Context, string, string, string, string) (Publication, error)
-	TransitionGovernance(context.Context, GovernanceChange) (Publication, error)
+	TransitionGovernance(context.Context, GovernanceChange, GovernanceCheck) (Publication, error)
 	List(context.Context, string, int) ([]Publication, error)
 	GetSession(context.Context, string) (Session, error)
 	Expire(context.Context, time.Time, int) ([]Session, error)
