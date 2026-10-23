@@ -50,6 +50,7 @@ type Options struct {
 	Groups        GroupStore
 	Upstream      Upstream
 	Store         repository.NativeHelmStore
+	Governance    repository.HelmGovernanceStore
 	Repositories  RepositoryStore
 	Objects       objectstore.Store
 	Authenticator authorization.Authenticator
@@ -65,6 +66,7 @@ type Module struct {
 	groups        GroupStore
 	upstream      Upstream
 	store         repository.NativeHelmStore
+	governance    repository.HelmGovernanceStore
 	repos         RepositoryStore
 	objects       objectstore.Store
 	auth          authorization.Authenticator
@@ -86,7 +88,7 @@ func nilPort(v any) bool {
 	return false
 }
 func New(o Options) (*Module, error) {
-	for _, port := range []any{o.Store, o.Repositories, o.Audit, o.Anonymous, o.Capacities, o.Authorizer.Grants} {
+	for _, port := range []any{o.Store, o.Governance, o.Repositories, o.Audit, o.Anonymous, o.Capacities, o.Authorizer.Grants} {
 		if nilPort(port) {
 			return nil, errors.New("helm preview requires explicit publication, repository, authorization, audit, anonymous policy and capacity ports")
 		}
@@ -110,7 +112,7 @@ func New(o Options) (*Module, error) {
 	if o.MaxChartBytes < 1 || o.MaxChartBytes > helmprotocol.MaxChartBytes {
 		return nil, errors.New("helm compressed chart limit must be between 1 and 64 MiB")
 	}
-	return &Module{sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream, store: o.Store, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxChartBytes}, nil
+	return &Module{sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream, store: o.Store, governance: o.Governance, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxChartBytes}, nil
 }
 func (*Module) Format() repository.Format { return repository.FormatHelm }
 func (m *Module) Routes() []formatmodule.Route {

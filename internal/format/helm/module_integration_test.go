@@ -35,7 +35,7 @@ func TestPostgresRustFSHelmInterruptedClosureRestartAndCorruptObject(t *testing.
 	}
 	auth := authorization.Authenticator{AdminToken: "helm-owned-admin", AdminActor: "operator"}
 	compose := func(objects objectstore.Store) *Module {
-		module, e := New(Options{Store: store, Repositories: store, Objects: objects, Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Audit: store, Anonymous: store, Capacities: store})
+		module, e := New(Options{Store: store, Governance: store, Repositories: store, Objects: objects, Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Audit: store, Anonymous: store, Capacities: store})
 		if e != nil {
 			t.Fatal(e)
 		}

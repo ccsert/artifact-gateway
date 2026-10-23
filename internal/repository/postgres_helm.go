@@ -8,7 +8,7 @@ import (
 )
 
 const helmSessionColumns = `id::text,repository_id::text,name,version,digest,size,provenance_digest,provenance_size,actor,state,object_key,provenance_key,metadata_json,chart_yaml,created_at,expires_at,committed_at,collected_at,source_version`
-const helmPublicationColumns = `repository_id::text,name,version,session_id::text,digest,object_key,size,provenance_digest,provenance_key,provenance_size,metadata_json,chart_yaml,publisher,published_at`
+const helmPublicationColumns = `repository_id::text,name,version,session_id::text,digest,object_key,size,provenance_digest,provenance_key,provenance_size,metadata_json,chart_yaml,publisher,published_at,governance_version::text,tombstoned,quarantined,governance_updated_at,governance_updated_by,governance_reason`
 
 type helmScanner interface{ Scan(...any) error }
 
@@ -29,7 +29,11 @@ func scanHelmSession(row helmScanner) (HelmSession, error) {
 }
 func scanHelmPublication(row helmScanner) (HelmPublication, error) {
 	var in HelmPublication
-	err := row.Scan(&in.RepositoryID, &in.Name, &in.Version, &in.SessionID, &in.Digest, &in.ObjectKey, &in.Size, &in.ProvenanceDigest, &in.ProvenanceKey, &in.ProvenanceSize, &in.MetadataJSON, &in.ChartYAML, &in.Publisher, &in.PublishedAt)
+	var updated sql.NullTime
+	err := row.Scan(&in.RepositoryID, &in.Name, &in.Version, &in.SessionID, &in.Digest, &in.ObjectKey, &in.Size, &in.ProvenanceDigest, &in.ProvenanceKey, &in.ProvenanceSize, &in.MetadataJSON, &in.ChartYAML, &in.Publisher, &in.PublishedAt, &in.Governance.Version, &in.Governance.Tombstoned, &in.Governance.Quarantined, &updated, &in.Governance.UpdatedBy, &in.Governance.Reason)
+	if updated.Valid {
+		in.Governance.UpdatedAt = updated.Time
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}

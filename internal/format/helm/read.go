@@ -41,7 +41,11 @@ func (m *Module) snapshot(r *http.Request, repo repository.HostedRepository, p a
 	}
 	out := []repository.HelmPublication{}
 	for _, in := range all {
-		if m.allowed(r.Context(), p, repo, in.Name) {
+		blocked, err := m.publicationBlocked(r.Context(), in)
+		if err != nil {
+			return nil, err
+		}
+		if !blocked && m.allowed(r.Context(), p, repo, in.Name) {
 			out = append(out, in)
 		}
 	}
@@ -139,12 +143,36 @@ func (m *Module) asset(w http.ResponseWriter, r *http.Request, repo repository.H
 	m.publicationAsset(w, r, p, filename, provAsset)
 }
 func (m *Module) publicationAsset(w http.ResponseWriter, r *http.Request, p repository.HelmPublication, filename string, provAsset bool) {
+	ctx, release, err := m.store.LockHelmPublication(r.Context(), p.RepositoryID, p.Name, p.Version)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	defer release()
+	// A cached DTO or frozen source URL never carries permission to read a chart.
+	current, err := m.store.GetHelmPublication(ctx, p.RepositoryID, p.Name, p.Version)
+	if err == nil && (current.SessionID != p.SessionID || current.Digest != p.Digest) {
+		err = repository.ErrHelmPublicationConflict
+	}
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	blocked, err := m.publicationBlocked(ctx, current)
+	if err != nil {
+		m.failure(w, err)
+		return
+	}
+	if blocked {
+		m.problem(w, 404, "not_found")
+		return
+	}
+	p = current
 	if provAsset && p.ProvenanceSize == 0 {
 		m.problem(w, 404, "not_found")
 		return
 	}
-	in := repository.HelmSession{RepositoryID: p.RepositoryID, Name: p.Name, Version: p.Version, Digest: p.Digest, Size: p.Size, ObjectKey: p.ObjectKey, ProvenanceDigest: p.ProvenanceDigest, ProvenanceSize: p.ProvenanceSize, ProvenanceKey: p.ProvenanceKey, MetadataJSON: p.MetadataJSON, ChartYAML: p.ChartYAML}
-	chart, prov, err := m.verify(r.Context(), in)
+	chart, prov, err := m.verify(ctx, publicationSession(p))
 	if err != nil {
 		m.problem(w, 503, "helm_object_integrity_failure")
 		return

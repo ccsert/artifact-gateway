@@ -58,6 +58,7 @@ type GatewayOptions struct {
 	// ports are supplied explicitly, never inferred from Store.
 	HelmPreviewEnabled     bool
 	HelmStore              repository.NativeHelmStore
+	HelmGovernance         repository.HelmGovernanceStore
 	HelmSources            repository.HelmSourceStore
 	HelmUpstream           helmformat.Upstream
 	HelmObjects            ObjectStore
@@ -84,6 +85,9 @@ func (o GatewayOptions) validate() error {
 		if nilDependency(o.HelmStore) {
 			failures = append(failures, errors.New("helm preview publication store is required"))
 		}
+		if nilDependency(o.HelmGovernance) {
+			failures = append(failures, errors.New("helm preview governance store is required"))
+		}
 		if nilDependency(o.HelmSources) {
 			failures = append(failures, errors.New("helm preview source store is required"))
 		}
@@ -93,7 +97,7 @@ func (o GatewayOptions) validate() error {
 		if err := objectstore.Validate(o.HelmObjects); err != nil {
 			failures = append(failures, fmt.Errorf("helm preview %w", err))
 		}
-	} else if o.HelmStore != nil || o.HelmSources != nil || o.HelmUpstream != nil || o.HelmObjects != nil {
+	} else if o.HelmStore != nil || o.HelmGovernance != nil || o.HelmSources != nil || o.HelmUpstream != nil || o.HelmObjects != nil {
 		failures = append(failures, errors.New("helm preview dependencies require explicit enablement"))
 	}
 	if o.NuGetPreviewEnabled {

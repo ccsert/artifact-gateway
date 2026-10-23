@@ -95,6 +95,15 @@ func (m *Module) groupEntries(ctx context.Context, g repository.HostedGroup, mem
 		if e != nil {
 			return nil, e
 		}
+		// Choose the durable owner before applying governance. In particular a
+		// removed or hidden owner must never transfer authority to another member.
+		blocked, e := m.entryBlocked(ctx, owner.Entry)
+		if e != nil {
+			return nil, e
+		}
+		if blocked {
+			continue
+		}
 		current, ok := all[key][owner.Entry.RepositoryID]
 		if !ok {
 			return nil, repository.ErrHelmSourceChanged
@@ -239,6 +248,15 @@ func (m *Module) snapshotAsset(w http.ResponseWriter, r *http.Request, view repo
 		_ = m.audit.RecordAudit(r.Context(), repository.AuditRecord{Actor: principal.Actor, Repository: view.Name, GroupName: view.Name, Format: "helm", Resource: entry.Name + "@" + entry.Version, Operation: "helm.source.resolve", Outcome: outcome, Status: result.status, Bytes: result.bytes, OccurredAt: time.Now().UTC(), Evidence: map[string]string{"repositoryId": source.ID, "repositoryVersion": source.Version, "digest": entry.Digest, "snapshotId": snap.ID}})
 	}()
 	var p repository.HelmPublication
+	blocked, e := m.entryBlocked(r.Context(), entry)
+	if e != nil {
+		m.failure(w, e)
+		return
+	}
+	if blocked {
+		m.problem(w, 404, "not_found")
+		return
+	}
 	if source.Type == repository.RepositoryTypeProxy {
 		p, e = m.proxyChart(r.Context(), source, entry)
 	} else {

@@ -19,6 +19,15 @@ docker_ready=False
 label='com.artifact-gateway.helm-e2e.run='+run_id
 containers=[];volumes=set();exit_code=1
 required={
+ 'TestHelmMemoryGovernanceStoreContract',
+ 'TestPostgresHelmGovernanceStoreContract',
+ 'TestPostgresHelmGovernanceAuditRollbackAndReopen',
+ 'TestPostgresRustFSHelmGovernanceHTTPRestartAndCorruptClosure',
+ 'TestHelmGovernanceHTTPHidesIndexAssetsBrowseAndRetainsClosure',
+ 'TestHelmGovernanceMixedGroupNeverRevivesHiddenAuthority',
+ 'TestHelmGovernanceRequiresExplicitPortAndPolicyFailureStaysClosed',
+ 'TestHelmGovernanceConcurrentHTTPUsesOneCASAndNoOpAudit',
+ 'TestHelmGovernanceRestoreRejectsRetainedIdentityAndMetadataCorruption',
  'TestHelmProxyInterruptedOldSourceCannotBlockRotatedClosureOrCollectReplacement',
  'TestHelmProxySnapshotCacheConditionalOfflineAndProvenance',
  'TestHelmProxyMissingCorruptOrCrossIdentityClosureNeverBecomesVisible',
@@ -78,7 +87,11 @@ try:
     hashes={'darwin-arm64':'31513e1193da4eb4ae042eb5f98ef9aca7890cfa136f4707c8d4f70e2115bef6','linux-amd64':'a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496','linux-arm64':'440cf7add0aee27ebc93fada965523c1dc2e0ab340d4348da2215737fc0d76ad'}
     if host_platform not in hashes: raise RuntimeError('Unsupported fixed Helm client platform: '+host_platform)
     archive=work/'helm.tar.gz';url='https://get.helm.sh/helm-v3.19.0-'+host_platform+'.tar.gz'
-    command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','120','--retry','2','--retry-all-errors',url,'-o',str(archive)],output='helm-download.log')
+    command(['python3','-B','-m','unittest','discover','-s','scripts/tests','-p','test_helm_client_download.py'],output='helm-download-control-tests.log')
+    sys.path.insert(0,str(root/'scripts'))
+    from helm_client_download import download_archive
+    download_receipt=download_archive(url,archive,hashes[host_platform])
+    write_json('helm-download.json',download_receipt)
     actual=hashlib.sha256(archive.read_bytes()).hexdigest()
     if actual!=hashes[host_platform]: raise RuntimeError('Official Helm archive differs from reviewed fixed SHA-256')
     # Extract only the verified Helm executable from the official archive.
@@ -93,7 +106,7 @@ try:
     source_proof={}
     for filename,relative in [('helm-install-action.go.txt','pkg/action/install.go'),('helm-install-command.go.txt','cmd/helm/install.go'),('helm-template-command.go.txt','cmd/helm/template.go')]:
         source_url='https://raw.githubusercontent.com/helm/helm/'+client_version[1]+'/'+relative
-        command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','90','--retry','2','--retry-all-errors',source_url,'-o',str(evidence/filename)],output=filename+'.log')
+        command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','45','--retry','0',source_url,'-o',str(evidence/filename)],output=filename+'.log')
         source_proof[relative]={'url':source_url,'sha256':hashlib.sha256((evidence/filename).read_bytes()).hexdigest()}
     action=(evidence/'helm-install-action.go.txt').read_text()
     if 'if !i.ClientOnly {' not in action or 'i.cfg.KubeClient.IsReachable()' not in action: raise RuntimeError('Pinned Helm reachability source branch changed')

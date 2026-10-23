@@ -27,6 +27,7 @@ func TestHelmPreviewGatewayCompositionAndFormalCapabilitiesStayConsistent(t *tes
 	}
 	o.HelmPreviewEnabled = true
 	o.HelmStore = store
+	o.HelmGovernance = store
 	o.HelmSources = store
 	o.HelmObjects = objectstore.NewMemoryStore()
 	h, err := NewGatewayHandler(o)
@@ -81,6 +82,8 @@ func TestHelmPreviewGatewayRejectsImplicitOrIncompletePorts(t *testing.T) {
 	}{
 		{"missing publication store", func(o *GatewayOptions) { o.HelmStore = nil }},
 		{"typed nil publication store", func(o *GatewayOptions) { o.HelmStore = (*repository.PostgresStore)(nil) }},
+		{"missing governance store", func(o *GatewayOptions) { o.HelmGovernance = nil }},
+		{"typed nil governance store", func(o *GatewayOptions) { o.HelmGovernance = (*repository.PostgresStore)(nil) }},
 		{"missing source store", func(o *GatewayOptions) { o.HelmSources = nil }},
 		{"typed nil source store", func(o *GatewayOptions) { o.HelmSources = (*repository.PostgresStore)(nil) }},
 		{"missing object store", func(o *GatewayOptions) { o.HelmObjects = nil }},
@@ -91,7 +94,7 @@ func TestHelmPreviewGatewayRejectsImplicitOrIncompletePorts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			o := explicitGatewayOptions()
 			store := o.Store.(*repository.MemoryStore)
-			o.HelmPreviewEnabled, o.HelmStore, o.HelmSources, o.HelmObjects = true, store, store, objectstore.NewMemoryStore()
+			o.HelmPreviewEnabled, o.HelmStore, o.HelmGovernance, o.HelmSources, o.HelmObjects = true, store, store, store, objectstore.NewMemoryStore()
 			tc.mutate(&o)
 			if h, err := NewGatewayHandler(o); err == nil || h != nil {
 				t.Fatalf("incomplete ports=%v %v", h, err)
@@ -106,7 +109,7 @@ func TestHelmGrantManagementAcceptsChartPrefixesWithoutFormalSearch(t *testing.T
 			t.Run(method+"/"+prefix, func(t *testing.T) {
 				o := explicitGatewayOptions()
 				store := o.Store.(*repository.MemoryStore)
-				o.HelmPreviewEnabled, o.HelmStore, o.HelmSources, o.HelmObjects = true, store, store, objectstore.NewMemoryStore()
+				o.HelmPreviewEnabled, o.HelmStore, o.HelmGovernance, o.HelmSources, o.HelmObjects = true, store, store, store, objectstore.NewMemoryStore()
 				h, err := NewGatewayHandler(o)
 				if err != nil {
 					t.Fatal(err)

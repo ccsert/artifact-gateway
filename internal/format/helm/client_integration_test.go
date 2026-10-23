@@ -190,7 +190,7 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 	newServer := func() *httptest.Server {
 		t.Helper()
 		auth := authorization.Authenticator{AdminToken: token, AdminActor: "helm-fixture", APIKeys: store, ServiceAccounts: store}
-		handler, e := app.NewGatewayHandler(app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: app.SharedObjectStores(objects), Adapter: ownedAdapter{}, Authenticator: auth, HelmPreviewEnabled: true, HelmStore: store, HelmSources: store, HelmObjects: objects})
+		handler, e := app.NewGatewayHandler(app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: app.SharedObjectStores(objects), Adapter: ownedAdapter{}, Authenticator: auth, HelmPreviewEnabled: true, HelmStore: store, HelmGovernance: store, HelmSources: store, HelmObjects: objects})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -422,6 +422,58 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 	if !bytes.Contains(installed, []byte("kind: ConfigMap")) || !bytes.Contains(installed, []byte("owned-release")) {
 		t.Fatalf("cold dry-run install did not render original chart: %s", installed)
 	}
+	// Real Helm keeps its old index cache across governance mutations. A stale
+	// chart URL must be denied, while a fresh target-only cache must not discover
+	// a hidden chart. Restoring uses the same retained original closure.
+	govern := func(action, version string, want int) {
+		t.Helper()
+		body, _ := json.Marshal(map[string]string{"expectedDigest": chartSHA, "expectedGovernanceVersion": version, "action": action, "reason": "Owned official Helm lifecycle fixture"})
+		send("POST", publishPath+"/governance", token, "application/json", body, want)
+	}
+	send("GET", publishPath+"/governance", blue, "", nil, 403)
+	govern("delete", "1", 200)
+	govern("delete", "1", 409)
+	chartPath := "/helm/" + name + "/charts/owned/1.2.3/owned-1.2.3.tgz"
+	for _, path := range []string{chartPath, chartPath + ".prov"} {
+		send("GET", path, blue, "", nil, 404)
+	}
+	run(consumer, false, "pull", "owned/owned", "--version", "1.2.3", "--destination", filepath.Join(work, "stale-tombstone-denied"))
+	hidden := clientEnv("cold-tombstone")
+	run(hidden, true, "repo", "add", "owned", server.URL+"/helm/"+name, "--username", "owned", "--password", blue)
+	run(hidden, false, "pull", "owned/owned", "--version", "1.2.3", "--destination", filepath.Join(work, "cold-tombstone-denied"))
+	retained, err := store.GetHelmPublication(t.Context(), repo.ID, "owned", "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	corruptProv := append([]byte(nil), provBytes...)
+	corruptProv[len(corruptProv)/2] ^= 1
+	if err = objects.Put(t.Context(), retained.ProvenanceKey, corruptProv); err != nil {
+		t.Fatal(err)
+	}
+	govern("restore", "2", 502)
+	if err = objects.PutVerifiedReader(t.Context(), retained.ProvenanceKey, bytes.NewReader(provBytes), int64(provSize), provSHA); err != nil {
+		t.Fatal(err)
+	}
+	govern("restore", "2", 200)
+	govern("quarantine", "3", 200)
+	policyPath := "/api/v2/previews/helm/repositories/" + repo.ID + "/quarantine-read-policy"
+	send("PUT", policyPath, token, "application/json", []byte(`{"expectedVersion":"1","enabled":true}`), 200)
+	run(consumer, false, "pull", "owned/owned", "--version", "1.2.3", "--destination", filepath.Join(work, "stale-quarantine-denied"))
+	hidden = clientEnv("cold-quarantine")
+	run(hidden, true, "repo", "add", "owned", server.URL+"/helm/"+name, "--username", "owned", "--password", blue)
+	run(hidden, false, "pull", "owned/owned", "--version", "1.2.3", "--destination", filepath.Join(work, "cold-quarantine-denied"))
+	govern("release", "4", 200)
+	restored := clientEnv("cold-restored-governance")
+	run(restored, true, "repo", "add", "owned", server.URL+"/helm/"+name, "--username", "owned", "--password", blue)
+	restoredDir := filepath.Join(work, "cold-restored-governance", "downloads")
+	run(restored, true, "pull", "owned/owned", "--version", "1.2.3", "--verify", "--keyring", filepath.Join(work, "public-keyring.gpg"), "--destination", restoredDir)
+	run(restored, true, "verify", filepath.Join(restoredDir, "owned-1.2.3.tgz"), "--keyring", filepath.Join(work, "public-keyring.gpg"))
+	if sum, size := fileDigest(t, filepath.Join(restoredDir, "owned-1.2.3.tgz")); sum != chartSHA || size != chartSize {
+		t.Fatal("restored original chart differs")
+	}
+	if sum, size := fileDigest(t, filepath.Join(restoredDir, "owned-1.2.3.tgz.prov")); sum != provSHA || size != provSize {
+		t.Fatal("restored original provenance differs")
+	}
 	run(clientEnv("unauthorized-cold"), false, "repo", "add", "owned", server.URL+"/helm/"+name)
 	// Rotate and revoke real service credentials. No local credential is reused
 	// as a signing key or an upstream secret; Hosted performs no upstream fetch.
@@ -460,7 +512,7 @@ func TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart(t *testing.T
 		requestsMu.Lock()
 		paths := append([]string(nil), requests...)
 		requestsMu.Unlock()
-		report := map[string]any{"client": "Helm", "version": "v3.19.0", "gatewayComposition": "full", "postgresRustFS": true, "targetOnly": true, "restartReadBack": true, "signatureVerifiedWithOwnedPublicKey": true, "dryRunInstallAgainstOwnedReadOnlyDiscoveryFixture": true, "kubernetesClusterInstallVerified": false, "kubernetesDiscoveryRequests": kubeRequests, "commandOutputs": commandOutputs, "credentialRotationAndRevocation": true, "grantCreatedAndRevokedThroughHTTP": true, "nonAdministratorPublishAndColdConsumer": true, "chartPrefixFilteredIndexBrowseAndDownloads": true, "revokedCredentialAndGrantRejectedByOfficialCLI": true, "publicationAuditCount": len(audit), "expected": expected, "commands": commands, "gatewayRequestPaths": paths}
+		report := map[string]any{"client": "Helm", "version": "v3.19.0", "gatewayComposition": "full", "postgresRustFS": true, "targetOnly": true, "restartReadBack": true, "signatureVerifiedWithOwnedPublicKey": true, "dryRunInstallAgainstOwnedReadOnlyDiscoveryFixture": true, "kubernetesClusterInstallVerified": false, "kubernetesDiscoveryRequests": kubeRequests, "commandOutputs": commandOutputs, "credentialRotationAndRevocation": true, "grantCreatedAndRevokedThroughHTTP": true, "nonAdministratorPublishAndColdConsumer": true, "chartPrefixFilteredIndexBrowseAndDownloads": true, "revokedCredentialAndGrantRejectedByOfficialCLI": true, "publicationAuditCount": len(audit), "governanceTombstoneQuarantineAndRestore": true, "staleAndColdClientGovernanceDenial": true, "corruptProvenanceRestoreRejected": true, "expected": expected, "commands": commands, "gatewayRequestPaths": paths}
 		encoded, e := json.MarshalIndent(report, "", "  ")
 		if e != nil {
 			t.Fatal(e)

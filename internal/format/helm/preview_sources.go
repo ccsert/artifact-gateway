@@ -320,6 +320,15 @@ func (m *Module) previewGroups(w http.ResponseWriter, r *http.Request, p authori
 		m.failure(w, repository.ErrHelmSourceChanged)
 		return
 	}
+	blocked, e := m.entryBlocked(r.Context(), owner.Entry)
+	if e != nil {
+		m.failure(w, e)
+		return
+	}
+	if blocked {
+		m.problem(w, 404, "not_found")
+		return
+	}
 	cached, e := m.store.GetHelmPublication(r.Context(), owner.Entry.RepositoryID, name, version)
 	if e != nil && !errors.Is(e, repository.ErrNotFound) {
 		m.failure(w, e)

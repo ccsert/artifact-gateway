@@ -38,6 +38,7 @@ type HelmPublication struct {
 	Size, ProvenanceSize                                                                                  int64
 	MetadataJSON, ChartYAML                                                                               []byte
 	PublishedAt                                                                                           time.Time
+	Governance                                                                                            HelmGovernance
 }
 
 // NativeHelmStore is a narrow, explicitly injected publication port. It is not
@@ -95,7 +96,7 @@ func cloneHelmPublication(in HelmPublication) HelmPublication {
 	return in
 }
 func helmPublication(in HelmSession) HelmPublication {
-	return HelmPublication{RepositoryID: in.RepositoryID, Name: in.Name, Version: in.Version, Digest: in.Digest, ProvenanceDigest: in.ProvenanceDigest, ObjectKey: in.ObjectKey, ProvenanceKey: in.ProvenanceKey, SessionID: in.ID, Publisher: in.Actor, Size: in.Size, ProvenanceSize: in.ProvenanceSize, MetadataJSON: append([]byte(nil), in.MetadataJSON...), ChartYAML: append([]byte(nil), in.ChartYAML...), PublishedAt: in.CommittedAt}
+	return HelmPublication{RepositoryID: in.RepositoryID, Name: in.Name, Version: in.Version, Digest: in.Digest, ProvenanceDigest: in.ProvenanceDigest, ObjectKey: in.ObjectKey, ProvenanceKey: in.ProvenanceKey, SessionID: in.ID, Publisher: in.Actor, Size: in.Size, ProvenanceSize: in.ProvenanceSize, MetadataJSON: append([]byte(nil), in.MetadataJSON...), ChartYAML: append([]byte(nil), in.ChartYAML...), PublishedAt: in.CommittedAt, Governance: HelmGovernance{Version: "1"}}
 }
 func helmPublicationAudit(in HelmPublication, repo string) AuditRecord {
 	return AuditRecord{Repository: repo, GroupName: repo, Actor: in.Publisher, Format: string(FormatHelm), Resource: in.Name + "@" + in.Version, Operation: "helm.publish", Outcome: AuditResolved, Status: 201, OccurredAt: in.PublishedAt, Evidence: map[string]string{"digest": in.Digest, "provenanceDigest": in.ProvenanceDigest, "sessionId": in.SessionID}}
