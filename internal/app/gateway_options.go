@@ -7,6 +7,7 @@ import (
 
 	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
+	helmdist "github.com/ccsert/artifact-gateway/internal/helmdistribution"
 	dist "github.com/ccsert/artifact-gateway/internal/nugetdistribution"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
@@ -60,6 +61,7 @@ type GatewayOptions struct {
 	HelmPreviewEnabled     bool
 	HelmStore              repository.NativeHelmStore
 	HelmGovernance         repository.HelmGovernanceStore
+	HelmDistribution       helmdist.Store
 	HelmSources            repository.HelmSourceStore
 	HelmUpstream           helmformat.Upstream
 	HelmObjects            ObjectStore
@@ -93,13 +95,16 @@ func (o GatewayOptions) validate() error {
 		if nilDependency(o.HelmSources) {
 			failures = append(failures, errors.New("helm preview source store is required"))
 		}
+		if o.HelmDistribution != nil && nilDependency(o.HelmDistribution) {
+			failures = append(failures, errors.New("helm replication store is typed nil"))
+		}
 		if o.HelmUpstream != nil && nilDependency(o.HelmUpstream) {
 			failures = append(failures, errors.New("helm preview upstream client is typed nil"))
 		}
 		if err := objectstore.Validate(o.HelmObjects); err != nil {
 			failures = append(failures, fmt.Errorf("helm preview %w", err))
 		}
-	} else if o.HelmStore != nil || o.HelmGovernance != nil || o.HelmSources != nil || o.HelmUpstream != nil || o.HelmObjects != nil {
+	} else if o.HelmStore != nil || o.HelmGovernance != nil || o.HelmSources != nil || o.HelmUpstream != nil || o.HelmObjects != nil || o.HelmDistribution != nil {
 		failures = append(failures, errors.New("helm preview dependencies require explicit enablement"))
 	}
 	if o.NuGetPreviewEnabled {

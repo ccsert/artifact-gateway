@@ -62,6 +62,81 @@ export type RubyGemsPreviewQuotaInput = {
   quotaBytes: number;
 };
 
+export type HelmPreviewReplicationIdentity = (
+  | {
+      provenanceDigest?: "";
+      provenanceSize?: 0;
+    }
+  | {
+      provenanceDigest: string;
+      provenanceSize: number;
+    }
+) & {
+  name: string;
+  version: string;
+  digest: string;
+  size: number;
+  provenanceDigest?: string;
+  provenanceSize?: number;
+  sourceGovernanceVersion: string;
+};
+
+export type HelmPreviewReplicationRequest = {
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  items: Array<HelmPreviewReplicationIdentity>;
+};
+
+export type HelmPreviewReplicationItem = (
+  | {
+      provenanceDigest?: "";
+      provenanceSize?: 0;
+    }
+  | {
+      provenanceDigest: string;
+      provenanceSize: number;
+    }
+) & {
+  name: string;
+  version: string;
+  digest: string;
+  size: number;
+  provenanceDigest: string;
+  provenanceSize: number;
+  sourceGovernanceVersion: string;
+  index: number;
+  state: "pending" | "running" | "succeeded" | "failed";
+  attempts: number;
+  code?:
+    | "access_denied"
+    | "source_changed"
+    | "target_conflict"
+    | "identity_conflict"
+    | "quota_exceeded"
+    | "transfer_failed";
+  targetSessionId?: string;
+  result?: "published" | "already_present";
+  completedAt?: string;
+};
+
+export type HelmPreviewReplicationJob = {
+  id: string;
+  planDigest: string;
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  actor: string;
+  version: string;
+  state: "queued" | "running" | "succeeded" | "failed";
+  items: Array<HelmPreviewReplicationItem>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HelmPreviewReplicationRetry = {
+  expectedVersion: string;
+  itemIndexes: Array<number>;
+};
+
 /**
  * Retained immutable chart governance. This record exists only after a full publication closure is committed or cached; hiding never releases capacity or Group authority.
  */
@@ -1664,6 +1739,7 @@ export type HelmPreviewChart = (
   name: string;
   version: string;
   digest: string;
+  governanceVersion?: string;
   /**
    * True only for a complete verified chart/provenance closure; false for index metadata without verified bytes
    */
@@ -3785,6 +3861,140 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type CreateHelmPreviewReplicationJobData = {
+  body: HelmPreviewReplicationRequest;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/previews/helm/replication-jobs";
+};
+
+export type CreateHelmPreviewReplicationJobErrors = {
+  /**
+   * Invalid or duplicate chart identity, unbounded plan or key
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Active Helm Hosted repository or exact source chart not found
+   */
+  404: unknown;
+  /**
+   * Different plan for the key, source governance changed, conflict or capacity denied
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type CreateHelmPreviewReplicationJobResponses = {
+  /**
+   * Queued plan, or the same plan on an exact idempotent replay
+   */
+  202: HelmPreviewReplicationJob;
+};
+
+export type CreateHelmPreviewReplicationJobResponse =
+  CreateHelmPreviewReplicationJobResponses[keyof CreateHelmPreviewReplicationJobResponses];
+
+export type GetHelmPreviewReplicationJobData = {
+  body?: never;
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/helm/replication-jobs/{jobId}";
+};
+
+export type GetHelmPreviewReplicationJobErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Source and target read authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewReplicationJobResponses = {
+  /**
+   * Durable job and chart checkpoints without secrets or physical object keys
+   */
+  200: HelmPreviewReplicationJob;
+};
+
+export type GetHelmPreviewReplicationJobResponse =
+  GetHelmPreviewReplicationJobResponses[keyof GetHelmPreviewReplicationJobResponses];
+
+export type RetryHelmPreviewReplicationJobData = {
+  body: HelmPreviewReplicationRetry;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/helm/replication-jobs/{jobId}/retry";
+};
+
+export type RetryHelmPreviewReplicationJobErrors = {
+  /**
+   * Invalid retry key or item set
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Original actor with current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Job version, retry payload, state or selected item conflicts
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type RetryHelmPreviewReplicationJobResponses = {
+  /**
+   * Selected failed items queued, or an exact retry replay
+   */
+  202: HelmPreviewReplicationJob;
+};
+
+export type RetryHelmPreviewReplicationJobResponse =
+  RetryHelmPreviewReplicationJobResponses[keyof RetryHelmPreviewReplicationJobResponses];
 
 export type GetRubyGemsPreviewGovernanceData = {
   body?: never;

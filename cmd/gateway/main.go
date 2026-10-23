@@ -24,6 +24,7 @@ import (
 	helmformat "github.com/ccsert/artifact-gateway/internal/format/helm"
 	nugetformat "github.com/ccsert/artifact-gateway/internal/format/nuget"
 	rubygemsformat "github.com/ccsert/artifact-gateway/internal/format/rubygems"
+	helmdist "github.com/ccsert/artifact-gateway/internal/helmdistribution"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	migrationpg "github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"
@@ -298,12 +299,25 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		aptPublisher = aptpublication.NewPublisher(store, objectStore, dependencies.APTSigner).WithMetrics(metrics).WithPublicationScanner(app.NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics))
 	}
 	var helmMaintenance *helmformat.Maintenance
+	var helmReplication *helmdist.Worker
 	if cfg.HelmPreviewEnabled {
 		helmMaintenance, err = helmformat.NewMaintenance(store, objectStore)
 		if err != nil {
 			slog.Error("configure Helm preview maintenance", "error", err)
 			return 1
 		}
+		authority := authorization.Authenticator{AdminToken: cfg.AdminToken, AdminActor: cfg.AdminActor, ResolverToken: cfg.ResolverToken, ResolverActor: cfg.ResolverActor, RepositoryReaders: cfg.RepositoryReaders, LegacyReadPermissive: cfg.LegacyReadPermissive}
+		module, setupErr := helmformat.New(helmformat.Options{Distribution: store, Store: store, Governance: store, Repositories: store, Objects: objectStore, Authenticator: authority, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: authority}, Audit: store, Anonymous: store, Capacities: store})
+		if setupErr != nil {
+			slog.Error("configure Helm preview replication", "error", setupErr)
+			return 1
+		}
+		worker, setupErr := module.ReplicationWorker(cfg.InstanceID + "/" + runtimeSessionID)
+		if setupErr != nil {
+			slog.Error("configure Helm preview replication worker", "error", setupErr)
+			return 1
+		}
+		helmReplication = &worker
 	}
 	var nugetMaintenance *nugetformat.Maintenance
 	var nugetReplication *dist.Worker
@@ -351,6 +365,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		nugetMaintenance:    nugetMaintenance,
 		nugetReplication:    nugetReplication,
 		helmMaintenance:     helmMaintenance,
+		helmReplication:     helmReplication,
 		rubyGemsMaintenance: rubyGemsMaintenance,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
@@ -398,6 +413,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			gatewayOptions.HelmPreviewEnabled = true
 			gatewayOptions.HelmStore = store
 			gatewayOptions.HelmGovernance = store
+			gatewayOptions.HelmDistribution = store
 			gatewayOptions.HelmSources = store
 			gatewayOptions.HelmObjects = objectStore
 		}

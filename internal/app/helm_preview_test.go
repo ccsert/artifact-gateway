@@ -84,6 +84,7 @@ func TestHelmPreviewGatewayRejectsImplicitOrIncompletePorts(t *testing.T) {
 		{"typed nil publication store", func(o *GatewayOptions) { o.HelmStore = (*repository.PostgresStore)(nil) }},
 		{"missing governance store", func(o *GatewayOptions) { o.HelmGovernance = nil }},
 		{"typed nil governance store", func(o *GatewayOptions) { o.HelmGovernance = (*repository.PostgresStore)(nil) }},
+		{"typed nil replication store", func(o *GatewayOptions) { o.HelmDistribution = (*repository.PostgresStore)(nil) }},
 		{"missing source store", func(o *GatewayOptions) { o.HelmSources = nil }},
 		{"typed nil source store", func(o *GatewayOptions) { o.HelmSources = (*repository.PostgresStore)(nil) }},
 		{"missing object store", func(o *GatewayOptions) { o.HelmObjects = nil }},
@@ -100,6 +101,14 @@ func TestHelmPreviewGatewayRejectsImplicitOrIncompletePorts(t *testing.T) {
 				t.Fatalf("incomplete ports=%v %v", h, err)
 			}
 		})
+	}
+}
+
+func TestHelmReplicationPortCannotEnablePreviewImplicitly(t *testing.T) {
+	o := explicitGatewayOptions()
+	o.HelmDistribution = o.Store.(*repository.MemoryStore)
+	if h, err := NewGatewayHandler(o); err == nil || h != nil {
+		t.Fatalf("replication enabled a default-off preview: handler=%v error=%v", h, err)
 	}
 }
 

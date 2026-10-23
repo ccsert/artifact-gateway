@@ -9,6 +9,12 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/helm/replication-jobs":
+    "$ref": "./management/helm-preview.yaml#/replication_jobs"
+  "/previews/helm/replication-jobs/{jobId}":
+    "$ref": "./management/helm-preview.yaml#/replication_job"
+  "/previews/helm/replication-jobs/{jobId}/retry":
+    "$ref": "./management/helm-preview.yaml#/replication_retry"
   "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance":
     "$ref": "./management/rubygems-preview.yaml#/governance"
   "/previews/rubygems/repositories":
@@ -389,6 +395,16 @@ components:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewCapacity"
     RubyGemsPreviewQuotaInput:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewQuotaInput"
+    HelmPreviewReplicationIdentity:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationIdentity"
+    HelmPreviewReplicationRequest:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationRequest"
+    HelmPreviewReplicationItem:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationItem"
+    HelmPreviewReplicationJob:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationJob"
+    HelmPreviewReplicationRetry:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationRetry"
     HelmPreviewGovernance:
       "$ref": "./components/helm-preview.yaml#/HelmPreviewGovernance"
     HelmPreviewGovernanceChange:

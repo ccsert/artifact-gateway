@@ -272,7 +272,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		} else if configured, ok := upstreamClient.(helmformat.Upstream); ok {
 			client = configured
 		}
-		helmModule, err := helmformat.New(helmformat.Options{Store: options.HelmStore, Governance: options.HelmGovernance, Sources: options.HelmSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.HelmObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
+		helmModule, err := helmformat.New(helmformat.Options{Distribution: options.HelmDistribution, Store: options.HelmStore, Governance: options.HelmGovernance, Sources: options.HelmSources, Configuration: store, Groups: store, Upstream: client, Repositories: store, Objects: options.HelmObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store, Capacities: store})
 		if err != nil {
 			return nil, err
 		}
