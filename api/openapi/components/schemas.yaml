@@ -13,10 +13,11 @@ Format:
   - apt
 PreviewWorkerFormat:
   type: string
-  description: Opt-in preview upload cleanup formats; these do not enter the formal format catalog.
+  description: Opt-in preview worker formats outside the formal format catalog.
   enum:
   - nuget
   - helm
+  - rubygems
 RepositoryOperation:
   type: string
   enum:

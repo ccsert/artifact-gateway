@@ -16,6 +16,958 @@
     }
   ],
   "paths": {
+    "/previews/rubygems/repositories": {
+      "post": {
+        "tags": [
+          "RubyGemsPreview"
+        ],
+        "operationId": "createRubyGemsPreviewRepository",
+        "summary": "Create an opt-in RubyGems Hosted preview repository",
+        "description": "Requires administrator authentication and explicit runtime preview enablement. Outside the admitted Format catalog; Proxy and Group are not supported.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RubyGemsPreviewRepositoryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created or replayed repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RubyGemsPreviewRepository"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/previews/rubygems/repositories/{repositoryId}": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "RubyGemsPreview"
+        ],
+        "operationId": "getRubyGemsPreviewRepository",
+        "summary": "Read a RubyGems preview repository",
+        "responses": {
+          "200": {
+            "description": "Explicit preview repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RubyGemsPreviewRepository"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/previews/rubygems/repositories/{repositoryId}/capacity": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "RubyGemsPreview"
+        ],
+        "operationId": "getRubyGemsPreviewCapacity",
+        "summary": "Read preview capacity including pending reservations",
+        "responses": {
+          "200": {
+            "description": "Capacity, administrator only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RubyGemsPreviewCapacity"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "RubyGemsPreview"
+        ],
+        "operationId": "setRubyGemsPreviewQuota",
+        "summary": "Set administrator-managed preview quota atomically with its audit",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RubyGemsPreviewQuotaInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated quota; reservations and committed bytes remain covered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RubyGemsPreviewCapacity"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/rubygems/{repository}/api/v1/gems": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repository"
+        }
+      ],
+      "post": {
+        "operationId": "pushRubyGemHostedPreview",
+        "description": "Explicitly enabled RubyGems Hosted preview. Posts original gem bytes using Authorization with a local API key, Bearer token, or Basic password token. The entire metadata/data/checksum closure must validate before discovery. Same identity and bytes is idempotent; different bytes conflict. Not part of the admitted Format catalog. Signed gem archives are not accepted.",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 67108864
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable original bytes committed with their audit"
+          },
+          "400": {
+            "description": "Invalid or unsupported archive closure"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository or gem-name permission denied"
+          },
+          "404": {
+            "description": "Preview disabled or Hosted repository not found"
+          },
+          "409": {
+            "description": "Immutable identity conflict or reserved capacity exceeded"
+          },
+          "413": {
+            "description": "Gem exceeds the configured compressed-byte bound"
+          },
+          "500": {
+            "description": "Persistence or verified-object failure; no partial index publication"
+          }
+        }
+      }
+    },
+    "/rubygems/{repository}/{index}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repository"
+        },
+        {
+          "name": "index",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "names",
+              "versions",
+              "specs.4.8.gz",
+              "latest_specs.4.8.gz",
+              "prerelease_specs.4.8.gz"
+            ]
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readRubyGemsHostedPreviewIndex",
+        "description": "Authorized complete bounded compact or legacy Marshal 4.8 snapshot. Package-scoped grants filter every entry. Range requests receive the complete current 200 representation.",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized index snapshot"
+          },
+          "304": {
+            "description": "Same authorized ETag"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository read permission denied"
+          },
+          "404": {
+            "description": "Preview or repository not found"
+          },
+          "500": {
+            "description": "Invalid or unavailable committed metadata"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headRubyGemsHostedPreviewIndex",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Same headers as GET without body"
+          },
+          "304": {
+            "description": "Same authorized ETag"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository read permission denied"
+          },
+          "404": {
+            "description": "Preview or repository not found"
+          }
+        }
+      }
+    },
+    "/rubygems/{repository}/info/{gemName}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repository"
+        },
+        {
+          "name": "gemName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readRubyGemsHostedPreviewInfo",
+        "description": "Compact info with runtime dependencies, Ruby/RubyGems requirements, platform and original gem SHA-256.",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized compact dependency info"
+          },
+          "304": {
+            "description": "Same authorized info ETag"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Gem-name read permission denied"
+          },
+          "404": {
+            "description": "Invalid name or missing preview repository"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headRubyGemsHostedPreviewInfo",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Same authorized compact info headers without body"
+          },
+          "304": {
+            "description": "Same authorized info ETag"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Gem-name read permission denied"
+          },
+          "404": {
+            "description": "Invalid name or missing preview repository"
+          }
+        }
+      }
+    },
+    "/rubygems/{repository}/gems/{gemFile}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repository"
+        },
+        {
+          "name": "gemFile",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "downloadRubyGemHostedPreview",
+        "description": "Verified original gem bytes; all reads recheck complete size and SHA-256 before writing a response.",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Original complete immutable gem"
+          },
+          "304": {
+            "description": "Same authorized gem digest"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Gem-name read permission denied"
+          },
+          "404": {
+            "description": "Gem not found"
+          },
+          "500": {
+            "description": "Stored gem integrity verification failed"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headRubyGemHostedPreview",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Same headers as GET without body"
+          },
+          "304": {
+            "description": "Same authorized gem digest"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Gem-name read permission denied"
+          },
+          "404": {
+            "description": "Gem not found"
+          }
+        }
+      }
+    },
+    "/rubygems/{repository}/quick/Marshal.4.8/{gemspecFile}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repository"
+        },
+        {
+          "name": "gemspecFile",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readRubyGemsHostedPreviewGemspec",
+        "description": "Server-serialized zlib Marshal 4.8 Gem::Specification preserving runtime/development dependencies and version requirements.",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized immutable gemspec"
+          },
+          "304": {
+            "description": "Same authorized gemspec ETag"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Gem-name read permission denied"
+          },
+          "404": {
+            "description": "Gem not found"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headRubyGemsHostedPreviewGemspec",
+        "security": [
+          {
+            "rubyGemsApiKey": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Same authorized gemspec headers without body"
+          },
+          "304": {
+            "description": "Same authorized gemspec ETag"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Gem-name read permission denied"
+          },
+          "404": {
+            "description": "Gem not found"
+          }
+        }
+      }
+    },
+    "/previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repositoryId"
+        },
+        {
+          "name": "chartName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getHelmPreviewGovernance",
+        "description": "Repository administrator reads retained Hosted or cached Proxy governance, including tombstoned charts. Uncached upstream index entries have no durable governance record.",
+        "responses": {
+          "200": {
+            "description": "Retained chart governance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewGovernance"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "No retained publication"
+          },
+          "503": {
+            "description": "Preview disabled or storage unavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "applyHelmPreviewGovernance",
+        "description": "Compare-and-set the immutable digest and governance version. delete creates a retained tombstone; restore and release verify complete original chart/provenance bytes and metadata before relaxing state. An unchanged action at the current version is an unaudited no-op; a stale version conflicts. State and audit commit atomically. Fixed Group authority never falls through to another member.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelmPreviewGovernanceChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current chart governance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewGovernance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid action or request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "No retained publication"
+          },
+          "409": {
+            "description": "Digest or governance version conflict"
+          },
+          "502": {
+            "description": "Original chart/provenance closure failed verification"
+          },
+          "503": {
+            "description": "Preview disabled or storage/audit unavailable"
+          }
+        }
+      }
+    },
+    "/previews/helm/repositories/{repositoryId}/quarantine-read-policy": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/repositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getHelmPreviewQuarantineReadPolicy",
+        "responses": {
+          "200": {
+            "description": "Independent repository quarantine read policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewQuarantineReadPolicy"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "Repository not found"
+          },
+          "503": {
+            "description": "Preview disabled or storage unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceHelmPreviewQuarantineReadPolicy",
+        "description": "Repository administrator compares the independent policy version. enabled=true blocks quarantined charts in indexes, browse responses and assets. Disabling a previously enabled block first verifies every retained non-tombstoned quarantined closure that would become readable. No-op writes preserve the version and audit count. Tombstones always remain hidden.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelmPreviewQuarantineReadPolicyChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current independent quarantine read policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelmPreviewQuarantineReadPolicy"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid policy request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Repository administrator required"
+          },
+          "404": {
+            "description": "Repository not found"
+          },
+          "409": {
+            "description": "Policy version conflict"
+          },
+          "422": {
+            "description": "Preview inventory limit prevents complete verification"
+          },
+          "502": {
+            "description": "Original chart/provenance closure failed verification"
+          },
+          "503": {
+            "description": "Preview disabled or storage/audit unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/replication-jobs": {
+      "post": {
+        "operationId": "createNuGetPreviewReplicationJob",
+        "description": "Creates a bounded, durable Hosted-to-Hosted replication plan. This default-disabled preview fixes canonical identities, SHA-256, sizes and source governance versions. Each package commits atomically; a failed batch retains completed items. No credentials, source object keys, Proxy or Group targets are accepted. The current durable actor, source read and target write authority, governance and capacity are checked again by the worker at publication.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewReplicationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Queued plan, or the same plan on an exact idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewReplicationJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or duplicate package identity, unbounded plan or key"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Current source read and target write authority required"
+          },
+          "404": {
+            "description": "Active NuGet Hosted repository or exact source package not found"
+          },
+          "409": {
+            "description": "Different plan for the key, source governance changed, conflict or capacity denied"
+          },
+          "503": {
+            "description": "Preview disabled or durable replication unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/replication-jobs/{jobId}": {
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getNuGetPreviewReplicationJob",
+        "description": "Returns exact item results; current read authority on both repositories is required.",
+        "responses": {
+          "200": {
+            "description": "Durable job and package checkpoints without secrets or physical object keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewReplicationJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Source and target read authority required"
+          },
+          "404": {
+            "description": "Job not found"
+          },
+          "503": {
+            "description": "Preview disabled or durable replication unavailable"
+          }
+        }
+      }
+    },
+    "/previews/nuget/replication-jobs/{jobId}/retry": {
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "retryNuGetPreviewReplicationJob",
+        "description": "The original durable actor can retry explicitly selected failed items of a failed job using its current version. Completed items, plan, actor and source pins remain fixed. An exact key replay never schedules another attempt. This is package-level recovery, not a batch rollback.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuGetPreviewReplicationRetry"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Selected failed items queued, or an exact retry replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuGetPreviewReplicationJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid retry key or item set"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Original actor with current source read and target write authority required"
+          },
+          "404": {
+            "description": "Job not found"
+          },
+          "409": {
+            "description": "Job version, retry payload, state or selected item conflicts"
+          },
+          "503": {
+            "description": "Preview disabled or durable replication unavailable"
+          }
+        }
+      }
+    },
     "/previews/helm/groups": {
       "post": {
         "operationId": "createHelmPreviewGroup",
@@ -588,7 +1540,7 @@
       ],
       "parameters": [
         {
-          "$ref": "#/components/parameters/repository"
+          "$ref": "#/components/parameters/repository-2"
         }
       ],
       "get": {
@@ -683,7 +1635,7 @@
       ],
       "parameters": [
         {
-          "$ref": "#/components/parameters/repository"
+          "$ref": "#/components/parameters/repository-2"
         },
         {
           "name": "chartName",
@@ -802,7 +1754,7 @@
       ],
       "parameters": [
         {
-          "$ref": "#/components/parameters/repository"
+          "$ref": "#/components/parameters/repository-2"
         },
         {
           "name": "snapshotId",
@@ -10154,6 +11106,490 @@
   },
   "components": {
     "schemas": {
+      "RubyGemsPreviewRepositoryInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "anonymousRead": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "RubyGemsPreviewRepository": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "format",
+          "type",
+          "preview",
+          "version",
+          "anonymousRead",
+          "sourceUrl",
+          "pushHost",
+          "publicationUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "rubygems"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted"
+            ]
+          },
+          "preview": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "anonymousRead": {
+            "type": "boolean"
+          },
+          "sourceUrl": {
+            "type": "string"
+          },
+          "pushHost": {
+            "type": "string",
+            "description": "Base URI for gem push --host, without a trailing slash. The official client appends /api/v1/gems."
+          },
+          "publicationUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "RubyGemsPreviewCapacity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "usedBytes",
+          "pendingBytes",
+          "objectCount",
+          "quotaBytes"
+        ],
+        "properties": {
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "pendingBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "RubyGemsPreviewQuotaInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "quotaBytes"
+        ],
+        "properties": {
+          "quotaBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Zero means no configured quota. Pending unexpired uploads reserve capacity."
+          }
+        }
+      },
+      "HelmPreviewGovernance": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Retained immutable chart governance. This record exists only after a full publication closure is committed or cached; hiding never releases capacity or Group authority.",
+        "required": [
+          "repositoryId",
+          "name",
+          "version",
+          "digest",
+          "governanceVersion",
+          "tombstoned",
+          "quarantined"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "governanceVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "tombstoned": {
+            "type": "boolean"
+          },
+          "quarantined": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "HelmPreviewGovernanceChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedDigest",
+          "expectedGovernanceVersion",
+          "action",
+          "reason"
+        ],
+        "properties": {
+          "expectedDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "expectedGovernanceVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "delete",
+              "restore",
+              "quarantine",
+              "release"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        }
+      },
+      "HelmPreviewQuarantineReadPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Independently versioned policy. enabled=true blocks quarantined chart discovery and assets; the default is false. Tombstones always block.",
+        "required": [
+          "version",
+          "enabled"
+        ],
+        "properties": {
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "HelmPreviewQuarantineReadPolicyChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "enabled"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NuGetPreviewReplicationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceRepositoryId",
+          "targetRepositoryId",
+          "items"
+        ],
+        "properties": {
+          "sourceRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/NuGetPreviewReplicationIdentity"
+            }
+          }
+        }
+      },
+      "NuGetPreviewReplicationJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "planDigest",
+          "sourceRepositoryId",
+          "targetRepositoryId",
+          "actor",
+          "version",
+          "state",
+          "items",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "sourceRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/NuGetPreviewReplicationItem"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NuGetPreviewReplicationRetry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "itemIndexes"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "itemIndexes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            }
+          }
+        }
+      },
+      "NuGetPreviewReplicationIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packageId",
+          "version",
+          "digest",
+          "size",
+          "sourceGovernanceVersion"
+        ],
+        "properties": {
+          "packageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 268435456
+          },
+          "sourceGovernanceVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        }
+      },
+      "NuGetPreviewReplicationItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packageId",
+          "version",
+          "digest",
+          "size",
+          "sourceGovernanceVersion",
+          "index",
+          "state",
+          "attempts"
+        ],
+        "properties": {
+          "packageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 268435456
+          },
+          "sourceGovernanceVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "access_denied",
+              "source_changed",
+              "target_conflict",
+              "identity_conflict",
+              "quota_exceeded",
+              "transfer_failed"
+            ]
+          },
+          "targetSessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "published",
+              "already_present"
+            ]
+          },
+          "listed": {
+            "type": "boolean"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "HelmPreviewRepositoryCreate": {
         "type": "object",
         "additionalProperties": false,
@@ -10973,6 +12409,7 @@
           "repositoryId",
           "packageId",
           "version",
+          "governanceVersion",
           "digest",
           "size",
           "publishedAt",
@@ -10989,6 +12426,11 @@
           },
           "version": {
             "type": "string"
+          },
+          "governanceVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "description": "Read-only current governance pin for a Hosted replication plan; mutations retain separate administrator authority."
           },
           "digest": {
             "type": "string"
@@ -16859,15 +18301,14 @@
           "type": "string"
         }
       },
-      "helmPreviewIdempotencyKey": {
-        "name": "Idempotency-Key",
-        "in": "header",
-        "required": false,
-        "description": "Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.",
+      "repository": {
+        "name": "repository",
+        "in": "path",
+        "required": true,
         "schema": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 200
+          "maxLength": 63
         }
       },
       "repositoryId": {
@@ -16879,7 +18320,18 @@
           "format": "uuid"
         }
       },
-      "repository": {
+      "helmPreviewIdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "repository-2": {
         "name": "repository",
         "in": "path",
         "required": true,
@@ -17507,6 +18959,11 @@
       }
     },
     "securitySchemes": {
+      "rubyGemsApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization"
+      },
       "nuGetApiKey": {
         "type": "apiKey",
         "in": "header",

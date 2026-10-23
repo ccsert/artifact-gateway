@@ -42,7 +42,7 @@ scheduler-only nodes do not initialize repositories. Apply the additive
 
 To start empty, set `GATEWAY_REPOSITORY_PRESETS=none` on every API/standalone node.
 This deletes nothing. A later explicit change to `standard` initializes only an
-empty catalog that has never been initialized. NuGet/Helm previews, APT signing,
+empty catalog that has never been initialized. NuGet/Helm/RubyGems previews, APT signing,
 and registries requiring additional upstream credentials retain their individual
 admission requirements.
 

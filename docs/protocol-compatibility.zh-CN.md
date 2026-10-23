@@ -62,14 +62,16 @@ Gradle 的 Gateway 客户端身份与上游凭据相互独立。修改凭据绑�
 须提交新密钥或显式选择 `scheme: none`；否则 PATCH 返回
 `400 upstream_credential_rebind_required`，旧版本与密文不变。
 
-## Helm Hosted 预览
+## Helm Hosted、Proxy 与 Group 预览
 
 默认关闭的[传统 Helm Hosted 预览](helm-hosted-preview.zh-CN.md) 提供 chart/provenance
 单请求原子发布、授权过滤且确定的 `index.yaml`、原始字节校验下载及配额预留。管理使用独立
 `/api/v2/previews/helm`，读取位于 `/helm/<repository>`；正式格式档案、仓库目录、active
 capabilities 和 Console 选择器均不公开 Helm。固定官方 Helm 3.19.0 验收冷 pull/verify，
 并通过自有只读 discovery fixture 验证 dry-run 渲染，不声明真实 Kubernetes 安装。
-Proxy/Group（#291）和生命周期/正式准入（#292）仍为独立工作。
+Proxy/Group 在重排后仍保留持久来源绑定，并使用经过校验的 chart/provenance 缓存。
+版本化墓碑和隔离同时约束索引与资产，旧快照 URL 同样受限；恢复前重验原始完整闭包。
+保留、分发与完整格式准入仍由 #292 承接。
 
 ## NuGet Hosted、Proxy 与 Group 预览
 
@@ -82,8 +84,20 @@ ID/版本的来源绑定，Group 重排不能换源。源配置变化后，必�
 完整字节才能前移既有 Group 来源版本。上游 unlisted 精确版本仍可读取，搜索与
 自动补全不展示它。`make native-nuget-e2e` 验证官方 .NET SDK 10.0.100 push、仅以
 目标源恢复传递依赖、完整包身份、冷/热/断源读取，以及 Gateway/PostgreSQL/RustFS
-重启恢复和离线执行。预览不进入正式格式目录与 Console 格式选择器；本地 Hosted
-unlist、治理和正式准入仍由 #289 推进。
+重启恢复和离线执行。预览不进入正式格式目录与 Console 格式选择器。Hosted
+unlist/relist、墓碑和隔离作为独立治理控制提供；[持久复制预览](nuget-replication-preview.zh-CN.md)
+固定 Hosted→Hosted 计划与源治理版本，重新核验当前权限，并以逐项检查点原子提交
+目标自有的完整验证字节。精确重试保留已完成项；其余生命周期与正式准入仍由 #289 承接。
+
+## RubyGems Hosted 预览
+
+默认关闭的 [RubyGems Hosted 预览](rubygems-hosted-preview.zh-CN.md) 使用独立的
+`/api/v2/previews/rubygems` 管理与 `/rubygems/<repository>` 原生入口。原始未签名
+`.gem` 完整验证后，才原子发布不可变 name/version/platform 身份、运行时依赖与配额用量。
+Compact、legacy Marshal 索引与 gemspec 描述同一批已提交包；
+`make native-rubygems-e2e` 使用固定官方 RubyGems/Bundler、仅配置目标的空缓存，
+验证服务重启前后的原包摘要与冷安装。本切片不含 Proxy/Group、签名包、yank、完整治理
+或正式准入，剩余要求保留在 #293；预览不进入正式目录、Console 格式选择器或安装预置。
 
 ## 契约对齐
 

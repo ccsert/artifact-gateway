@@ -544,3 +544,34 @@ command. This mapping does not mark the remaining #289 admission complete.
 | `PUT /previews/nuget/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceNuGetPreviewQuarantineReadPolicy` | `nuget preview quarantine-policy set --repo <id>` | #449 | M2 planned | RA | C |
 | `DELETE /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`unlistNuGetHostedPackage` | native NuGet PackagePublish unlist; no agctl registry client | #449 | N/A | W | N: NuGet clients use the native unlist endpoint; agctl neither registers nor sends this protocol action |
 | `POST /nuget/{repository}/api/v2/package/{packageId}/{version}`<br>`relistNuGetHostedPackage` | native NuGet PackagePublish relist API; no agctl registry client | #449 | N/A | W | N: use the native relist API; no agctl or official dotnet CLI relist command is claimed |
+
+## Helm governance, NuGet replication and RubyGems Hosted previews (#457–#459)
+
+The seven command names below remain M2 plans. Their APIs require explicit
+preview enablement; no new agctl command is registered or verified here. NuGet
+retry retains the original durable actor and credential identity and rechecks
+current authority. RubyGems uses the preview API and official clients. Formal
+format admission remains under #292, #289 and #293.
+
+| API / operationId | Planned command | Owning issue | Phase | Permission | Acceptance |
+| --- | --- | --- | --- | --- | --- |
+| `GET /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance`<br>`getHelmPreviewGovernance` | `helm preview governance show --repo <id> --chart <name> --version <version>` | #457 | M2 planned | RA | Q |
+| `POST /previews/helm/repositories/{repositoryId}/charts/{chartName}/{version}/governance`<br>`applyHelmPreviewGovernance` | `helm preview governance apply --repo <id> --chart <name> --version <version>` | #457 | M2 planned | RA | C |
+| `GET /previews/helm/repositories/{repositoryId}/quarantine-read-policy`<br>`getHelmPreviewQuarantineReadPolicy` | `helm preview quarantine-policy show --repo <id>` | #457 | M2 planned | RA | Q |
+| `PUT /previews/helm/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceHelmPreviewQuarantineReadPolicy` | `helm preview quarantine-policy set --repo <id>` | #457 | M2 planned | RA | C |
+| `POST /previews/nuget/replication-jobs`<br>`createNuGetPreviewReplicationJob` | `nuget preview replication create --file <plan.json>` | #458 | M2 planned | source R + target W | W |
+| `GET /previews/nuget/replication-jobs/{jobId}`<br>`getNuGetPreviewReplicationJob` | `nuget preview replication show <job-id>` | #458 | M2 planned | source R + target R | Q |
+| `POST /previews/nuget/replication-jobs/{jobId}/retry`<br>`retryNuGetPreviewReplicationJob` | `nuget preview replication retry <job-id> --file <retry.json>` | #458 | M2 planned | original actor + source R + target W | C |
+| `POST /previews/rubygems/repositories`<br>`createRubyGemsPreviewRepository` | explicit RubyGems preview API | #459 | N/A | A | N: this Hosted preview has an explicit management API; no agctl command is registered or verified |
+| `GET /previews/rubygems/repositories/{repositoryId}`<br>`getRubyGemsPreviewRepository` | explicit RubyGems preview API | #459 | N/A | R | N: this Hosted preview has an explicit management API; no agctl command is registered or verified |
+| `GET /previews/rubygems/repositories/{repositoryId}/capacity`<br>`getRubyGemsPreviewCapacity` | explicit RubyGems preview API | #459 | N/A | A | N: this Hosted preview has an explicit management API; no agctl command is registered or verified |
+| `PUT /previews/rubygems/repositories/{repositoryId}/capacity`<br>`setRubyGemsPreviewQuota` | explicit RubyGems preview API | #459 | N/A | A | N: this Hosted preview has an explicit management API; no agctl command is registered or verified |
+| `POST /rubygems/{repository}/api/v1/gems`<br>`pushRubyGemHostedPreview` | official RubyGems/Bundler client | #459 | N/A | W | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `GET /rubygems/{repository}/{index}`<br>`readRubyGemsHostedPreviewIndex` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `HEAD /rubygems/{repository}/{index}`<br>`headRubyGemsHostedPreviewIndex` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `GET /rubygems/{repository}/info/{gemName}`<br>`readRubyGemsHostedPreviewInfo` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `GET /rubygems/{repository}/gems/{gemFile}`<br>`downloadRubyGemHostedPreview` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `HEAD /rubygems/{repository}/gems/{gemFile}`<br>`headRubyGemHostedPreview` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `GET /rubygems/{repository}/quick/Marshal.4.8/{gemspecFile}`<br>`readRubyGemsHostedPreviewGemspec` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `HEAD /rubygems/{repository}/info/{gemName}`<br>`headRubyGemsHostedPreviewInfo` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |
+| `HEAD /rubygems/{repository}/quick/Marshal.4.8/{gemspecFile}`<br>`headRubyGemsHostedPreviewGemspec` | official RubyGems/Bundler client | #459 | N/A | R* | N: official RubyGems/Bundler uses the native endpoint; agctl neither registers nor sends this operation |

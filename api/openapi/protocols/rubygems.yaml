@@ -50,7 +50,7 @@ index:
       '401': {description: Authentication required}
       '403': {description: Repository read permission denied}
       '404': {description: Preview or repository not found}
-info:
+compact_info:
   servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}

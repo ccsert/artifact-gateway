@@ -71,6 +71,8 @@ agree with executable tests and the
 - [NuGet Hosted preview](nuget-hosted-preview.md) — default-off native publication and verified restore.
 - [NuGet Proxy and Group preview](nuget-proxy-group-preview.md) — V3 source discovery, persistent authority and private verified caches.
 - [NuGet roadmap](nuget-roadmap.md) — preview acceptance and remaining lifecycle/admission work.
+- [NuGet durable replication preview](nuget-replication-preview.md) — fixed Hosted plans, fenced workers, verified target-owned packages and exact item retry.
+- [RubyGems Hosted preview](rubygems-hosted-preview.md) — default-off native publication, compact/legacy dependency indexes and verified original gems.
 - [Legacy Group migration](legacy-group-migration.md) — compatibility behavior and migration guidance.
 - [Gitea backend reference](gitea-backend-reference.md) — preflight and evidence-loop design reference.
 
