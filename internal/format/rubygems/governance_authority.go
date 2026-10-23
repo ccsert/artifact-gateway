@@ -54,7 +54,7 @@ func (m *Module) governanceIdentity(r *http.Request, p authorization.Principal) 
 	if _, password, ok := r.BasicAuth(); ok {
 		token = password
 	}
-	if p.AuthenticationKind == authorization.AuthenticationStaticAdmin || p.AuthenticationKind == authorization.AuthenticationStaticResolver && token == m.auth.ResolverToken {
+	if p.AuthenticationKind == authorization.AuthenticationStaticAdmin && token == m.auth.AdminToken || p.AuthenticationKind == authorization.AuthenticationStaticResolver && token == m.auth.ResolverToken {
 		return in, nil
 	}
 	parts := strings.Split(token, ".")

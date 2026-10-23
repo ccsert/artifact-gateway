@@ -2,9 +2,15 @@ package rubygems
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -197,6 +203,40 @@ func TestRubyGemsGovernanceRequiresCurrentAuthorityAfterLockAndVerification(t *t
 }
 
 func TestRubyGemsGovernanceUsesRepositoryAdminAndExactName(t *testing.T) {
+	t.Run("static-administrator-protocol-token-retains-expiry", func(t *testing.T) {
+		f := setup(t)
+		expiry := time.Now().Add(30 * time.Second).Truncate(time.Second)
+		token := ownedExpiringRubyGemsPrincipalToken(t, f.module.auth, authorization.Principal{Actor: "operator", Admin: true, Role: authorization.RoleAdmin, AuthenticationKind: authorization.AuthenticationStaticAdmin}, expiry)
+		for _, header := range []string{token, "Bearer " + token, "Basic " + base64.StdEncoding.EncodeToString([]byte("gateway:"+token))} {
+			r := httptest.NewRequest("DELETE", "/rubygems/owned-gems/api/v1/gems/yank", nil)
+			r.Header.Set("Authorization", header)
+			p, ok := f.module.principal(r)
+			if !ok || !p.Admin || p.AuthenticationKind != authorization.AuthenticationStaticAdmin {
+				t.Fatal("real authenticator rejected valid owned administrator protocol token")
+			}
+			identity, err := f.module.governanceIdentity(r, p)
+			if err != nil || !identity.ValidUntil.Equal(expiry) {
+				t.Errorf("administrator protocol expiry lost: %+v %v", identity, err)
+			}
+		}
+		r := httptest.NewRequest("DELETE", "/rubygems/owned-gems/api/v1/gems/yank", nil)
+		r.Header.Set("Authorization", "Bearer owned-admin")
+		p, ok := f.module.principal(r)
+		if !ok {
+			t.Fatal("static credential rejected")
+		}
+		identity, err := f.module.governanceIdentity(r, p)
+		if err != nil || !identity.ValidUntil.IsZero() {
+			t.Fatal("opaque administrator credential gained an expiry", identity, err)
+		}
+		parts := strings.Split(token, ".")
+		parts[2] = strconv.FormatInt(expiry.Add(time.Second).Unix(), 10)
+		invalid := yankRequest(f.module, f.repo.Name, "owned", "1.0.0", "", strings.Join(parts, "."))
+		if invalid.Code != http.StatusUnauthorized {
+			t.Fatalf("unsigned expiry change bypassed authentication: %d", invalid.Code)
+		}
+	})
+
 	f := setup(t)
 	for _, name := range []string{"owned", "other"} {
 		if w := push(f, gem(t, name, "1.0.0", "ruby", "fixture")); w.Code != 201 {
@@ -220,4 +260,19 @@ func TestRubyGemsGovernanceUsesRepositoryAdminAndExactName(t *testing.T) {
 	if w := request(m.Preview(), "GET", governancePath(f.repo.ID, "owned", "1.0.0", "ruby"), nil, "Bearer owned-reader"); w.Code != 403 {
 		t.Fatal(w.Code)
 	}
+}
+
+// Use the production encoder and the fixture-owned signing secret. Only the
+// signed expiry is shortened; the real authenticator still verifies the token.
+func ownedExpiringRubyGemsPrincipalToken(t *testing.T, auth authorization.Authenticator, p authorization.Principal, expiry time.Time) string {
+	t.Helper()
+	parts := strings.Split(auth.IssuePrincipalToken(p), ".")
+	if len(parts) != 4 || parts[0] != "v2" {
+		t.Fatal("unexpected production principal token format")
+	}
+	parts[2] = strconv.FormatInt(expiry.Unix(), 10)
+	payload := strings.Join(parts[:3], ".")
+	mac := hmac.New(sha256.New, []byte(auth.ResolverToken))
+	_, _ = mac.Write([]byte(payload))
+	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }

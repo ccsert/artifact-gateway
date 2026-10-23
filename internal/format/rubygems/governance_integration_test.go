@@ -5,6 +5,7 @@ package rubygems
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -243,4 +244,126 @@ func TestRubyGemsPostgresRustFSGovernanceAtomicAuditAndRestart(t *testing.T) {
 			t.Fatal(got, err)
 		}
 	})
+	for _, action := range []string{"yank", "restore"} {
+		t.Run("expired-administrator-protocol-token-during-transaction-lock-wait/"+action, func(t *testing.T) {
+			if otherDB.Stats().MaxOpenConnections != 1 {
+				t.Fatal("publication pool must remain constrained to one connection")
+			}
+			if action == "restore" {
+				if w := yankRequest(m, repo.Name, "durable", "1.0.0", "", "owned-admin"); w.Code != 200 {
+					t.Fatal(w.Code)
+				}
+			}
+			before, err := store.GetRetained(t.Context(), repo.ID, "durable", "1.0.0", "ruby")
+			if err != nil {
+				t.Fatal(err)
+			}
+			priorAudits, err := repos.ListAudits(t.Context(), repository.AuditQuery{Repository: repo.Name, Operation: "rubygems." + action, Limit: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			auth.ResolverToken = "owned-governance-protocol-signer"
+			m = compose()
+			expiry := time.Now().Add(3 * time.Second).Truncate(time.Second)
+			token := ownedExpiringRubyGemsPrincipalToken(t, auth, authorization.Principal{Actor: "operator", Admin: true, Role: authorization.RoleAdmin, AuthenticationKind: authorization.AuthenticationStaticAdmin}, expiry)
+			if principal, ok := auth.AuthenticateContext(t.Context(), "Bearer "+token); !ok || !principal.Admin {
+				t.Fatal("owned protocol token must authenticate before row-lock wait")
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			defer cancel()
+			var requestPID int
+			if err = otherDB.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&requestPID); err != nil {
+				t.Fatal(err)
+			}
+			block, err := db.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = block.Rollback() }()
+			if _, err = block.ExecContext(ctx, `SELECT id FROM native_rubygems_sessions WHERE id::text=$1 FOR UPDATE`, p.SessionID); err != nil {
+				t.Fatal(err)
+			}
+			result, done := make(chan int, 1), make(chan struct{})
+			go func() {
+				defer close(done)
+				var request *httptest.ResponseRecorder
+				if action == "yank" {
+					r := httptest.NewRequest("DELETE", "/rubygems/"+repo.Name+"/api/v1/gems/yank", strings.NewReader("gem_name=durable&version=1.0.0")).WithContext(ctx)
+					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					r.Header.Set("Authorization", token)
+					request = httptest.NewRecorder()
+					m.ServeHTTP(request, r)
+				} else {
+					body, _ := json.Marshal(map[string]string{"expectedDigest": before.Digest, "expectedGovernanceVersion": before.Governance.Version, "action": "restore", "reason": "Owned expiring administrator protocol credential"})
+					r := httptest.NewRequest("POST", governancePath(repo.ID, "durable", "1.0.0", "ruby"), bytes.NewReader(body)).WithContext(ctx)
+					r.Header.Set("Content-Type", "application/json")
+					r.Header.Set("Authorization", "Bearer "+token)
+					request = httptest.NewRecorder()
+					m.Preview().ServeHTTP(request, r)
+				}
+				result <- request.Code
+			}()
+			defer func() {
+				cancel()
+				_ = block.Rollback()
+				select {
+				case <-done:
+				case <-time.After(2 * time.Second):
+					t.Error("owned request did not finish cleanup")
+				}
+			}()
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				var waiting bool
+				err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock' AND query LIKE '%native_rubygems_sessions%FOR UPDATE%')`, requestPID).Scan(&waiting)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if waiting {
+					break
+				}
+				select {
+				case code := <-result:
+					t.Fatalf("request finished before transaction wait: %d", code)
+				default:
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("request never waited on the owned transaction row lock")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if !time.Now().Before(expiry) {
+				t.Fatal("protocol token expired before the observed transaction wait")
+			}
+			timer := time.NewTimer(time.Until(expiry) + 25*time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			if _, ok := auth.AuthenticateContext(ctx, "Bearer "+token); ok {
+				t.Fatal("fixture protocol token is still accepted after signed expiry")
+			}
+			if err = block.Rollback(); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case code := <-result:
+				if code != 403 {
+					t.Fatalf("expired administrator protocol token passed commit boundary: %d", code)
+				}
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			got, err := store.GetRetained(t.Context(), repo.ID, "durable", "1.0.0", "ruby")
+			if err != nil || got.Governance != before.Governance {
+				t.Fatalf("expired token changed state: %+v %v", got, err)
+			}
+			audits, err := repos.ListAudits(t.Context(), repository.AuditQuery{Repository: repo.Name, Operation: "rubygems." + action, Limit: 100})
+			if err != nil || len(audits) != len(priorAudits) {
+				t.Fatalf("expired token changed audit: %d -> %d %v", len(priorAudits), len(audits), err)
+			}
+		})
+	}
 }
