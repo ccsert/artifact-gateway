@@ -66,6 +66,7 @@ type Config struct {
 	RepositoryPresetsMode           string
 	HelmPreviewEnabled              bool
 	NuGetPreviewEnabled             bool
+	RubyGemsPreviewEnabled          bool
 	MigrationSourcePrivateEndpoints map[string][]netip.Prefix
 	MigrationStoragePoolID          string
 	Email                           emailnotification.Config
@@ -258,6 +259,15 @@ func Load() (Config, error) {
 	}
 	if cfg.NuGetPreviewEnabled && strings.TrimSpace(os.Getenv("GATEWAY_WORKER_FORMATS")) == "" {
 		cfg.WorkerFormats = append(cfg.WorkerFormats, "nuget")
+	}
+	if raw := strings.TrimSpace(os.Getenv("GATEWAY_RUBYGEMS_PREVIEW_ENABLED")); raw != "" {
+		if raw != "true" && raw != "false" {
+			return Config{}, errors.New("GATEWAY_RUBYGEMS_PREVIEW_ENABLED must be true or false")
+		}
+		cfg.RubyGemsPreviewEnabled = raw == "true"
+	}
+	if cfg.RubyGemsPreviewEnabled && strings.TrimSpace(os.Getenv("GATEWAY_WORKER_FORMATS")) == "" {
+		cfg.WorkerFormats = append(cfg.WorkerFormats, "rubygems")
 	}
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return Config{}, err
@@ -727,6 +737,9 @@ func validateRuntimeConfig(cfg Config) error {
 			continue
 		}
 		if format == "nuget" && cfg.NuGetPreviewEnabled {
+			continue
+		}
+		if format == "rubygems" && cfg.RubyGemsPreviewEnabled {
 			continue
 		}
 		if _, ok := supportedWorkerFormats[format]; !ok {
