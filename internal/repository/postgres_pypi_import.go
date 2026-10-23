@@ -7,15 +7,20 @@ import (
 	"strings"
 )
 
-func checkPyPIImportActorTx(ctx context.Context, tx *sql.Tx, actor string) error {
+// CheckPyPIImportActorTx validates the authenticated kind and current managed
+// subject in the caller's actual transaction. Names alone are never authority.
+func CheckPyPIImportActorTx(ctx context.Context, tx *sql.Tx, actor, kind, ownerID string) error {
 	var allowed bool
+	if ownerID == "" {
+		return ErrDisabled
+	}
 	switch {
-	case strings.HasPrefix(actor, "user:"):
-		err := tx.QueryRowContext(ctx, `SELECT role='admin' AND state='active' AND NOT must_change_password FROM users WHERE lower(name)=lower($1) FOR SHARE`, strings.TrimPrefix(actor, "user:")).Scan(&allowed)
+	case (kind == "local_session" || kind == "oidc") && strings.HasPrefix(actor, "user:"):
+		err := tx.QueryRowContext(ctx, `SELECT role='admin' AND state='active' AND NOT must_change_password FROM users WHERE lower(name)=lower($1) AND id::text=$2 FOR SHARE`, strings.TrimPrefix(actor, "user:"), ownerID).Scan(&allowed)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-	case strings.HasPrefix(actor, "api-key:"):
+	case kind == "api_key" && actor == "api-key:"+ownerID:
 		err := tx.QueryRowContext(ctx, `SELECT roles @> ARRAY['admin']::text[] AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) AND service_account_id IS NULL FROM api_keys WHERE id::text=$1 FOR SHARE`, strings.TrimPrefix(actor, "api-key:")).Scan(&allowed)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -28,13 +33,13 @@ func checkPyPIImportActorTx(ctx context.Context, tx *sql.Tx, actor string) error
 	}
 	return nil
 }
-func (s *PostgresStore) CheckPyPIImportActor(ctx context.Context, actor string) error {
+func (s *PostgresStore) CheckPyPIImportActor(ctx context.Context, actor, kind, ownerID string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err = checkPyPIImportActorTx(ctx, tx, actor); err != nil {
+	if err = CheckPyPIImportActorTx(ctx, tx, actor, kind, ownerID); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -69,7 +74,7 @@ func (s *PostgresStore) PublishPyPIImport(ctx context.Context, c PyPIImportClosu
 	if err = checkNativePublicationGuard(ctx, tx); err != nil {
 		return err
 	}
-	if err = checkPyPIImportActorTx(ctx, tx, c.Audit.Actor); err != nil {
+	if err = CheckPyPIImportActorTx(ctx, tx, c.Audit.Actor, c.ActorKind, c.OwnerID); err != nil {
 		return err
 	}
 	var repoName string
@@ -119,7 +124,7 @@ func (s *PostgresStore) PublishPyPIImport(ctx context.Context, c PyPIImportClosu
 	}
 	// Expiry can cross while waiting for target/governance locks. Recheck under
 	// the already held actor rows immediately before committing the checkpoint.
-	if err = checkPyPIImportActorTx(ctx, tx, c.Audit.Actor); err != nil {
+	if err = CheckPyPIImportActorTx(ctx, tx, c.Audit.Actor, c.ActorKind, c.OwnerID); err != nil {
 		return err
 	}
 	if err = completeNativePublication(ctx, tx); err != nil {

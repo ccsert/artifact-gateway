@@ -14,12 +14,12 @@ import (
 
 var _ m.ScheduleStore = (*Store)(nil)
 
-const scheduleColumns = `s.id::text,s.actor,s.request,s.version::text,s.state,s.next_run_at,s.last_successful_at,s.consumed_observed_at,s.capacity_evidence,COALESCE(s.active_batch_id::text,''),COALESCE(s.last_batch_id::text,''),s.last_error,s.dispatch_attempts,s.created_at,s.updated_at,s.lease_token,s.lease_epoch`
+const scheduleColumns = `s.id::text,s.actor,s.actor_kind,COALESCE(s.owner_id::text,''),s.request,s.version::text,s.state,s.next_run_at,s.last_successful_at,s.consumed_observed_at,s.capacity_evidence,COALESCE(s.active_batch_id::text,''),COALESCE(s.last_batch_id::text,''),s.last_error,s.dispatch_attempts,s.created_at,s.updated_at,s.lease_token,s.lease_epoch`
 
 func scanSchedule(row scanner) (m.Schedule, error) {
 	var p m.Schedule
 	var request, evidence []byte
-	err := row.Scan(&p.ID, &p.Actor, &request, &p.Version, &p.State, &p.NextRunAt, &p.LastSuccessfulAt, &p.ConsumedObservedAt, &evidence, &p.ActiveBatchID, &p.LastBatchID, &p.LastError, &p.DispatchAttempts, &p.CreatedAt, &p.UpdatedAt, &p.LeaseToken, &p.LeaseEpoch)
+	err := row.Scan(&p.ID, &p.Actor, &p.ActorKind, &p.OwnerID, &request, &p.Version, &p.State, &p.NextRunAt, &p.LastSuccessfulAt, &p.ConsumedObservedAt, &evidence, &p.ActiveBatchID, &p.LastBatchID, &p.LastError, &p.DispatchAttempts, &p.CreatedAt, &p.UpdatedAt, &p.LeaseToken, &p.LeaseEpoch)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, m.ErrNotFound
 	}
@@ -147,10 +147,13 @@ func (s *Store) CreateSchedule(ctx context.Context, p m.Schedule, key, hash stri
 	if err = lockMigrationDispatch(ctx, tx); err != nil {
 		return p, err
 	}
-	var priorID, priorHash string
-	err = tx.QueryRowContext(ctx, `SELECT id::text,request_hash FROM nexus_migration_schedules WHERE actor=$1 AND idempotency_key=$2`, p.Actor, key).Scan(&priorID, &priorHash)
+	if err = checkPyPIMigrationActor(ctx, tx, p.Actor, p.ActorKind, p.OwnerID, p.Mappings); err != nil {
+		return p, err
+	}
+	var priorID, priorHash, priorKind, priorOwner string
+	err = tx.QueryRowContext(ctx, `SELECT id::text,request_hash,actor_kind,COALESCE(owner_id::text,'') FROM nexus_migration_schedules WHERE actor=$1 AND idempotency_key=$2`, p.Actor, key).Scan(&priorID, &priorHash, &priorKind, &priorOwner)
 	if err == nil {
-		if priorHash != hash {
+		if priorHash != hash || (p.ActorKind != "" || p.OwnerID != "") && (priorKind != p.ActorKind || priorOwner != p.OwnerID) {
 			return p, m.ErrIdempotencyConflict
 		}
 		return scanSchedule(tx.QueryRowContext(ctx, `SELECT `+scheduleColumns+` FROM nexus_migration_schedules s WHERE s.id::text=$1`, priorID))
@@ -188,12 +191,15 @@ func (s *Store) CreateSchedule(ctx context.Context, p m.Schedule, key, hash stri
 			return p, err
 		}
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_schedules(id,actor,idempotency_key,request_hash,request,state,interval_seconds,next_run_at,last_successful_at,consumed_observed_at,capacity_evidence,last_batch_id,last_error) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::uuid,$13)`, p.ID, p.Actor, key, hash, mustJSON(p.ScheduleBinding), p.State, p.IntervalSeconds, p.NextRunAt, p.LastSuccessfulAt, p.ConsumedObservedAt, mustJSON(p.CapacityEvidence), p.LastBatchID, p.LastError)
+	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_schedules(id,actor,idempotency_key,request_hash,request,state,interval_seconds,next_run_at,last_successful_at,consumed_observed_at,capacity_evidence,last_batch_id,last_error,actor_kind,owner_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::uuid,$13,$14,NULLIF($15,'')::uuid)`, p.ID, p.Actor, key, hash, mustJSON(p.ScheduleBinding), p.State, p.IntervalSeconds, p.NextRunAt, p.LastSuccessfulAt, p.ConsumedObservedAt, mustJSON(p.CapacityEvidence), p.LastBatchID, p.LastError, p.ActorKind, p.OwnerID)
 	if err != nil {
 		return p, err
 	}
 	p, err = scanSchedule(tx.QueryRowContext(ctx, `SELECT `+scheduleColumns+` FROM nexus_migration_schedules s WHERE s.id::text=$1`, p.ID))
 	if err != nil {
+		return p, err
+	}
+	if err = checkPyPIMigrationActor(ctx, tx, p.Actor, p.ActorKind, p.OwnerID, p.Mappings); err != nil {
 		return p, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -211,6 +217,11 @@ func (s *Store) ControlSchedule(ctx context.Context, id, expected, actor, key, a
 	p, err := scanSchedule(tx.QueryRowContext(ctx, `SELECT `+scheduleColumns+` FROM nexus_migration_schedules s WHERE s.id::text=$1 FOR UPDATE`, id))
 	if err != nil {
 		return p, err
+	}
+	if action == "resume" || action == "capacity" {
+		if err = checkPyPIMigrationActor(ctx, tx, p.Actor, p.ActorKind, p.OwnerID, p.Mappings); err != nil {
+			return p, err
+		}
 	}
 	var storedAction, storedHash string
 	var response []byte
@@ -282,6 +293,11 @@ func (s *Store) ControlSchedule(ctx context.Context, id, expected, actor, key, a
 	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_schedule_controls(schedule_id,actor,idempotency_key,operation,request_hash,response) VALUES($1,$2,$3,$4,$5,$6)`, id, actor, key, action, hash, mustJSON(p))
 	if err != nil {
 		return p, err
+	}
+	if action == "resume" || action == "capacity" {
+		if err = checkPyPIMigrationActor(ctx, tx, p.Actor, p.ActorKind, p.OwnerID, p.Mappings); err != nil {
+			return p, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return p, err
@@ -437,8 +453,11 @@ func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batc
 	if err != nil {
 		return err
 	}
-	if p.Version != claim.Version || p.LeaseEpoch != claim.LeaseEpoch || string(mustJSON(p.ScheduleBinding)) != string(mustJSON(claim.ScheduleBinding)) || string(mustJSON(p.CapacityEvidence)) != string(mustJSON(claim.CapacityEvidence)) {
+	if p.Actor != claim.Actor || p.ActorKind != claim.ActorKind || p.OwnerID != claim.OwnerID || p.Version != claim.Version || p.LeaseEpoch != claim.LeaseEpoch || string(mustJSON(p.ScheduleBinding)) != string(mustJSON(claim.ScheduleBinding)) || string(mustJSON(p.CapacityEvidence)) != string(mustJSON(claim.CapacityEvidence)) {
 		return m.ErrLeaseLost
+	}
+	if err = checkPyPIMigrationActor(ctx, tx, p.Actor, p.ActorKind, p.OwnerID, p.Mappings); err != nil {
+		return err
 	}
 	if p.PolicyVersion != m.PolicyVersion || b.PolicyVersion != p.PolicyVersion || b.SourceID != p.SourceID || b.SourceVersion != p.SourceVersion || string(mustJSON(b.Mappings)) != string(mustJSON(p.Mappings)) {
 		return m.Failed("policy_version_changed")
@@ -469,7 +488,7 @@ func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batc
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_batches(id,actor,idempotency_key,request_hash,request,capacity_evidence,source_id,source_version,schedule_id,schedule_epoch) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, b.ID, p.Actor, "schedule:"+p.ID+":"+strconv.FormatInt(p.LeaseEpoch, 10), claim.Version, mustJSON(b.StartInput), mustJSON(b.CapacityEvidence), b.SourceID, b.SourceVersion, p.ID, p.LeaseEpoch)
+	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_batches(id,actor,idempotency_key,request_hash,request,capacity_evidence,source_id,source_version,schedule_id,schedule_epoch,actor_kind,owner_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::uuid)`, b.ID, p.Actor, "schedule:"+p.ID+":"+strconv.FormatInt(p.LeaseEpoch, 10), claim.Version, mustJSON(b.StartInput), mustJSON(b.CapacityEvidence), b.SourceID, b.SourceVersion, p.ID, p.LeaseEpoch, p.ActorKind, p.OwnerID)
 	if err != nil {
 		return err
 	}
@@ -479,6 +498,9 @@ func (s *Store) DispatchSchedule(ctx context.Context, claim m.Schedule, b m.Batc
 	// and preserves the unconsumed capacity observation.
 	result, err := tx.ExecContext(ctx, `UPDATE nexus_migration_schedules SET active_batch_id=$2,last_batch_id=$2,consumed_observed_at=$3,capacity_evidence=NULL,next_run_at=$4,last_error='',dispatch_attempts=0,lease_token='',lease_expires_at=NULL,version=version+1,updated_at=clock_timestamp() WHERE id=$1 AND lease_token=$5 AND lease_epoch=$6 AND version=$7::bigint AND lease_expires_at>clock_timestamp() AND state='active' AND active_batch_id IS NULL`, p.ID, b.ID, p.CapacityEvidence.ObservedAt, next, claim.LeaseToken, claim.LeaseEpoch, claim.Version)
 	if err = changed(result, err); err != nil {
+		return err
+	}
+	if err = checkPyPIMigrationActor(ctx, tx, p.Actor, p.ActorKind, p.OwnerID, p.Mappings); err != nil {
 		return err
 	}
 	return tx.Commit()

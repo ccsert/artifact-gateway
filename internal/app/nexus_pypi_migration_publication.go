@@ -41,8 +41,8 @@ func (p *NexusPyPIMigrationPublication) WithPublicationScanner(scanner nexusMigr
 
 var _ NexusFormatMigrationPublication = (*NexusPyPIMigrationPublication)(nil)
 
-func (p *NexusPyPIMigrationPublication) CheckActor(ctx context.Context, actor string) error {
-	if p == nil || nilDependency(p.store) || p.store.CheckPyPIImportActor(ctx, actor) != nil {
+func (p *NexusPyPIMigrationPublication) CheckActor(ctx context.Context, actor, kind, ownerID string) error {
+	if p == nil || nilDependency(p.store) || p.store.CheckPyPIImportActor(ctx, actor, kind, ownerID) != nil {
 		return nexusmigration.Failed("pypi_actor_not_current_admin")
 	}
 	return nil
@@ -63,7 +63,7 @@ func pypiMigrationClosure(e nexusmigration.Entry) (repository.PyPIImportClosure,
 		return repository.PyPIImportClosure{}, err
 	}
 	project, version, _ := strings.Cut(e.Identity, "@")
-	c := repository.PyPIImportClosure{RepositoryID: e.TargetRepositoryID, Project: project, Version: version, Audit: repository.AuditRecord{Actor: e.Actor, Evidence: map[string]string{"migrationEntryId": e.ID, "migrationBatchId": e.BatchID}}}
+	c := repository.PyPIImportClosure{RepositoryID: e.TargetRepositoryID, Project: project, Version: version, ActorKind: e.ActorKind, OwnerID: e.OwnerID, Audit: repository.AuditRecord{Actor: e.Actor, Evidence: map[string]string{"migrationEntryId": e.ID, "migrationBatchId": e.BatchID}}}
 	assets := map[string]nexusmigration.Asset{}
 	for _, a := range e.Assets {
 		assets[a.TargetPath] = a
@@ -105,16 +105,16 @@ func pypiMigrationFingerprint(e nexusmigration.Entry) string {
 		e.Assets[i].Verified = false
 	}
 	raw, _ := json.Marshal(struct {
-		ID, Batch, Source, Target, Identity, Actor string
-		Assets                                     []nexusmigration.Asset
-	}{e.ID, e.BatchID, e.SourceRepository, e.TargetRepositoryID, e.Identity, e.Actor, e.Assets})
+		ID, Batch, Source, Target, Identity, Actor, ActorKind, OwnerID string
+		Assets                                                         []nexusmigration.Asset
+	}{e.ID, e.BatchID, e.SourceRepository, e.TargetRepositoryID, e.Identity, e.Actor, e.ActorKind, e.OwnerID, e.Assets})
 	return string(raw)
 }
 func (p *NexusPyPIMigrationPublication) Lock(ctx context.Context, e nexusmigration.Entry) (context.Context, func(), error) {
 	if err := p.target(ctx, e); err != nil {
 		return ctx, nil, err
 	}
-	if err := p.CheckActor(ctx, e.Actor); err != nil {
+	if err := p.CheckActor(ctx, e.Actor, e.ActorKind, e.OwnerID); err != nil {
 		return ctx, nil, err
 	}
 	assets, err := p.NativeAssets(e)

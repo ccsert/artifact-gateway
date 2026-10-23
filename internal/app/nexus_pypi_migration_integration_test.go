@@ -217,18 +217,18 @@ func pypiMigrationSDist(t *testing.T, name, version string) []byte {
 }
 
 type pypiMigrationPG struct {
-	t                                   *testing.T
-	db                                  *sql.DB
-	store                               *repository.PostgresStore
-	objects                             *objectstore.RustFSStore
-	repo                                repository.HostedRepository
-	source                              *nexussource.Service
-	created                             nexussource.Source
-	remote                              *pypiMigrationRemote
-	server                              *httptest.Server
-	service                             *nexusmigration.Service
-	publication                         *NexusMigrationPublication
-	actor, keyID, keyToken, databaseURL string
+	t                                                       *testing.T
+	db                                                      *sql.DB
+	store                                                   *repository.PostgresStore
+	objects                                                 *objectstore.RustFSStore
+	repo                                                    repository.HostedRepository
+	source                                                  *nexussource.Service
+	created                                                 nexussource.Source
+	remote                                                  *pypiMigrationRemote
+	server                                                  *httptest.Server
+	service                                                 *nexusmigration.Service
+	publication                                             *NexusMigrationPublication
+	actor, actorKind, ownerID, keyID, keyToken, databaseURL string
 }
 
 func newPyPIMigrationPG(t *testing.T) *pypiMigrationPG {
@@ -309,10 +309,14 @@ func newPyPIMigrationPG(t *testing.T) *pypiMigrationPG {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &pypiMigrationPG{t: t, db: db, store: store, objects: objects, repo: repo, source: source, created: created, remote: remote, server: server, actor: "api-key:" + key.ID, keyID: key.ID, keyToken: key.Token, databaseURL: databaseURL}
+	f := &pypiMigrationPG{t: t, db: db, store: store, objects: objects, repo: repo, source: source, created: created, remote: remote, server: server, actor: "api-key:" + key.ID, actorKind: "api_key", keyID: key.ID, keyToken: key.Token, databaseURL: databaseURL}
 	f.reset(nexusmigration.Options{})
 	t.Cleanup(func() {
-		_, err := db.Exec(`UPDATE nexus_migration_batches SET state='cancelled',lease_token='',lease_expires_at=NULL,cancel_requested=true WHERE source_id=$1 AND state NOT IN ('completed','cancelled')`, created.ID)
+		_, err := db.Exec(`UPDATE nexus_migration_schedules SET state='stopped',next_run_at=NULL,lease_token='',lease_expires_at=NULL WHERE request->>'sourceId'=$1`, created.ID)
+		if err != nil {
+			t.Errorf("owned PyPI schedule cleanup: %v", err)
+		}
+		_, err = db.Exec(`UPDATE nexus_migration_batches SET state='cancelled',lease_token='',lease_expires_at=NULL,cancel_requested=true WHERE source_id=$1 AND state NOT IN ('completed','cancelled')`, created.ID)
 		if err != nil {
 			t.Errorf("owned PyPI batch cleanup: %v", err)
 		}
@@ -334,7 +338,7 @@ func (f *pypiMigrationPG) input() nexusmigration.StartInput {
 }
 func (f *pypiMigrationPG) start() nexusmigration.Batch {
 	f.t.Helper()
-	b, err := f.service.Start(context.Background(), f.input(), f.actor, uuid.NewString())
+	b, err := f.service.Start(nexusmigration.WithOperatorIdentity(context.Background(), nexusmigration.OperatorIdentity{Actor: f.actor, AuthenticationKind: f.actorKind, UserID: f.ownerID}), f.input(), f.actor, uuid.NewString())
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -409,7 +413,7 @@ func TestPostgresRustFSNexusPyPIMigrationClosureAndRestart(t *testing.T) {
 		t.Fatalf("durable entries=%d %v", len(entries), err)
 	}
 	for _, e := range entries {
-		e.Actor = f.actor
+		e.Actor, e.ActorKind, e.OwnerID = f.actor, f.actorKind, f.keyID
 		if state, err := f.publication.Readback(context.Background(), e); err != nil || state != nexusmigration.Identical {
 			t.Fatalf("reopened=%s %v", state, err)
 		}
@@ -569,6 +573,8 @@ func TestPostgresNexusPyPIMigrationCurrentAdministrator(t *testing.T) {
 				}
 				userID = user.ID
 				f.actor = "user:" + user.Name
+				f.actorKind = "local_session"
+				f.ownerID = user.ID
 			}
 			fired := false
 			f.reset(nexusmigration.Options{AfterVerify: func(ctx context.Context, _ nexusmigration.Entry) error {

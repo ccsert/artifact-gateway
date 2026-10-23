@@ -93,6 +93,8 @@ type Batch struct {
 	CreatedAt               time.Time    `json:"createdAt"`
 	UpdatedAt               time.Time    `json:"updatedAt"`
 	Actor                   string       `json:"-"`
+	ActorKind               string       `json:"-"`
+	OwnerID                 string       `json:"-"`
 	LeaseToken              string       `json:"-"`
 	LeaseEpoch              int64        `json:"-"`
 	PauseRequested          bool         `json:"-"`
@@ -131,6 +133,8 @@ type Entry struct {
 	UpdatedAt          time.Time `json:"updatedAt"`
 	SessionID          string    `json:"-"`
 	Actor              string    `json:"-"`
+	ActorKind          string    `json:"-"`
+	OwnerID            string    `json:"-"`
 }
 type Capabilities struct {
 	TargetID               string `json:"targetId"`

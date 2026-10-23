@@ -22,12 +22,12 @@ var _ m.Store = (*Store)(nil)
 
 type scanner interface{ Scan(...any) error }
 
-const batchColumns = `b.id::text,b.actor,b.request,b.capacity_evidence,b.state,b.version::text,b.manifest_sha256,b.scan_complete,b.metadata_discovered,b.source_verification_bytes,b.entry_count,b.total_bytes,b.last_error,b.last_scan_failure,b.created_at,b.updated_at,b.lease_token,b.lease_epoch,b.pause_requested,b.cancel_requested`
+const batchColumns = `b.id::text,b.actor,b.actor_kind,COALESCE(b.owner_id::text,''),b.request,b.capacity_evidence,b.state,b.version::text,b.manifest_sha256,b.scan_complete,b.metadata_discovered,b.source_verification_bytes,b.entry_count,b.total_bytes,b.last_error,b.last_scan_failure,b.created_at,b.updated_at,b.lease_token,b.lease_epoch,b.pause_requested,b.cancel_requested`
 
 func scanBatch(row scanner) (m.Batch, error) {
 	var b m.Batch
 	var request, evidence, failure []byte
-	err := row.Scan(&b.ID, &b.Actor, &request, &evidence, &b.State, &b.Version, &b.ManifestSHA256, &b.ScanComplete, &b.MetadataDiscovered, &b.SourceVerificationBytes, &b.EntryCount, &b.TotalBytes, &b.LastError, &failure, &b.CreatedAt, &b.UpdatedAt, &b.LeaseToken, &b.LeaseEpoch, &b.PauseRequested, &b.CancelRequested)
+	err := row.Scan(&b.ID, &b.Actor, &b.ActorKind, &b.OwnerID, &request, &evidence, &b.State, &b.Version, &b.ManifestSHA256, &b.ScanComplete, &b.MetadataDiscovered, &b.SourceVerificationBytes, &b.EntryCount, &b.TotalBytes, &b.LastError, &failure, &b.CreatedAt, &b.UpdatedAt, &b.LeaseToken, &b.LeaseEpoch, &b.PauseRequested, &b.CancelRequested)
 	if errors.Is(err, sql.ErrNoRows) {
 		return b, m.ErrNotFound
 	}
@@ -62,10 +62,13 @@ func (s *Store) Create(ctx context.Context, b m.Batch, key, hash string) (m.Batc
 	if err = lockMigrationDispatch(ctx, tx); err != nil {
 		return m.Batch{}, err
 	}
-	var priorID, priorHash string
-	err = tx.QueryRowContext(ctx, `SELECT id::text,request_hash FROM nexus_migration_batches WHERE actor=$1 AND idempotency_key=$2`, b.Actor, key).Scan(&priorID, &priorHash)
+	if err = checkPyPIMigrationActor(ctx, tx, b.Actor, b.ActorKind, b.OwnerID, b.Mappings); err != nil {
+		return m.Batch{}, err
+	}
+	var priorID, priorHash, priorKind, priorOwner string
+	err = tx.QueryRowContext(ctx, `SELECT id::text,request_hash,actor_kind,COALESCE(owner_id::text,'') FROM nexus_migration_batches WHERE actor=$1 AND idempotency_key=$2`, b.Actor, key).Scan(&priorID, &priorHash, &priorKind, &priorOwner)
 	if err == nil {
-		if priorHash != hash {
+		if priorHash != hash || (b.ActorKind != "" || b.OwnerID != "") && (priorKind != b.ActorKind || priorOwner != b.OwnerID) {
 			return m.Batch{}, m.ErrIdempotencyConflict
 		}
 		if err = tx.Rollback(); err != nil {
@@ -83,8 +86,11 @@ func (s *Store) Create(ctx context.Context, b m.Batch, key, hash string) (m.Batc
 	}
 	request, _ := json.Marshal(b.StartInput)
 	evidence, _ := json.Marshal(b.CapacityEvidence)
-	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_batches(id,actor,idempotency_key,request_hash,request,capacity_evidence,source_id,source_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, b.ID, b.Actor, key, hash, request, evidence, b.SourceID, b.SourceVersion)
+	_, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_batches(id,actor,idempotency_key,request_hash,request,capacity_evidence,source_id,source_version,actor_kind,owner_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10,'')::uuid)`, b.ID, b.Actor, key, hash, request, evidence, b.SourceID, b.SourceVersion, b.ActorKind, b.OwnerID)
 	if err != nil {
+		return m.Batch{}, err
+	}
+	if err = checkPyPIMigrationActor(ctx, tx, b.Actor, b.ActorKind, b.OwnerID, b.Mappings); err != nil {
 		return m.Batch{}, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -245,6 +251,11 @@ func (s *Store) Control(ctx context.Context, id, expected, actor, key, action, h
 	if err != nil {
 		return b, err
 	}
+	if action == "resume" || action == "retry" {
+		if err = checkPyPIMigrationActor(ctx, tx, b.Actor, b.ActorKind, b.OwnerID, b.Mappings); err != nil {
+			return b, err
+		}
+	}
 	var storedAction, storedHash string
 	var response []byte
 	err = tx.QueryRowContext(ctx, `SELECT operation,request_hash,response FROM nexus_migration_controls WHERE batch_id=$1 AND actor=$2 AND idempotency_key=$3`, id, actor, key).Scan(&storedAction, &storedHash, &response)
@@ -319,6 +330,11 @@ func (s *Store) Control(ctx context.Context, id, expected, actor, key, action, h
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO nexus_migration_controls(batch_id,actor,idempotency_key,operation,request_hash,response) VALUES($1,$2,$3,$4,$5,$6)`, id, actor, key, action, hash, mustJSON(b)); err != nil {
 		return b, err
+	}
+	if action == "resume" || action == "retry" {
+		if err = checkPyPIMigrationActor(ctx, tx, b.Actor, b.ActorKind, b.OwnerID, b.Mappings); err != nil {
+			return b, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return b, err

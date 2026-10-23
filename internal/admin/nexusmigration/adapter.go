@@ -182,7 +182,7 @@ func (h *BatchAdapter) StartNexusMigrationBatch(w http.ResponseWriter, r *http.R
 	if op.failed(w, json.Unmarshal(raw, &input)) {
 		return
 	}
-	b, err := h.service.Start(r.Context(), input, op.p.Actor, params.IdempotencyKey)
+	b, err := h.service.Start(m.WithOperatorIdentity(r.Context(), m.OperatorIdentity{Actor: op.p.Actor, AuthenticationKind: string(op.p.AuthenticationKind), UserID: op.p.UserID}), input, op.p.Actor, params.IdempotencyKey)
 	if op.failed(w, err) {
 		return
 	}

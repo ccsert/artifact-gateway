@@ -42,6 +42,8 @@ type Schedule struct {
 	CreatedAt          time.Time         `json:"createdAt"`
 	UpdatedAt          time.Time         `json:"updatedAt"`
 	Actor              string            `json:"-"`
+	ActorKind          string            `json:"-"`
+	OwnerID            string            `json:"-"`
 	LeaseToken         string            `json:"-"`
 	LeaseEpoch         int64             `json:"-"`
 }
@@ -81,6 +83,9 @@ func (s *ScheduleService) Available() bool {
 }
 
 func (s *ScheduleService) validateBinding(ctx context.Context, p Schedule) error {
+	if err := s.batches.validateMigrationActor(ctx, p.Actor, p.ActorKind, p.OwnerID, p.Mappings); err != nil {
+		return err
+	}
 	if p.PolicyVersion != PolicyVersion {
 		return Failed("policy_version_changed")
 	}
@@ -100,8 +105,15 @@ func (s *ScheduleService) Create(ctx context.Context, in ScheduleCreate, actor, 
 	if _, err := uuid.Parse(in.TemplateBatchID); err != nil {
 		return Schedule{}, Failed("invalid_request")
 	}
+	var kind, ownerID string
 	hash := digest(in)
 	if p, found, err := s.store.ReplayScheduleCreate(ctx, actor, key, hash); err != nil || found {
+		if err == nil {
+			kind, ownerID, err = s.batches.migrationActor(ctx, actor, p.Mappings)
+			if err == nil && (kind != "" || ownerID != "") && (p.ActorKind != kind || p.OwnerID != ownerID) {
+				err = ErrIdempotencyConflict
+			}
+		}
 		return p, err
 	}
 	b, err := s.store.ScheduleTemplate(ctx, in.TemplateBatchID)
@@ -111,8 +123,12 @@ func (s *ScheduleService) Create(ctx context.Context, in ScheduleCreate, actor, 
 	if b.State != "completed" || !b.ScanComplete || b.LastError != "" {
 		return Schedule{}, Failed("successful_template_required")
 	}
+	kind, ownerID, err = s.batches.migrationActor(ctx, actor, b.Mappings)
+	if err != nil {
+		return Schedule{}, err
+	}
 	now := s.now().UTC()
-	p := Schedule{ScheduleBinding: ScheduleBinding{TemplateBatchID: b.ID, SourceID: b.SourceID, SourceVersion: b.SourceVersion, Mappings: b.Mappings, PolicyVersion: b.PolicyVersion, IntervalSeconds: in.IntervalSeconds}, ID: uuid.NewString(), Actor: actor, State: "waiting_capacity", NextRunAt: &now, LastBatchID: b.ID, LastSuccessfulAt: &b.UpdatedAt, ConsumedObservedAt: &b.CapacityEvidence.ObservedAt, LastError: "capacity_evidence_refresh_required"}
+	p := Schedule{ScheduleBinding: ScheduleBinding{TemplateBatchID: b.ID, SourceID: b.SourceID, SourceVersion: b.SourceVersion, Mappings: b.Mappings, PolicyVersion: b.PolicyVersion, IntervalSeconds: in.IntervalSeconds}, ID: uuid.NewString(), Actor: actor, ActorKind: kind, OwnerID: ownerID, State: "waiting_capacity", NextRunAt: &now, LastBatchID: b.ID, LastSuccessfulAt: &b.UpdatedAt, ConsumedObservedAt: &b.CapacityEvidence.ObservedAt, LastError: "capacity_evidence_refresh_required"}
 	if err = s.validateBinding(ctx, p); err != nil {
 		return Schedule{}, err
 	}
@@ -152,6 +168,15 @@ func (s *ScheduleService) Control(ctx context.Context, id, expected, actor, key,
 	}
 	if !validKey(actor) || !validKey(key) || expected == "" || action != "pause" && action != "resume" && action != "stop" && action != "capacity" {
 		return Schedule{}, Failed("invalid_request")
+	}
+	if action == "resume" || action == "capacity" {
+		owner, err := s.store.GetSchedule(ctx, id)
+		if err != nil {
+			return Schedule{}, err
+		}
+		if err = s.batches.validateMigrationActor(ctx, owner.Actor, owner.ActorKind, owner.OwnerID, owner.Mappings); err != nil {
+			return owner, err
+		}
 	}
 	hash := digest(struct {
 		Action   string
@@ -211,7 +236,7 @@ func (s *ScheduleService) RunDue(ctx context.Context, limit int) error {
 			}
 		}
 		if err == nil {
-			b := Batch{ID: uuid.NewString(), Actor: p.Actor, StartInput: StartInput{SourceID: p.SourceID, SourceVersion: p.SourceVersion, Mappings: p.Mappings, PolicyVersion: p.PolicyVersion, CapacityEvidence: *p.CapacityEvidence}}
+			b := Batch{ID: uuid.NewString(), Actor: p.Actor, ActorKind: p.ActorKind, OwnerID: p.OwnerID, StartInput: StartInput{SourceID: p.SourceID, SourceVersion: p.SourceVersion, Mappings: p.Mappings, PolicyVersion: p.PolicyVersion, CapacityEvidence: *p.CapacityEvidence}}
 			err = s.store.DispatchSchedule(ctx, p, b, now)
 		}
 		if errors.Is(err, ErrLeaseLost) {

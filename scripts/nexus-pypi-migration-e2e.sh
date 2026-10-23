@@ -182,7 +182,7 @@ python3 -B - "$evidence/results.jsonl" "$evidence/results.json" "$test_status" <
 import hashlib, json, pathlib, sys
 path,destination=map(pathlib.Path,sys.argv[1:3])
 exit_code=int(sys.argv[3])
-required=set(['TestPostgresRustFSNexusPyPIMigrationClosureAndRestart', 'TestPostgresRustFSNexusPyPIMigrationRecovery', 'TestPostgresNexusPyPIMigrationRejectsIncompleteAndDrift', 'TestPostgresNexusPyPIMigrationCurrentAdministrator', 'TestPostgresNexusPyPIMigrationLeaseAndSourceFence', 'TestPostgresNexusPyPIMigrationAtomicConflictQuotaAudit', 'TestPostgresMigrationTargetOnlyPyPIClient', 'TestPostgresNexusPyPIMigrationNativeTransactionLossCannotPublish'])
+required=set(['TestPostgresRustFSNexusPyPIMigrationClosureAndRestart', 'TestPostgresRustFSNexusPyPIMigrationRecovery', 'TestPostgresNexusPyPIMigrationRejectsIncompleteAndDrift', 'TestPostgresNexusPyPIMigrationCurrentAdministrator', 'TestPostgresNexusPyPIMigrationLeaseAndSourceFence', 'TestPostgresNexusPyPIMigrationAtomicConflictQuotaAudit', 'TestPostgresMigrationTargetOnlyPyPIClient', 'TestPostgresNexusPyPIMigrationNativeTransactionLossCannotPublish','TestPostgresNexusPyPIMigrationRejectsAuthenticationKindCollisions','TestPostgresNexusPyPIMigrationScheduledOwnerAuthority','TestPostgresNexusPyPIMigrationDurableOwnerBindingAndPoolOne'])
 events=[json.loads(line)for line in path.read_text().splitlines()]
 run={e.get('Test')for e in events if e.get('Action')=='run' and e.get('Test')}
 passed={e.get('Test')for e in events if e.get('Action')=='pass' and e.get('Test')}
@@ -194,5 +194,5 @@ destination.write_text(json.dumps(summary,indent=2)+'\n')
 for e in events:
     if e.get('Output'):print(e['Output'],end='')
 if exit_code or required-run or required-passed or failed or skipped or packages!={"github.com/ccsert/artifact-gateway/internal/app"}:raise SystemExit('mandatory pypi migration proof missing, skipped or failed')
-print('All eight required PyPI migration fixtures passed: complete bytes/selection/identity, native transaction fence and progress, current authority, restart/recovery, governance and pinned target-only pip.')
+print('All eleven required PyPI migration fixtures passed: complete bytes/selection/identity, native transaction fence and progress, current authority, restart/recovery, governance and pinned target-only pip.')
 PYRESULT

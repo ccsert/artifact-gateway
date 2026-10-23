@@ -102,14 +102,15 @@ func (s *Service) Start(ctx context.Context, in StartInput, actor, key string) (
 		seenSource[mp.SourceRepository] = true
 		seenTarget[mp.TargetRepositoryID] = true
 	}
-	if check, ok := s.publication.(interface {
-		ValidateMigrationActor(context.Context, string, []Mapping) error
-	}); ok {
-		if err := check.ValidateMigrationActor(ctx, actor, in.Mappings); err != nil {
-			return Batch{}, err
-		}
+	kind, ownerID, err := s.migrationActor(ctx, actor, in.Mappings)
+	if err != nil {
+		return Batch{}, err
 	}
+
 	if prior, found, err := s.store.ReplayStart(ctx, actor, key, digest(in)); err != nil || found {
+		if err == nil && found && (kind != "" || ownerID != "") && (prior.ActorKind != kind || prior.OwnerID != ownerID) {
+			return Batch{}, ErrIdempotencyConflict
+		}
 		return prior, err
 	}
 	source, err := s.source.Get(ctx, in.SourceID)
@@ -125,7 +126,7 @@ func (s *Service) Start(ctx context.Context, in StartInput, actor, key string) (
 	if err = s.publication.ValidateTargets(ctx, in.Mappings); err != nil {
 		return Batch{}, err
 	}
-	return s.store.Create(ctx, Batch{StartInput: in, ID: uuid.NewString(), Actor: actor}, key, digest(in))
+	return s.store.Create(ctx, Batch{StartInput: in, ID: uuid.NewString(), Actor: actor, ActorKind: kind, OwnerID: ownerID}, key, digest(in))
 }
 func (s *Service) Get(ctx context.Context, id string) (Batch, error) { return s.store.Get(ctx, id) }
 func (s *Service) List(ctx context.Context, limit int, cursor string) ([]Batch, string, error) {
@@ -156,6 +157,15 @@ func validPage(limit int, cursor string) bool {
 func (s *Service) Control(ctx context.Context, id, expected, actor, key, action string, evidence *CapacityEvidence) (Batch, error) {
 	if !validKey(key) || expected == "" {
 		return Batch{}, Failed("invalid_request")
+	}
+	if action == "resume" || action == "retry" {
+		owner, err := s.store.Get(ctx, id)
+		if err != nil {
+			return Batch{}, err
+		}
+		if err = s.validateMigrationActor(ctx, owner.Actor, owner.ActorKind, owner.OwnerID, owner.Mappings); err != nil {
+			return owner, err
+		}
 	}
 	hash := digest(struct {
 		Action   string
@@ -294,6 +304,9 @@ func (s *Service) sourceUnchanged(ctx context.Context, b Batch) error {
 	return nil
 }
 func (s *Service) runBatch(ctx context.Context, b Batch) (string, string) {
+	if err := s.validateMigrationActor(ctx, b.Actor, b.ActorKind, b.OwnerID, b.Mappings); err != nil {
+		return "blocked", code(err)
+	}
 	if err := s.sourceUnchanged(ctx, b); err != nil {
 		return "blocked", code(err)
 	}
@@ -394,7 +407,7 @@ func (s *Service) runBatch(ctx context.Context, b Batch) (string, string) {
 		if err = s.ValidateEvidence(b.CapacityEvidence); err != nil {
 			return "blocked", code(err)
 		}
-		entry.Actor = b.Actor
+		entry.Actor, entry.ActorKind, entry.OwnerID = b.Actor, b.ActorKind, b.OwnerID
 		if err = s.execute(ctx, b, &entry); err != nil {
 			if entry.Format == "pypi" && entry.State == "committed" {
 				return "failed", code(err)

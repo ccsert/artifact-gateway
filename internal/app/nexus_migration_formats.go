@@ -103,24 +103,26 @@ func (p *NexusMigrationPublication) capacityAsset(ctx context.Context, entry nex
 
 // ValidateMigrationActor rejects non-durable/expired authority before writing a
 // PyPI batch. Legacy format admission remains separate.
-func (p *NexusMigrationPublication) ValidateMigrationActor(ctx context.Context, actor string, mappings []nexusmigration.Mapping) error {
-	for _, m := range mappings {
-		repo, err := p.store.GetHostedRepository(ctx, m.TargetRepositoryID)
+func (p *NexusMigrationPublication) ValidateMigrationActor(ctx context.Context, actor, kind, ownerID string, mappings []nexusmigration.Mapping) (bool, error) {
+	required := false
+	for _, mapping := range mappings {
+		repo, err := p.store.GetHostedRepository(ctx, mapping.TargetRepositoryID)
 		if err != nil {
-			return err
+			return required, err
 		}
 		if repo.Format != repository.FormatPyPI {
 			continue
 		}
+		required = true
 		check, ok := p.pypi.(interface {
-			CheckActor(context.Context, string) error
+			CheckActor(context.Context, string, string, string) error
 		})
 		if !ok {
-			return nexusmigration.Failed("pypi_actor_not_current_admin")
+			return required, nexusmigration.Failed("pypi_actor_not_current_admin")
 		}
-		if err = check.CheckActor(ctx, actor); err != nil {
-			return err
+		if err = check.CheckActor(ctx, actor, kind, ownerID); err != nil {
+			return required, err
 		}
 	}
-	return nil
+	return required, nil
 }

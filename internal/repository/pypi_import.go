@@ -10,11 +10,13 @@ import (
 // PyPIImportStore is deliberately separate from GatewayStore. Production imports
 // require a transaction-owned migration guard and completion callback.
 type PyPIImportStore interface {
-	CheckPyPIImportActor(context.Context, string) error
+	CheckPyPIImportActor(context.Context, string, string, string) error
 	PublishPyPIImport(context.Context, PyPIImportClosure) error
 }
 type PyPIImportClosure struct {
 	RepositoryID, Project, Version string
+	ActorKind                      string
+	OwnerID                        string
 	Files                          []PyPIFile
 	Audit                          AuditRecord
 }

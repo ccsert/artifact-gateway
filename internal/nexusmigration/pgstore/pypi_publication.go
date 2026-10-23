@@ -16,6 +16,19 @@ func (s *Store) PublicationEntryContext(ctx context.Context, e m.Entry, token st
 	if e.Format != "pypi" {
 		return ctx
 	}
+	ctx = repository.WithNativePublicationGuard(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		var actor, kind, ownerID string
+		if err := tx.QueryRowContext(ctx, `SELECT actor,actor_kind,COALESCE(owner_id::text,'') FROM nexus_migration_batches WHERE id::text=$1`, e.BatchID).Scan(&actor, &kind, &ownerID); err != nil {
+			return err
+		}
+		if actor != e.Actor || kind != e.ActorKind || ownerID != e.OwnerID {
+			return m.Failed("pypi_actor_binding_changed")
+		}
+		if err := repository.CheckPyPIImportActorTx(ctx, tx, actor, kind, ownerID); err != nil {
+			return m.Failed("pypi_actor_not_current_admin")
+		}
+		return nil
+	})
 	return repository.WithNativePublicationCompletion(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		if err := validLease(ctx, tx, e.BatchID, token); err != nil {
 			return err

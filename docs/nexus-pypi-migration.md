@@ -48,14 +48,30 @@ selection snapshot. Execution and recovery re-read source bytes and selection
 facts. Every target object is read back in full and hashed before publication;
 a matching size, ETag or metadata row does not establish byte integrity.
 
-PyPI requires a persistently identifiable administrator: an active `user:` with
-current admin role and no mandatory password change, or an unrevoked, unexpired
-standalone `api-key:` with current admin role. Static bootstrap identities,
-service accounts and unknown actors are rejected before creating a PyPI batch.
-An administrator can use bootstrap authentication to create a managed admin key
-first. Current user/key rows are locked and rechecked inside publication;
-previously granted authority is not restored from the batch. Source credentials
-are used only for read-only requests; refusal during revalidation stops import.
+PyPI requires an administrator authenticated by a managed local/OIDC user or a
+standalone API key. The server binds the actual authentication kind and stable
+user/key ID to each batch and schedule. User names and configured actor display
+names do not establish that identity. The user must be active, currently an admin
+and free of mandatory password change; the key must remain unrevoked, unexpired
+and an admin key. Static bootstrap identities, service accounts, unknown kinds,
+and derived protocol tokens without a stable user ID are rejected. A static
+identity named after an existing user or key receives no exception. Bootstrap
+may first create a managed admin key for the migration.
+
+Creation, restart, resume/retry, schedule capacity refresh and each dispatch
+revalidate the original owner. Another administrator cannot substitute their own
+authority when controlling a revoked owner's work. Deleting and recreating a
+user under the same name does not transfer ownership or an idempotent response;
+authentication-kind changes also conflict with an existing idempotency key.
+The private owner binding is not writable or exposed through the management
+contract. Missing bindings fail closed for PyPI; other formats retain their
+existing admission policy.
+
+Batch/schedule admission, dispatch and native publication lock and recheck the
+current user/key in their actual database transaction, including checks after
+waiting for other locks. Native publication also compares the persisted batch
+owner with the worker's bound identity. Source credentials remain read-only;
+refusal during source revalidation stops import.
 
 The narrow `PyPIImportStore` shares native publication with the actual database
 transaction that validates the batch lease and source connection version. The
@@ -76,11 +92,16 @@ the worker detects observed drift across bounded repeated reads.
 
 Run `make nexus-pypi-migration-e2e` (or the matching script). It uses synthetic
 Nexus HTTPS responses and its own PostgreSQL/RustFS Compose project, captures
-JSONL results and cleanup receipts, and requires all eight named proofs without
+JSONL results and cleanup receipts, and requires all eleven named proofs without
 skips. A private `PYPI_MIGRATION_SUBNET` may be supplied for an owned test network
 when the local Docker default address pools are exhausted; confirm it does not
 overlap an existing network first. The runner deletes only its own project and
 temporary client environment.
+
+The authority proofs cover static-name and derived-token collisions, revoked
+schedule owners, deleted/recreated users, idempotent replay, owner persistence
+across restart, and a one-connection transaction pool. The original eight byte,
+recovery, governance and client proofs remain mandatory.
 
 The runner downloads the fixed pip 26.2 wheel from `files.pythonhosted.org`,
 checks its pinned SHA-256 and size against the official PyPI release metadata,
