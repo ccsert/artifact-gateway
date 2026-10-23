@@ -88,7 +88,7 @@ func TestOIDCBearerIdentityUsesBoundLocalAccountRoleAndState(t *testing.T) {
 		time.Now().Add(time.Minute), []string{"provider-admin-role"},
 	)
 	principal, ok := authenticator.Authenticate("Bearer " + token)
-	if !ok || principal.Actor != "user:bound-user" || principal.Role != authorization.RoleMember || principal.Admin || principal.AuthenticationKind != authorization.AuthenticationOIDC {
+	if !ok || principal.Actor != "user:bound-user" || principal.UserID != user.ID || principal.Role != authorization.RoleMember || principal.Admin || principal.AuthenticationKind != authorization.AuthenticationOIDC {
 		t.Fatalf("bound bearer principal=%#v ok=%v", principal, ok)
 	}
 
@@ -97,7 +97,7 @@ func TestOIDCBearerIdentityUsesBoundLocalAccountRoleAndState(t *testing.T) {
 		t.Fatal(err)
 	}
 	principal, ok = authenticator.Authenticate("Bearer " + token)
-	if !ok || !principal.MustChangePassword || principal.Role != "" || principal.Admin {
+	if !ok || principal.UserID != user.ID || !principal.MustChangePassword || principal.Role != "" || principal.Admin {
 		t.Fatalf("password-restricted bearer principal=%#v ok=%v", principal, ok)
 	}
 	passwordReady, err := store.UpdateUserPassword(context.Background(), user.ID, "new-local-hash", passwordRestricted.Version, false)

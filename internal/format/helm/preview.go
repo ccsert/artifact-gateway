@@ -45,6 +45,7 @@ func chartDTO(repo repository.HostedRepository, p repository.HelmPublication) an
 	if cached {
 		out["size"] = p.Size
 		out["provenanceSize"] = p.ProvenanceSize
+		out["governanceVersion"] = p.Governance.Version
 	}
 	if repo.Type == repository.RepositoryTypeProxy {
 		out["chartUrl"] = snapshotPath(repo.Name, p.SessionID, repository.HelmSourceEntry{Name: p.Name, Version: p.Version})
@@ -81,6 +82,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	if reason := p.AccountStateReason(); reason != "" {
 		m.problem(w, 403, reason)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v2/previews/helm/replication-jobs") {
+		m.previewReplication(w, r, p)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/v2/previews/helm/groups") {

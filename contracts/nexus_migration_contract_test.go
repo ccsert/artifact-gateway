@@ -26,3 +26,20 @@ func TestNexusNPMClosureFailureAndFormatSatisfyPublishedContract(t *testing.T) {
 		}
 	}
 }
+
+func TestNexusPyPIClosureFailuresAndFormatSatisfyPublishedContract(t *testing.T) {
+	spec := loadManagementRuntimeSpec(t)
+	for _, stage := range []string{"pypi_simple_validation", "pypi_distribution_validation"} {
+		if err := spec.Components.Schemas["NexusMigrationScanFailure"].Value.VisitJSON(map[string]any{
+			"stage": stage, "sourceRepositories": []any{"python-source"}, "sourceRepository": "python-source",
+			"sourcePath": "simple/widget/", "identity": "widget@1.0", "code": "pypi_closure_incomplete", "occurredAt": "2026-10-24T01:00:00Z",
+		}); err != nil {
+			t.Fatalf("%s failed its public contract: %v", stage, err)
+		}
+	}
+	for _, name := range []string{"NexusMigrationEntry", "MigrationSourceMapping"} {
+		if err := spec.Components.Schemas[name].Value.Properties["format"].Value.VisitJSON("pypi"); err != nil {
+			t.Fatalf("%s rejects the PyPI adapter: %v", name, err)
+		}
+	}
+}

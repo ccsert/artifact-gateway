@@ -29,14 +29,14 @@ func New(db, locks *sql.DB) (*Store, error) {
 	return &Store{db, locks}, nil
 }
 
-const columns = `id::text,repository_id::text,name,version,platform,digest,size,actor,state,object_key,metadata_json,metadata_yaml,created_at,expires_at,committed_at,collected_at`
+const columns = `id::text,repository_id::text,name,version,platform,digest,size,actor,state,object_key,metadata_json,metadata_yaml,created_at,expires_at,committed_at,collected_at,governance_version::text,yanked,governance_updated_at,governance_updated_by,governance_reason`
 
 type scanner interface{ Scan(...any) error }
 
 func scan(row scanner) (domain.Session, error) {
 	var s domain.Session
-	var committed, collected sql.NullTime
-	err := row.Scan(&s.ID, &s.RepositoryID, &s.Name, &s.Version, &s.Platform, &s.Digest, &s.Size, &s.Actor, &s.State, &s.ObjectKey, &s.MetadataJSON, &s.MetadataYAML, &s.CreatedAt, &s.ExpiresAt, &committed, &collected)
+	var committed, collected, governed sql.NullTime
+	err := row.Scan(&s.ID, &s.RepositoryID, &s.Name, &s.Version, &s.Platform, &s.Digest, &s.Size, &s.Actor, &s.State, &s.ObjectKey, &s.MetadataJSON, &s.MetadataYAML, &s.CreatedAt, &s.ExpiresAt, &committed, &collected, &s.Governance.Version, &s.Governance.Yanked, &governed, &s.Governance.UpdatedBy, &s.Governance.Reason)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = repository.ErrNotFound
 	}
@@ -45,6 +45,9 @@ func scan(row scanner) (domain.Session, error) {
 	}
 	if collected.Valid {
 		s.CollectedAt = collected.Time
+	}
+	if governed.Valid {
+		s.Governance.UpdatedAt = governed.Time
 	}
 	return s, err
 }
@@ -95,7 +98,7 @@ func capacity(ctx context.Context, tx *sql.Tx, repo string) (domain.Capacity, er
 	return c, e
 }
 func (s *Store) Reserve(ctx context.Context, in domain.Session) (domain.Session, bool, error) {
-	if !domain.ValidInput(in) || !in.ExpiresAt.After(time.Now()) || in.State != "" || in.ObjectKey != "" || !in.CreatedAt.IsZero() || !in.CommittedAt.IsZero() || !in.CollectedAt.IsZero() {
+	if !domain.ValidInput(in) || !in.ExpiresAt.After(time.Now()) || in.State != "" || in.ObjectKey != "" || !in.CreatedAt.IsZero() || !in.CommittedAt.IsZero() || !in.CollectedAt.IsZero() || in.Governance != (domain.Governance{}) {
 		return domain.Session{}, false, domain.ErrInvalid
 	}
 	tx, _, e := s.transaction(ctx, in.RepositoryID)
@@ -108,7 +111,7 @@ func (s *Store) Reserve(ctx context.Context, in domain.Session) (domain.Session,
 	}
 	prior, e := scan(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE id::text=$1`, in.ID))
 	if e == nil {
-		if !domain.Same(prior, in) || prior.Actor != in.Actor {
+		if prior.Governance.Yanked || !domain.Same(prior, in) || prior.Actor != in.Actor {
 			return domain.Session{}, false, domain.ErrConflict
 		}
 		if prior.State == "expired" {
@@ -121,7 +124,7 @@ func (s *Store) Reserve(ctx context.Context, in domain.Session) (domain.Session,
 	}
 	prior, e = scan(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND ((name=$2 AND canonical_version=$3 AND platform=$4) OR full_name=$5) AND state IN ('pending','committed')`, in.RepositoryID, in.Name, protocol.CanonicalVersion(in.Version), in.Platform, domain.Visible(in).FullName()))
 	if e == nil {
-		if !domain.Same(prior, in) || prior.State == "pending" && prior.Actor != in.Actor {
+		if prior.Governance.Yanked || !domain.Same(prior, in) || prior.State == "pending" && prior.Actor != in.Actor {
 			return domain.Session{}, false, domain.ErrConflict
 		}
 		return prior, true, tx.Commit()
@@ -171,6 +174,9 @@ func (s *Store) Commit(ctx context.Context, id, actor string) (domain.Publicatio
 		return domain.Publication{}, false, e
 	}
 	if in.State == "committed" {
+		if in.Governance.Yanked {
+			return domain.Publication{}, false, domain.ErrConflict
+		}
 		return domain.Visible(in), true, tx.Commit()
 	}
 	if in.State != "pending" || !in.ExpiresAt.After(time.Now()) {
@@ -190,14 +196,14 @@ func (s *Store) Commit(ctx context.Context, id, actor string) (domain.Publicatio
 	return p, false, tx.Commit()
 }
 func (s *Store) Get(ctx context.Context, repo, fullName string) (domain.Publication, error) {
-	in, e := scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND full_name=$2 AND state='committed' AND EXISTS(SELECT 1 FROM hosted_repositories r WHERE r.id=repository_id AND r.format='rubygems' AND r.repo_type='hosted' AND r.state='active')`, repo, fullName))
+	in, e := scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND full_name=$2 AND state='committed' AND NOT yanked AND EXISTS(SELECT 1 FROM hosted_repositories r WHERE r.id=repository_id AND r.format='rubygems' AND r.repo_type='hosted' AND r.state='active')`, repo, fullName))
 	return domain.Visible(in), e
 }
 func (s *Store) List(ctx context.Context, repo string, limit int) ([]domain.Publication, error) {
 	if limit < 1 || limit > 4097 {
 		limit = 4097
 	}
-	rows, e := s.db.QueryContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND state='committed' AND EXISTS(SELECT 1 FROM hosted_repositories r WHERE r.id=repository_id AND r.format='rubygems' AND r.repo_type='hosted' AND r.state='active') ORDER BY full_name COLLATE "C" LIMIT $2`, repo, limit)
+	rows, e := s.db.QueryContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND state='committed' AND NOT yanked AND EXISTS(SELECT 1 FROM hosted_repositories r WHERE r.id=repository_id AND r.format='rubygems' AND r.repo_type='hosted' AND r.state='active') ORDER BY full_name COLLATE "C" LIMIT $2`, repo, limit)
 	if e != nil {
 		return nil, e
 	}

@@ -4,6 +4,29 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+/**
+ * Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
+ */
+export type RubyGemsPreviewGovernance = {
+  repositoryId: string;
+  name: string;
+  version: string;
+  platform: string;
+  digest: string;
+  governanceVersion: string;
+  yanked: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  reason?: string;
+};
+
+export type RubyGemsPreviewGovernanceChange = {
+  expectedDigest: string;
+  expectedGovernanceVersion: string;
+  action: "yank" | "restore";
+  reason: string;
+};
+
 export type RubyGemsPreviewRepositoryInput = {
   name: string;
   anonymousRead?: boolean;
@@ -37,6 +60,81 @@ export type RubyGemsPreviewQuotaInput = {
    * Zero means no configured quota. Pending unexpired uploads reserve capacity.
    */
   quotaBytes: number;
+};
+
+export type HelmPreviewReplicationIdentity = (
+  | {
+      provenanceDigest?: "";
+      provenanceSize?: 0;
+    }
+  | {
+      provenanceDigest: string;
+      provenanceSize: number;
+    }
+) & {
+  name: string;
+  version: string;
+  digest: string;
+  size: number;
+  provenanceDigest?: string;
+  provenanceSize?: number;
+  sourceGovernanceVersion: string;
+};
+
+export type HelmPreviewReplicationRequest = {
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  items: Array<HelmPreviewReplicationIdentity>;
+};
+
+export type HelmPreviewReplicationItem = (
+  | {
+      provenanceDigest?: "";
+      provenanceSize?: 0;
+    }
+  | {
+      provenanceDigest: string;
+      provenanceSize: number;
+    }
+) & {
+  name: string;
+  version: string;
+  digest: string;
+  size: number;
+  provenanceDigest: string;
+  provenanceSize: number;
+  sourceGovernanceVersion: string;
+  index: number;
+  state: "pending" | "running" | "succeeded" | "failed";
+  attempts: number;
+  code?:
+    | "access_denied"
+    | "source_changed"
+    | "target_conflict"
+    | "identity_conflict"
+    | "quota_exceeded"
+    | "transfer_failed";
+  targetSessionId?: string;
+  result?: "published" | "already_present";
+  completedAt?: string;
+};
+
+export type HelmPreviewReplicationJob = {
+  id: string;
+  planDigest: string;
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  actor: string;
+  version: string;
+  state: "queued" | "running" | "succeeded" | "failed";
+  items: Array<HelmPreviewReplicationItem>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HelmPreviewReplicationRetry = {
+  expectedVersion: string;
+  itemIndexes: Array<number>;
 };
 
 /**
@@ -1641,6 +1739,7 @@ export type HelmPreviewChart = (
   name: string;
   version: string;
   digest: string;
+  governanceVersion?: string;
   /**
    * True only for a complete verified chart/provenance closure; false for index metadata without verified bytes
    */
@@ -1773,7 +1872,9 @@ export type NexusMigrationScanFailure = {
     | "source_verification_digest"
     | "source_version_validation"
     | "oci_graph_validation"
-    | "npm_packument_validation";
+    | "npm_packument_validation"
+    | "pypi_simple_validation"
+    | "pypi_distribution_validation";
   sourceRepositories: Array<string>;
   sourceRepository: string;
   sourcePath: string;
@@ -1854,7 +1955,7 @@ export type NexusMigrationEntry = {
   batchId: string;
   sourceRepository: string;
   targetRepositoryId: string;
-  format: "maven" | "raw" | "oci" | "conan" | "npm";
+  format: "maven" | "raw" | "oci" | "conan" | "npm" | "pypi";
   identity: string;
   state:
     | "pending"
@@ -1980,7 +2081,7 @@ export type MigrationSourceDiscovery = {
 export type MigrationSourceMapping = {
   sourceRepository: string;
   targetName: string;
-  format: "raw" | "maven" | "oci" | "conan" | "npm";
+  format: "raw" | "maven" | "oci" | "conan" | "npm" | "pypi";
   type: "hosted" | "proxy" | "group";
   targetMembers?: Array<string>;
 };
@@ -3762,6 +3863,240 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type CreateHelmPreviewReplicationJobData = {
+  body: HelmPreviewReplicationRequest;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/previews/helm/replication-jobs";
+};
+
+export type CreateHelmPreviewReplicationJobErrors = {
+  /**
+   * Invalid or duplicate chart identity, unbounded plan or key
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Active Helm Hosted repository or exact source chart not found
+   */
+  404: unknown;
+  /**
+   * Different plan for the key, source governance changed, conflict or capacity denied
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type CreateHelmPreviewReplicationJobResponses = {
+  /**
+   * Queued plan, or the same plan on an exact idempotent replay
+   */
+  202: HelmPreviewReplicationJob;
+};
+
+export type CreateHelmPreviewReplicationJobResponse =
+  CreateHelmPreviewReplicationJobResponses[keyof CreateHelmPreviewReplicationJobResponses];
+
+export type GetHelmPreviewReplicationJobData = {
+  body?: never;
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/helm/replication-jobs/{jobId}";
+};
+
+export type GetHelmPreviewReplicationJobErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Source and target read authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type GetHelmPreviewReplicationJobResponses = {
+  /**
+   * Durable job and chart checkpoints without secrets or physical object keys
+   */
+  200: HelmPreviewReplicationJob;
+};
+
+export type GetHelmPreviewReplicationJobResponse =
+  GetHelmPreviewReplicationJobResponses[keyof GetHelmPreviewReplicationJobResponses];
+
+export type RetryHelmPreviewReplicationJobData = {
+  body: HelmPreviewReplicationRetry;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/helm/replication-jobs/{jobId}/retry";
+};
+
+export type RetryHelmPreviewReplicationJobErrors = {
+  /**
+   * Invalid retry key or item set
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Original actor with current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Job version, retry payload, state or selected item conflicts
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type RetryHelmPreviewReplicationJobResponses = {
+  /**
+   * Selected failed items queued, or an exact retry replay
+   */
+  202: HelmPreviewReplicationJob;
+};
+
+export type RetryHelmPreviewReplicationJobResponse =
+  RetryHelmPreviewReplicationJobResponses[keyof RetryHelmPreviewReplicationJobResponses];
+
+export type GetRubyGemsPreviewGovernanceData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    gemName: string;
+    gemVersion: string;
+    platform: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance";
+};
+
+export type GetRubyGemsPreviewGovernanceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type GetRubyGemsPreviewGovernanceError =
+  GetRubyGemsPreviewGovernanceErrors[keyof GetRubyGemsPreviewGovernanceErrors];
+
+export type GetRubyGemsPreviewGovernanceResponses = {
+  /**
+   * Retained gem governance
+   */
+  200: RubyGemsPreviewGovernance;
+};
+
+export type GetRubyGemsPreviewGovernanceResponse =
+  GetRubyGemsPreviewGovernanceResponses[keyof GetRubyGemsPreviewGovernanceResponses];
+
+export type ChangeRubyGemsPreviewGovernanceData = {
+  body: RubyGemsPreviewGovernanceChange;
+  path: {
+    repositoryId: string;
+    gemName: string;
+    gemVersion: string;
+    platform: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance";
+};
+
+export type ChangeRubyGemsPreviewGovernanceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type ChangeRubyGemsPreviewGovernanceError =
+  ChangeRubyGemsPreviewGovernanceErrors[keyof ChangeRubyGemsPreviewGovernanceErrors];
+
+export type ChangeRubyGemsPreviewGovernanceResponses = {
+  /**
+   * Current retained gem governance
+   */
+  200: RubyGemsPreviewGovernance;
+};
+
+export type ChangeRubyGemsPreviewGovernanceResponse =
+  ChangeRubyGemsPreviewGovernanceResponses[keyof ChangeRubyGemsPreviewGovernanceResponses];
 
 export type CreateRubyGemsPreviewRepositoryData = {
   body: RubyGemsPreviewRepositoryInput;

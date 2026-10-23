@@ -1715,6 +1715,162 @@ func (e HelmPreviewGroupPreview) Valid() bool {
 	}
 }
 
+// Defines values for HelmPreviewReplicationIdentity0ProvenanceDigest.
+const (
+	HelmPreviewReplicationIdentity0ProvenanceDigestEmpty HelmPreviewReplicationIdentity0ProvenanceDigest = ""
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationIdentity0ProvenanceDigest enum.
+func (e HelmPreviewReplicationIdentity0ProvenanceDigest) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationIdentity0ProvenanceDigestEmpty:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewReplicationIdentity0ProvenanceSize.
+const (
+	HelmPreviewReplicationIdentity0ProvenanceSizeN0 HelmPreviewReplicationIdentity0ProvenanceSize = 0
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationIdentity0ProvenanceSize enum.
+func (e HelmPreviewReplicationIdentity0ProvenanceSize) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationIdentity0ProvenanceSizeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewReplicationItemCode.
+const (
+	HelmPreviewReplicationItemCodeAccessDenied     HelmPreviewReplicationItemCode = "access_denied"
+	HelmPreviewReplicationItemCodeIdentityConflict HelmPreviewReplicationItemCode = "identity_conflict"
+	HelmPreviewReplicationItemCodeQuotaExceeded    HelmPreviewReplicationItemCode = "quota_exceeded"
+	HelmPreviewReplicationItemCodeSourceChanged    HelmPreviewReplicationItemCode = "source_changed"
+	HelmPreviewReplicationItemCodeTargetConflict   HelmPreviewReplicationItemCode = "target_conflict"
+	HelmPreviewReplicationItemCodeTransferFailed   HelmPreviewReplicationItemCode = "transfer_failed"
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationItemCode enum.
+func (e HelmPreviewReplicationItemCode) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationItemCodeAccessDenied:
+		return true
+	case HelmPreviewReplicationItemCodeIdentityConflict:
+		return true
+	case HelmPreviewReplicationItemCodeQuotaExceeded:
+		return true
+	case HelmPreviewReplicationItemCodeSourceChanged:
+		return true
+	case HelmPreviewReplicationItemCodeTargetConflict:
+		return true
+	case HelmPreviewReplicationItemCodeTransferFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewReplicationItemResult.
+const (
+	HelmPreviewReplicationItemResultAlreadyPresent HelmPreviewReplicationItemResult = "already_present"
+	HelmPreviewReplicationItemResultPublished      HelmPreviewReplicationItemResult = "published"
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationItemResult enum.
+func (e HelmPreviewReplicationItemResult) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationItemResultAlreadyPresent:
+		return true
+	case HelmPreviewReplicationItemResultPublished:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewReplicationItemState.
+const (
+	HelmPreviewReplicationItemStateFailed    HelmPreviewReplicationItemState = "failed"
+	HelmPreviewReplicationItemStatePending   HelmPreviewReplicationItemState = "pending"
+	HelmPreviewReplicationItemStateRunning   HelmPreviewReplicationItemState = "running"
+	HelmPreviewReplicationItemStateSucceeded HelmPreviewReplicationItemState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationItemState enum.
+func (e HelmPreviewReplicationItemState) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationItemStateFailed:
+		return true
+	case HelmPreviewReplicationItemStatePending:
+		return true
+	case HelmPreviewReplicationItemStateRunning:
+		return true
+	case HelmPreviewReplicationItemStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewReplicationItem0ProvenanceDigest.
+const (
+	HelmPreviewReplicationItem0ProvenanceDigestEmpty HelmPreviewReplicationItem0ProvenanceDigest = ""
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationItem0ProvenanceDigest enum.
+func (e HelmPreviewReplicationItem0ProvenanceDigest) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationItem0ProvenanceDigestEmpty:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewReplicationItem0ProvenanceSize.
+const (
+	HelmPreviewReplicationItem0ProvenanceSizeN0 HelmPreviewReplicationItem0ProvenanceSize = 0
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationItem0ProvenanceSize enum.
+func (e HelmPreviewReplicationItem0ProvenanceSize) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationItem0ProvenanceSizeN0:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HelmPreviewReplicationJobState.
+const (
+	HelmPreviewReplicationJobStateFailed    HelmPreviewReplicationJobState = "failed"
+	HelmPreviewReplicationJobStateQueued    HelmPreviewReplicationJobState = "queued"
+	HelmPreviewReplicationJobStateRunning   HelmPreviewReplicationJobState = "running"
+	HelmPreviewReplicationJobStateSucceeded HelmPreviewReplicationJobState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the HelmPreviewReplicationJobState enum.
+func (e HelmPreviewReplicationJobState) Valid() bool {
+	switch e {
+	case HelmPreviewReplicationJobStateFailed:
+		return true
+	case HelmPreviewReplicationJobStateQueued:
+		return true
+	case HelmPreviewReplicationJobStateRunning:
+		return true
+	case HelmPreviewReplicationJobStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HelmPreviewRepositoryEgressMode.
 const (
 	HelmPreviewRepositoryEgressModeDirect      HelmPreviewRepositoryEgressMode = "direct"
@@ -2129,6 +2285,7 @@ const (
 	MigrationSourceMappingFormatMaven MigrationSourceMappingFormat = "maven"
 	MigrationSourceMappingFormatNpm   MigrationSourceMappingFormat = "npm"
 	MigrationSourceMappingFormatOci   MigrationSourceMappingFormat = "oci"
+	MigrationSourceMappingFormatPypi  MigrationSourceMappingFormat = "pypi"
 	MigrationSourceMappingFormatRaw   MigrationSourceMappingFormat = "raw"
 )
 
@@ -2142,6 +2299,8 @@ func (e MigrationSourceMappingFormat) Valid() bool {
 	case MigrationSourceMappingFormatNpm:
 		return true
 	case MigrationSourceMappingFormatOci:
+		return true
+	case MigrationSourceMappingFormatPypi:
 		return true
 	case MigrationSourceMappingFormatRaw:
 		return true
@@ -2321,6 +2480,7 @@ const (
 	NexusMigrationEntryFormatMaven NexusMigrationEntryFormat = "maven"
 	NexusMigrationEntryFormatNpm   NexusMigrationEntryFormat = "npm"
 	NexusMigrationEntryFormatOci   NexusMigrationEntryFormat = "oci"
+	NexusMigrationEntryFormatPypi  NexusMigrationEntryFormat = "pypi"
 	NexusMigrationEntryFormatRaw   NexusMigrationEntryFormat = "raw"
 )
 
@@ -2334,6 +2494,8 @@ func (e NexusMigrationEntryFormat) Valid() bool {
 	case NexusMigrationEntryFormatNpm:
 		return true
 	case NexusMigrationEntryFormatOci:
+		return true
+	case NexusMigrationEntryFormatPypi:
 		return true
 	case NexusMigrationEntryFormatRaw:
 		return true
@@ -2386,14 +2548,16 @@ func (e NexusMigrationEntryState) Valid() bool {
 
 // Defines values for NexusMigrationScanFailureStage.
 const (
-	ManifestPlanning         NexusMigrationScanFailureStage = "manifest_planning"
-	MetadataDiscovery        NexusMigrationScanFailureStage = "metadata_discovery"
-	NpmPackumentValidation   NexusMigrationScanFailureStage = "npm_packument_validation"
-	OciGraphValidation       NexusMigrationScanFailureStage = "oci_graph_validation"
-	SourceVerificationDigest NexusMigrationScanFailureStage = "source_verification_digest"
-	SourceVerificationOpen   NexusMigrationScanFailureStage = "source_verification_open"
-	SourceVerificationRead   NexusMigrationScanFailureStage = "source_verification_read"
-	SourceVersionValidation  NexusMigrationScanFailureStage = "source_version_validation"
+	ManifestPlanning           NexusMigrationScanFailureStage = "manifest_planning"
+	MetadataDiscovery          NexusMigrationScanFailureStage = "metadata_discovery"
+	NpmPackumentValidation     NexusMigrationScanFailureStage = "npm_packument_validation"
+	OciGraphValidation         NexusMigrationScanFailureStage = "oci_graph_validation"
+	PypiDistributionValidation NexusMigrationScanFailureStage = "pypi_distribution_validation"
+	PypiSimpleValidation       NexusMigrationScanFailureStage = "pypi_simple_validation"
+	SourceVerificationDigest   NexusMigrationScanFailureStage = "source_verification_digest"
+	SourceVerificationOpen     NexusMigrationScanFailureStage = "source_verification_open"
+	SourceVerificationRead     NexusMigrationScanFailureStage = "source_verification_read"
+	SourceVersionValidation    NexusMigrationScanFailureStage = "source_version_validation"
 )
 
 // Valid indicates whether the value is a known member of the NexusMigrationScanFailureStage enum.
@@ -2406,6 +2570,10 @@ func (e NexusMigrationScanFailureStage) Valid() bool {
 	case NpmPackumentValidation:
 		return true
 	case OciGraphValidation:
+		return true
+	case PypiDistributionValidation:
+		return true
+	case PypiSimpleValidation:
 		return true
 	case SourceVerificationDigest:
 		return true
@@ -2569,16 +2737,16 @@ func (e NuGetPreviewReplicationItemCode) Valid() bool {
 
 // Defines values for NuGetPreviewReplicationItemResult.
 const (
-	AlreadyPresent NuGetPreviewReplicationItemResult = "already_present"
-	Published      NuGetPreviewReplicationItemResult = "published"
+	NuGetPreviewReplicationItemResultAlreadyPresent NuGetPreviewReplicationItemResult = "already_present"
+	NuGetPreviewReplicationItemResultPublished      NuGetPreviewReplicationItemResult = "published"
 )
 
 // Valid indicates whether the value is a known member of the NuGetPreviewReplicationItemResult enum.
 func (e NuGetPreviewReplicationItemResult) Valid() bool {
 	switch e {
-	case AlreadyPresent:
+	case NuGetPreviewReplicationItemResultAlreadyPresent:
 		return true
-	case Published:
+	case NuGetPreviewReplicationItemResultPublished:
 		return true
 	default:
 		return false
@@ -3599,6 +3767,24 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 	case RetentionDryRunCandidatesVersionTypeSnapshot:
 		return true
 	case RetentionDryRunCandidatesVersionTypeVersion:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RubyGemsPreviewGovernanceChangeAction.
+const (
+	RubyGemsPreviewGovernanceChangeActionRestore RubyGemsPreviewGovernanceChangeAction = "restore"
+	RubyGemsPreviewGovernanceChangeActionYank    RubyGemsPreviewGovernanceChangeAction = "yank"
+)
+
+// Valid indicates whether the value is a known member of the RubyGemsPreviewGovernanceChangeAction enum.
+func (e RubyGemsPreviewGovernanceChangeAction) Valid() bool {
+	switch e {
+	case RubyGemsPreviewGovernanceChangeActionRestore:
+		return true
+	case RubyGemsPreviewGovernanceChangeActionYank:
 		return true
 	default:
 		return false
@@ -6024,11 +6210,12 @@ type HelmPreviewChart struct {
 	Cached bool `json:"cached"`
 
 	// ChartUrl Gateway-relative immutable chart download URL
-	ChartUrl         string  `json:"chartUrl"`
-	Digest           string  `json:"digest"`
-	Name             string  `json:"name"`
-	ProvenanceDigest *string `json:"provenanceDigest,omitempty"`
-	ProvenanceSize   *int64  `json:"provenanceSize,omitempty"`
+	ChartUrl          string  `json:"chartUrl"`
+	Digest            string  `json:"digest"`
+	GovernanceVersion *string `json:"governanceVersion,omitempty"`
+	Name              string  `json:"name"`
+	ProvenanceDigest  *string `json:"provenanceDigest,omitempty"`
+	ProvenanceSize    *int64  `json:"provenanceSize,omitempty"`
 
 	// ProvenanceUrl Present only when the closure contains provenance
 	ProvenanceUrl *string            `json:"provenanceUrl,omitempty"`
@@ -6139,6 +6326,112 @@ type HelmPreviewQuarantineReadPolicy struct {
 type HelmPreviewQuarantineReadPolicyChange struct {
 	Enabled         bool   `json:"enabled"`
 	ExpectedVersion string `json:"expectedVersion"`
+}
+
+// HelmPreviewReplicationIdentity defines model for HelmPreviewReplicationIdentity.
+type HelmPreviewReplicationIdentity struct {
+	Digest                  string  `json:"digest"`
+	Name                    string  `json:"name"`
+	ProvenanceDigest        *string `json:"provenanceDigest,omitempty"`
+	ProvenanceSize          *int64  `json:"provenanceSize,omitempty"`
+	Size                    int64   `json:"size"`
+	SourceGovernanceVersion string  `json:"sourceGovernanceVersion"`
+	Version                 string  `json:"version"`
+	union                   json.RawMessage
+}
+
+// HelmPreviewReplicationIdentity0 defines model for HelmPreviewReplicationIdentity.0.
+type HelmPreviewReplicationIdentity0 struct {
+	ProvenanceDigest *HelmPreviewReplicationIdentity0ProvenanceDigest `json:"provenanceDigest,omitempty"`
+	ProvenanceSize   *HelmPreviewReplicationIdentity0ProvenanceSize   `json:"provenanceSize,omitempty"`
+}
+
+// HelmPreviewReplicationIdentity0ProvenanceDigest defines model for HelmPreviewReplicationIdentity.0.ProvenanceDigest.
+type HelmPreviewReplicationIdentity0ProvenanceDigest string
+
+// HelmPreviewReplicationIdentity0ProvenanceSize defines model for HelmPreviewReplicationIdentity.0.ProvenanceSize.
+type HelmPreviewReplicationIdentity0ProvenanceSize int
+
+// HelmPreviewReplicationIdentity1 defines model for HelmPreviewReplicationIdentity.1.
+type HelmPreviewReplicationIdentity1 struct {
+	ProvenanceDigest string `json:"provenanceDigest"`
+	ProvenanceSize   int64  `json:"provenanceSize"`
+}
+
+// HelmPreviewReplicationItem defines model for HelmPreviewReplicationItem.
+type HelmPreviewReplicationItem struct {
+	Attempts                int                               `json:"attempts"`
+	Code                    *HelmPreviewReplicationItemCode   `json:"code,omitempty"`
+	CompletedAt             *time.Time                        `json:"completedAt,omitempty"`
+	Digest                  string                            `json:"digest"`
+	Index                   int                               `json:"index"`
+	Name                    string                            `json:"name"`
+	ProvenanceDigest        string                            `json:"provenanceDigest"`
+	ProvenanceSize          int64                             `json:"provenanceSize"`
+	Result                  *HelmPreviewReplicationItemResult `json:"result,omitempty"`
+	Size                    int64                             `json:"size"`
+	SourceGovernanceVersion string                            `json:"sourceGovernanceVersion"`
+	State                   HelmPreviewReplicationItemState   `json:"state"`
+	TargetSessionId         *openapi_types.UUID               `json:"targetSessionId,omitempty"`
+	Version                 string                            `json:"version"`
+	union                   json.RawMessage
+}
+
+// HelmPreviewReplicationItemCode defines model for HelmPreviewReplicationItem.Code.
+type HelmPreviewReplicationItemCode string
+
+// HelmPreviewReplicationItemResult defines model for HelmPreviewReplicationItem.Result.
+type HelmPreviewReplicationItemResult string
+
+// HelmPreviewReplicationItemState defines model for HelmPreviewReplicationItem.State.
+type HelmPreviewReplicationItemState string
+
+// HelmPreviewReplicationItem0 defines model for HelmPreviewReplicationItem.0.
+type HelmPreviewReplicationItem0 struct {
+	ProvenanceDigest *HelmPreviewReplicationItem0ProvenanceDigest `json:"provenanceDigest,omitempty"`
+	ProvenanceSize   *HelmPreviewReplicationItem0ProvenanceSize   `json:"provenanceSize,omitempty"`
+}
+
+// HelmPreviewReplicationItem0ProvenanceDigest defines model for HelmPreviewReplicationItem.0.ProvenanceDigest.
+type HelmPreviewReplicationItem0ProvenanceDigest string
+
+// HelmPreviewReplicationItem0ProvenanceSize defines model for HelmPreviewReplicationItem.0.ProvenanceSize.
+type HelmPreviewReplicationItem0ProvenanceSize int
+
+// HelmPreviewReplicationItem1 defines model for HelmPreviewReplicationItem.1.
+type HelmPreviewReplicationItem1 struct {
+	ProvenanceDigest string `json:"provenanceDigest"`
+	ProvenanceSize   int64  `json:"provenanceSize"`
+}
+
+// HelmPreviewReplicationJob defines model for HelmPreviewReplicationJob.
+type HelmPreviewReplicationJob struct {
+	Actor              string                         `json:"actor"`
+	CreatedAt          time.Time                      `json:"createdAt"`
+	Id                 openapi_types.UUID             `json:"id"`
+	Items              []HelmPreviewReplicationItem   `json:"items"`
+	PlanDigest         string                         `json:"planDigest"`
+	SourceRepositoryId openapi_types.UUID             `json:"sourceRepositoryId"`
+	State              HelmPreviewReplicationJobState `json:"state"`
+	TargetRepositoryId openapi_types.UUID             `json:"targetRepositoryId"`
+	UpdatedAt          time.Time                      `json:"updatedAt"`
+	Version            string                         `json:"version"`
+}
+
+// HelmPreviewReplicationJobState defines model for HelmPreviewReplicationJob.State.
+type HelmPreviewReplicationJobState string
+
+// HelmPreviewReplicationRequest defines model for HelmPreviewReplicationRequest.
+type HelmPreviewReplicationRequest struct {
+	Items              []HelmPreviewReplicationIdentity `json:"items"`
+	SourceRepositoryId openapi_types.UUID               `json:"sourceRepositoryId"`
+	TargetRepositoryId openapi_types.UUID               `json:"targetRepositoryId"`
+}
+
+// HelmPreviewReplicationRetry defines model for HelmPreviewReplicationRetry.
+type HelmPreviewReplicationRetry struct {
+	ExpectedVersion string `json:"expectedVersion"`
+	ItemIndexes     []int  `json:"itemIndexes"`
 }
 
 // HelmPreviewRepository defines model for HelmPreviewRepository.
@@ -7803,6 +8096,31 @@ type RubyGemsPreviewCapacity struct {
 	UsedBytes    int64 `json:"usedBytes"`
 }
 
+// RubyGemsPreviewGovernance Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
+type RubyGemsPreviewGovernance struct {
+	Digest            string             `json:"digest"`
+	GovernanceVersion string             `json:"governanceVersion"`
+	Name              string             `json:"name"`
+	Platform          string             `json:"platform"`
+	Reason            *string            `json:"reason,omitempty"`
+	RepositoryId      openapi_types.UUID `json:"repositoryId"`
+	UpdatedAt         *time.Time         `json:"updatedAt,omitempty"`
+	UpdatedBy         *string            `json:"updatedBy,omitempty"`
+	Version           string             `json:"version"`
+	Yanked            bool               `json:"yanked"`
+}
+
+// RubyGemsPreviewGovernanceChange defines model for RubyGemsPreviewGovernanceChange.
+type RubyGemsPreviewGovernanceChange struct {
+	Action                    RubyGemsPreviewGovernanceChangeAction `json:"action"`
+	ExpectedDigest            string                                `json:"expectedDigest"`
+	ExpectedGovernanceVersion string                                `json:"expectedGovernanceVersion"`
+	Reason                    string                                `json:"reason"`
+}
+
+// RubyGemsPreviewGovernanceChangeAction defines model for RubyGemsPreviewGovernanceChange.Action.
+type RubyGemsPreviewGovernanceChangeAction string
+
 // RubyGemsPreviewQuotaInput defines model for RubyGemsPreviewQuotaInput.
 type RubyGemsPreviewQuotaInput struct {
 	// QuotaBytes Zero means no configured quota. Pending unexpired uploads reserve capacity.
@@ -8701,6 +9019,16 @@ type StopNexusMigrationScheduleParams struct {
 	IfMatch        string `json:"If-Match"`
 }
 
+// CreateHelmPreviewReplicationJobParams defines parameters for CreateHelmPreviewReplicationJob.
+type CreateHelmPreviewReplicationJobParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// RetryHelmPreviewReplicationJobParams defines parameters for RetryHelmPreviewReplicationJob.
+type RetryHelmPreviewReplicationJobParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // CreateHelmPreviewRepositoryParams defines parameters for CreateHelmPreviewRepository.
 type CreateHelmPreviewRepositoryParams struct {
 	// IdempotencyKey Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
@@ -9261,6 +9589,12 @@ type CreateHelmPreviewGroupJSONRequestBody = HelmPreviewGroupInput
 // ReplaceHelmPreviewGroupJSONRequestBody defines body for ReplaceHelmPreviewGroup for application/json ContentType.
 type ReplaceHelmPreviewGroupJSONRequestBody = HelmPreviewGroupReplace
 
+// CreateHelmPreviewReplicationJobJSONRequestBody defines body for CreateHelmPreviewReplicationJob for application/json ContentType.
+type CreateHelmPreviewReplicationJobJSONRequestBody = HelmPreviewReplicationRequest
+
+// RetryHelmPreviewReplicationJobJSONRequestBody defines body for RetryHelmPreviewReplicationJob for application/json ContentType.
+type RetryHelmPreviewReplicationJobJSONRequestBody = HelmPreviewReplicationRetry
+
 // CreateHelmPreviewRepositoryJSONRequestBody defines body for CreateHelmPreviewRepository for application/json ContentType.
 type CreateHelmPreviewRepositoryJSONRequestBody = HelmPreviewRepositoryCreate
 
@@ -9317,6 +9651,9 @@ type CreateRubyGemsPreviewRepositoryJSONRequestBody = RubyGemsPreviewRepositoryI
 
 // SetRubyGemsPreviewQuotaJSONRequestBody defines body for SetRubyGemsPreviewQuota for application/json ContentType.
 type SetRubyGemsPreviewQuotaJSONRequestBody = RubyGemsPreviewQuotaInput
+
+// ChangeRubyGemsPreviewGovernanceJSONRequestBody defines body for ChangeRubyGemsPreviewGovernance for application/json ContentType.
+type ChangeRubyGemsPreviewGovernanceJSONRequestBody = RubyGemsPreviewGovernanceChange
 
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
@@ -9557,6 +9894,13 @@ func (t HelmPreviewChart) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("error marshaling 'digest': %w", err)
 	}
 
+	if t.GovernanceVersion != nil {
+		object["governanceVersion"], err = json.Marshal(t.GovernanceVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'governanceVersion': %w", err)
+		}
+	}
+
 	object["name"], err = json.Marshal(t.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'name': %w", err)
@@ -9641,6 +9985,13 @@ func (t *HelmPreviewChart) UnmarshalJSON(b []byte) error {
 		}
 	}
 
+	if raw, found := object["governanceVersion"]; found {
+		err = json.Unmarshal(raw, &t.GovernanceVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'governanceVersion': %w", err)
+		}
+	}
+
 	if raw, found := object["name"]; found {
 		err = json.Unmarshal(raw, &t.Name)
 		if err != nil {
@@ -9687,6 +10038,436 @@ func (t *HelmPreviewChart) UnmarshalJSON(b []byte) error {
 		err = json.Unmarshal(raw, &t.Size)
 		if err != nil {
 			return fmt.Errorf("error reading 'size': %w", err)
+		}
+	}
+
+	if raw, found := object["version"]; found {
+		err = json.Unmarshal(raw, &t.Version)
+		if err != nil {
+			return fmt.Errorf("error reading 'version': %w", err)
+		}
+	}
+
+	return err
+}
+
+// AsHelmPreviewReplicationIdentity0 returns the union data inside the HelmPreviewReplicationIdentity as a HelmPreviewReplicationIdentity0
+func (t HelmPreviewReplicationIdentity) AsHelmPreviewReplicationIdentity0() (HelmPreviewReplicationIdentity0, error) {
+	var body HelmPreviewReplicationIdentity0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmPreviewReplicationIdentity0 overwrites any union data inside the HelmPreviewReplicationIdentity as the provided HelmPreviewReplicationIdentity0
+func (t *HelmPreviewReplicationIdentity) FromHelmPreviewReplicationIdentity0(v HelmPreviewReplicationIdentity0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmPreviewReplicationIdentity0 performs a merge with any union data inside the HelmPreviewReplicationIdentity, using the provided HelmPreviewReplicationIdentity0
+func (t *HelmPreviewReplicationIdentity) MergeHelmPreviewReplicationIdentity0(v HelmPreviewReplicationIdentity0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsHelmPreviewReplicationIdentity1 returns the union data inside the HelmPreviewReplicationIdentity as a HelmPreviewReplicationIdentity1
+func (t HelmPreviewReplicationIdentity) AsHelmPreviewReplicationIdentity1() (HelmPreviewReplicationIdentity1, error) {
+	var body HelmPreviewReplicationIdentity1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmPreviewReplicationIdentity1 overwrites any union data inside the HelmPreviewReplicationIdentity as the provided HelmPreviewReplicationIdentity1
+func (t *HelmPreviewReplicationIdentity) FromHelmPreviewReplicationIdentity1(v HelmPreviewReplicationIdentity1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmPreviewReplicationIdentity1 performs a merge with any union data inside the HelmPreviewReplicationIdentity, using the provided HelmPreviewReplicationIdentity1
+func (t *HelmPreviewReplicationIdentity) MergeHelmPreviewReplicationIdentity1(v HelmPreviewReplicationIdentity1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t HelmPreviewReplicationIdentity) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["digest"], err = json.Marshal(t.Digest)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'digest': %w", err)
+	}
+
+	object["name"], err = json.Marshal(t.Name)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'name': %w", err)
+	}
+
+	if t.ProvenanceDigest != nil {
+		object["provenanceDigest"], err = json.Marshal(t.ProvenanceDigest)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'provenanceDigest': %w", err)
+		}
+	}
+
+	if t.ProvenanceSize != nil {
+		object["provenanceSize"], err = json.Marshal(t.ProvenanceSize)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'provenanceSize': %w", err)
+		}
+	}
+
+	object["size"], err = json.Marshal(t.Size)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'size': %w", err)
+	}
+
+	object["sourceGovernanceVersion"], err = json.Marshal(t.SourceGovernanceVersion)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'sourceGovernanceVersion': %w", err)
+	}
+
+	object["version"], err = json.Marshal(t.Version)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'version': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *HelmPreviewReplicationIdentity) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["digest"]; found {
+		err = json.Unmarshal(raw, &t.Digest)
+		if err != nil {
+			return fmt.Errorf("error reading 'digest': %w", err)
+		}
+	}
+
+	if raw, found := object["name"]; found {
+		err = json.Unmarshal(raw, &t.Name)
+		if err != nil {
+			return fmt.Errorf("error reading 'name': %w", err)
+		}
+	}
+
+	if raw, found := object["provenanceDigest"]; found {
+		err = json.Unmarshal(raw, &t.ProvenanceDigest)
+		if err != nil {
+			return fmt.Errorf("error reading 'provenanceDigest': %w", err)
+		}
+	}
+
+	if raw, found := object["provenanceSize"]; found {
+		err = json.Unmarshal(raw, &t.ProvenanceSize)
+		if err != nil {
+			return fmt.Errorf("error reading 'provenanceSize': %w", err)
+		}
+	}
+
+	if raw, found := object["size"]; found {
+		err = json.Unmarshal(raw, &t.Size)
+		if err != nil {
+			return fmt.Errorf("error reading 'size': %w", err)
+		}
+	}
+
+	if raw, found := object["sourceGovernanceVersion"]; found {
+		err = json.Unmarshal(raw, &t.SourceGovernanceVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'sourceGovernanceVersion': %w", err)
+		}
+	}
+
+	if raw, found := object["version"]; found {
+		err = json.Unmarshal(raw, &t.Version)
+		if err != nil {
+			return fmt.Errorf("error reading 'version': %w", err)
+		}
+	}
+
+	return err
+}
+
+// AsHelmPreviewReplicationItem0 returns the union data inside the HelmPreviewReplicationItem as a HelmPreviewReplicationItem0
+func (t HelmPreviewReplicationItem) AsHelmPreviewReplicationItem0() (HelmPreviewReplicationItem0, error) {
+	var body HelmPreviewReplicationItem0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmPreviewReplicationItem0 overwrites any union data inside the HelmPreviewReplicationItem as the provided HelmPreviewReplicationItem0
+func (t *HelmPreviewReplicationItem) FromHelmPreviewReplicationItem0(v HelmPreviewReplicationItem0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmPreviewReplicationItem0 performs a merge with any union data inside the HelmPreviewReplicationItem, using the provided HelmPreviewReplicationItem0
+func (t *HelmPreviewReplicationItem) MergeHelmPreviewReplicationItem0(v HelmPreviewReplicationItem0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsHelmPreviewReplicationItem1 returns the union data inside the HelmPreviewReplicationItem as a HelmPreviewReplicationItem1
+func (t HelmPreviewReplicationItem) AsHelmPreviewReplicationItem1() (HelmPreviewReplicationItem1, error) {
+	var body HelmPreviewReplicationItem1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmPreviewReplicationItem1 overwrites any union data inside the HelmPreviewReplicationItem as the provided HelmPreviewReplicationItem1
+func (t *HelmPreviewReplicationItem) FromHelmPreviewReplicationItem1(v HelmPreviewReplicationItem1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmPreviewReplicationItem1 performs a merge with any union data inside the HelmPreviewReplicationItem, using the provided HelmPreviewReplicationItem1
+func (t *HelmPreviewReplicationItem) MergeHelmPreviewReplicationItem1(v HelmPreviewReplicationItem1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t HelmPreviewReplicationItem) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["attempts"], err = json.Marshal(t.Attempts)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'attempts': %w", err)
+	}
+
+	if t.Code != nil {
+		object["code"], err = json.Marshal(t.Code)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'code': %w", err)
+		}
+	}
+
+	if t.CompletedAt != nil {
+		object["completedAt"], err = json.Marshal(t.CompletedAt)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'completedAt': %w", err)
+		}
+	}
+
+	object["digest"], err = json.Marshal(t.Digest)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'digest': %w", err)
+	}
+
+	object["index"], err = json.Marshal(t.Index)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'index': %w", err)
+	}
+
+	object["name"], err = json.Marshal(t.Name)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'name': %w", err)
+	}
+
+	object["provenanceDigest"], err = json.Marshal(t.ProvenanceDigest)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'provenanceDigest': %w", err)
+	}
+
+	object["provenanceSize"], err = json.Marshal(t.ProvenanceSize)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'provenanceSize': %w", err)
+	}
+
+	if t.Result != nil {
+		object["result"], err = json.Marshal(t.Result)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'result': %w", err)
+		}
+	}
+
+	object["size"], err = json.Marshal(t.Size)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'size': %w", err)
+	}
+
+	object["sourceGovernanceVersion"], err = json.Marshal(t.SourceGovernanceVersion)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'sourceGovernanceVersion': %w", err)
+	}
+
+	object["state"], err = json.Marshal(t.State)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'state': %w", err)
+	}
+
+	if t.TargetSessionId != nil {
+		object["targetSessionId"], err = json.Marshal(t.TargetSessionId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'targetSessionId': %w", err)
+		}
+	}
+
+	object["version"], err = json.Marshal(t.Version)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'version': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *HelmPreviewReplicationItem) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["attempts"]; found {
+		err = json.Unmarshal(raw, &t.Attempts)
+		if err != nil {
+			return fmt.Errorf("error reading 'attempts': %w", err)
+		}
+	}
+
+	if raw, found := object["code"]; found {
+		err = json.Unmarshal(raw, &t.Code)
+		if err != nil {
+			return fmt.Errorf("error reading 'code': %w", err)
+		}
+	}
+
+	if raw, found := object["completedAt"]; found {
+		err = json.Unmarshal(raw, &t.CompletedAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'completedAt': %w", err)
+		}
+	}
+
+	if raw, found := object["digest"]; found {
+		err = json.Unmarshal(raw, &t.Digest)
+		if err != nil {
+			return fmt.Errorf("error reading 'digest': %w", err)
+		}
+	}
+
+	if raw, found := object["index"]; found {
+		err = json.Unmarshal(raw, &t.Index)
+		if err != nil {
+			return fmt.Errorf("error reading 'index': %w", err)
+		}
+	}
+
+	if raw, found := object["name"]; found {
+		err = json.Unmarshal(raw, &t.Name)
+		if err != nil {
+			return fmt.Errorf("error reading 'name': %w", err)
+		}
+	}
+
+	if raw, found := object["provenanceDigest"]; found {
+		err = json.Unmarshal(raw, &t.ProvenanceDigest)
+		if err != nil {
+			return fmt.Errorf("error reading 'provenanceDigest': %w", err)
+		}
+	}
+
+	if raw, found := object["provenanceSize"]; found {
+		err = json.Unmarshal(raw, &t.ProvenanceSize)
+		if err != nil {
+			return fmt.Errorf("error reading 'provenanceSize': %w", err)
+		}
+	}
+
+	if raw, found := object["result"]; found {
+		err = json.Unmarshal(raw, &t.Result)
+		if err != nil {
+			return fmt.Errorf("error reading 'result': %w", err)
+		}
+	}
+
+	if raw, found := object["size"]; found {
+		err = json.Unmarshal(raw, &t.Size)
+		if err != nil {
+			return fmt.Errorf("error reading 'size': %w", err)
+		}
+	}
+
+	if raw, found := object["sourceGovernanceVersion"]; found {
+		err = json.Unmarshal(raw, &t.SourceGovernanceVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'sourceGovernanceVersion': %w", err)
+		}
+	}
+
+	if raw, found := object["state"]; found {
+		err = json.Unmarshal(raw, &t.State)
+		if err != nil {
+			return fmt.Errorf("error reading 'state': %w", err)
+		}
+	}
+
+	if raw, found := object["targetSessionId"]; found {
+		err = json.Unmarshal(raw, &t.TargetSessionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetSessionId': %w", err)
 		}
 	}
 
@@ -9961,6 +10742,15 @@ type ServerInterface interface {
 	// (GET /previews/helm/groups/{groupId}/sources/{chartName}/{version})
 	GetHelmPreviewSource(w http.ResponseWriter, r *http.Request, groupId openapi_types.UUID, chartName string, version string)
 
+	// (POST /previews/helm/replication-jobs)
+	CreateHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, params CreateHelmPreviewReplicationJobParams)
+
+	// (GET /previews/helm/replication-jobs/{jobId})
+	GetHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID)
+
+	// (POST /previews/helm/replication-jobs/{jobId}/retry)
+	RetryHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID, params RetryHelmPreviewReplicationJobParams)
+
 	// (POST /previews/helm/repositories)
 	CreateHelmPreviewRepository(w http.ResponseWriter, r *http.Request, params CreateHelmPreviewRepositoryParams)
 
@@ -10077,6 +10867,12 @@ type ServerInterface interface {
 	// SetRubyGemsPreviewQuota Set administrator-managed preview quota atomically with its audit
 	// (PUT /previews/rubygems/repositories/{repositoryId}/capacity)
 	SetRubyGemsPreviewQuota(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string)
+
+	// (POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
@@ -13762,6 +14558,131 @@ func (siw *ServerInterfaceWrapper) GetHelmPreviewSource(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// CreateHelmPreviewReplicationJob operation middleware
+func (siw *ServerInterfaceWrapper) CreateHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateHelmPreviewReplicationJobParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateHelmPreviewReplicationJob(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHelmPreviewReplicationJob operation middleware
+func (siw *ServerInterfaceWrapper) GetHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", r.PathValue("jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHelmPreviewReplicationJob(w, r, jobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryHelmPreviewReplicationJob operation middleware
+func (siw *ServerInterfaceWrapper) RetryHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", r.PathValue("jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RetryHelmPreviewReplicationJobParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryHelmPreviewReplicationJob(w, r, jobId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateHelmPreviewRepository operation middleware
 func (siw *ServerInterfaceWrapper) CreateHelmPreviewRepository(w http.ResponseWriter, r *http.Request) {
 
@@ -15090,6 +16011,112 @@ func (siw *ServerInterfaceWrapper) SetRubyGemsPreviewQuota(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetRubyGemsPreviewQuota(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRubyGemsPreviewGovernance operation middleware
+func (siw *ServerInterfaceWrapper) GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemName" -------------
+	var gemName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemName", r.PathValue("gemName"), &gemName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemVersion" -------------
+	var gemVersion string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemVersion", r.PathValue("gemVersion"), &gemVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemVersion", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "platform" -------------
+	var platform string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "platform", r.PathValue("platform"), &platform, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRubyGemsPreviewGovernance(w, r, repositoryId, gemName, gemVersion, platform)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeRubyGemsPreviewGovernance operation middleware
+func (siw *ServerInterfaceWrapper) ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemName" -------------
+	var gemName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemName", r.PathValue("gemName"), &gemName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemVersion" -------------
+	var gemVersion string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemVersion", r.PathValue("gemVersion"), &gemVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemVersion", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "platform" -------------
+	var platform string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "platform", r.PathValue("platform"), &platform, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeRubyGemsPreviewGovernance(w, r, repositoryId, gemName, gemVersion, platform)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20634,6 +21661,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/groups/{groupId}", wrapper.GetHelmPreviewGroup)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/helm/groups/{groupId}", wrapper.ReplaceHelmPreviewGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/groups/{groupId}/sources/{chartName}/{version}", wrapper.GetHelmPreviewSource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/helm/replication-jobs", wrapper.CreateHelmPreviewReplicationJob)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/replication-jobs/{jobId}", wrapper.GetHelmPreviewReplicationJob)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/helm/replication-jobs/{jobId}/retry", wrapper.RetryHelmPreviewReplicationJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/helm/repositories", wrapper.CreateHelmPreviewRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}", wrapper.GetHelmPreviewRepository)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/helm/repositories/{repositoryId}", wrapper.ReplaceHelmPreviewRepository)
@@ -20673,6 +21703,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}", wrapper.GetRubyGemsPreviewRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/capacity", wrapper.GetRubyGemsPreviewCapacity)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/capacity", wrapper.SetRubyGemsPreviewQuota)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.GetRubyGemsPreviewGovernance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.ChangeRubyGemsPreviewGovernance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
@@ -28583,6 +29615,203 @@ func (response GetHelmPreviewSource503Response) VisitGetHelmPreviewSourceRespons
 	return nil
 }
 
+type CreateHelmPreviewReplicationJobRequestObject struct {
+	Params CreateHelmPreviewReplicationJobParams
+	Body   *CreateHelmPreviewReplicationJobJSONRequestBody
+}
+
+type CreateHelmPreviewReplicationJobResponseObject interface {
+	VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error
+}
+
+type CreateHelmPreviewReplicationJob202JSONResponse HelmPreviewReplicationJob
+
+func (response CreateHelmPreviewReplicationJob202JSONResponse) VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHelmPreviewReplicationJob400Response struct {
+}
+
+func (response CreateHelmPreviewReplicationJob400Response) VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateHelmPreviewReplicationJob401Response struct {
+}
+
+func (response CreateHelmPreviewReplicationJob401Response) VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateHelmPreviewReplicationJob403Response struct {
+}
+
+func (response CreateHelmPreviewReplicationJob403Response) VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type CreateHelmPreviewReplicationJob404Response struct {
+}
+
+func (response CreateHelmPreviewReplicationJob404Response) VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type CreateHelmPreviewReplicationJob409Response struct {
+}
+
+func (response CreateHelmPreviewReplicationJob409Response) VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type CreateHelmPreviewReplicationJob503Response struct {
+}
+
+func (response CreateHelmPreviewReplicationJob503Response) VisitCreateHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetHelmPreviewReplicationJobRequestObject struct {
+	JobId openapi_types.UUID `json:"jobId"`
+}
+
+type GetHelmPreviewReplicationJobResponseObject interface {
+	VisitGetHelmPreviewReplicationJobResponse(w http.ResponseWriter) error
+}
+
+type GetHelmPreviewReplicationJob200JSONResponse HelmPreviewReplicationJob
+
+func (response GetHelmPreviewReplicationJob200JSONResponse) VisitGetHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHelmPreviewReplicationJob401Response struct {
+}
+
+func (response GetHelmPreviewReplicationJob401Response) VisitGetHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetHelmPreviewReplicationJob403Response struct {
+}
+
+func (response GetHelmPreviewReplicationJob403Response) VisitGetHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetHelmPreviewReplicationJob404Response struct {
+}
+
+func (response GetHelmPreviewReplicationJob404Response) VisitGetHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetHelmPreviewReplicationJob503Response struct {
+}
+
+func (response GetHelmPreviewReplicationJob503Response) VisitGetHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type RetryHelmPreviewReplicationJobRequestObject struct {
+	JobId  openapi_types.UUID `json:"jobId"`
+	Params RetryHelmPreviewReplicationJobParams
+	Body   *RetryHelmPreviewReplicationJobJSONRequestBody
+}
+
+type RetryHelmPreviewReplicationJobResponseObject interface {
+	VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error
+}
+
+type RetryHelmPreviewReplicationJob202JSONResponse HelmPreviewReplicationJob
+
+func (response RetryHelmPreviewReplicationJob202JSONResponse) VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryHelmPreviewReplicationJob400Response struct {
+}
+
+func (response RetryHelmPreviewReplicationJob400Response) VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type RetryHelmPreviewReplicationJob401Response struct {
+}
+
+func (response RetryHelmPreviewReplicationJob401Response) VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type RetryHelmPreviewReplicationJob403Response struct {
+}
+
+func (response RetryHelmPreviewReplicationJob403Response) VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type RetryHelmPreviewReplicationJob404Response struct {
+}
+
+func (response RetryHelmPreviewReplicationJob404Response) VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type RetryHelmPreviewReplicationJob409Response struct {
+}
+
+func (response RetryHelmPreviewReplicationJob409Response) VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type RetryHelmPreviewReplicationJob503Response struct {
+}
+
+func (response RetryHelmPreviewReplicationJob503Response) VisitRetryHelmPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
 type CreateHelmPreviewRepositoryRequestObject struct {
 	Params CreateHelmPreviewRepositoryParams
 	Body   *CreateHelmPreviewRepositoryJSONRequestBody
@@ -31346,6 +32575,215 @@ func (response SetRubyGemsPreviewQuota409ApplicationProblemPlusJSONResponse) Vis
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernanceRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	GemName      string             `json:"gemName"`
+	GemVersion   string             `json:"gemVersion"`
+	Platform     string             `json:"platform"`
+}
+
+type GetRubyGemsPreviewGovernanceResponseObject interface {
+	VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error
+}
+
+type GetRubyGemsPreviewGovernance200JSONResponse RubyGemsPreviewGovernance
+
+func (response GetRubyGemsPreviewGovernance200JSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernanceRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	GemName      string             `json:"gemName"`
+	GemVersion   string             `json:"gemVersion"`
+	Platform     string             `json:"platform"`
+	Body         *ChangeRubyGemsPreviewGovernanceJSONRequestBody
+}
+
+type ChangeRubyGemsPreviewGovernanceResponseObject interface {
+	VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error
+}
+
+type ChangeRubyGemsPreviewGovernance200JSONResponse RubyGemsPreviewGovernance
+
+func (response ChangeRubyGemsPreviewGovernance200JSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ChangeRubyGemsPreviewGovernance400ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance401ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance403ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance404ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance409ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance409ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeRubyGemsPreviewGovernance500ApplicationProblemPlusJSONResponse) VisitChangeRubyGemsPreviewGovernanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -40695,6 +42133,15 @@ type StrictServerInterface interface {
 	// (GET /previews/helm/groups/{groupId}/sources/{chartName}/{version})
 	GetHelmPreviewSource(ctx context.Context, request GetHelmPreviewSourceRequestObject) (GetHelmPreviewSourceResponseObject, error)
 
+	// (POST /previews/helm/replication-jobs)
+	CreateHelmPreviewReplicationJob(ctx context.Context, request CreateHelmPreviewReplicationJobRequestObject) (CreateHelmPreviewReplicationJobResponseObject, error)
+
+	// (GET /previews/helm/replication-jobs/{jobId})
+	GetHelmPreviewReplicationJob(ctx context.Context, request GetHelmPreviewReplicationJobRequestObject) (GetHelmPreviewReplicationJobResponseObject, error)
+
+	// (POST /previews/helm/replication-jobs/{jobId}/retry)
+	RetryHelmPreviewReplicationJob(ctx context.Context, request RetryHelmPreviewReplicationJobRequestObject) (RetryHelmPreviewReplicationJobResponseObject, error)
+
 	// (POST /previews/helm/repositories)
 	CreateHelmPreviewRepository(ctx context.Context, request CreateHelmPreviewRepositoryRequestObject) (CreateHelmPreviewRepositoryResponseObject, error)
 
@@ -40811,6 +42258,12 @@ type StrictServerInterface interface {
 	// SetRubyGemsPreviewQuota Set administrator-managed preview quota atomically with its audit
 	// (PUT /previews/rubygems/repositories/{repositoryId}/capacity)
 	SetRubyGemsPreviewQuota(ctx context.Context, request SetRubyGemsPreviewQuotaRequestObject) (SetRubyGemsPreviewQuotaResponseObject, error)
+
+	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	GetRubyGemsPreviewGovernance(ctx context.Context, request GetRubyGemsPreviewGovernanceRequestObject) (GetRubyGemsPreviewGovernanceResponseObject, error)
+
+	// (POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
+	ChangeRubyGemsPreviewGovernance(ctx context.Context, request ChangeRubyGemsPreviewGovernanceRequestObject) (ChangeRubyGemsPreviewGovernanceResponseObject, error)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
@@ -43658,6 +45111,99 @@ func (sh *strictHandler) GetHelmPreviewSource(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// CreateHelmPreviewReplicationJob operation middleware
+func (sh *strictHandler) CreateHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, params CreateHelmPreviewReplicationJobParams) {
+	var request CreateHelmPreviewReplicationJobRequestObject
+
+	request.Params = params
+
+	var body CreateHelmPreviewReplicationJobJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateHelmPreviewReplicationJob(ctx, request.(CreateHelmPreviewReplicationJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateHelmPreviewReplicationJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateHelmPreviewReplicationJobResponseObject); ok {
+		if err := validResponse.VisitCreateHelmPreviewReplicationJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHelmPreviewReplicationJob operation middleware
+func (sh *strictHandler) GetHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID) {
+	var request GetHelmPreviewReplicationJobRequestObject
+
+	request.JobId = jobId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHelmPreviewReplicationJob(ctx, request.(GetHelmPreviewReplicationJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHelmPreviewReplicationJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHelmPreviewReplicationJobResponseObject); ok {
+		if err := validResponse.VisitGetHelmPreviewReplicationJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetryHelmPreviewReplicationJob operation middleware
+func (sh *strictHandler) RetryHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID, params RetryHelmPreviewReplicationJobParams) {
+	var request RetryHelmPreviewReplicationJobRequestObject
+
+	request.JobId = jobId
+	request.Params = params
+
+	var body RetryHelmPreviewReplicationJobJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryHelmPreviewReplicationJob(ctx, request.(RetryHelmPreviewReplicationJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryHelmPreviewReplicationJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryHelmPreviewReplicationJobResponseObject); ok {
+		if err := validResponse.VisitRetryHelmPreviewReplicationJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateHelmPreviewRepository operation middleware
 func (sh *strictHandler) CreateHelmPreviewRepository(w http.ResponseWriter, r *http.Request, params CreateHelmPreviewRepositoryParams) {
 	var request CreateHelmPreviewRepositoryRequestObject
@@ -44821,6 +46367,71 @@ func (sh *strictHandler) SetRubyGemsPreviewQuota(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetRubyGemsPreviewQuotaResponseObject); ok {
 		if err := validResponse.VisitSetRubyGemsPreviewQuotaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRubyGemsPreviewGovernance operation middleware
+func (sh *strictHandler) GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string) {
+	var request GetRubyGemsPreviewGovernanceRequestObject
+
+	request.RepositoryId = repositoryId
+	request.GemName = gemName
+	request.GemVersion = gemVersion
+	request.Platform = platform
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRubyGemsPreviewGovernance(ctx, request.(GetRubyGemsPreviewGovernanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRubyGemsPreviewGovernance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRubyGemsPreviewGovernanceResponseObject); ok {
+		if err := validResponse.VisitGetRubyGemsPreviewGovernanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeRubyGemsPreviewGovernance operation middleware
+func (sh *strictHandler) ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string) {
+	var request ChangeRubyGemsPreviewGovernanceRequestObject
+
+	request.RepositoryId = repositoryId
+	request.GemName = gemName
+	request.GemVersion = gemVersion
+	request.Platform = platform
+
+	var body ChangeRubyGemsPreviewGovernanceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeRubyGemsPreviewGovernance(ctx, request.(ChangeRubyGemsPreviewGovernanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeRubyGemsPreviewGovernance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeRubyGemsPreviewGovernanceResponseObject); ok {
+		if err := validResponse.VisitChangeRubyGemsPreviewGovernanceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -98,6 +98,9 @@ func (s *Service) ReadInventoryPage(ctx context.Context, id, expected string, re
 }
 
 func (s *session) inventoryPage(repo Repository, cursor string) (InventoryPage, error) {
+	if repo.Format == "pypi" {
+		return s.pypiInventoryPage(repo, cursor)
+	}
 	if repo.Format == "npm" {
 		return s.npmInventoryPage(repo, cursor)
 	}

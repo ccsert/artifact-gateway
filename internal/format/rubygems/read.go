@@ -107,6 +107,19 @@ func (m *Module) asset(w http.ResponseWriter, r *http.Request, repo repository.H
 		m.failure(w, e)
 		return
 	}
+	// Share the immutable identity lock with yank/restore/push, and re-read after
+	// waiting. Conditional and HEAD responses must observe the current policy.
+	ctx, release, e := m.store.Lock(r.Context(), repo.ID, domain.Identity(record.Name, record.Version, record.Platform))
+	if e != nil {
+		m.failure(w, e)
+		return
+	}
+	defer release()
+	record, e = m.store.Get(ctx, repo.ID, fullName)
+	if e != nil {
+		m.failure(w, e)
+		return
+	}
 	p, ok := m.authorize(w, r, repo, authorization.RepositoryRead, record.Name, false)
 	if !ok {
 		return

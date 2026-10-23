@@ -54,6 +54,26 @@ required={
  'TestPostgresHelmStoreContract',
  'TestPostgresRustFSHelmInterruptedClosureRestartAndCorruptObject',
  'TestHelmFixedOfficialCLIThroughGatewayPostgresRustFSAndRestart',
+ 'TestHelmFixedOfficialCLIReplicatedClosureTargetOnlyColdRestart',
+ 'TestHelmReplicationBlockedCurrentUserAuthority',
+ 'TestHelmReplicationCanonicalPlanIdentityAndBounds',
+ 'TestHelmReplicationExpiredOwnerCannotPublish',
+ 'TestHelmReplicationMemoryStoreContract',
+ 'TestHelmReplicationOwnsCompleteChartAndProvenance',
+ 'TestHelmReplicationPartialProgressAndExactRetry',
+ 'TestHelmReplicationPlanPublicIdentityIdempotencyAndBoundaries',
+ 'TestHelmReplicationRechecksLeaseAndAuthorityAfterPublicationLock',
+ 'TestHelmReplicationRejectsGovernanceQuotaAndDamagedClosure',
+ 'TestHelmReplicationRejectsMutatedWorkerPlan',
+ 'TestHelmReplicationRepositoryOnlyKeyAuthority',
+ 'TestPostgresHelmReplicationAuditRollbackAndReopen',
+ 'TestPostgresHelmReplicationAuthorityMutationSerializesWithPublication',
+ 'TestPostgresHelmReplicationCredentialExpiryDuringFinalTransactionRollsBack',
+ 'TestPostgresHelmReplicationFinalGovernanceAndClosureQuota',
+ 'TestPostgresHelmReplicationStoreContract',
+ 'TestPostgresRustFSHelmReplicationBlockedCurrentUserAuthority',
+ 'TestPostgresRustFSHelmReplicationRepositoryOnlyKeyAuthority',
+ 'TestPostgresRustFSHelmReplicationRestartAndLostCommitResponse',
 }
 def write_json(name,value): (evidence/name).write_text(json.dumps(value,indent=2)+'\n')
 write_json('mandatory-test-cases.json',{'target':'native-helm-e2e','mandatoryCount':len(required),'required':sorted(required)})
@@ -173,7 +193,7 @@ try:
     command(migration_args,input=migration,output='migrations-noop.log')
     env.update(TEST_DATABASE_URL='postgres://gateway:'+password+'@'+pg_address+'/gateway_test?sslmode=disable',TEST_RUSTFS_ENDPOINT='http://'+rust_address,TEST_RUSTFS_ACCESS_KEY=access,TEST_RUSTFS_SECRET_KEY=secret,HELM_TEST_BINARY=str(binary),HELM_OWNED_EVIDENCE_DIR=str(evidence),GATEWAY_REPOSITORY_PRESETS='none')
     env.update(HELM_SDK_NODE=shutil.which('node'),HELM_SDK_PUBLISH_SCRIPT=str(root/'scripts/helm-sdk-publish.ts'))
-    result=command(['go','test','-json','-count=1','-p','1','-tags=integration','./internal/protocol/helm','./internal/repository','./internal/format/helm','./internal/app','-run','Helm','-timeout','600s'],output='results.jsonl',check=False)
+    result=command(['go','test','-json','-count=1','-p','1','-tags=integration','./internal/protocol/helm','./internal/repository','./internal/format/helm','./internal/helmdistribution','./internal/app','-run','Helm','-timeout','600s'],output='results.jsonl',check=False)
     events=[]
     for line in (evidence/'results.jsonl').read_text().splitlines():
         try: events.append(json.loads(line))

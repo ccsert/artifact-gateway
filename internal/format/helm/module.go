@@ -12,6 +12,7 @@ import (
 
 	"github.com/ccsert/artifact-gateway/internal/authorization"
 	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	dist "github.com/ccsert/artifact-gateway/internal/helmdistribution"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	helmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/helm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -45,6 +46,7 @@ type Upstream interface {
 	FetchHelm(context.Context, repository.HostedRepository, string, http.Header) (*http.Response, error)
 }
 type Options struct {
+	Distribution  dist.Store
 	Sources       repository.HelmSourceStore
 	Configuration ConfigurationStore
 	Groups        GroupStore
@@ -61,6 +63,7 @@ type Options struct {
 	MaxChartBytes int64
 }
 type Module struct {
+	distribution  dist.Store
 	sources       repository.HelmSourceStore
 	configuration ConfigurationStore
 	groups        GroupStore
@@ -93,7 +96,7 @@ func New(o Options) (*Module, error) {
 			return nil, errors.New("helm preview requires explicit publication, repository, authorization, audit, anonymous policy and capacity ports")
 		}
 	}
-	for _, port := range []any{o.Sources, o.Configuration, o.Groups, o.Upstream} {
+	for _, port := range []any{o.Sources, o.Configuration, o.Groups, o.Upstream, o.Distribution} {
 		if port != nil && nilPort(port) {
 			return nil, errors.New("helm optional capability is typed nil")
 		}
@@ -112,7 +115,7 @@ func New(o Options) (*Module, error) {
 	if o.MaxChartBytes < 1 || o.MaxChartBytes > helmprotocol.MaxChartBytes {
 		return nil, errors.New("helm compressed chart limit must be between 1 and 64 MiB")
 	}
-	return &Module{sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream, store: o.Store, governance: o.Governance, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxChartBytes}, nil
+	return &Module{distribution: o.Distribution, sources: o.Sources, configuration: o.Configuration, groups: o.Groups, upstream: o.Upstream, store: o.Store, governance: o.Governance, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, capacities: o.Capacities, maxBytes: o.MaxChartBytes}, nil
 }
 func (*Module) Format() repository.Format { return repository.FormatHelm }
 func (m *Module) Routes() []formatmodule.Route {

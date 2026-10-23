@@ -126,6 +126,14 @@ const codes: Record<
   raw_path_unsupported: "nexusBatch.unsupportedReason",
   maven_pom_missing: "nexusBatch.unsupportedReason",
   maven_release_closure_unsupported: "nexusBatch.unsupportedReason",
+  pypi_metadata_limit_exceeded: "nexusBatch.unsupportedReason",
+  pypi_source_shape_unsupported: "nexusBatch.unsupportedReason",
+  pypi_simple_invalid: "nexusBatch.pypiClosure",
+  pypi_closure_incomplete: "nexusBatch.pypiClosure",
+  pypi_closure_invalid: "nexusBatch.pypiClosure",
+  pypi_distribution_identity_invalid: "nexusBatch.pypiIdentity",
+  pypi_actor_not_current_admin: "nexusBatch.pypiAdministrator",
+  pypi_actor_or_target_unavailable: "nexusBatch.pypiAuthorityOrTarget",
   npm_metadata_limit_exceeded: "nexusBatch.unsupportedReason",
   npm_source_unavailable: "nexusBatch.sourceFailure",
   npm_source_shape_unsupported: "nexusBatch.unsupportedReason",
@@ -196,6 +204,8 @@ export function scanStage(
     source_version_validation: "nexusBatch.scanVersion",
     oci_graph_validation: "nexusBatch.scanGraph",
     npm_packument_validation: "nexusBatch.scanNPM",
+    pypi_simple_validation: "nexusBatch.scanPyPISimple",
+    pypi_distribution_validation: "nexusBatch.scanPyPIDistribution",
   };
   return stages[stage];
 }

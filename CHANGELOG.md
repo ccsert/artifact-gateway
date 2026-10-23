@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+- Nexus [PyPI Hosted migration](docs/nexus-pypi-migration.md) (#461) publishes each complete wheel/sdist release atomically with its durable checkpoint. Frozen Simple metadata preserves Requires-Python and file yanking; current administrator authority, lease and source versions are rechecked before publication. A required fixed-pip gate consumes only the target after the synthetic source is stopped.
+
+- RubyGems Hosted preview supports native `gem yank` and versioned management recovery (#462). Yank hides indexes, gemspecs and original downloads while retaining bytes and quota; restore verifies the original package under current repository-admin authority. Platform variants stay independent across restart.
+
+- Helm preview adds [durable Hosted replication](docs/helm-replication-preview.md) (#463). Fixed plans bind chart and optional provenance bytes, source governance and actor authority; workers publish target-owned closures with atomic audit/checkpoints and exact failed-item retry. Target-only cold Helm consumption verifies copied signatures after source removal and restart.
+
 - Helm preview adds versioned tombstone/restore and quarantine controls for Hosted and cached Proxy charts (#457). Indexes, chart/provenance assets and Group snapshot reads share the same governance; recovery revalidates original bytes. Full lifecycle admission remains under #292.
 
 - NuGet preview adds [durable Hosted replication](docs/nuget-replication-preview.md) (#458): fixed plans, current actor/credential and repository authority checks, fenced workers, verified target-owned bytes and exact failed-item retry. Completed packages remain visible when another item fails; full admission remains under #289.

@@ -60,6 +60,7 @@ type NexusMigrationPublication struct {
 	oci              NexusFormatMigrationPublication
 	conan            NexusFormatMigrationPublication
 	npm              NexusFormatMigrationPublication
+	pypi             NexusFormatMigrationPublication
 }
 
 var _ nexusmigration.Publication = (*NexusMigrationPublication)(nil)

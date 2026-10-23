@@ -9,6 +9,16 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/helm/replication-jobs":
+    "$ref": "./management/helm-preview.yaml#/replication_jobs"
+  "/previews/helm/replication-jobs/{jobId}":
+    "$ref": "./management/helm-preview.yaml#/replication_job"
+  "/previews/helm/replication-jobs/{jobId}/retry":
+    "$ref": "./management/helm-preview.yaml#/replication_retry"
+  "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance":
+    "$ref": "./management/rubygems-preview.yaml#/governance"
+  "/rubygems/{repository}/api/v1/gems/yank":
+    "$ref": "./protocols/rubygems.yaml#/yank"
   "/previews/rubygems/repositories":
     "$ref": "./management/rubygems-preview.yaml#/repositories"
   "/previews/rubygems/repositories/{repositoryId}":
@@ -307,6 +317,10 @@ paths:
     "$ref": "./protocols/npm.yaml#/npm_repository_tarball_revision"
 components:
   schemas:
+    RubyGemsPreviewGovernance:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernance"
+    RubyGemsPreviewGovernanceChange:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernanceChange"
     RubyGemsPreviewRepositoryInput:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewRepositoryInput"
     RubyGemsPreviewRepository:
@@ -315,6 +329,16 @@ components:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewCapacity"
     RubyGemsPreviewQuotaInput:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewQuotaInput"
+    HelmPreviewReplicationIdentity:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationIdentity"
+    HelmPreviewReplicationRequest:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationRequest"
+    HelmPreviewReplicationItem:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationItem"
+    HelmPreviewReplicationJob:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationJob"
+    HelmPreviewReplicationRetry:
+      "$ref": "./components/helm-preview.yaml#/HelmPreviewReplicationRetry"
     HelmPreviewGovernance:
       "$ref": "./components/helm-preview.yaml#/HelmPreviewGovernance"
     HelmPreviewGovernanceChange:

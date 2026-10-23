@@ -17,3 +17,12 @@ func TestRubyGemsMemoryPublicationStoreContract(t *testing.T) {
 	}
 	f.StoreContract(t, d.NewMemory(repos, repos), repo)
 }
+
+func TestRubyGemsMemoryGovernanceStoreContract(t *testing.T) {
+	repos := repository.NewMemoryStore()
+	repo, err := repos.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: "ruby-governance-" + uuid.NewString(), Format: repository.FormatRubyGems, Type: repository.RepositoryTypeHosted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.GovernanceContract(t, d.NewMemory(repos, repos), repo)
+}

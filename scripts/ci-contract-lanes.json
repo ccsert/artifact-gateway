@@ -11,7 +11,8 @@
     "oci-discovery",
     "npm-migration",
     "helm",
-    "rubygems"
+    "rubygems",
+    "pypi-migration"
   ],
   "lanes": {
     "core": {
@@ -467,6 +468,31 @@
       ],
       "rawDirectories": [
         "output/native-rubygems-e2e"
+      ]
+    },
+    "pypi-migration": {
+      "timeoutMinutes": 15,
+      "steps": [
+        {
+          "name": "Prepare pinned Go modules",
+          "command": [
+            "go",
+            "mod",
+            "download"
+          ],
+          "timeoutSeconds": 300
+        },
+        {
+          "name": "nexus-pypi-migration-e2e",
+          "command": [
+            "make",
+            "nexus-pypi-migration-e2e"
+          ],
+          "timeoutSeconds": 900
+        }
+      ],
+      "rawDirectories": [
+        "output/nexus-pypi-migration-e2e"
       ]
     }
   },

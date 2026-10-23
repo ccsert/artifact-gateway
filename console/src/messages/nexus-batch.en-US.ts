@@ -178,6 +178,16 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.scanDigest": "Check source asset digest",
   "nexusBatch.scanVersion": "Revalidate source connection version",
   "nexusBatch.scanNPM": "Check the npm packument and complete version set",
+  "nexusBatch.scanPyPISimple": "Check the Python package index",
+  "nexusBatch.scanPyPIDistribution": "Verify the Python distribution identity",
+  "nexusBatch.pypiClosure":
+    "The PyPI release files or index metadata are incomplete or inconsistent. Check the source release and rescan.",
+  "nexusBatch.pypiIdentity":
+    "The archive metadata does not match the PyPI project and version. Check the source distribution and rescan.",
+  "nexusBatch.pypiAdministrator":
+    "PyPI migration requires an active administrator account or administrator API key. Check the batch or schedule owner's current access.",
+  "nexusBatch.pypiAuthorityOrTarget":
+    "The PyPI migration owner or target is unavailable. Check the owner's current access and that the target is an active Hosted repository.",
   "nexusBatch.npmClosure":
     "The npm metadata and version set are incomplete or inconsistent. Check read access to the selected repository and every version, then rescan.",
   "nexusBatch.npmIntegrity":

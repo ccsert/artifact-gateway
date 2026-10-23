@@ -70,3 +70,5 @@ architectural sequence, not completion of the broader format backlog. Current
 support and limits are described by the [protocol matrix](protocol-compatibility.md);
 private upstreams, migration execution and new ecosystems continue under their
 own Issues. Executable gates and evidence govern each delivered slice.
+
+Migration adapters now cover Maven release, Raw, OCI, Conan 2, npm and PyPI Hosted; see the [PyPI release-file and selection-metadata boundary](nexus-pypi-migration.md). Helm adds durable closure replication and RubyGems adds yank/recovery, while both remain default-off previews. These slices do not establish complete format or kkRepo parity.

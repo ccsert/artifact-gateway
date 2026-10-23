@@ -71,7 +71,9 @@ capabilities 和 Console 选择器均不公开 Helm。固定官方 Helm 3.19.0 �
 并通过自有只读 discovery fixture 验证 dry-run 渲染，不声明真实 Kubernetes 安装。
 Proxy/Group 在重排后仍保留持久来源绑定，并使用经过校验的 chart/provenance 缓存。
 版本化墓碑和隔离同时约束索引与资产，旧快照 URL 同样受限；恢复前重验原始完整闭包。
-保留、分发与完整格式准入仍由 #292 承接。
+[Hosted 持久复制](helm-replication-preview.zh-CN.md) 固定完整 chart/provenance 计划，
+在当前权限和源治理保护下提交目标自有的已验证字节及逐项检查点。
+保留、晋升与完整格式准入仍由 #292 承接。
 
 ## NuGet Hosted、Proxy 与 Group 预览
 
@@ -96,8 +98,10 @@ unlist/relist、墓碑和隔离作为独立治理控制提供；[持久复制预
 `.gem` 完整验证后，才原子发布不可变 name/version/platform 身份、运行时依赖与配额用量。
 Compact、legacy Marshal 索引与 gemspec 描述同一批已提交包；
 `make native-rubygems-e2e` 使用固定官方 RubyGems/Bundler、仅配置目标的空缓存，
-验证服务重启前后的原包摘要与冷安装。本切片不含 Proxy/Group、签名包、yank、完整治理
-或正式准入，剩余要求保留在 #293；预览不进入正式目录、Console 格式选择器或安装预置。
+验证服务重启前后的原包摘要与冷安装。原生 `gem yank` 隐藏所有包表示与下载，保留不可变
+字节和配额；仓库管理员按治理版本恢复，提交前核验原始闭包及当前权限，覆盖事务锁等待后
+的撤权。客户端门禁验证 platform 隔离、冷读取拒绝与重启后恢复。Proxy/Group、签名包、
+其余治理和正式准入仍由 #293 承接；预览不进入正式目录、Console 格式选择器或安装预置。
 
 ## 契约对齐
 

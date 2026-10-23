@@ -102,7 +102,15 @@ func (s *Service) Start(ctx context.Context, in StartInput, actor, key string) (
 		seenSource[mp.SourceRepository] = true
 		seenTarget[mp.TargetRepositoryID] = true
 	}
+	kind, ownerID, err := s.migrationActor(ctx, actor, in.Mappings)
+	if err != nil {
+		return Batch{}, err
+	}
+
 	if prior, found, err := s.store.ReplayStart(ctx, actor, key, digest(in)); err != nil || found {
+		if err == nil && found && (kind != "" || ownerID != "") && (prior.ActorKind != kind || prior.OwnerID != ownerID) {
+			return Batch{}, ErrIdempotencyConflict
+		}
 		return prior, err
 	}
 	source, err := s.source.Get(ctx, in.SourceID)
@@ -118,7 +126,7 @@ func (s *Service) Start(ctx context.Context, in StartInput, actor, key string) (
 	if err = s.publication.ValidateTargets(ctx, in.Mappings); err != nil {
 		return Batch{}, err
 	}
-	return s.store.Create(ctx, Batch{StartInput: in, ID: uuid.NewString(), Actor: actor}, key, digest(in))
+	return s.store.Create(ctx, Batch{StartInput: in, ID: uuid.NewString(), Actor: actor, ActorKind: kind, OwnerID: ownerID}, key, digest(in))
 }
 func (s *Service) Get(ctx context.Context, id string) (Batch, error) { return s.store.Get(ctx, id) }
 func (s *Service) List(ctx context.Context, limit int, cursor string) ([]Batch, string, error) {
@@ -149,6 +157,15 @@ func validPage(limit int, cursor string) bool {
 func (s *Service) Control(ctx context.Context, id, expected, actor, key, action string, evidence *CapacityEvidence) (Batch, error) {
 	if !validKey(key) || expected == "" {
 		return Batch{}, Failed("invalid_request")
+	}
+	if action == "resume" || action == "retry" {
+		owner, err := s.store.Get(ctx, id)
+		if err != nil {
+			return Batch{}, err
+		}
+		if err = s.validateMigrationActor(ctx, owner.Actor, owner.ActorKind, owner.OwnerID, owner.Mappings); err != nil {
+			return owner, err
+		}
 	}
 	hash := digest(struct {
 		Action   string
@@ -287,6 +304,9 @@ func (s *Service) sourceUnchanged(ctx context.Context, b Batch) error {
 	return nil
 }
 func (s *Service) runBatch(ctx context.Context, b Batch) (string, string) {
+	if err := s.validateMigrationActor(ctx, b.Actor, b.ActorKind, b.OwnerID, b.Mappings); err != nil {
+		return "blocked", code(err)
+	}
 	if err := s.sourceUnchanged(ctx, b); err != nil {
 		return "blocked", code(err)
 	}
@@ -387,8 +407,11 @@ func (s *Service) runBatch(ctx context.Context, b Batch) (string, string) {
 		if err = s.ValidateEvidence(b.CapacityEvidence); err != nil {
 			return "blocked", code(err)
 		}
-		entry.Actor = b.Actor
+		entry.Actor, entry.ActorKind, entry.OwnerID = b.Actor, b.ActorKind, b.OwnerID
 		if err = s.execute(ctx, b, &entry); err != nil {
+			if entry.Format == "pypi" && entry.State == "committed" {
+				return "failed", code(err)
+			}
 			if errors.Is(err, ErrStopped) {
 				current, _ := s.store.Get(ctx, b.ID)
 				if current.CancelRequested {
@@ -491,6 +514,7 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 	byIdentity := map[string]*Entry{}
 	ociInventory := map[string][]nexussource.Asset{}
 	npmInventory := map[string][]nexussource.Asset{}
+	pypiInventory := map[string][]nexussource.Asset{}
 	npmMetadataBudget := int64(MaxInventoryMetadataBytes)
 	entries := []Entry{}
 	metadata := int64(len(discovery.Assets) + len(discovery.UnsupportedAssets))
@@ -520,6 +544,10 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			return nil, "", 0, 0, err
 		}
 		format := formats[a.Repository]
+		if format == "pypi" {
+			pypiInventory[a.Repository] = append(pypiInventory[a.Repository], a)
+			continue
+		}
 		if format == "npm" {
 			npmInventory[a.Repository] = append(npmInventory[a.Repository], a)
 			continue
@@ -645,6 +673,13 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 		entries = append(entries, *entry)
 	}
 	for _, name := range names {
+		if formats[name] == "pypi" {
+			planned, err := s.planPyPIEntries(ctx, b, name, targets[name], pypiInventory[name], failure, &npmMetadataBudget)
+			if err != nil {
+				return nil, "", 0, 0, err
+			}
+			entries = append(entries, planned...)
+		}
 		if formats[name] == "npm" {
 			planned, err := s.planNPMEntries(ctx, b, name, targets[name], npmInventory[name], failure, &npmMetadataBudget)
 			if err != nil {
@@ -698,7 +733,7 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 			continue
 		}
 		for _, a := range e.Assets {
-			if e.Format == "npm" && a.TargetPath == NPMPackumentPath {
+			if MetadataAsset(e, a) {
 				continue
 			}
 			k := e.Format + ":" + a.SHA256
@@ -810,7 +845,7 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 	}
 	for i := range e.Assets {
 		asset := &e.Assets[i]
-		content, err := s.source.OpenAsset(ctx, b.SourceID, b.SourceVersion, e.SourceRepository, AssetRequest{Format: e.Format, Path: asset.SourcePath, Size: asset.Size, Validator: asset.Validator})
+		content, err := s.openEntryAsset(ctx, b, *e, *asset)
 		if err != nil {
 			return err
 		}
@@ -822,7 +857,7 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 		name := spool.Name()
 		unlinked := os.Remove(name) == nil
 		h := sha256.New()
-		targetBytes := e.Format != "npm" || asset.TargetPath != NPMPackumentPath
+		targetBytes := !MetadataAsset(*e, *asset)
 		var writer io.Writer = &transferWriter{ctx: ctx, store: s.store, entry: e.ID, batch: b.ID, token: b.LeaseToken, writer: io.MultiWriter(spool, h)}
 		if !targetBytes {
 			writer = io.MultiWriter(spool, h, &scanByteWriter{ctx: ctx, store: s.store, batch: b.ID, token: b.LeaseToken})
@@ -876,7 +911,7 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 		}
 	}
 	for i := range e.Assets {
-		if e.Format == "npm" && e.Assets[i].TargetPath == NPMPackumentPath {
+		if MetadataAsset(*e, e.Assets[i]) {
 			continue
 		}
 		e.Assets[i].Verified = true
@@ -893,22 +928,38 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 	}
 	// The actual native metadata transaction locks and validates this owner.
 	// A separate session lock cannot protect publication after that session dies.
-	ctx = s.store.PublicationContext(ctx, b.ID, b.LeaseToken)
+	if e.Format == "pypi" {
+		completion, ok := s.store.(interface {
+			PublicationEntryContext(context.Context, Entry, string) context.Context
+		})
+		if !ok {
+			return Failed("pypi_atomic_checkpoint_unavailable")
+		}
+		ctx = completion.PublicationEntryContext(ctx, *e, b.LeaseToken)
+	} else {
+		ctx = s.store.PublicationContext(ctx, b.ID, b.LeaseToken)
+	}
 	if err = s.sourceUnchanged(ctx, b); err != nil {
 		return err
 	}
 	if err = s.ValidateEvidence(b.CapacityEvidence); err != nil {
 		return err
 	}
+	if err = s.verifyPyPISource(ctx, b, *e); err != nil {
+		return err
+	}
 	if err = s.verifyNPMSource(ctx, b, *e); err != nil {
 		return err
 	}
-	if state == Absent {
+	if state == Absent || e.Format == "pypi" {
 		if err = s.publication.Verify(ctx, *e); err != nil {
 			return err
 		}
 		if err = s.publication.Publish(ctx, *e); err != nil {
 			return err
+		}
+		if e.Format == "pypi" {
+			e.State = "committed"
 		}
 		if s.options.AfterPublish != nil {
 			if err = s.options.AfterPublish(ctx, *e); err != nil {

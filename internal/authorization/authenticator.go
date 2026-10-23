@@ -155,13 +155,13 @@ func (a Authenticator) AuthenticateContext(ctx context.Context, header string) (
 					if user.MustChangePassword {
 						return Principal{
 							Actor: "user:" + user.Name, RepositoryPatterns: a.RepositoryReaders["user:"+user.Name],
-							AuthenticationKind: AuthenticationOIDC, MustChangePassword: true,
+							AuthenticationKind: AuthenticationOIDC, MustChangePassword: true, UserID: user.ID,
 						}, true
 					}
 					return Principal{
 						Actor: "user:" + user.Name, Admin: role == RoleAdmin, Role: role,
 						RepositoryPatterns: a.RepositoryReaders["user:"+user.Name], AuthenticationKind: AuthenticationOIDC,
-						OIDCAdminSubject: identity.AdminSubject, OIDCRoleMappings: identity.RoleMappings,
+						OIDCAdminSubject: identity.AdminSubject, OIDCRoleMappings: identity.RoleMappings, UserID: user.ID,
 					}, true
 				}
 				if !errors.Is(err, repository.ErrNotFound) {

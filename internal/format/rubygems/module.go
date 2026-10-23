@@ -153,6 +153,10 @@ func (m *Module) failure(w http.ResponseWriter, e error) {
 	switch {
 	case errors.Is(e, repository.ErrNotFound), errors.Is(e, objectstore.ErrNotFound):
 		m.problem(w, 404, "not_found")
+	case errors.Is(e, domain.ErrAccessDenied):
+		m.problem(w, 403, "access_denied")
+	case errors.Is(e, repository.ErrVersionConflict):
+		m.problem(w, 409, "governance_version_conflict")
 	case errors.Is(e, domain.ErrConflict), errors.Is(e, repository.ErrNameExists), errors.Is(e, repository.ErrIdempotencyConflict):
 		m.problem(w, 409, "immutable_identity_conflict")
 	case errors.Is(e, repository.ErrQuotaExceeded):
@@ -181,6 +185,10 @@ func (m *Module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	relative := strings.Join(parts[1:], "/")
+	if relative == "api/v1/gems/yank" {
+		m.nativeYank(w, r, repo)
+		return
+	}
 	if relative == "api/v1/gems" {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", "POST")

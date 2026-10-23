@@ -45,3 +45,28 @@ RubyGemsPreviewQuotaInput:
       format: int64
       minimum: 0
       description: Zero means no configured quota. Pending unexpired uploads reserve capacity.
+RubyGemsPreviewGovernance:
+  type: object
+  additionalProperties: false
+  description: Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
+  required: [repositoryId, name, version, platform, digest, governanceVersion, yanked]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    name: {type: string}
+    version: {type: string}
+    platform: {type: string}
+    digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    governanceVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+    yanked: {type: boolean}
+    updatedAt: {type: string, format: date-time}
+    updatedBy: {type: string}
+    reason: {type: string}
+RubyGemsPreviewGovernanceChange:
+  type: object
+  additionalProperties: false
+  required: [expectedDigest, expectedGovernanceVersion, action, reason]
+  properties:
+    expectedDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    expectedGovernanceVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+    action: {type: string, enum: [yank, restore]}
+    reason: {type: string, minLength: 1, maxLength: 2048}

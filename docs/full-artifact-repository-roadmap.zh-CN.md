@@ -30,3 +30,5 @@ Artifact 只能通过格式自己的 **Publication** 边界变为可见。字节
 OCI、Maven、Raw 和 Conan 的六个阶段均已实现。各格式具备 Hosted、Proxy、Group、原生生命周期、适用的管理浏览、晋级、断点复制和后端完成清单中的运维覆盖。
 
 本文记录初始 V1 架构实施顺序，不代表更广的格式 backlog 已完成。当前支持和限制以[协议矩阵](protocol-compatibility.zh-CN.md)为准；私有上游、迁移执行和新生态继续由各自 Issue 推进。每个交付切片均以可执行门禁和证据验证。
+
+当前迁移适配器覆盖 Maven release、Raw、OCI、Conan 2、npm 与 PyPI Hosted；PyPI 的完整发行文件及选择元数据见[专项说明](nexus-pypi-migration.zh-CN.md)。Helm 已补持久闭包复制，RubyGems 已补 yank/恢复，但仍是默认关闭的预览；这些切片不构成全部格式或 kkRepo 能力等同的声明。

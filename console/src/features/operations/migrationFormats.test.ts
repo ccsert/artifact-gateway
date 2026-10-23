@@ -18,3 +18,16 @@ describe("explicit npm migration format", () => {
     ).toBe("https://gateway.example/npm/npm-releases/");
   });
 });
+
+describe("explicit PyPI migration format", () => {
+  it("makes PyPI available to planning and batch creation", () => {
+    expect(migrationTargetFormat("pypi")).toBe("pypi");
+    expect(isMigrationTargetFormat("pypi")).toBe(true);
+    expect(migrationTargetFormat("pypi-legacy")).toBeUndefined();
+  });
+  it("exports the target Simple index for pip", () => {
+    expect(
+      migrationTargetURL("pypi", "python-releases", "https://gateway.example"),
+    ).toBe("https://gateway.example/pypi/python-releases/simple/");
+  });
+});

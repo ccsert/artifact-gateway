@@ -1753,9 +1753,17 @@ for (const width of [1440, 390]) {
       expect(geometry.gap).toBeLessThanOrEqual(18);
       expect(geometry.overlap).toBe(false);
       expect(geometry.overflow).toBeLessThanOrEqual(0);
+      if (width === 390 && theme === "light") {
+        await page.addStyleTag({
+          content:
+            ".ant-modal.ant-zoom-enter-active, .ant-modal.ant-zoom-appear-active { animation-duration: 800ms !important; }",
+        });
+      }
       await panel.getByRole("button", { name: "编辑弃用提示" }).click();
       const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
+      // Visibility precedes AntD's opening scale. Wait before measuring or
+      // clicking so the button cannot move between pointer down and pointer up.
+      await waitForModalOpen(dialog);
       const bounds = await dialog.boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);

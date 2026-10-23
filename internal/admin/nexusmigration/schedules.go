@@ -29,7 +29,7 @@ func (h *BatchAdapter) CreateNexusMigrationSchedule(w http.ResponseWriter, r *ht
 	if !op.body(w, &input) {
 		return
 	}
-	p, err := h.schedules.Create(r.Context(), input, op.p.Actor, params.IdempotencyKey)
+	p, err := h.schedules.Create(m.WithOperatorIdentity(r.Context(), m.OperatorIdentity{Actor: op.p.Actor, AuthenticationKind: string(op.p.AuthenticationKind), UserID: op.p.UserID}), input, op.p.Actor, params.IdempotencyKey)
 	if op.failed(w, err) {
 		return
 	}

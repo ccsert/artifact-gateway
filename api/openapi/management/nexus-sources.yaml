@@ -654,6 +654,7 @@ schemas:
         - oci
         - conan
         - npm
+        - pypi
       type:
         type: string
         enum:

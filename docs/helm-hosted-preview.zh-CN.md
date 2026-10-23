@@ -207,8 +207,11 @@ commit 与对应上游源码分支。该场景证明冷 chart 消费与 dry-run 
 测试事件、明确的 mandatory 清单、required/summary 结果、原始 CLI 输出、上游源码证据
 及精确自有资源清理结果。mandatory 缺失或 skip 均使验收失败。
 
+[Hosted 持久复制](helm-replication-preview.zh-CN.md) 固定 chart/provenance 计划，按当前
+权限原子发布目标自有字节和逐项检查点；同一必需客户端门禁在源删除和服务重启后验证目标冷消费。
+
 预览不提供 Proxy/Group 发布、Console 创建/上传/浏览、agctl 命令、可见 chart
-保留策略、扫描、晋升/复制、完整备份/升级验收或 Nexus Helm 迁移。这些仍属于 #292 或其迁移依赖。本交付不改变生产路由，不执行源迁移或切流。
+保留策略、扫描、晋升、完整备份/升级验收或 Nexus Helm 迁移。这些仍属于 #292 或其迁移依赖。本交付不改变生产路由，不执行源迁移或切流。
 
 协议依据：[Helm chart 仓库指南](https://helm.sh/docs/topics/chart_repository/)、
 [Helm provenance](https://helm.sh/docs/topics/provenance/)、

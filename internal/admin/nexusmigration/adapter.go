@@ -146,15 +146,13 @@ func batchResponse(b m.Batch) api.NexusMigrationBatch {
 	return out
 }
 func entryResponse(e m.Entry) api.NexusMigrationEntry {
-	if e.Format == "npm" {
-		assets := make([]m.Asset, 0, len(e.Assets))
-		for _, asset := range e.Assets {
-			if asset.TargetPath != m.NPMPackumentPath {
-				assets = append(assets, asset)
-			}
+	assets := make([]m.Asset, 0, len(e.Assets))
+	for _, asset := range e.Assets {
+		if !m.MetadataAsset(e, asset) {
+			assets = append(assets, asset)
 		}
-		e.Assets = assets
 	}
+	e.Assets = assets
 	raw, _ := json.Marshal(e)
 	var out api.NexusMigrationEntry
 	_ = json.Unmarshal(raw, &out)
@@ -184,7 +182,7 @@ func (h *BatchAdapter) StartNexusMigrationBatch(w http.ResponseWriter, r *http.R
 	if op.failed(w, json.Unmarshal(raw, &input)) {
 		return
 	}
-	b, err := h.service.Start(r.Context(), input, op.p.Actor, params.IdempotencyKey)
+	b, err := h.service.Start(m.WithOperatorIdentity(r.Context(), m.OperatorIdentity{Actor: op.p.Actor, AuthenticationKind: string(op.p.AuthenticationKind), UserID: op.p.UserID}), input, op.p.Actor, params.IdempotencyKey)
 	if op.failed(w, err) {
 		return
 	}

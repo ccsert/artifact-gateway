@@ -70,7 +70,7 @@ func (m *Memory) capacity(repo string) Capacity {
 	return c
 }
 func (m *Memory) Reserve(ctx context.Context, in Session) (Session, bool, error) {
-	if !ValidInput(in) || !in.ExpiresAt.After(time.Now()) || in.State != "" || in.ObjectKey != "" || !in.CreatedAt.IsZero() || !in.CommittedAt.IsZero() || !in.CollectedAt.IsZero() {
+	if !ValidInput(in) || !in.ExpiresAt.After(time.Now()) || in.State != "" || in.ObjectKey != "" || !in.CreatedAt.IsZero() || !in.CommittedAt.IsZero() || !in.CollectedAt.IsZero() || in.Governance != (Governance{}) {
 		return Session{}, false, ErrInvalid
 	}
 	m.mu.Lock()
@@ -87,7 +87,7 @@ func (m *Memory) Reserve(ctx context.Context, in Session) (Session, bool, error)
 			return Session{}, false, ErrConflict
 		}
 		if s.RepositoryID == in.RepositoryID && (s.Identity() == in.Identity() || Visible(s).FullName() == Visible(in).FullName()) && (s.State == "pending" || s.State == "committed") {
-			if !Same(s, in) || s.State == "pending" && s.Actor != in.Actor {
+			if s.Governance.Yanked || !Same(s, in) || s.State == "pending" && s.Actor != in.Actor {
 				return Session{}, false, ErrConflict
 			}
 			return clone(s), true, nil
@@ -110,6 +110,7 @@ func (m *Memory) Reserve(ctx context.Context, in Session) (Session, bool, error)
 		return Session{}, false, repository.ErrQuotaExceeded
 	}
 	in.State = "pending"
+	in.Governance.Version = "1"
 	in.CreatedAt = time.Now().UTC()
 	in.ObjectKey = ObjectKey(in)
 	m.sessions[in.ID] = clone(in)
@@ -130,6 +131,9 @@ func (m *Memory) Commit(ctx context.Context, id, actor string) (Publication, boo
 		return Publication{}, false, e
 	}
 	if s.State == "committed" {
+		if s.Governance.Yanked {
+			return Publication{}, false, ErrConflict
+		}
 		return Visible(s), true, nil
 	}
 	if s.State != "pending" || !s.ExpiresAt.After(time.Now()) {
@@ -155,7 +159,7 @@ func (m *Memory) Get(ctx context.Context, repo, fullName string) (Publication, e
 	}
 	for _, s := range m.sessions {
 		p := Visible(s)
-		if s.RepositoryID == repo && s.State == "committed" && p.FullName() == fullName {
+		if s.RepositoryID == repo && s.State == "committed" && !s.Governance.Yanked && p.FullName() == fullName {
 			return p, nil
 		}
 	}
@@ -172,7 +176,7 @@ func (m *Memory) List(ctx context.Context, repo string, limit int) ([]Publicatio
 	}
 	out := []Publication{}
 	for _, s := range m.sessions {
-		if s.RepositoryID == repo && s.State == "committed" {
+		if s.RepositoryID == repo && s.State == "committed" && !s.Governance.Yanked {
 			out = append(out, Visible(s))
 		}
 	}

@@ -413,3 +413,77 @@ helmPreviewIdempotencyKey:
   required: false
   description: Actor-scoped replay key. An expired publication reservation requires a new key; exact closure replay without a key is also safe.
   schema: {type: string, minLength: 1, maxLength: 200}
+
+replication_jobs:
+  post:
+    operationId: createHelmPreviewReplicationJob
+    description: >-
+      Creates a bounded, durable Hosted-to-Hosted replication plan. This default-disabled preview
+      fixes strict chart identities, complete chart/provenance SHA-256 and sizes, and source governance versions.
+      Provenance digest/size must both describe the same optional closure (empty/zero when absent). Each chart commits
+      atomically; a failed batch retains completed items. No credentials, source object keys, Proxy or
+      Group targets are accepted. The current durable actor, source read and target write authority,
+      governance and capacity are checked again by the worker at publication.
+    parameters:
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 200}}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewReplicationRequest'}
+    responses:
+      '202':
+        description: Queued plan, or the same plan on an exact idempotent replay
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewReplicationJob'}
+      '400': {description: "Invalid or duplicate chart identity, unbounded plan or key"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Current source read and target write authority required"}
+      '404': {description: "Active Helm Hosted repository or exact source chart not found"}
+      '409': {description: "Different plan for the key, source governance changed, conflict or capacity denied"}
+      '503': {description: "Preview disabled or durable replication unavailable"}
+replication_job:
+  parameters:
+    - {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    operationId: getHelmPreviewReplicationJob
+    description: Returns exact item results; current read authority on both repositories is required.
+    responses:
+      '200':
+        description: Durable job and chart checkpoints without secrets or physical object keys
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewReplicationJob'}
+      '401': {description: "Authentication required"}
+      '403': {description: "Source and target read authority required"}
+      '404': {description: "Job not found"}
+      '503': {description: "Preview disabled or durable replication unavailable"}
+replication_retry:
+  parameters:
+    - {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+  post:
+    operationId: retryHelmPreviewReplicationJob
+    description: >-
+      The original durable actor can retry explicitly selected failed items of a failed job using
+      its current version. Completed items, plan, actor and source pins remain fixed. An exact key
+      replay never schedules another attempt. This is chart-level recovery, not a batch rollback.
+    parameters:
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 200}}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewReplicationRetry'}
+    responses:
+      '202':
+        description: Selected failed items queued, or an exact retry replay
+        content:
+          application/json:
+            schema: {$ref: '../components/helm-preview.yaml#/HelmPreviewReplicationJob'}
+      '400': {description: "Invalid retry key or item set"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Original actor with current source read and target write authority required"}
+      '404': {description: "Job not found"}
+      '409': {description: "Job version, retry payload, state or selected item conflicts"}
+      '503': {description: "Preview disabled or durable replication unavailable"}

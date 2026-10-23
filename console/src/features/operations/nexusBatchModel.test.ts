@@ -176,6 +176,43 @@ describe("batch truth and safe reports", () => {
     }
     expect(scanStage("oci_graph_validation")).toBe("nexusBatch.scanGraph");
   });
+  it("keeps PyPI scan failures bounded and localized in both languages", () => {
+    expect(scanStage("pypi_simple_validation")).toBe(
+      "nexusBatch.scanPyPISimple",
+    );
+    expect(scanStage("pypi_distribution_validation")).toBe(
+      "nexusBatch.scanPyPIDistribution",
+    );
+    for (const locale of ["zh-CN", "en-US"] as const) {
+      const t = createTranslator(locale);
+      for (const code of [
+        "pypi_simple_invalid",
+        "pypi_closure_incomplete",
+        "pypi_distribution_identity_invalid",
+        "pypi_actor_not_current_admin",
+        "pypi_actor_or_target_unavailable",
+      ]) {
+        const report = observationReport(
+          {
+            ...nexusBatch,
+            lastScanFailure: {
+              ...nexusScanFailure,
+              stage: "pypi_simple_validation",
+              code,
+            },
+          },
+          [],
+          false,
+          [],
+        );
+        expect(report.lastScanFailure).toMatchObject({
+          stage: "pypi_simple_validation",
+          code,
+        });
+        expect(batchReason(code, t)).toContain("PyPI");
+      }
+    }
+  });
   it("keeps npm scan failures bounded and localized in reports", () => {
     expect(scanStage("npm_packument_validation")).toBe("nexusBatch.scanNPM");
     const t = createTranslator("zh-CN");

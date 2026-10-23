@@ -81,3 +81,13 @@ func (a *Boundary) GetHelmPreviewQuarantineReadPolicy(w http.ResponseWriter, r *
 func (a *Boundary) ReplaceHelmPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
 	a.serve(w, r)
 }
+
+func (a *Boundary) CreateHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ api.CreateHelmPreviewReplicationJobParams) {
+	a.serve(w, r)
+}
+func (a *Boundary) GetHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *Boundary) RetryHelmPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _ api.RetryHelmPreviewReplicationJobParams) {
+	a.serve(w, r)
+}

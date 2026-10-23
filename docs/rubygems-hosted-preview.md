@@ -8,14 +8,16 @@ RubyGems/Bundler compact indexes, legacy Marshal 4.8 indexes and zlib gemspecs.
 It is absent from the admitted format profiles, formal repository catalog,
 Console creation selector and installation presets. There is no preview `agctl`
 command. The Hosted slice is tracked by [#459](https://github.com/ccsert/artifact-gateway/issues/459);
-Proxy/Group, yank, full lifecycle governance, Console, scanning, distribution,
+Native yank and controlled restore are tracked by
+[#462](https://github.com/ccsert/artifact-gateway/issues/462). Proxy/Group, quarantine, hard deletion, Console, scanning, distribution,
 backup admission and Nexus migration remain in
 [#293](https://github.com/ccsert/artifact-gateway/issues/293).
 
 ## Enable and provision
 
 Apply the normal append-only migrations, including
-`000185_native_rubygems_hosted_preview.sql`. Use the existing PostgreSQL and
+`000185_native_rubygems_hosted_preview.sql` and
+`000187_native_rubygems_yank_governance.sql`. Use the existing PostgreSQL and
 verified S3/RustFS runtime ports and set
 `GATEWAY_RUBYGEMS_PREVIEW_ENABLED=true`. The default is false; an invalid boolean
 fails startup. Publication persistence is an explicitly injected domain store,
@@ -120,13 +122,13 @@ and verification of every target operating system are outside this slice.
 A native push reserves capacity and a unique object key, stages the exact
 original bytes, reopens and hashes the entire object, revalidates identity and
 metadata, rechecks publication authority, then atomically commits visibility
-and its audit. Pending or failed uploads never enter any index. Same identity
+and its audit. Pending or failed uploads never enter any index. Same visible identity
 and identical bytes replay idempotently without a second publication audit;
 different bytes or an ambiguous native filename return 409. All original
 package reads recheck complete size and SHA-256 before writing a response.
 
 GET/PUT `/api/v2/previews/rubygems/repositories/{id}/capacity` is administrator
-only. `usedBytes` and `objectCount` describe committed originals; `pendingBytes`
+only. `usedBytes` and `objectCount` describe all retained committed originals, including yanked gems; `pendingBytes`
 reserves unexpired uploads. `quotaBytes:0` means no configured byte quota.
 Quota reduction below committed plus reserved usage is refused, and quota
 updates retain their audit transaction. This independent preview capacity does
@@ -137,6 +139,75 @@ a dropped response or process restart. Cleanup only removes expired,
 never-visible objects and shares the identity lock with publication; replacement
 sessions have distinct object keys. It does not delete published gems. Failed
 deletes/collection markers remain eligible for retry.
+
+## Yank and controlled restore
+
+The fixed official RubyGems client can withdraw one published version/platform:
+
+```sh
+export GEM_HOST_API_KEY='<current repository write credential>'
+gem yank owned_top --version 1.2.0 \
+  --host https://gateway.example.com/rubygems/ruby-internal
+# For a platform-specific variant:
+gem yank owned_variant --version 1.0.0 --platform java \
+  --host https://gateway.example.com/rubygems/ruby-internal
+```
+
+The client sends `DELETE /api/v1/gems/yank` beneath that host with an
+`application/x-www-form-urlencoded` body. Only single-valued `gem_name`,
+`version`, and optional `platform` are accepted, within 4 KiB. An absent or
+empty platform means exactly `ruby`; it does not select other variants.
+Version lookup uses the same canonical identity as publication. Unknown or
+repeated fields, unsupported `ruby_abi`, malformed encoding, and noncanonical
+platforms fail explicitly. The request requires current write permission for
+the exact gem name. Authentication and authorization are repeated after
+waiting for the shared identity lock.
+
+A successful yank returns 200 and atomically hides the selected identity from
+compact and legacy indexes, quick gemspecs and original package GET/HEAD,
+including requests carrying an old ETag. A cold install with a lockfile that
+requires the withdrawn gem therefore fails. Already downloaded client copies
+remain local to those clients. Gateway retains its original bytes, immutable
+identity and capacity charge; cleanup does not collect these committed
+objects. Neither an identical nor a different push can revive a yanked identity.
+Repeating native yank succeeds without another state change or success audit.
+
+A current repository administrator can inspect retained governance with:
+
+```text
+GET /api/v2/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance
+Authorization: Bearer <repository administrator credential>
+```
+
+The response includes `repositoryId`, `name`, `version`, `platform`, `digest`,
+`governanceVersion`, and `yanked`; after a transition it also includes
+`updatedAt`, `updatedBy`, and `reason`. The initial governance version is `1`.
+Use that response to submit a conditional decision to the same path:
+
+```json
+{
+  "expectedDigest": "sha256:<original SHA-256>",
+  "expectedGovernanceVersion": "2",
+  "action": "restore",
+  "reason": "Verified the retained publication and approved restoration"
+}
+```
+
+POST accepts `yank` or `restore`. It requires current repository administrator
+permission for the exact gem name, a matching digest and governance version,
+and a nonblank reason of at most 2,048 Unicode characters. A stale decision
+returns 409. Restore reopens and validates the entire retained size/SHA-256,
+archive, parsed identity and original metadata before rechecking the current
+credential and administrator grant. Missing or corrupt content stays hidden.
+State and audit commit together, with a monotonically increasing governance
+version. A same-state request with the current version is a no-op and emits no
+second audit; use a fresh GET after losing a management response.
+
+This is retained Hosted governance. It does not add quarantine, hard deletion,
+physical reclamation, Proxy/Group propagation or general lifecycle admission.
+The native wire contract follows the fixed
+[yank command](https://github.com/rubygems/rubygems/blob/v3.6.7/lib/rubygems/commands/yank_command.rb)
+and [RubyGems removal semantics](https://guides.rubygems.org/removing-a-published-gem/).
 
 ## Native contract and verification
 
@@ -170,8 +241,14 @@ directory. Each consumer has a separate initially empty working directory,
 HOME and cache tree; gem installs explicitly require remote resolution. Each
 phase separately proves full target `.gem` GETs with matching original size,
 SHA-256, parsed identity and dependencies, including both cold clients after
-restart; requests from another phase cannot satisfy its assertions.
-Five original size/SHA/identity closures, per-phase response proofs, raw client
+restart; requests from another phase cannot satisfy its assertions. The same
+fixed client yanks the `ruby` and `java` variants independently and repeats one
+yank idempotently. Empty-cache gem and locked Bundler installs must fail while
+a transitive dependency is yanked, before and after the physical restart. A
+verified management restore then allows both cold clients to receive the same
+original closure. Expected native denials retain their nonzero command status;
+they are not skipped tests or successful installs.
+Seven original size/SHA/identity closures, per-phase response proofs, raw client
 outputs, JSON test results, source/tool provenance and cleanup receipts are
 written under `output/native-rubygems-e2e/<run>/`. Its mandatory client test
 cannot pass by skipping unavailable tools. These are fixture/local or CI

@@ -4,7 +4,7 @@ umask 077
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 exec python3 -B - "$repo_root" <<'PY'
-import hashlib,json,os,pathlib,secrets,shutil,signal,socket,subprocess,sys,tempfile,time,urllib.request
+import hashlib,ipaddress,json,os,pathlib,secrets,shutil,signal,socket,subprocess,sys,tempfile,time,urllib.request
 gate_signals={signal.SIGTERM,signal.SIGINT}
 initial_signal_mask=signal.pthread_sigmask(signal.SIG_BLOCK,gate_signals)
 root=pathlib.Path(sys.argv[1]);run_id='ag459-rubygems-'+secrets.token_hex(6)
@@ -37,6 +37,14 @@ required={
 'TestRubyGemsPostgresPublicationStoreContract',
 'TestRubyGemsPostgresRustFSAtomicAuditInterruptionQuotaAndRestart',
 'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart',
+'TestRubyGemsMemoryGovernanceStoreContract',
+'TestRubyGemsPostgresGovernanceStoreContract',
+'TestRubyGemsYankHidesAllReadsAndRestoresVerifiedIdentity',
+'TestRubyGemsYankRejectsAmbiguousFormsAndPreservesPlatform',
+'TestRubyGemsGovernanceCorruptRestoreAndAuditFailureStayClosed',
+'TestRubyGemsGovernanceRequiresCurrentAuthorityAfterLockAndVerification',
+'TestRubyGemsGovernanceUsesRepositoryAdminAndExactName',
+'TestRubyGemsPostgresRustFSGovernanceAtomicAuditAndRestart',
 }
 class GateCancelled(Exception):
     def __init__(self,signum):self.signum=signum
@@ -118,8 +126,8 @@ try:
     probe=command(['docker','run','--rm','--network','none','--label',label,image,'ruby','-e','require "rubygems";require "bundler";puts [RUBY_VERSION,Gem::VERSION,Bundler::VERSION].join(" ")']).stdout.strip()
     if probe!='3.4.4 3.6.7 2.6.7':raise RuntimeError('Fixed official Ruby/RubyGems/Bundler identity mismatch: '+probe)
     source_proof={}
-    source_files=['lib/rubygems/specification.rb','lib/rubygems/version.rb','lib/rubygems/requirement.rb','lib/rubygems/package.rb','lib/rubygems/platform.rb','lib/rubygems/commands/push_command.rb','lib/rubygems/gemcutter_utilities.rb','bundler/lib/bundler/compact_index_client/parser.rb']
-    expected_source_hashes={'lib/rubygems/platform.rb':'741d03e920690639402c5a39a84abd27e9b5f9e93d5569170d3a23aa62677bb4','lib/rubygems/specification.rb':'bcf89944d63f082c54474af101c6419605ac5c2534384debce11eab0e6eae434','lib/rubygems/version.rb':'712bca6acd43c9a6cc226afc65a44cfc38e3eb9737a4b357f734c5e1ed20f519','lib/rubygems/requirement.rb':'76b56c47ca3372cdcc85829d96296cbb5923504ff464f6556de9c9fccbcdc913','lib/rubygems/package.rb':'712310184686c9a2bb692a86f544fd7e2f0fbe911eabdbe34e35fe39ee9b4686','lib/rubygems/commands/push_command.rb':'4bbaa13cf60df4f65c7a40932add4fc34640d4ecef1465138773b5bbcedab282','lib/rubygems/gemcutter_utilities.rb':'edcb9cdaf3826c7c781d057e9cb0e77f9f6bf0173b5fe148713bf71543686476','bundler/lib/bundler/compact_index_client/parser.rb':'ea6d6d5698731ebed1e2e7523db81d8556c4b4772f35bba9d6f36f9e6a7841eb'}
+    source_files=['lib/rubygems/specification.rb','lib/rubygems/version.rb','lib/rubygems/requirement.rb','lib/rubygems/package.rb','lib/rubygems/platform.rb','lib/rubygems/commands/push_command.rb','lib/rubygems/commands/yank_command.rb','lib/rubygems/gemcutter_utilities.rb','bundler/lib/bundler/compact_index_client/parser.rb']
+    expected_source_hashes={'lib/rubygems/platform.rb':'741d03e920690639402c5a39a84abd27e9b5f9e93d5569170d3a23aa62677bb4','lib/rubygems/specification.rb':'bcf89944d63f082c54474af101c6419605ac5c2534384debce11eab0e6eae434','lib/rubygems/version.rb':'712bca6acd43c9a6cc226afc65a44cfc38e3eb9737a4b357f734c5e1ed20f519','lib/rubygems/requirement.rb':'76b56c47ca3372cdcc85829d96296cbb5923504ff464f6556de9c9fccbcdc913','lib/rubygems/package.rb':'712310184686c9a2bb692a86f544fd7e2f0fbe911eabdbe34e35fe39ee9b4686','lib/rubygems/commands/push_command.rb':'4bbaa13cf60df4f65c7a40932add4fc34640d4ecef1465138773b5bbcedab282','lib/rubygems/commands/yank_command.rb':'4b10884704cb904a5759ce23dced7c459f52e170051b1fa96cc0925d7a716c83','lib/rubygems/gemcutter_utilities.rb':'edcb9cdaf3826c7c781d057e9cb0e77f9f6bf0173b5fe148713bf71543686476','bundler/lib/bundler/compact_index_client/parser.rb':'ea6d6d5698731ebed1e2e7523db81d8556c4b4772f35bba9d6f36f9e6a7841eb'}
     for path in source_files:
         url='https://raw.githubusercontent.com/rubygems/rubygems/v3.6.7/'+path;filename='official-source-'+path.replace('/','_')
         command(['curl','--disable','--fail','--silent','--show-error','--proto','=https','--tlsv1.2','--connect-timeout','15','--max-time','45',url,'-o',str(evidence/filename)],output=filename+'.log')
@@ -129,7 +137,25 @@ try:
     write('tool-provenance.json',{'toolchain':probe,'image':image,'imageId':ruby_inspect['Id'],'repoDigests':ruby_inspect.get('RepoDigests',[]),'platform':ruby_inspect['Os']+'/'+ruby_inspect['Architecture'],'rubyGemsSourceTag':'v3.6.7','bundlerVersion':'2.6.7','sources':source_proof,'packaging':'official gem build in network-none container','consumers':'owned-empty GEM_HOME/GEM_PATH/GEM_SPEC_CACHE/Bundler caches and target-only source','formalAdmission':False})
     files=command(['git','ls-files','-co','--exclude-standard','-z']).stdout.split('\0');hashes={name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in sorted(set(files)) if name and (root/name).is_file()}
     write('source.json',{'head':command(['git','rev-parse','HEAD']).stdout.strip(),'tree':command(['git','rev-parse','HEAD^{tree}']).stdout.strip(),'dirty':bool(command(['git','status','--porcelain']).stdout),'fileHashes':hashes,'goVersion':command(['go','version']).stdout.strip()})
-    command(['docker','network','create','--label',label,network]);password=secrets.token_hex(24);access='ruby'+secrets.token_hex(8);secret=secrets.token_hex(24)
+    network_args=['docker','network','create','--label',label]
+    # An explicit fixture-only subnet avoids changing the daemon or deleting
+    # other projects when Docker's automatic address pools are exhausted.
+    explicit_subnet=env.get('RUBYGEMS_OWNED_SUBNET','')
+    if explicit_subnet:
+        selected=ipaddress.ip_network(explicit_subnet,strict=True)
+        private_ranges=[ipaddress.ip_network(cidr) for cidr in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16')]
+        if selected.version!=4 or not 24<=selected.prefixlen<=28 or not any(selected.subnet_of(parent) for parent in private_ranges):raise RuntimeError('Owned fixture subnet must be a canonical RFC1918 IPv4 /24 through /28')
+        network_ids=command(['docker','network','ls','-q'],timeout=20).stdout.split()
+        current=json.loads(command(['docker','network','inspect',*network_ids],timeout=30).stdout) if network_ids else []
+        subnets=[]
+        for item in current:
+            for config in item.get('IPAM',{}).get('Config',[]) or []:
+                if not config.get('Subnet'):continue
+                existing=ipaddress.ip_network(config['Subnet'],strict=False);subnets.append(str(existing))
+                if existing.version==4 and existing.overlaps(selected):raise RuntimeError('Owned fixture subnet overlaps an existing Docker network')
+        write('network-subnet-check.json',{'requested':str(selected),'observedDockerSubnets':sorted(subnets),'overlap':False,'daemonConfigurationChanged':False})
+        network_args+=['--subnet',str(selected)]
+    command([*network_args,network],timeout=30);password=secrets.token_hex(24);access='ruby'+secrets.token_hex(8);secret=secrets.token_hex(24)
     for suffix in ('pg','rust','logs'):
         name=run_id+'-'+suffix+'-data';volumes.append(name);command(['docker','volume','create','--label',label,name])
     pg_env=work/'pg.env';pg_env.write_text('POSTGRES_DB=gateway_test\nPOSTGRES_USER=gateway\nPOSTGRES_PASSWORD='+password+'\nPGPASSWORD='+password+'\n')
