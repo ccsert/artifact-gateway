@@ -9,6 +9,7 @@ import (
 	"errors"
 	"github.com/ccsert/artifact-gateway/internal/authorization"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -43,7 +44,7 @@ func (s lostReplicationReply) CompleteHelmReplicationItem(ctx context.Context, l
 	return j, context.Canceled
 }
 func TestPostgresRustFSHelmReplicationRestartAndLostCommitResponse(t *testing.T) {
-	for _, window := range []string{"after-target-upload", "after-publication-commit"} {
+	for _, window := range []string{"after-target-chart-upload", "after-target-provenance-upload", "after-publication-commit"} {
 		t.Run(window, func(t *testing.T) {
 			f := newReplicationDurableFixture(t)
 			f.module.distribution = f.store
@@ -54,7 +55,7 @@ func TestPostgresRustFSHelmReplicationRestartAndLostCommitResponse(t *testing.T)
 			body := chartFixture(t, "durable-app", "1.0.0", "restart closure")
 			proof := provenanceFixture(t, body)
 			payload, ct := multipartChart(t, "durable-app", "1.0.0", body, proof)
-			w := request(t, f.module, "PUT", "/api/v2/previews/helm/repositories/"+f.repo.ID+"/charts/durable-app/1.0.0", payload, map[string]string{"Authorization": "Bearer helm-owned-admin", "Content-Type": ct})
+			w := request(t, f.module.Preview(), "PUT", "/api/v2/previews/helm/repositories/"+f.repo.ID+"/charts/durable-app/1.0.0", payload, map[string]string{"Authorization": "Bearer helm-owned-admin", "Content-Type": ct})
 			if w.Code != 201 {
 				t.Fatal(w.Body.String())
 			}
@@ -71,8 +72,8 @@ func TestPostgresRustFSHelmReplicationRestartAndLostCommitResponse(t *testing.T)
 			}
 			crash, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			if window == "after-target-upload" {
-				f.module.objects = &replicationHookObjects{Store: f.objects, hook: cancel}
+			if strings.HasPrefix(window, "after-target-") {
+				f.module.objects = replicationCrashObjects{Store: f.objects, cancel: cancel, afterProvenance: window == "after-target-provenance-upload"}
 			} else {
 				f.module.distribution = lostReplicationReply{Store: f.store, cancel: cancel}
 			}
@@ -89,7 +90,7 @@ func TestPostgresRustFSHelmReplicationRestartAndLostCommitResponse(t *testing.T)
 				t.Fatalf("persisted checkpoint=%+v %v", before, err)
 			}
 			var committed repository.HelmPublication
-			if window == "after-target-upload" {
+			if strings.HasPrefix(window, "after-target-") {
 				if _, err = f.store.GetHelmPublication(t.Context(), target.ID, source.Name, source.Version); !errors.Is(err, repository.ErrNotFound) {
 					t.Fatalf("upload prematurely visible=%v", err)
 				}
@@ -133,9 +134,14 @@ func TestPostgresRustFSHelmReplicationRestartAndLostCommitResponse(t *testing.T)
 				t.Fatal(err)
 			}
 			path := "/helm/" + target.Name + "/charts/durable-app/1.0.0/durable-app-1.0.0.tgz"
-			w = request(t, module, "GET", path, nil, admin)
-			if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), body) {
-				t.Fatalf("target depends on source=%d", w.Code)
+			for _, asset := range []struct {
+				suffix string
+				want   []byte
+			}{{"", body}, {".prov", proof}} {
+				w = request(t, module, "GET", path+asset.suffix, nil, admin)
+				if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), asset.want) {
+					t.Fatalf("target closure depends on source=%d", w.Code)
+				}
 			}
 		})
 	}
@@ -179,4 +185,18 @@ func newReplicationDurableFixture(t *testing.T) replicationDurableFixture {
 		t.Fatal(err)
 	}
 	return replicationDurableFixture{newReplicationDurableModule(t, store, objects), store, objects, repo}
+}
+
+type replicationCrashObjects struct {
+	objectstore.Store
+	cancel          context.CancelFunc
+	afterProvenance bool
+}
+
+func (s replicationCrashObjects) PutVerifiedReader(ctx context.Context, key string, r io.Reader, size int64, digest string) error {
+	err := s.Store.PutVerifiedReader(ctx, key, r, size, digest)
+	if err == nil && (!s.afterProvenance || strings.Contains(key, "/provenance/")) {
+		s.cancel()
+	}
+	return err
 }
