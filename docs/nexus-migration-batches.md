@@ -13,7 +13,8 @@ Apply migrations `000147_nexus_migration_batches.sql` and
 `000148_nexus_migration_scan_diagnostics.sql` and the appended
 `000154_nexus_native_migration_formats.sql` and
 `000155_nexus_migration_scan_checkpoints.sql`, `000162_nexus_npm_migration.sql` and
-`000186_nexus_pypi_migration.sql` through the standard migration runner. Configure
+`000186_nexus_pypi_migration.sql` and `000189_nexus_migration_actor_kind.sql`
+through the standard migration runner. Configure
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` with the real object-storage pool identity.
 Compose forwards it to every inherited Gateway role. Without it migration writes
 are disabled; the rest of Gateway and migration reports remain available. Source
@@ -121,10 +122,12 @@ reported while retaining their target. There is no timestamp-only watermark.
 
 [PyPI migration](nexus-pypi-migration.md) preserves a complete project/version's
 wheel and `.tar.gz` source files, Requires-Python and yank metadata. It requires a
-currently active durable administrator or administrator API key; static display-name
+currently active durable administrator or administrator API key. Batches and
+schedules bind the actual authentication kind and stable owner ID, and recheck
+that owner's current authority before dispatch and publication. Static display-name
 actors cannot prove current authority and are refused for this adapter. Source
 builds and other archive shapes remain outside this slice. The dedicated
-`make nexus-pypi-migration-e2e` gate requires eight real persistence/client cases.
+`make nexus-pypi-migration-e2e` gate requires eleven real persistence/client cases.
 
 ## npm Hosted package closures
 
@@ -189,7 +192,8 @@ bounded source verification; OCI graph manifest pre-reads and complete npm archi
 `transferredBytes` counts copy-stage source body bytes, including retries and
 revalidation of existing identities. `verifiedBytes` counts unique primary target
 bytes with full readback evidence; retries do not inflate it. `visibleIdentities`
-counts committed or readback-confirmed native Raw paths, Maven GAVs, OCI references, Conan revisions and npm package closures separately.
+counts committed or readback-confirmed native Raw paths, Maven GAVs, OCI references,
+Conan revisions, npm package closures and PyPI project/version closures separately.
 `totalBytes` is null until the complete manifest is sealed, then counts unique
 supported primary bytes. Unsupported and source-deleted entries remain explicit
 report rows. These counters do not constitute official-client acceptance.
