@@ -39,9 +39,11 @@ RustFS 数据卷。
 5. 用户可见变化记录在 `CHANGELOG.md` 的 `Unreleased` 下。
 6. 开发时执行最小相关检查，提交前再执行下方必需检查。
 
-禁止手工修改生成文件。可编辑 OpenAPI 根文件是
-`api/openapi/native-hosted.yaml`；`make openapi-check` 会重新生成并校验 JSON bundle、
-Console 客户端与 Go 管理契约。
+禁止手工修改生成文件。可编辑 OpenAPI 根文件包括面向原生协议及 Console 的
+`api/openapi/native-hosted.yaml`，以及面向 Go 管理边界的
+`api/openapi/management-runtime.yaml`。共享管理路径和 schema 必须在两个根文件中
+保持一致。`make openapi-check` 会重新生成并校验两个 JSON bundle、Console 客户端
+与 Go 管理契约。
 
 运行契约检查前安装固定版本生成器：
 

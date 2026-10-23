@@ -44,9 +44,12 @@ Compose stack without deleting its PostgreSQL and RustFS volumes.
 6. Run the smallest relevant check while developing, then the required checks
    below before committing.
 
-Generated files must not be edited by hand. The editable OpenAPI root is
-`api/openapi/native-hosted.yaml`; `make openapi-check` regenerates and verifies
-the JSON bundle, Console client, and Go management contract.
+Generated files must not be edited by hand. The editable OpenAPI roots are
+`api/openapi/native-hosted.yaml` for the native/Console contract and
+`api/openapi/management-runtime.yaml` for the Go management boundary. Keep shared
+management paths and schemas consistent in both roots. `make openapi-check`
+regenerates and verifies both JSON bundles, the Console client, and the Go
+management contract.
 
 Install the pinned generators before running the contract check:
 

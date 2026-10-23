@@ -185,6 +185,7 @@ native-helm-e2e:
 
 .PHONY: native-rubygems-e2e
 native-rubygems-e2e:
+	@python3 -B -m unittest discover -s scripts/tests -p test_native_rubygems_cleanup.py
 	@./scripts/native-rubygems-e2e.sh
 
 .PHONY: native-oci-discovery-e2e
