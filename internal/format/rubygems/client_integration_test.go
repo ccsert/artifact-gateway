@@ -379,15 +379,19 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 				t.Fatalf("phase %s made no full original GET for %s", phase, filename)
 			}
 		}
-		for _, path := range requiredPaths {
+		for _, required := range requiredPaths {
+			method, path, explicitMethod := strings.Cut(required, " ")
+			if !explicitMethod {
+				method, path = http.MethodGet, required
+			}
 			found := false
 			for _, response := range window {
-				if response.Method == "GET" && response.Status == http.StatusOK && response.Path == "/rubygems/"+repo.Name+"/"+path {
+				if response.Method == method && response.Status == http.StatusOK && response.Path == "/rubygems/"+repo.Name+"/"+path {
 					found = true
 				}
 			}
 			if !found {
-				t.Fatalf("phase %s did not exercise native branch %s", phase, path)
+				t.Fatalf("phase %s did not exercise native branch %s %s", phase, method, path)
 			}
 		}
 		phaseProofs = append(phaseProofs, map[string]any{"phase": phase, "observerWindowStart": start, "observerWindowLength": len(window), "originals": expected, "verifiedFullOriginalGETs": seen, "identityAndDependenciesMatchOriginals": true, "requiredNativePaths": requiredPaths})
@@ -395,6 +399,10 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	stable := []string{"owned_top-1.2.0.gem", "owned_middle-1.1.0.gem", "owned_leaf-1.0.0.gem"}
 	compact := []string{"versions", "info/owned_top", "info/owned_middle", "info/owned_leaf"}
 	legacy := []string{"specs.4.8.gz", "quick/Marshal.4.8/owned_top-1.2.0.gemspec.rz"}
+	// Fixed RubyGems 3.6.7 Source#dependency_resolver_set probes versions with
+	// HEAD and selects APISet's compact info. Only the explicit Bundler
+	// --full-index phase is required to exercise the legacy specs GET.
+	gemCompact := []string{"HEAD versions", "info/owned_top", "info/owned_middle", "info/owned_leaf", "quick/Marshal.4.8/owned_top-1.2.0.gemspec.rz"}
 	install := func(phase string) {
 		t.Helper()
 		run(phase, "gem-install", false, "gem", "install", "owned_top", "--version", "1.2.0", "--remote", "--clear-sources", "--source", readSource, "--no-document", "--verbose")
@@ -402,7 +410,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		if !strings.Contains(out, "top-middle-leaf") {
 			t.Fatal(out)
 		}
-		verifyPhase(phase, stable, legacy)
+		verifyPhase(phase, stable, gemCompact)
 	}
 	install("gem-cold-before")
 	gemfileBody = "source " + strconv.Quote(readSource) + "\ngem 'owned_top', '= 1.2.0'\n"
@@ -414,7 +422,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	run("bundle-full-index", "legacy-bundle-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
 	verifyPhase("bundle-full-index", stable, legacy)
 	run("pre-cold", "prerelease-install", false, "gem", "install", "owned_top", "--version", "1.3.0.pre", "--prerelease", "--remote", "--clear-sources", "--source", readSource, "--no-document")
-	verifyPhase("pre-cold", []string{"owned_top-1.3.0.pre.gem", "owned_middle-1.1.0.gem", "owned_leaf-1.0.0.gem"}, []string{"prerelease_specs.4.8.gz", "quick/Marshal.4.8/owned_top-1.3.0.pre.gemspec.rz"})
+	verifyPhase("pre-cold", []string{"owned_top-1.3.0.pre.gem", "owned_middle-1.1.0.gem", "owned_leaf-1.0.0.gem"}, []string{"HEAD versions", "info/owned_top", "info/owned_middle", "info/owned_leaf", "quick/Marshal.4.8/owned_top-1.3.0.pre.gemspec.rz"})
 	run("platform-cold", "platform-fetch", false, "gem", "fetch", "owned_platform", "--version", "1.0.0", "--platform", "x86_64-linux", "--clear-sources", "--source", readSource)
 	verifyPhase("platform-cold", []string{"owned_platform-1.0.0-x86_64-linux.gem"}, nil)
 	audits, e := repos.ListAudits(t.Context(), repository.AuditQuery{Repository: repo.Name, Operation: "rubygems.publish", Limit: 100})
