@@ -6,7 +6,7 @@ umask 077
 # RustFS only. It never discovers, modifies, or migrates an operator's Nexus.
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
-for binary in python3 docker go; do
+for binary in python3 docker go curl; do
   command -v "$binary" >/dev/null || { printf 'pypi migration E2E requires %s\n' "$binary" >&2; exit 1; }
 done
 
@@ -139,7 +139,25 @@ pathlib.Path(sys.argv[1]).write_text(json.dumps({"head": git("rev-parse", "HEAD"
 PY
 
 python3 -m venv "$workdir/venv"
-bounded 60 "$workdir/venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir --retries 0 --timeout 30 --no-deps 'pip==26.2' >"$evidence/client-setup.log" 2>&1
+pip_archive="$workdir/pip-26.2-py3-none-any.whl"
+pip_url='https://files.pythonhosted.org/packages/62/36/a3aed958d60531cb442b7ab4596cda7b3621cfb916f8ae1d6769795c7dc1/pip-26.2-py3-none-any.whl'
+curl --disable --fail --silent --show-error --proto '=https' --tlsv1.2 \
+  --connect-timeout 10 --max-time 40 --retry 0 "$pip_url" --output "$pip_archive" \
+  >"$evidence/client-download.stdout" 2>"$evidence/client-download.stderr"
+python3 -B - "$pip_archive" "$evidence/official-pip.json" "$pip_url" <<'PYPIP'
+import hashlib, json, pathlib, sys
+archive, receipt = map(pathlib.Path, sys.argv[1:3])
+body = archive.read_bytes()
+expected = "931c303696af6fa3417112103b1cad26890e5a07eccb5b99783700e33f2b8aad"
+actual = hashlib.sha256(body).hexdigest()
+verified = actual == expected and len(body) == 1816475
+receipt.write_text(json.dumps({"version":"26.2", "sourceURL":sys.argv[3],
+    "metadataSource":"https://pypi.org/pypi/pip/26.2/json", "sha256":actual,
+    "expectedSHA256":expected,"size":len(body),"verified":verified}, indent=2)+"\n")
+if not verified:
+    raise SystemExit("official pip wheel checksum/size mismatch")
+PYPIP
+bounded 60 "$workdir/venv/bin/python" -m pip --isolated install --disable-pip-version-check --no-cache-dir --no-index --no-deps "$pip_archive" >"$evidence/client-setup.log" 2>&1
 export PYPI_MIGRATION_PYTHON="$workdir/venv/bin/python"
 export PYPI_MIGRATION_REQUIRED=1
 export PYPI_MIGRATION_EVIDENCE="$evidence"

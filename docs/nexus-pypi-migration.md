@@ -82,7 +82,9 @@ when the local Docker default address pools are exhausted; confirm it does not
 overlap an existing network first. The runner deletes only its own project and
 temporary client environment.
 
-The fixed official pip 26.2 test starts with an empty cache and only the target
+The runner downloads the fixed pip 26.2 wheel from `files.pythonhosted.org`,
+checks its pinned SHA-256 and size against the official PyPI release metadata,
+and installs that local wheel without an index. The client test starts with an empty cache and only the target
 index configured after the source server has closed. It selects the eligible
 wheel, resolves a synthetic dependency, verifies both original byte digests,
 and installs/imports them using only downloaded local wheels. A yanked newer
