@@ -136,11 +136,11 @@ func ParseSimple(body []byte, project string, pageURL *url.URL, repositoryPrefix
 			return s, ErrImport
 		}
 		ref, err := url.Parse(href)
-		if err != nil {
+		if err != nil || !safeReferencePath(ref) {
 			return s, ErrImport
 		}
 		u := pageURL.ResolveReference(ref)
-		if u.Scheme != "https" || u.Host != pageURL.Host || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery || !strings.HasPrefix(u.Path, repositoryPrefix) || u.RawPath != "" {
+		if u.Scheme != "https" || u.Host != pageURL.Host || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery || !strings.HasPrefix(u.Path, repositoryPrefix) {
 			return s, ErrImport
 		}
 		alg, hash, ok := strings.Cut(u.Fragment, "=")
@@ -155,6 +155,18 @@ func ParseSimple(body []byte, project string, pageURL *url.URL, repositoryPrefix
 		}
 	}
 	return s, s.Validate()
+}
+
+// Equivalent filename escaping is canonicalized through URL.Path. Encoded
+// separators, encoded dot segments and residual escapes cannot change hierarchy.
+func safeReferencePath(ref *url.URL) bool {
+	for _, encoded := range strings.Split(ref.EscapedPath(), "/") {
+		decoded, err := url.PathUnescape(encoded)
+		if err != nil || strings.ContainsAny(decoded, "/\\%?#\r\n\x00") || ((decoded == "." || decoded == "..") && decoded != encoded) {
+			return false
+		}
+	}
+	return true
 }
 
 func readMetadata(data []byte, d Distribution) (Distribution, error) {
@@ -257,11 +269,14 @@ func Inspect(reader io.ReaderAt, size int64, filename string) (Distribution, err
 			if count > 10000 || (h.Typeflag != tar.TypeReg && h.Typeflag != tar.TypeDir) {
 				return d, ErrImport
 			}
+			root := strings.TrimSuffix(filename, ".tar.gz")
 			parts := strings.Split(h.Name, "/")
-			isMetadata := strings.HasSuffix(h.Name, "/PKG-INFO")
-			if isMetadata && (len(parts) != 2 || parts[0] != strings.TrimSuffix(filename, ".tar.gz")) {
+			if parts[0] != root {
 				return d, ErrImport
 			}
+			// Only the sdist root PKG-INFO declares distribution identity.
+			// Build backends may retain nested egg-info as ordinary package data.
+			isMetadata := h.Name == root+"/PKG-INFO"
 			if e = accept(h.Name, tr, h.Size, isMetadata); e != nil {
 				return d, e
 			}

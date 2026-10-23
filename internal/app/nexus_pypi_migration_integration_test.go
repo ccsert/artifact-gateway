@@ -199,11 +199,13 @@ func pypiMigrationSDist(t *testing.T, name, version string) []byte {
 	gz := gzip.NewWriter(&out)
 	tw := tar.NewWriter(gz)
 	body := "Metadata-Version: 2.1\nName: " + name + "\nVersion: " + version + "\nRequires-Python: >=3.8\n\n"
-	if err := tw.WriteHeader(&tar.Header{Name: name + "-" + version + "/PKG-INFO", Mode: 0o600, Size: int64(len(body))}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := io.WriteString(tw, body); err != nil {
-		t.Fatal(err)
+	for _, member := range []string{name + "-" + version + "/PKG-INFO", name + "-" + version + "/src/" + name + ".egg-info/PKG-INFO"} {
+		if err := tw.WriteHeader(&tar.Header{Name: member, Mode: 0o600, Size: int64(len(body))}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(tw, body); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := tw.Close(); err != nil {
 		t.Fatal(err)
