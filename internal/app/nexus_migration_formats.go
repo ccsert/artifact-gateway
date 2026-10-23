@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
@@ -107,6 +108,11 @@ func (p *NexusMigrationPublication) ValidateMigrationActor(ctx context.Context, 
 	required := false
 	for _, mapping := range mappings {
 		repo, err := p.store.GetHostedRepository(ctx, mapping.TargetRepositoryID)
+		if errors.Is(err, repository.ErrNotFound) {
+			// Target existence belongs to inventory binding and target validation.
+			// Do not mask a resumed scan's mapping drift with an actor lookup error.
+			continue
+		}
 		if err != nil {
 			return required, err
 		}
