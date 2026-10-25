@@ -53,12 +53,14 @@ func (m *Memory) ReplaceReadPolicy(ctx context.Context, c PolicyChange, check Go
 		return repository.RepositoryQuarantineReadPolicy{}, ErrInvalid
 	}
 	writer, ok := m.repositories.(interface {
-		ChangeRubyGemsReadPolicy(context.Context, string, repository.RubyGemsGovernanceIdentity, func(context.Context, repository.AuditRecord) error, func(repository.RepositoryQuarantineReadPolicy, repository.RubyGemsGovernanceAuthority) (repository.RepositoryQuarantineReadPolicy, *repository.AuditRecord, error)) (repository.RepositoryQuarantineReadPolicy, error)
+		ChangeRubyGemsReadPolicy(context.Context, string, repository.RubyGemsGovernanceIdentity, func(context.Context, repository.AuditRecord) error, func(repository.RubyGemsGovernanceAuthority) error, func(repository.RepositoryQuarantineReadPolicy, repository.RubyGemsGovernanceAuthority) (repository.RepositoryQuarantineReadPolicy, *repository.AuditRecord, error)) (repository.RepositoryQuarantineReadPolicy, error)
 	})
 	if !ok {
 		return repository.RepositoryQuarantineReadPolicy{}, ErrAccessDenied
 	}
-	return writer.ChangeRubyGemsReadPolicy(ctx, c.RepositoryID, c.Identity, m.audit.RecordAudit, func(current repository.RepositoryQuarantineReadPolicy, a repository.RubyGemsGovernanceAuthority) (repository.RepositoryQuarantineReadPolicy, *repository.AuditRecord, error) {
+	return writer.ChangeRubyGemsReadPolicy(ctx, c.RepositoryID, c.Identity, m.audit.RecordAudit, func(a repository.RubyGemsGovernanceAuthority) error {
+		return CheckGovernance(ctx, check, a)
+	}, func(current repository.RepositoryQuarantineReadPolicy, a repository.RubyGemsGovernanceAuthority) (repository.RepositoryQuarantineReadPolicy, *repository.AuditRecord, error) {
 		return ApplyReadPolicy(ctx, current, a, c, check)
 	})
 }

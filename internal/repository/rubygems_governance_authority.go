@@ -108,8 +108,8 @@ func (s *MemoryStore) rubyGemsGovernanceAuthorityLocked(ctx context.Context, id 
 // ChangeRubyGemsReadPolicy shares the repository mutex with credential/grant and
 // generic policy mutations. The callback validates CAS and current authority;
 // policy and any audits delegated back to this store become visible together
-// only after the injected recordAudit succeeds.
-func (s *MemoryStore) ChangeRubyGemsReadPolicy(ctx context.Context, id string, identity RubyGemsGovernanceIdentity, recordAudit func(context.Context, AuditRecord) error, apply func(RepositoryQuarantineReadPolicy, RubyGemsGovernanceAuthority) (RepositoryQuarantineReadPolicy, *AuditRecord, error)) (RepositoryQuarantineReadPolicy, error) {
+// only after the injected recordAudit and final authority check succeed.
+func (s *MemoryStore) ChangeRubyGemsReadPolicy(ctx context.Context, id string, identity RubyGemsGovernanceIdentity, recordAudit func(context.Context, AuditRecord) error, check func(RubyGemsGovernanceAuthority) error, apply func(RepositoryQuarantineReadPolicy, RubyGemsGovernanceAuthority) (RepositoryQuarantineReadPolicy, *AuditRecord, error)) (RepositoryQuarantineReadPolicy, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, err := s.rubyGemsGovernanceAuthorityLocked(ctx, id, identity)
@@ -127,15 +127,23 @@ func (s *MemoryStore) ChangeRubyGemsReadPolicy(ctx context.Context, id string, i
 	if err := ctx.Err(); err != nil {
 		return RepositoryQuarantineReadPolicy{}, err
 	}
+	var batch *memoryAuditBatch
 	if audit != nil {
 		// The injected sink may wrap this store. Stage delegated RecordAudit calls
 		// instead of reacquiring s.mu or exposing an audit before sink success.
-		batch := &memoryAuditBatch{store: s}
+		batch = &memoryAuditBatch{store: s}
 		defer batch.finish()
 		auditCtx := context.WithValue(ctx, memoryAuditBatchKey{}, batch)
 		if err := recordAudit(auditCtx, *audit); err != nil {
 			return RepositoryQuarantineReadPolicy{}, err
 		}
+	}
+	// Credentials and grants remain locked, but cancellation and expiry can
+	// change while the injected sink runs. Recheck before publishing either.
+	if err := check(a); err != nil {
+		return RepositoryQuarantineReadPolicy{}, err
+	}
+	if audit != nil {
 		for _, record := range batch.finish() {
 			s.appendAuditLocked(record)
 		}

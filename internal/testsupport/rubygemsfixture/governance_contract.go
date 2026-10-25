@@ -141,6 +141,23 @@ func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepos
 	if _, err = store.ReplaceReadPolicy(ctx, pc, nil); !errors.Is(err, d.ErrAccessDenied) {
 		t.Fatalf("policy no-op bypassed authority %v", err)
 	}
+	for _, enabled := range []bool{false, true} {
+		pc.Enabled = enabled
+		checks := 0
+		_, err = store.ReplaceReadPolicy(ctx, pc, func(context.Context, repository.RubyGemsGovernanceAuthority) error {
+			checks++
+			if checks > 1 {
+				return d.ErrAccessDenied
+			}
+			return nil
+		})
+		if !errors.Is(err, d.ErrAccessDenied) {
+			t.Fatalf("policy final authority (enabled=%t): checks=%d, error=%v", enabled, checks, err)
+		}
+		if got, err := store.GetReadPolicy(ctx, repo.ID); err != nil || got != policy {
+			t.Fatalf("policy final authority rollback: %+v, %v", got, err)
+		}
+	}
 	c.Action = "yank"
 	c.ExpectedVersion = "9"
 	var wg sync.WaitGroup
