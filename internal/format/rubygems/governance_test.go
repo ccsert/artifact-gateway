@@ -197,7 +197,7 @@ type failingGovernanceAudit struct {
 }
 
 func (a *failingGovernanceAudit) RecordAudit(ctx context.Context, r repository.AuditRecord) error {
-	if a.fail && (r.Operation == "rubygems.yank" || r.Operation == "rubygems.restore") {
+	if a.fail && (r.Operation == "rubygems.yank" || r.Operation == "rubygems.restore" || r.Operation == "rubygems.quarantine" || r.Operation == "rubygems.release") {
 		return errors.New("owned governance audit failure")
 	}
 	return a.Auditor.RecordAudit(ctx, r)
@@ -267,6 +267,62 @@ func TestRubyGemsGovernanceCorruptRestoreAndAuditFailureStayClosed(t *testing.T)
 				t.Fatal(got, err)
 			}
 			rows, err := f.repos.ListAudits(t.Context(), repository.AuditQuery{Operation: "rubygems.restore", Limit: 10})
+			if err != nil || len(rows) != 0 {
+				t.Fatal(rows, err)
+			}
+		})
+	}
+}
+
+func TestRubyGemsQuarantineCorruptReleaseAndAuditFailureStayClosed(t *testing.T) {
+	for _, mode := range []string{"missing", "bytes", "metadata", "identity", "audit"} {
+		t.Run(mode, func(t *testing.T) {
+			f := setup(t)
+			body := gem(t, "owned", "1.0.0", "ruby", "fixture")
+			audit := &failingGovernanceAudit{Auditor: f.repos}
+			store := domain.NewMemory(f.repos, audit)
+			f.store = store
+			m, err := New(options(f.repos, store, f.objects, f.repos))
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.module = m
+			if w := push(f, body); w.Code != 201 {
+				t.Fatal(w.Code)
+			}
+			p, err := store.GetRetained(t.Context(), f.repo.ID, "owned", "1.0.0", "ruby")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "audit" {
+				audit.fail = true
+				governanceChange(t, m.Preview(), f.repo.ID, "owned", "1.0.0", "ruby", p.Digest, "1", "quarantine", "Bearer owned-admin", 500)
+				got, _ := store.GetRetained(t.Context(), f.repo.ID, "owned", "1.0.0", "ruby")
+				if got.Governance.Version != "1" || got.Governance.Quarantined {
+					t.Fatal(got)
+				}
+				audit.fail = false
+			}
+			governanceChange(t, m.Preview(), f.repo.ID, "owned", "1.0.0", "ruby", p.Digest, "1", "quarantine", "Bearer owned-admin", 200)
+			switch mode {
+			case "missing":
+				err = f.objects.Delete(t.Context(), p.ObjectKey)
+			case "bytes":
+				err = f.objects.Put(t.Context(), p.ObjectKey, []byte("damaged"))
+			case "metadata", "identity":
+				m, err = New(options(f.repos, retainedCorruption{store, mode}, f.objects, f.repos))
+			case "audit":
+				audit.fail = true
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			governanceChange(t, m.Preview(), f.repo.ID, "owned", "1.0.0", "ruby", p.Digest, "2", "release", "Bearer owned-admin", 500)
+			got, err := store.GetRetained(t.Context(), f.repo.ID, "owned", "1.0.0", "ruby")
+			if err != nil || !got.Governance.Quarantined || got.Governance.Version != "2" {
+				t.Fatal(got, err)
+			}
+			rows, err := f.repos.ListAudits(t.Context(), repository.AuditQuery{Operation: "rubygems.release", Limit: 10})
 			if err != nil || len(rows) != 0 {
 				t.Fatal(rows, err)
 			}

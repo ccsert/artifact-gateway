@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- RubyGems Hosted 预览增加[独立隔离/释放及默认关闭的读策略](docs/rubygems-hosted-preview.zh-CN.md#独立隔离与释放)（#468）。当前管理员按 CAS 决策，状态和策略与审计同事务提交；内存策略变更遵循注入的审计器，包含委托包装器的审计失败均保留原策略及版本；release 重验保留原字节且不撤销 yank。compact/full 索引和原包 GET/HEAD 在重启、条件及 Range 请求下遵循同一策略。
+
 - 新增管理员[邮件队列只读诊断](docs/email-notification-delivery.zh-CN.md#队列只读诊断)（#467）：使用数据库时间的一致快照覆盖全部保留交付，聚合与领取条件一致的候选、退避、租约和待终结任务，提供有限安全失败分类及持久 SMTP 接受证据。worker 健康保持 unknown，GET 不发送、不修改队列；不增加 Console 或 CLI 入口。
 
 - 新增仅限 TTY 的 [agctl 交互式 shell](docs/cli.zh-CN.md#交互式-shell)（#136），支持会话 profile/仓库上下文、命令/profile/仓库补全、sticky JSON/dry-run/verbose、私有命令路径历史和有界客户端中断。沿用普通 CLI 的权限、确认与输出处理；stdin 读取不会吞掉后续 shell 命令。

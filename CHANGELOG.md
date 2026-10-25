@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; in-memory policy changes honor the configured auditor and retain the prior policy/version on audit failure, including delegating audit wrappers; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
+
 - Add administrator-only [read-only email queue diagnostics](docs/email-notification-delivery.md#read-only-queue-diagnostics) (#467): one database-time snapshot across all retained deliveries, claim-aligned candidate/backoff/lease/cleanup counts, bounded safe failure classes and persisted SMTP acceptance evidence. Worker health remains unknown; the GET never sends or changes the queue. No Console or CLI surface is added.
 
 - Add the TTY-only [agctl interactive shell](docs/cli.md#interactive-shell) (#136), with session profile/repository context, command/profile/repository completion, sticky JSON/dry-run/verbose options, private command-path history, and bounded client interruption. It shares ordinary CLI authorization, confirmation and output handling; stdin readers cannot consume later shell commands.

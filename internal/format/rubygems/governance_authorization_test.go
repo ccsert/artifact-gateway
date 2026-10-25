@@ -202,6 +202,82 @@ func TestRubyGemsGovernanceRequiresCurrentAuthorityAfterLockAndVerification(t *t
 	}
 }
 
+func TestRubyGemsQuarantineRequiresCurrentAuthorityAfterLockAndVerification(t *testing.T) {
+	for _, boundary := range []string{"quarantine-lock", "release-lock", "release-bytes"} {
+		for _, change := range []string{"key-revoked", "key-expired", "account-disabled", "user-disabled", "password-reset", "role-none", "grant-revoked"} {
+			t.Run(boundary+"/"+change, func(t *testing.T) {
+				f := setup(t)
+				if w := push(f, gem(t, "owned", "1.0.0", "ruby", "fixture")); w.Code != 201 {
+					t.Fatal(w.Code)
+				}
+				p, err := f.store.GetRetained(t.Context(), f.repo.ID, "owned", "1.0.0", "ruby")
+				if err != nil {
+					t.Fatal(err)
+				}
+				restore := boundary != "quarantine-lock"
+				if restore {
+					governanceChange(t, f.module.Preview(), f.repo.ID, "owned", "1.0.0", "ruby", p.Digest, "1", "quarantine", "Bearer owned-admin", 200)
+				}
+				o, token, revoke := governanceAuthority(t, f, change)
+				ready, resume := make(chan struct{}), make(chan struct{})
+				if boundary == "release-bytes" {
+					o.Objects = governanceReadGate{f.objects, ready, resume}
+				} else {
+					o.Store = governanceLockGate{f.store, ready, resume}
+				}
+				m, err := New(o)
+				if err != nil {
+					t.Fatal(err)
+				}
+				result := make(chan int, 1)
+				go func() {
+					if !restore {
+						body, _ := json.Marshal(map[string]string{"expectedDigest": p.Digest, "expectedGovernanceVersion": "1", "action": "quarantine", "reason": "Owned quarantine current authority"})
+						result <- request(m.Preview(), "POST", governancePath(f.repo.ID, "owned", "1.0.0", "ruby"), body, "Bearer "+token).Code
+						return
+					}
+					body, _ := json.Marshal(map[string]string{"expectedDigest": p.Digest, "expectedGovernanceVersion": "2", "action": "release", "reason": "Owned current authority check"})
+					result <- request(m.Preview(), "POST", governancePath(f.repo.ID, "owned", "1.0.0", "ruby"), body, "Bearer "+token).Code
+				}()
+				select {
+				case <-ready:
+				case code := <-result:
+					t.Fatalf("did not reach authority boundary: %d", code)
+				case <-time.After(5 * time.Second):
+					t.Fatal("boundary timeout")
+				}
+				revoke()
+				close(resume)
+				select {
+				case code := <-result:
+					if code != http.StatusUnauthorized && code != http.StatusForbidden {
+						t.Fatalf("stale authority committed %d", code)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("request not reaped")
+				}
+				got, err := f.store.GetRetained(t.Context(), f.repo.ID, "owned", "1.0.0", "ruby")
+				if err != nil || got.Governance.Quarantined != restore {
+					t.Fatal(got, err)
+				}
+				op := "rubygems.quarantine"
+				version := "1"
+				if restore {
+					op = "rubygems.release"
+					version = "2"
+				}
+				if got.Governance.Version != version {
+					t.Fatal(got)
+				}
+				audits, err := f.repos.ListAudits(t.Context(), repository.AuditQuery{Operation: op, Limit: 10})
+				if err != nil || len(audits) != 0 {
+					t.Fatal(audits, err)
+				}
+			})
+		}
+	}
+}
+
 func TestRubyGemsGovernanceUsesRepositoryAdminAndExactName(t *testing.T) {
 	t.Run("static-administrator-protocol-token-retains-expiry", func(t *testing.T) {
 		f := setup(t)
@@ -250,6 +326,11 @@ func TestRubyGemsGovernanceUsesRepositoryAdminAndExactName(t *testing.T) {
 	}
 	if w := request(m.Preview(), "GET", governancePath(f.repo.ID, "owned", "1.0.0", "ruby"), nil, "Bearer "+token); w.Code != 200 {
 		t.Fatalf("repository-only admin key rejected %d", w.Code)
+	}
+	for _, method := range []string{"GET", "PUT"} {
+		if w := request(m.Preview(), method, policyPath(f.repo.ID), []byte(`{"expectedVersion":"1","enabled":true}`), "Bearer "+token); w.Code != 403 {
+			t.Fatalf("package-only administrator widened read policy: %s %d", method, w.Code)
+		}
 	}
 	if w := request(m.Preview(), "GET", governancePath(f.repo.ID, "other", "1.0.0", "ruby"), nil, "Bearer "+token); w.Code != 403 {
 		t.Fatalf("name grant widened %d", w.Code)

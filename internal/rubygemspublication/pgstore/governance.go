@@ -39,7 +39,7 @@ func (s *Store) TransitionGovernance(ctx context.Context, c domain.GovernanceCha
 	if !changed {
 		return domain.Visible(in), tx.Commit()
 	}
-	in, err = scan(tx.QueryRowContext(ctx, `UPDATE native_rubygems_sessions SET governance_version=$2,yanked=$3,governance_updated_at=$4,governance_updated_by=$5,governance_reason=$6 WHERE id::text=$1 RETURNING `+columns, in.ID, g.Version, g.Yanked, g.UpdatedAt, g.UpdatedBy, g.Reason))
+	in, err = scan(tx.QueryRowContext(ctx, `UPDATE native_rubygems_sessions SET governance_version=$2,yanked=$3,governance_updated_at=$4,governance_updated_by=$5,governance_reason=$6,quarantined=$7 WHERE id::text=$1 RETURNING `+columns, in.ID, g.Version, g.Yanked, g.UpdatedAt, g.UpdatedBy, g.Reason, g.Quarantined))
 	if err != nil {
 		return domain.Publication{}, err
 	}

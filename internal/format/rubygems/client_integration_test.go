@@ -461,6 +461,20 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		t.Fatal("default yank changed java", w.Code)
 	}
 	run("yank-variant-java", "yank-explicit-java", false, "gem", "yank", "owned_variant", "--version", "1.0.0", "--platform", "java", "--host", strings.TrimSuffix(source, "/"))
+
+	leafState := request(server.Config.Handler, "GET", governancePath(repo.ID, "owned_leaf", "1.0.0", "ruby"), nil, "Bearer "+admin)
+	var leaf governanceReceipt
+	if leafState.Code != 200 || json.Unmarshal(leafState.Body.Bytes(), &leaf) != nil {
+		t.Fatal("leaf governance", leafState.Code)
+	}
+	governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", leaf.Digest, "1", "quarantine", "Bearer "+admin, 200)
+	// Default-disabled quarantine policy retains the prior client behavior.
+	install("gem-quarantine-policy-disabled")
+	policyBody := []byte(`{"expectedVersion":"1","enabled":true}`)
+	pw := request(server.Config.Handler, "PUT", policyPath(repo.ID), policyBody, "Bearer "+admin)
+	if pw.Code != 200 {
+		t.Fatal("enable quarantine read policy", pw.Code, pw.Body.String())
+	}
 	run("yank-leaf", "yank-transitive-leaf", false, "gem", "yank", "owned_leaf", "--version", "1.0.0", "--host", strings.TrimSuffix(source, "/"))
 	run("yank-leaf-replay", "yank-idempotent-retry", false, "gem", "yank", "owned_leaf", "--version", "1.0.0", "--host", strings.TrimSuffix(source, "/"))
 	assertRejectedPhase := func(phase string) {
@@ -499,6 +513,13 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		out = runExpected(phase, "locked-yanked-bundle-install", false, false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
 		if !strings.Contains(out, "owned_leaf") {
 			t.Fatal("missing rejected locked dependency identity", out)
+		}
+
+		assertRejectedPhase(phase)
+		phase = "bundle-full-quarantined-" + suffix
+		out = runExpected(phase, "quarantined-full-index-install", false, false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
+		if !strings.Contains(out, "owned_leaf") {
+			t.Fatal("missing full-index rejected dependency", out)
 		}
 		assertRejectedPhase(phase)
 	}
@@ -541,23 +562,43 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	statePath := governancePath(repo.ID, "owned_leaf", "1.0.0", "ruby")
 	w := request(server.Config.Handler, "GET", statePath, nil, "Bearer "+admin)
 	var state governanceReceipt
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &state) != nil || !state.Yanked || state.GovernanceVersion != "2" {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &state) != nil || !state.Yanked || !state.Quarantined || state.GovernanceVersion != "3" {
 		t.Fatalf("restarted governance %d %s", w.Code, w.Body.String())
 	}
 	g := governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, state.GovernanceVersion, "restore", "Bearer "+admin, 200)
-	if g.Yanked || g.GovernanceVersion != "3" {
+	if g.Yanked || !g.Quarantined || g.GovernanceVersion != "4" {
 		t.Fatal(g)
 	}
+
+	deniedConsumers("restore-still-quarantined")
+	// Release independently revalidates original bytes after a physical restart.
+	g = governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, g.GovernanceVersion, "release", "Bearer "+admin, 200)
+	if g.Yanked || g.Quarantined || g.GovernanceVersion != "5" {
+		t.Fatal(g)
+	}
+	governanceEvidence["restartRetainedIndependentQuarantineAndPolicy"] = true
 	governanceEvidence["restartRetainedYank"] = true
 	governanceEvidence["verifiedRestoreGovernanceVersion"] = g.GovernanceVersion
 	install("gem-cold-after")
 	run("bundle-cold-after", "restarted-bundle-install", false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
 	run("bundle-cold-after", "restarted-bundle-execute", true, "bundle", "_2.6.7_", "exec", "ruby", "-e", `require 'owned_top'; abort unless OWNED_TOP == 'top-middle-leaf'; puts OWNED_TOP`)
 	verifyPhase("bundle-cold-after", stable, compact)
+
+	run("bundle-full-release-after", "released-full-index-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
+	verifyPhase("bundle-full-release-after", stable, legacy)
+	// Release must never revive a yanked dependency in either index family.
+	governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, "5", "yank", "Bearer "+admin, 200)
+	governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, "6", "quarantine", "Bearer "+admin, 200)
+	finalState := governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, "7", "release", "Bearer "+admin, 200)
+	if !finalState.Yanked || finalState.Quarantined {
+		t.Fatal(finalState)
+	}
+	deniedConsumers("yanked-release")
+	governanceEvidence["yankedReleaseStillRejectedCompactAndFullIndex"] = true
 	governanceEvidence["restoredColdClientsOriginalClosureVerified"] = true
 	for _, op := range []string{"rubygems.yank", "rubygems.restore"} {
 		auditRows, err := repos.ListAudits(t.Context(), repository.AuditQuery{Repository: repo.Name, Operation: op, Limit: 100})
-		want := 3
+		want := 4
 		if op == "rubygems.restore" {
 			want = 1
 		}

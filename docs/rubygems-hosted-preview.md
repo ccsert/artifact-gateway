@@ -9,7 +9,8 @@ It is absent from the admitted format profiles, formal repository catalog,
 Console creation selector and installation presets. There is no preview `agctl`
 command. The Hosted slice is tracked by [#459](https://github.com/ccsert/artifact-gateway/issues/459);
 Native yank and controlled restore are tracked by
-[#462](https://github.com/ccsert/artifact-gateway/issues/462). Proxy/Group, quarantine, hard deletion, Console, scanning, distribution,
+[#462](https://github.com/ccsert/artifact-gateway/issues/462). Independent quarantine and release are tracked by
+[#468](https://github.com/ccsert/artifact-gateway/issues/468). Proxy/Group, hard deletion, Console, scanning, distribution,
 backup admission and Nexus migration remain in
 [#293](https://github.com/ccsert/artifact-gateway/issues/293).
 
@@ -17,7 +18,8 @@ backup admission and Nexus migration remain in
 
 Apply the normal append-only migrations, including
 `000185_native_rubygems_hosted_preview.sql` and
-`000187_native_rubygems_yank_governance.sql`. Use the existing PostgreSQL and
+`000187_native_rubygems_yank_governance.sql` and
+`000188_native_rubygems_quarantine.sql`. Use the existing PostgreSQL and
 verified S3/RustFS runtime ports and set
 `GATEWAY_RUBYGEMS_PREVIEW_ENABLED=true`. The default is false; an invalid boolean
 fails startup. Publication persistence is an explicitly injected domain store,
@@ -128,7 +130,7 @@ different bytes or an ambiguous native filename return 409. All original
 package reads recheck complete size and SHA-256 before writing a response.
 
 GET/PUT `/api/v2/previews/rubygems/repositories/{id}/capacity` is administrator
-only. `usedBytes` and `objectCount` describe all retained committed originals, including yanked gems; `pendingBytes`
+only. `usedBytes` and `objectCount` describe all retained committed originals, including yanked and quarantined gems; `pendingBytes`
 reserves unexpired uploads. `quotaBytes:0` means no configured byte quota.
 Quota reduction below committed plus reserved usage is refused, and quota
 updates retain their audit transaction. This independent preview capacity does
@@ -180,7 +182,7 @@ Authorization: Bearer <repository administrator credential>
 ```
 
 The response includes `repositoryId`, `name`, `version`, `platform`, `digest`,
-`governanceVersion`, and `yanked`; after a transition it also includes
+`governanceVersion`, `yanked`, and `quarantined`; after a transition it also includes
 `updatedAt`, `updatedBy`, and `reason`. The initial governance version is `1`.
 Use that response to submit a conditional decision to the same path:
 
@@ -193,7 +195,7 @@ Use that response to submit a conditional decision to the same path:
 }
 ```
 
-POST accepts `yank` or `restore`. It requires current repository administrator
+POST accepts `yank`, `restore`, `quarantine`, or `release`. It requires current repository administrator
 permission for the exact gem name, a matching digest and governance version,
 and a nonblank reason of at most 2,048 Unicode characters. A stale decision
 returns 409. Restore reopens and validates the entire retained size/SHA-256,
@@ -203,11 +205,54 @@ State and audit commit together, with a monotonically increasing governance
 version. A same-state request with the current version is a no-op and emits no
 second audit; use a fresh GET after losing a management response.
 
-This is retained Hosted governance. It does not add quarantine, hard deletion,
+This is retained Hosted governance. It does not add hard deletion,
 physical reclamation, Proxy/Group propagation or general lifecycle admission.
 The native wire contract follows the fixed
 [yank command](https://github.com/rubygems/rubygems/blob/v3.6.7/lib/rubygems/commands/yank_command.rb)
 and [RubyGems removal semantics](https://guides.rubygems.org/removing-a-published-gem/).
+
+## Independent quarantine and release
+
+Quarantine uses the same exact name/canonical-version/platform governance path,
+expected digest, governance CAS version, reason, current administrator recheck and
+transactional audit as yank/restore. Submit `action:"quarantine"` to set the
+independent `quarantined` flag, or `action:"release"` to clear it. Release reopens
+and validates original bytes, size, SHA-256, archive identity and metadata before
+committing; missing or corrupt bytes leave quarantine unchanged. Release never
+clears yank, restore never clears quarantine, and replayed pushes cannot remove
+either restriction. Platform variants remain independent. Bytes, immutable
+identity and capacity remain retained.
+
+The independent repository read policy starts at `{"version":"1","enabled":false}`.
+Current repository administrators (with repository-wide scope) read and replace it:
+
+```text
+GET /api/v2/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy
+PUT /api/v2/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy
+Authorization: Bearer <current repository administrator credential>
+Content-Type: application/json
+
+{"expectedVersion":"1","enabled":true}
+```
+
+PUT uses its own version CAS, returns 409 on stale decisions, and commits changes
+with their audit. A current same-state request rechecks authority but changes
+neither version nor audit. GET/PUT return `version` and `enabled`. A package-only
+administrator grant cannot configure the repository-wide policy.
+
+With `enabled:false`, quarantine alone preserves prior native read behavior.
+With `enabled:true`, every compact names/versions/info and legacy
+specs/latest/prerelease index omits quarantined identities; quick gemspec and
+original package GET/HEAD return 404 before ETag/304 or Range processing. Policy
+lookup errors fail closed. Yank always blocks independently of this policy.
+Cached client copies already downloaded are not revoked.
+
+The fixed official client gate uses target-only cold gem and Bundler consumers:
+quarantined transitive dependencies fail with compact and full indexes, remain
+blocked after service restart and restore, and install the complete original
+byte closures after release. A yanked+released dependency remains unavailable in
+both index families. PostgreSQL/RustFS tests prove missing/bad bytes cannot be
+released and audit failures roll back both governance and policy mutations.
 
 ## Native contract and verification
 

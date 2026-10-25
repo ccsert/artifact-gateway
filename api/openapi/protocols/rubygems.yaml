@@ -48,7 +48,8 @@ push:
       Explicitly enabled RubyGems Hosted preview. Posts original gem bytes using
       Authorization with a local API key, Bearer token, or Basic password token.
       The entire metadata/data/checksum closure must validate before discovery.
-      Same identity and bytes is idempotent; different bytes conflict. Not part
+      Same unrestricted identity and bytes is idempotent; yanked or quarantined
+      identities reject replay and keep their restrictions. Different bytes conflict. Not part
       of the admitted Format catalog. Signed gem archives are not accepted.
     security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}]
     requestBody:
@@ -66,6 +67,7 @@ push:
       '413': {description: Gem exceeds the configured compressed-byte bound}
       '500': {description: Persistence or verified-object failure; no partial index publication}
 index:
+  description: Yanked identities are always hidden. Quarantined identities are hidden when the independent default-disabled read policy is enabled. Policy failures deny reads; ETag/304 and Range cannot bypass governance.
   servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
@@ -80,7 +82,7 @@ index:
       '401': {description: Authentication required}
       '403': {description: Repository read permission denied}
       '404': {description: Preview or repository not found}
-      '500': {description: Invalid or unavailable committed metadata}
+      '500': {description: Policy or committed metadata unavailable}
   head:
     operationId: headRubyGemsHostedPreviewIndex
     security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
@@ -90,7 +92,9 @@ index:
       '401': {description: Authentication required}
       '403': {description: Repository read permission denied}
       '404': {description: Preview or repository not found}
+      '500': {description: Policy or committed metadata unavailable}
 compact_info:
+  description: Yanked identities are always hidden. Quarantined identities are hidden when the independent default-disabled read policy is enabled. Policy failures deny reads; ETag/304 and Range cannot bypass governance.
   servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
@@ -105,6 +109,7 @@ compact_info:
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}
       '404': {description: Invalid name or missing preview repository}
+      '500': {description: Policy or committed metadata unavailable}
   head:
     operationId: headRubyGemsHostedPreviewInfo
     security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
@@ -114,7 +119,9 @@ compact_info:
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}
       '404': {description: Invalid name or missing preview repository}
+      '500': {description: Policy or committed metadata unavailable}
 asset:
+  description: Yanked identities are always hidden. Quarantined identities are hidden when the independent default-disabled read policy is enabled. Policy failures deny reads; ETag/304 and Range cannot bypass governance.
   servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
@@ -129,7 +136,7 @@ asset:
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}
       '404': {description: Gem not found}
-      '500': {description: Stored gem integrity verification failed}
+      '500': {description: Policy unavailable or stored gem integrity verification failed}
   head:
     operationId: headRubyGemHostedPreview
     security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
@@ -139,7 +146,9 @@ asset:
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}
       '404': {description: Gem not found}
+      '500': {description: Policy or committed metadata unavailable}
 quick:
+  description: Yanked identities are always hidden. Quarantined identities are hidden when the independent default-disabled read policy is enabled. Policy failures deny reads; ETag/304 and Range cannot bypass governance.
   servers: [{url: https://gateway.example.com}]
   parameters:
     - {$ref: '#/repository'}
@@ -154,6 +163,7 @@ quick:
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}
       '404': {description: Gem not found}
+      '500': {description: Policy or committed metadata unavailable}
   head:
     operationId: headRubyGemsHostedPreviewGemspec
     security: [{rubyGemsApiKey: []}, {protocolBasicAuth: []}, {protocolBearerAuth: []}, {}]
@@ -163,6 +173,7 @@ quick:
       '401': {description: Authentication required}
       '403': {description: Gem-name read permission denied}
       '404': {description: Gem not found}
+      '500': {description: Policy or committed metadata unavailable}
 repository:
   name: repository
   in: path

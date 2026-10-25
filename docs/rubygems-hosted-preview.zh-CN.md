@@ -8,14 +8,16 @@ compact 索引、Marshal 4.8 legacy 索引和 zlib gemspec。它尚未加入正�
 档案、正式仓库目录、Console 创建选择器或安装预置，没有预览 `agctl` 命令。
 Hosted 切片由 [#459](https://github.com/ccsert/artifact-gateway/issues/459) 跟踪；
 原生 yank 与受控恢复由 [#462](https://github.com/ccsert/artifact-gateway/issues/462) 跟踪。
-Proxy/Group、隔离、硬删除、Console、扫描、分发、备份准入和
+独立隔离与释放由 [#468](https://github.com/ccsert/artifact-gateway/issues/468) 跟踪。
+Proxy/Group、硬删除、Console、扫描、分发、备份准入和
 Nexus 迁移仍由 [#293](https://github.com/ccsert/artifact-gateway/issues/293) 承接。
 
 ## 启用与创建
 
 通过正常追加式迁移流程应用
 `000185_native_rubygems_hosted_preview.sql` 和
-`000187_native_rubygems_yank_governance.sql`，配置既有 PostgreSQL 和受校验的
+`000187_native_rubygems_yank_governance.sql` 和
+`000188_native_rubygems_quarantine.sql`，配置既有 PostgreSQL 和受校验的
 S3/RustFS 运行时端口，并设置 `GATEWAY_RUBYGEMS_PREVIEW_ENABLED=true`。
 默认值为 false，非法布尔值阻止启动。发布持久化使用显式注入的领域存储，
 PostgreSQL 适配器及 advisory-lock 连接池独立组合。
@@ -106,7 +108,7 @@ loader 同样会初始化这些节点。普通有界尾字段继续受支持，�
 
 管理员使用 GET/PUT
 `/api/v2/previews/rubygems/repositories/{id}/capacity` 查看容量、设置配额。
-`usedBytes` 和 `objectCount` 对应所有保留的已提交原包（包括已撤回的包），`pendingBytes` 预留尚未过期的
+`usedBytes` 和 `objectCount` 对应所有保留的已提交原包（包括已撤回或隔离的包），`pendingBytes` 预留尚未过期的
 上传，`quotaBytes:0` 表示未配置字节配额。配额不得降到已提交和预留用量之下，
 配额更新与审计保留事务边界。这套独立预览容量不代表格式已具备通用保留或
 备份准入。
@@ -150,7 +152,7 @@ Authorization: Bearer <仓库管理员凭据>
 ```
 
 响应包含 `repositoryId`、`name`、`version`、`platform`、`digest`、
-`governanceVersion` 和 `yanked`；发生过变更时另含 `updatedAt`、`updatedBy`
+`governanceVersion`、`yanked` 和 `quarantined`；发生过变更时另含 `updatedAt`、`updatedBy`
 和 `reason`。治理版本初始为 `1`。根据读回结果向相同路径 POST：
 
 ```json
@@ -162,17 +164,52 @@ Authorization: Bearer <仓库管理员凭据>
 }
 ```
 
-POST 支持 `yank` 和 `restore`，要求精确包名的当前仓库管理员权限、匹配的
+POST 支持 `yank`、`restore`、`quarantine` 和 `release`，要求精确包名的当前仓库管理员权限、匹配的
 摘要与治理版本，以及不超过 2,048 个 Unicode 字符的非空白理由。过期决策
 返回 409。恢复会重新读取并验证原始完整大小/SHA-256、归档、解析身份及
 元数据，再次核验当前凭据与管理员授权；缺失或损坏的内容保持隐藏。状态与
 审计同事务提交，治理版本单调递增。携带当前版本的同状态请求不产生新状态
 或重复审计；管理响应丢失后，先重新 GET 再决定是否重试。
 
-此切片提供保留字节的 Hosted 治理。隔离、硬删除、物理回收、Proxy/Group
+此切片提供保留字节的 Hosted 治理。硬删除、物理回收、Proxy/Group
 传播与通用生命周期准入仍由父路线图承接。原生协议依据固定
 [yank 客户端](https://github.com/rubygems/rubygems/blob/v3.6.7/lib/rubygems/commands/yank_command.rb)
 和 [RubyGems 移除语义](https://guides.rubygems.org/removing-a-published-gem/)。
+
+## 独立隔离与释放
+
+隔离沿用精确 name/canonical-version/platform 的治理路径、expectedDigest、
+治理版本 CAS、reason、当前管理员复核及事务审计。提交 `action:"quarantine"`
+设置独立 `quarantined` 状态，提交 `action:"release"` 清除该状态。释放前重新
+核验原始字节、大小、SHA-256、归档身份和元数据，缺字节或损坏时保持隔离。
+release 不撤销 yank，restore 不清除隔离，重放 push 不能移除任一限制。
+各平台变体独立，原字节、不可变身份和容量均保留。
+
+独立仓库读策略初始为 `{"version":"1","enabled":false}`，由拥有仓库全局范围
+的当前仓库管理员读取或替换：
+
+```text
+GET /api/v2/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy
+PUT /api/v2/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy
+Authorization: Bearer <当前仓库管理员凭据>
+Content-Type: application/json
+
+{"expectedVersion":"1","enabled":true}
+```
+
+PUT 使用独立版本 CAS，过期决策返回 409；变更与审计同事务提交。当前版本的
+同状态请求仍复核权限，但不递增版本或新增审计。GET/PUT 返回 `version` 和
+`enabled`。只有包名范围的管理员授权不能配置仓库全局策略。
+
+`enabled:false` 时，单独隔离保留原生既有读取行为。`enabled:true` 时，compact
+names/versions/info 及 legacy specs/latest/prerelease 索引一致过滤隔离身份；
+quick gemspec 和原包 GET/HEAD 在 ETag/304 或 Range 处理前返回 404。
+策略读取失败关闭访问。yank 始终独立阻止读取；已下载的客户端缓存不被撤销。
+
+固定官方门禁使用只配置目标、冷缓存的 gem 与 Bundler：隔离传递依赖在 compact
+和 full-index 下均安装失败，物理重启及 restore 后仍被阻止，release 后重新安装
+完整原始字节闭包。yanked+release 仍在两类索引下失败。PostgreSQL/RustFS 测试
+验证缺字节/坏摘要不能释放，审计失败会回滚治理状态和策略变更。
 
 ## 原生契约与验证
 

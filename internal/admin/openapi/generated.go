@@ -3859,13 +3859,19 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 
 // Defines values for RubyGemsPreviewGovernanceChangeAction.
 const (
-	RubyGemsPreviewGovernanceChangeActionRestore RubyGemsPreviewGovernanceChangeAction = "restore"
-	RubyGemsPreviewGovernanceChangeActionYank    RubyGemsPreviewGovernanceChangeAction = "yank"
+	RubyGemsPreviewGovernanceChangeActionQuarantine RubyGemsPreviewGovernanceChangeAction = "quarantine"
+	RubyGemsPreviewGovernanceChangeActionRelease    RubyGemsPreviewGovernanceChangeAction = "release"
+	RubyGemsPreviewGovernanceChangeActionRestore    RubyGemsPreviewGovernanceChangeAction = "restore"
+	RubyGemsPreviewGovernanceChangeActionYank       RubyGemsPreviewGovernanceChangeAction = "yank"
 )
 
 // Valid indicates whether the value is a known member of the RubyGemsPreviewGovernanceChangeAction enum.
 func (e RubyGemsPreviewGovernanceChangeAction) Valid() bool {
 	switch e {
+	case RubyGemsPreviewGovernanceChangeActionQuarantine:
+		return true
+	case RubyGemsPreviewGovernanceChangeActionRelease:
+		return true
 	case RubyGemsPreviewGovernanceChangeActionRestore:
 		return true
 	case RubyGemsPreviewGovernanceChangeActionYank:
@@ -8238,12 +8244,13 @@ type RubyGemsPreviewCapacity struct {
 	UsedBytes    int64 `json:"usedBytes"`
 }
 
-// RubyGemsPreviewGovernance Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
+// RubyGemsPreviewGovernance Retained immutable gem identity. Yank always hides discovery and downloads. Independent quarantine hides them only when the default-disabled repository read policy is enabled. Both preserve bytes, identity and capacity.
 type RubyGemsPreviewGovernance struct {
 	Digest            string             `json:"digest"`
 	GovernanceVersion string             `json:"governanceVersion"`
 	Name              string             `json:"name"`
 	Platform          string             `json:"platform"`
+	Quarantined       bool               `json:"quarantined"`
 	Reason            *string            `json:"reason,omitempty"`
 	RepositoryId      openapi_types.UUID `json:"repositoryId"`
 	UpdatedAt         *time.Time         `json:"updatedAt,omitempty"`
@@ -8262,6 +8269,18 @@ type RubyGemsPreviewGovernanceChange struct {
 
 // RubyGemsPreviewGovernanceChangeAction defines model for RubyGemsPreviewGovernanceChange.Action.
 type RubyGemsPreviewGovernanceChangeAction string
+
+// RubyGemsPreviewQuarantineReadPolicy defines model for RubyGemsPreviewQuarantineReadPolicy.
+type RubyGemsPreviewQuarantineReadPolicy struct {
+	Enabled bool   `json:"enabled"`
+	Version string `json:"version"`
+}
+
+// RubyGemsPreviewQuarantineReadPolicyChange defines model for RubyGemsPreviewQuarantineReadPolicyChange.
+type RubyGemsPreviewQuarantineReadPolicyChange struct {
+	Enabled         bool   `json:"enabled"`
+	ExpectedVersion string `json:"expectedVersion"`
+}
 
 // RubyGemsPreviewQuotaInput defines model for RubyGemsPreviewQuotaInput.
 type RubyGemsPreviewQuotaInput struct {
@@ -9797,6 +9816,9 @@ type SetRubyGemsPreviewQuotaJSONRequestBody = RubyGemsPreviewQuotaInput
 // ChangeRubyGemsPreviewGovernanceJSONRequestBody defines body for ChangeRubyGemsPreviewGovernance for application/json ContentType.
 type ChangeRubyGemsPreviewGovernanceJSONRequestBody = RubyGemsPreviewGovernanceChange
 
+// ReplaceRubyGemsPreviewQuarantineReadPolicyJSONRequestBody defines body for ReplaceRubyGemsPreviewQuarantineReadPolicy for application/json ContentType.
+type ReplaceRubyGemsPreviewQuarantineReadPolicyJSONRequestBody = RubyGemsPreviewQuarantineReadPolicyChange
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
 
@@ -11018,6 +11040,12 @@ type ServerInterface interface {
 
 	// (POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
 	ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string)
+
+	// (GET /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy)
+	GetRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (PUT /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy)
+	ReplaceRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
@@ -16276,6 +16304,58 @@ func (siw *ServerInterfaceWrapper) ChangeRubyGemsPreviewGovernance(w http.Respon
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChangeRubyGemsPreviewGovernance(w, r, repositoryId, gemName, gemVersion, platform)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRubyGemsPreviewQuarantineReadPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRubyGemsPreviewQuarantineReadPolicy(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRubyGemsPreviewQuarantineReadPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRubyGemsPreviewQuarantineReadPolicy(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21865,6 +21945,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/capacity", wrapper.SetRubyGemsPreviewQuota)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.GetRubyGemsPreviewGovernance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.ChangeRubyGemsPreviewGovernance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy", wrapper.GetRubyGemsPreviewQuarantineReadPolicy)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy", wrapper.ReplaceRubyGemsPreviewQuarantineReadPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
@@ -33023,6 +33105,195 @@ func (response ChangeRubyGemsPreviewGovernance500ApplicationProblemPlusJSONRespo
 	return err
 }
 
+type GetRubyGemsPreviewQuarantineReadPolicyRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+}
+
+type GetRubyGemsPreviewQuarantineReadPolicyResponseObject interface {
+	VisitGetRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetRubyGemsPreviewQuarantineReadPolicy200JSONResponse RubyGemsPreviewQuarantineReadPolicy
+
+func (response GetRubyGemsPreviewQuarantineReadPolicy200JSONResponse) VisitGetRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewQuarantineReadPolicy401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRubyGemsPreviewQuarantineReadPolicy401ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewQuarantineReadPolicy403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewQuarantineReadPolicy403ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewQuarantineReadPolicy404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewQuarantineReadPolicy404ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewQuarantineReadPolicy500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRubyGemsPreviewQuarantineReadPolicy500ApplicationProblemPlusJSONResponse) VisitGetRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicyRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	Body         *ReplaceRubyGemsPreviewQuarantineReadPolicyJSONRequestBody
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicyResponseObject interface {
+	VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicy200JSONResponse RubyGemsPreviewQuarantineReadPolicy
+
+func (response ReplaceRubyGemsPreviewQuarantineReadPolicy200JSONResponse) VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicy400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceRubyGemsPreviewQuarantineReadPolicy400ApplicationProblemPlusJSONResponse) VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicy401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceRubyGemsPreviewQuarantineReadPolicy401ApplicationProblemPlusJSONResponse) VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicy403ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceRubyGemsPreviewQuarantineReadPolicy403ApplicationProblemPlusJSONResponse) VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicy404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceRubyGemsPreviewQuarantineReadPolicy404ApplicationProblemPlusJSONResponse) VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicy409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceRubyGemsPreviewQuarantineReadPolicy409ApplicationProblemPlusJSONResponse) VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRubyGemsPreviewQuarantineReadPolicy500ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceRubyGemsPreviewQuarantineReadPolicy500ApplicationProblemPlusJSONResponse) VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetPublishSessionRequestObject struct {
 	SessionId SessionId `json:"sessionId"`
 }
@@ -42503,6 +42774,12 @@ type StrictServerInterface interface {
 	// (POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
 	ChangeRubyGemsPreviewGovernance(ctx context.Context, request ChangeRubyGemsPreviewGovernanceRequestObject) (ChangeRubyGemsPreviewGovernanceResponseObject, error)
 
+	// (GET /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy)
+	GetRubyGemsPreviewQuarantineReadPolicy(ctx context.Context, request GetRubyGemsPreviewQuarantineReadPolicyRequestObject) (GetRubyGemsPreviewQuarantineReadPolicyResponseObject, error)
+
+	// (PUT /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy)
+	ReplaceRubyGemsPreviewQuarantineReadPolicy(ctx context.Context, request ReplaceRubyGemsPreviewQuarantineReadPolicyRequestObject) (ReplaceRubyGemsPreviewQuarantineReadPolicyResponseObject, error)
+
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
 
@@ -46694,6 +46971,65 @@ func (sh *strictHandler) ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChangeRubyGemsPreviewGovernanceResponseObject); ok {
 		if err := validResponse.VisitChangeRubyGemsPreviewGovernanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRubyGemsPreviewQuarantineReadPolicy operation middleware
+func (sh *strictHandler) GetRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID) {
+	var request GetRubyGemsPreviewQuarantineReadPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRubyGemsPreviewQuarantineReadPolicy(ctx, request.(GetRubyGemsPreviewQuarantineReadPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRubyGemsPreviewQuarantineReadPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRubyGemsPreviewQuarantineReadPolicyResponseObject); ok {
+		if err := validResponse.VisitGetRubyGemsPreviewQuarantineReadPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRubyGemsPreviewQuarantineReadPolicy operation middleware
+func (sh *strictHandler) ReplaceRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID) {
+	var request ReplaceRubyGemsPreviewQuarantineReadPolicyRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body ReplaceRubyGemsPreviewQuarantineReadPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRubyGemsPreviewQuarantineReadPolicy(ctx, request.(ReplaceRubyGemsPreviewQuarantineReadPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRubyGemsPreviewQuarantineReadPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRubyGemsPreviewQuarantineReadPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceRubyGemsPreviewQuarantineReadPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
