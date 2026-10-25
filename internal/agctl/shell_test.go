@@ -89,6 +89,64 @@ func TestShellContextAndStickyFlags(t *testing.T) {
 	}
 }
 
+func TestShellArtifactSearchScope(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, query string
+		args              []string
+		code              int
+	}{
+		{"global", artifactSearchPath, "example", []string{"--global", "--q", "example"}, ExitOK},
+		{"global-equals", artifactSearchPath, "example", []string{"--global=true", "--q=example"}, ExitOK},
+		{"global-single-dash", artifactSearchPath, "example", []string{"-global", "--q=example"}, ExitOK},
+		{"global-with-output-override", artifactSearchPath, "example", []string{"--json=false", "--q=example", "--global"}, ExitOK},
+		{"default-repository", repositoriesPath + "/repo-one/artifact-search", "example", []string{"--q=example"}, ExitOK},
+		{"global-false", repositoriesPath + "/repo-one/artifact-search", "example", []string{"--global=false", "--q=example"}, ExitOK},
+		{"last-global-false", repositoriesPath + "/repo-one/artifact-search", "example", []string{"--global", "--global=false", "--q=example"}, ExitOK},
+		{"last-global-true", artifactSearchPath, "example", []string{"--global=false", "--global", "--q=example"}, ExitOK},
+		{"flag-shaped-query", repositoriesPath + "/repo-one/artifact-search", "--global", []string{"--q", "--global"}, ExitOK},
+		{"explicit-repository", repositoriesPath + "/repo-two/artifact-search", "example", []string{"--repo=repo-two", "--q=example"}, ExitOK},
+		{"conflicting-explicit-scopes", "", "", []string{"--global", "--repo=repo-two", "--q=example"}, ExitUsage},
+		{"invalid-global-boolean", "", "", []string{"--global=invalid", "--q=example"}, ExitUsage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testShellSession(t)
+			var mu sync.Mutex
+			var paths, queries []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				paths = append(paths, r.URL.Path)
+				queries = append(queries, r.URL.Query().Get("q"))
+				mu.Unlock()
+				_, _ = fmt.Fprint(w, `{"items":[],"searchedRepositories":1}`)
+			}))
+			defer server.Close()
+			s.env.globals.server, s.env.globals.token = server.URL, "synthetic-token"
+			s.env.flagSet["server"], s.env.flagSet["token"] = true, true
+			if _, _, err := s.builtin([]string{"use", "repo", "repo-one"}); err != nil {
+				t.Fatal(err)
+			}
+			s.json = true
+			var out, errout bytes.Buffer
+			args := append([]string{"artifact", "search"}, tc.args...)
+			code := RunCLI(context.Background(), s.arguments(args), strings.NewReader(""), &out, &errout)
+			if code != tc.code {
+				t.Fatalf("exit %d, want %d: stdout %s, stderr %s", code, tc.code, &out, &errout)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if tc.code != ExitOK {
+				if len(paths) != 0 {
+					t.Fatalf("invalid search sent requests: %v", paths)
+				}
+				return
+			}
+			if !reflect.DeepEqual(paths, []string{tc.path}) || !reflect.DeepEqual(queries, []string{tc.query}) {
+				t.Fatalf("search scope: paths %v, queries %v", paths, queries)
+			}
+		})
+	}
+}
+
 func TestShellHistoryFiltersSyntheticSecrets(t *testing.T) {
 	s := testShellSession(t)
 	path := filepath.Join(filepath.Dir(s.env.configPath), "history")

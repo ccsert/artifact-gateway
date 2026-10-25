@@ -61,7 +61,18 @@ func (s *shellSession) arguments(args []string) []string {
 	if fs.Parse(args) == nil {
 		if cmd, remaining, ok := resolveCommand(fs.Args()); ok && cmd.setFlags != nil && s.repo != "" {
 			local := flag.NewFlagSet("command", flag.ContinueOnError)
+			local.SetOutput(io.Discard)
 			cmd.setFlags(local)
+			if cmd.name == "artifact search" {
+				// Match RunCLI's flag parsing, including values that look like
+				// flags and repeated boolean overrides, before choosing scope.
+				registerGlobalFlags(local, &globalFlags{})
+				if _, err := parseInterspersed(local, remaining); err == nil {
+					if global := local.Lookup("global"); global != nil && global.Value.String() == "true" {
+						return append(prefix, args...)
+					}
+				}
+			}
 			if local.Lookup("repo") != nil {
 				insert := len(args) - len(remaining)
 				withRepo := append([]string{}, args[:insert]...)

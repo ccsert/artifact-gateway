@@ -138,6 +138,7 @@ agctl [staging | https://staging.example.com | repo:]> exit
 
 - `use repo ID` 仅向声明了 `--repo` 的命令提供默认值；`use repo -` 清除该上下文。
   命令上的显式 flag 优先于会话默认值。
+  即使已选择会话仓库，`artifact search --global --q QUERY` 仍搜索所有可读取仓库。
 - `use profile NAME` 为本会话提供 `--profile` 并清除仓库上下文，不修改持久化
   `current_profile`。既有 flag 和环境变量优先级（包括 server/token 覆盖）保持生效。
 - `set json|dry-run|verbose on|off` 切换 sticky 默认值。启动时的 `--json`

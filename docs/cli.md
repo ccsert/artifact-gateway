@@ -154,6 +154,8 @@ agctl [staging | https://staging.example.com | repo:]> exit
 
 - `use repo ID` supplies a default `--repo` only to commands declaring that
   flag; `use repo -` clears it. Explicit command flags override the default.
+  `artifact search --global --q QUERY` searches across readable repositories
+  even when a session repository is selected.
 - `use profile NAME` supplies `--profile` for this session and clears its
   repository. It never changes persistent `current_profile`. Existing flag and
   environment precedence, including server/token overrides, still applies.
