@@ -36,15 +36,18 @@ func startShellPTY(t *testing.T, binary, home string, args ...string) *shellPTY 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := syscall.SetNonblock(int(file.Fd()), true); err != nil {
-		t.Fatal(err)
-	}
-	// NewFile observes O_NONBLOCK and registers the descriptor with Go's poller.
+	// File.Fd may restore blocking mode on Linux. Duplicate first, then set
+	// O_NONBLOCK on the raw descriptor before NewFile registers Go's poller.
 	fd, err := syscall.Dup(int(file.Fd()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = file.Close()
+	syscall.CloseOnExec(fd)
+	if err := syscall.SetNonblock(fd, true); err != nil {
+		_ = syscall.Close(fd)
+		t.Fatal(err)
+	}
 	file = os.NewFile(uintptr(fd), "shell-pty")
 	p := &shellPTY{t: t, cmd: cmd, file: file, chunks: make(chan string, 1024), done: make(chan error, 1)}
 	go func() {
@@ -122,11 +125,11 @@ func TestShellPTY(t *testing.T) {
 		p.expect("]> ")
 		p.send("auth change-password --password-stdin\nversion\n")
 		p.expect("stdin")
-		p.expect(`"schemaVersion": 1`)
+		p.expect(`"revision":`)
 		p.expect("]> ")
 		p.send("config profile add session --server https://example.com --token-stdin\nversion\n")
 		p.expect("stdin")
-		p.expect(`"schemaVersion": 1`)
+		p.expect(`"revision":`)
 		p.expect("]> ")
 		p.send("repo create SYNTHETIC_BODY_136 --description SYNTHETIC_PRIVATE_136 --dry-run\n")
 		p.expect("]> ")
