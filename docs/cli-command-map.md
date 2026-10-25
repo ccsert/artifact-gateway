@@ -149,6 +149,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /email-targets`<br>`createEmailTarget` | `email target create` | #336 | M2 implemented | A | W |
 | `GET /email-targets/{targetId}`<br>`getEmailTarget` | `email target show <id>` | #336 | M2 implemented | A | Q |
 | `PUT /email-targets/{targetId}`<br>`updateEmailTarget` | `email target update <id>` | #336 | M2 implemented | A | C |
+| `GET /email-queue/diagnostics`<br>`getEmailQueueDiagnostics` | N: administrator read-only API; CLI excluded from this slice | #467 | N/A | A | N: use the management API; no CLI command added |
 | `GET /email-deliveries`<br>`listEmailDeliveries` | `email delivery list` | #336 | M2 implemented | A | Q |
 | `GET /email-deliveries/{deliveryId}`<br>`getEmailDelivery` | `email delivery show <id>` | #336 | M2 implemented | A | Q |
 | `POST /email-deliveries/{deliveryId}:replay`<br>`replayEmailDelivery` | `email delivery replay <id>` | #336 | M2 implemented | A | J |

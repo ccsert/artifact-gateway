@@ -104,6 +104,7 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /email-targets`<br>`createEmailTarget` | `email target create` | #336 | M2 implemented | A | W |
 | `GET /email-targets/{targetId}`<br>`getEmailTarget` | `email target show <id>` | #336 | M2 implemented | A | Q |
 | `PUT /email-targets/{targetId}`<br>`updateEmailTarget` | `email target update <id>` | #336 | M2 implemented | A | C |
+| `GET /email-queue/diagnostics`<br>`getEmailQueueDiagnostics` | N：管理员只读 API，本批明确不含 CLI | #467 | N/A | A | N：使用管理 API，不新增 CLI 命令 |
 | `GET /email-deliveries`<br>`listEmailDeliveries` | `email delivery list` | #336 | M2 implemented | A | Q |
 | `GET /email-deliveries/{deliveryId}`<br>`getEmailDelivery` | `email delivery show <id>` | #336 | M2 implemented | A | Q |
 | `POST /email-deliveries/{deliveryId}:replay`<br>`replayEmailDelivery` | `email delivery replay <id>` | #336 | M2 implemented | A | J |

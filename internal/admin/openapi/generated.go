@@ -1325,6 +1325,90 @@ func (e EmailPreviewInputScenario) Valid() bool {
 	}
 }
 
+// Defines values for EmailQueueDiagnosticsClock.
+const (
+	EmailQueueDiagnosticsClockDatabase    EmailQueueDiagnosticsClock = "database"
+	EmailQueueDiagnosticsClockMemoryStore EmailQueueDiagnosticsClock = "memory_store"
+)
+
+// Valid indicates whether the value is a known member of the EmailQueueDiagnosticsClock enum.
+func (e EmailQueueDiagnosticsClock) Valid() bool {
+	switch e {
+	case EmailQueueDiagnosticsClockDatabase:
+		return true
+	case EmailQueueDiagnosticsClockMemoryStore:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailQueueDiagnosticsScope.
+const (
+	WholeRetainedQueue EmailQueueDiagnosticsScope = "whole_retained_queue"
+)
+
+// Valid indicates whether the value is a known member of the EmailQueueDiagnosticsScope enum.
+func (e EmailQueueDiagnosticsScope) Valid() bool {
+	switch e {
+	case WholeRetainedQueue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailQueueDiagnosticsWorkerHealth.
+const (
+	EmailQueueDiagnosticsWorkerHealthUnknown EmailQueueDiagnosticsWorkerHealth = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the EmailQueueDiagnosticsWorkerHealth enum.
+func (e EmailQueueDiagnosticsWorkerHealth) Valid() bool {
+	switch e {
+	case EmailQueueDiagnosticsWorkerHealthUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailQueueFailureClassCategory.
+const (
+	EmailQueueFailureClassCategoryAttemptsExhausted  EmailQueueFailureClassCategory = "attempts_exhausted"
+	EmailQueueFailureClassCategoryCancelled          EmailQueueFailureClassCategory = "cancelled"
+	EmailQueueFailureClassCategoryConfiguration      EmailQueueFailureClassCategory = "configuration"
+	EmailQueueFailureClassCategoryOutcomeUnknown     EmailQueueFailureClassCategory = "outcome_unknown"
+	EmailQueueFailureClassCategoryPermanentRejection EmailQueueFailureClassCategory = "permanent_rejection"
+	EmailQueueFailureClassCategoryTemporaryRejection EmailQueueFailureClassCategory = "temporary_rejection"
+	EmailQueueFailureClassCategoryTransport          EmailQueueFailureClassCategory = "transport"
+	EmailQueueFailureClassCategoryUnknown            EmailQueueFailureClassCategory = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the EmailQueueFailureClassCategory enum.
+func (e EmailQueueFailureClassCategory) Valid() bool {
+	switch e {
+	case EmailQueueFailureClassCategoryAttemptsExhausted:
+		return true
+	case EmailQueueFailureClassCategoryCancelled:
+		return true
+	case EmailQueueFailureClassCategoryConfiguration:
+		return true
+	case EmailQueueFailureClassCategoryOutcomeUnknown:
+		return true
+	case EmailQueueFailureClassCategoryPermanentRejection:
+		return true
+	case EmailQueueFailureClassCategoryTemporaryRejection:
+		return true
+	case EmailQueueFailureClassCategoryTransport:
+		return true
+	case EmailQueueFailureClassCategoryUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailTargetLocale.
 const (
 	EmailTargetLocaleEn   EmailTargetLocale = "en"
@@ -5982,6 +6066,64 @@ type EmailPreviewInputLocale string
 // EmailPreviewInputScenario defines model for EmailPreviewInput.Scenario.
 type EmailPreviewInputScenario string
 
+// EmailQueueCounts pending/retrying/delivering/accepted/dead partition total. Other counters overlap these states and each other and must not be summed. futureBackoff covers only pending/retrying with future nextAttemptAt. Lease counters cover delivering only. awaitingCancellation matches claim cleanup regardless of nextAttemptAt; awaitingExhaustion matches attempts >= 8 and due pending/retrying or expired lease, and can overlap cancellation. predecessorBlocked covers otherwise eligible rows blocked by an active earlier same-rule event after projected cleanup. executableCandidates excludes both cleanup categories and predecessor blocking; it ignores row locks and is not a promise that a worker can claim.
+type EmailQueueCounts struct {
+	Accepted             int64 `json:"accepted"`
+	AwaitingCancellation int64 `json:"awaitingCancellation"`
+	AwaitingExhaustion   int64 `json:"awaitingExhaustion"`
+	Dead                 int64 `json:"dead"`
+	Delivering           int64 `json:"delivering"`
+	ExecutableCandidates int64 `json:"executableCandidates"`
+	ExpiredLeases        int64 `json:"expiredLeases"`
+	FutureBackoff        int64 `json:"futureBackoff"`
+	Pending              int64 `json:"pending"`
+	PredecessorBlocked   int64 `json:"predecessorBlocked"`
+	Retrying             int64 `json:"retrying"`
+	Total                int64 `json:"total"`
+	ValidLeases          int64 `json:"validLeases"`
+}
+
+// EmailQueueDiagnostics defines model for EmailQueueDiagnostics.
+type EmailQueueDiagnostics struct {
+	Clock EmailQueueDiagnosticsClock `json:"clock"`
+
+	// Counts pending/retrying/delivering/accepted/dead partition total. Other counters overlap these states and each other and must not be summed. futureBackoff covers only pending/retrying with future nextAttemptAt. Lease counters cover delivering only. awaitingCancellation matches claim cleanup regardless of nextAttemptAt; awaitingExhaustion matches attempts >= 8 and due pending/retrying or expired lease, and can overlap cancellation. predecessorBlocked covers otherwise eligible rows blocked by an active earlier same-rule event after projected cleanup. executableCandidates excludes both cleanup categories and predecessor blocking; it ignores row locks and is not a promise that a worker can claim.
+	Counts              EmailQueueCounts `json:"counts"`
+	EvidenceLimitations []string         `json:"evidenceLimitations"`
+
+	// FailureClasses Counts of current nonempty failure codes across retained rows, grouped into fixed safe classes; no raw errors or identities. Empty if none.
+	FailureClasses []EmailQueueFailureClass `json:"failureClasses"`
+
+	// LastSmtpAcceptedAt Latest persisted acceptedAt in retained rows, null without evidence. Final positive SMTP DATA reply recorded by a fenced finish, not final inbox delivery or current worker activity.
+	LastSmtpAcceptedAt time.Time `json:"lastSmtpAcceptedAt"`
+
+	// OldestExecutableWaitSeconds Maximum age since own nextAttemptAt (pending/retrying) or lease expiry (delivering) among executable candidates; null if none. Does not reconstruct when predecessors cleared.
+	OldestExecutableWaitSeconds float32                    `json:"oldestExecutableWaitSeconds"`
+	SampledAt                   time.Time                  `json:"sampledAt"`
+	Scope                       EmailQueueDiagnosticsScope `json:"scope"`
+
+	// WorkerHealth No persisted role heartbeat or expected worker configuration exists.
+	WorkerHealth EmailQueueDiagnosticsWorkerHealth `json:"workerHealth"`
+}
+
+// EmailQueueDiagnosticsClock defines model for EmailQueueDiagnostics.Clock.
+type EmailQueueDiagnosticsClock string
+
+// EmailQueueDiagnosticsScope defines model for EmailQueueDiagnostics.Scope.
+type EmailQueueDiagnosticsScope string
+
+// EmailQueueDiagnosticsWorkerHealth No persisted role heartbeat or expected worker configuration exists.
+type EmailQueueDiagnosticsWorkerHealth string
+
+// EmailQueueFailureClass defines model for EmailQueueFailureClass.
+type EmailQueueFailureClass struct {
+	Category EmailQueueFailureClassCategory `json:"category"`
+	Count    int64                          `json:"count"`
+}
+
+// EmailQueueFailureClassCategory defines model for EmailQueueFailureClass.Category.
+type EmailQueueFailureClassCategory string
+
 // EmailTarget defines model for EmailTarget.
 type EmailTarget struct {
 	CreatedAt           time.Time          `json:"createdAt"`
@@ -10626,6 +10768,9 @@ type ServerInterface interface {
 	// (POST /email-notifications:test)
 	TestEmailNotification(w http.ResponseWriter, r *http.Request, params TestEmailNotificationParams)
 
+	// (GET /email-queue/diagnostics)
+	GetEmailQueueDiagnostics(w http.ResponseWriter, r *http.Request)
+
 	// (GET /email-targets)
 	ListEmailTargets(w http.ResponseWriter, r *http.Request)
 
@@ -12696,6 +12841,20 @@ func (siw *ServerInterfaceWrapper) TestEmailNotification(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestEmailNotification(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailQueueDiagnostics operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailQueueDiagnostics(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailQueueDiagnostics(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21695,6 +21854,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-notifications", wrapper.GetEmailNotificationCapability)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/email-notifications:preview", wrapper.PreviewEmailNotification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/email-notifications:test", wrapper.TestEmailNotification)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-queue/diagnostics", wrapper.GetEmailQueueDiagnostics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-targets", wrapper.ListEmailTargets)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/email-targets", wrapper.CreateEmailTarget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-targets/{targetId}", wrapper.GetEmailTarget)
@@ -24737,6 +24897,81 @@ func (response TestEmailNotification503ApplicationProblemPlusJSONResponse) Visit
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailQueueDiagnosticsRequestObject struct {
+}
+
+type GetEmailQueueDiagnosticsResponseObject interface {
+	VisitGetEmailQueueDiagnosticsResponse(w http.ResponseWriter) error
+}
+
+type GetEmailQueueDiagnostics200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type GetEmailQueueDiagnostics200JSONResponse struct {
+	Body    EmailQueueDiagnostics
+	Headers GetEmailQueueDiagnostics200ResponseHeaders
+}
+
+func (response GetEmailQueueDiagnostics200JSONResponse) VisitGetEmailQueueDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailQueueDiagnostics401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetEmailQueueDiagnostics401ApplicationProblemPlusJSONResponse) VisitGetEmailQueueDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailQueueDiagnostics403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailQueueDiagnostics403ApplicationProblemPlusJSONResponse) VisitGetEmailQueueDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailQueueDiagnostics500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailQueueDiagnostics500ApplicationProblemPlusJSONResponse) VisitGetEmailQueueDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -42266,6 +42501,9 @@ type StrictServerInterface interface {
 	// (POST /email-notifications:test)
 	TestEmailNotification(ctx context.Context, request TestEmailNotificationRequestObject) (TestEmailNotificationResponseObject, error)
 
+	// (GET /email-queue/diagnostics)
+	GetEmailQueueDiagnostics(ctx context.Context, request GetEmailQueueDiagnosticsRequestObject) (GetEmailQueueDiagnosticsResponseObject, error)
+
 	// (GET /email-targets)
 	ListEmailTargets(ctx context.Context, request ListEmailTargetsRequestObject) (ListEmailTargetsResponseObject, error)
 
@@ -44065,6 +44303,30 @@ func (sh *strictHandler) TestEmailNotification(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestEmailNotificationResponseObject); ok {
 		if err := validResponse.VisitTestEmailNotificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEmailQueueDiagnostics operation middleware
+func (sh *strictHandler) GetEmailQueueDiagnostics(w http.ResponseWriter, r *http.Request) {
+	var request GetEmailQueueDiagnosticsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEmailQueueDiagnostics(ctx, request.(GetEmailQueueDiagnosticsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEmailQueueDiagnostics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEmailQueueDiagnosticsResponseObject); ok {
+		if err := validResponse.VisitGetEmailQueueDiagnosticsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
