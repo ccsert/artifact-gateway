@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Add the TTY-only [agctl interactive shell](docs/cli.md#interactive-shell) (#136), with session profile/repository context, command/profile/repository completion, sticky JSON/dry-run/verbose options, private command-path history, and bounded client interruption. It shares ordinary CLI authorization, confirmation and output handling; stdin readers cannot consume later shell commands.
+
 - Nexus [PyPI Hosted migration](docs/nexus-pypi-migration.md) (#461) publishes each complete wheel/sdist release atomically with its durable checkpoint. Frozen Simple metadata preserves Requires-Python and file yanking; current administrator authority, lease and source versions are rechecked before publication. A required fixed-pip gate consumes only the target after the synthetic source is stopped.
 
 - RubyGems Hosted preview supports native `gem yank` and versioned management recovery (#462). Yank hides indexes, gemspecs and original downloads while retaining bytes and quota; restore verifies the original package under current repository-admin authority. Platform variants stay independent across restart.

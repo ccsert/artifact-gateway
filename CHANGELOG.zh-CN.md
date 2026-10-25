@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 新增仅限 TTY 的 [agctl 交互式 shell](docs/cli.zh-CN.md#交互式-shell)（#136），支持会话 profile/仓库上下文、命令/profile/仓库补全、sticky JSON/dry-run/verbose、私有命令路径历史和有界客户端中断。沿用普通 CLI 的权限、确认与输出处理；stdin 读取不会吞掉后续 shell 命令。
+
 - Nexus 新增 [PyPI Hosted 迁移](docs/nexus-pypi-migration.zh-CN.md)（#461），将完整 wheel/sdist 版本与持久检查点原子提交，保留 Requires-Python 和文件 yank。提交前复查当前管理员、租约与源版本；固定 pip 必需门禁在停止合成源后仅从目标消费。
 
 - RubyGems Hosted 预览支持原生 `gem yank` 与版本化恢复（#462）。撤回隐藏索引、gemspec 和下载，保留字节及配额；恢复核验原包和当前仓库管理员权限。各 platform 版本独立，重启后状态保留。

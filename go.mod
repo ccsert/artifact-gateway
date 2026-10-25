@@ -9,6 +9,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.35
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.1
 	github.com/aws/smithy-go v1.27.7
+	github.com/chzyer/readline v1.5.1
+	github.com/creack/pty v1.1.24
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/getkin/kin-openapi v0.143.0
 	github.com/google/uuid v1.6.0

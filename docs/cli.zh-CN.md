@@ -4,7 +4,7 @@
 
 `agctl` 是面向 CI 流水线、平台管理与 agent 的网关命令行客户端。它用 bearer
 凭据直接对 `/api/v2` 下的管理 API 编程。当前 checkout 提供 `version`、`info`、
-`commands`、`auth login|logout|whoami|change-password` 与
+`commands`、`shell`、`auth login|logout|whoami|change-password` 与
 `config profile add|list|use|remove`；其余命令面按可独立评审的切片陆续交付，只有实现后才会出现在
 命令树中。客户端形态与机器契约记录在
 [ADR 0007](adr/0007-agctl-cli-shape.zh-CN.md)。
@@ -117,6 +117,52 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
 `AGCTL_SERVER` 覆盖为不同目标时不会复用该 token；需用 `--token` 或
 `AGCTL_TOKEN` 显式提供新目标的凭据。主机名与默认端口的等价写法保留绑定，
 不同 IPv6 authority、接口 zone 与 base path 大小写不会共享凭据。
+
+## 交互式 shell
+
+`agctl shell` 是可选的终端前端，与脚本和 agent 共用同一 `RunCLI` 命令注册表。
+stdin 和 stdout 都必须是 TTY；管道输入或重定向输出以退出码 2 拒绝。
+自动化仍使用普通命令。提示符显示实际 profile、已脱敏的 server URL 和仓库上下文。
+
+```text
+agctl --profile production shell
+agctl [production | https://gateway.example.com | repo:]> use repo repository-id
+agctl [production | https://gateway.example.com | repo:repository-id]> artifact list
+agctl [production | https://gateway.example.com | repo:repository-id]> set json on
+agctl [production | https://gateway.example.com | repo:repository-id]> repo list
+agctl [production | https://gateway.example.com | repo:repository-id]> set dry-run on
+agctl [production | https://gateway.example.com | repo:repository-id]> set verbose on
+agctl [production | https://gateway.example.com | repo:repository-id]> use profile staging
+agctl [staging | https://staging.example.com | repo:]> exit
+```
+
+- `use repo ID` 仅向声明了 `--repo` 的命令提供默认值；`use repo -` 清除该上下文。
+  命令上的显式 flag 优先于会话默认值。
+- `use profile NAME` 为本会话提供 `--profile` 并清除仓库上下文，不修改持久化
+  `current_profile`。既有 flag 和环境变量优先级（包括 server/token 覆盖）保持生效。
+- `set json|dry-run|verbose on|off` 切换 sticky 默认值。启动时的 `--json`
+  （或 `-o json`）、`--dry-run` 和 `--verbose` 用于初始化。单条命令可用
+  `--json=false`、`--dry-run=false` 或 `--verbose=false` 覆盖。各命令沿用普通模式的
+  JSON envelope 与 schema；提示符和交互通知属于终端 UI，整个会话不是 JSON 流。
+- Tab 补全命令词、`use profile` 的名称，以及通过当前凭据授权仓库列表读取的
+  `use repo` ID（读取最多等待两秒）。
+- 上下方向键召回 `~/.config/agctl/history` 中的命令路径。历史刻意省略**全部参数**，
+  包括仓库/profile 选择、密码/token flag、私有正文和 secret-output 路径；从不记录
+  命令输出或一次性秘密。最多保留 500 条，以 0600 权限原子替换；拒绝符号链接、
+  非普通文件、其他用户可读文件和超过 1 MiB 的文件。历史不安全或不可用时显示通知，
+  禁用持久化。
+
+输入支持单双引号和反斜杠转义，参数按字面处理，不做环境变量展开、管道或命令替换。
+各命令接收隔离的空 stdin：`--password-stdin`、`--token-stdin` 及其他 stdin 读取
+立即失败，不会吞掉后续 shell 命令。使用支持的私有文件 flag，或退出 shell 后通过
+管道执行 stdin 命令；不要把秘密或输入正文粘贴成 shell 命令。不会新增密码提示。
+权限校验、危险命令必需的 `--yes` 确认和 dry-run 支持与普通命令一致；`--yes` 必须
+逐条显式提供，不会由 sticky 设置启用。
+
+`exit`、`quit` 或空提示符处的 Ctrl-D 正常退出。Ctrl-C 清除当前输入，或取消正在
+执行的**客户端请求/等待**并返回提示符；不承诺远端 job 被取消，也不会回滚已提交的
+写入。关闭终端结束会话。不提供 undo/redo 或通用仓库 undelete；恢复需使用实际可用
+的制品/快照恢复端点。`--dry-run` 只为支持预演的命令生成计划。
 
 ## 全局 flag
 
