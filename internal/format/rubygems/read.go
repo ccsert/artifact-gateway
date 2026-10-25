@@ -63,9 +63,14 @@ func (m *Module) read(w http.ResponseWriter, r *http.Request, repo repository.Ho
 		m.failure(w, errIntegrity)
 		return
 	}
+	policy, e := m.store.GetReadPolicy(r.Context(), repo.ID)
+	if e != nil {
+		m.failure(w, e)
+		return
+	}
 	entries := []protocol.IndexEntry{}
 	for _, record := range records {
-		if name != "" && record.Name != name || !m.allowed(r.Context(), p, repo, record.Name) {
+		if policy.Enabled && record.Governance.Quarantined || name != "" && record.Name != name || !m.allowed(r.Context(), p, repo, record.Name) {
 			continue
 		}
 		meta, e := metadata(record)
@@ -122,6 +127,15 @@ func (m *Module) asset(w http.ResponseWriter, r *http.Request, repo repository.H
 	}
 	p, ok := m.authorize(w, r, repo, authorization.RepositoryRead, record.Name, false)
 	if !ok {
+		return
+	}
+	policy, e := m.store.GetReadPolicy(ctx, repo.ID)
+	if e != nil {
+		m.failure(w, e)
+		return
+	}
+	if policy.Enabled && record.Governance.Quarantined {
+		m.problem(w, 404, "not_found")
 		return
 	}
 	meta, e := metadata(record)

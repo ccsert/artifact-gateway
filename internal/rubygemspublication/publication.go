@@ -48,6 +48,8 @@ type Store interface {
 	Commit(context.Context, string, string) (Publication, bool, error)
 	Get(context.Context, string, string) (Publication, error)
 	GetRetained(context.Context, string, string, string, string) (Publication, error)
+	GetReadPolicy(context.Context, string) (repository.RepositoryQuarantineReadPolicy, error)
+	ReplaceReadPolicy(context.Context, PolicyChange, GovernanceCheck) (repository.RepositoryQuarantineReadPolicy, error)
 	TransitionGovernance(context.Context, GovernanceChange, GovernanceCheck) (Publication, error)
 	List(context.Context, string, int) ([]Publication, error)
 	GetSession(context.Context, string) (Session, error)

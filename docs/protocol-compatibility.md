@@ -124,6 +124,9 @@ Native `gem yank` hides every package representation and original download while
 retaining immutable bytes and quota. Versioned repository-admin recovery verifies
 the retained closure and current authority, including after transaction lock waits.
 The client gate checks platform isolation, cold refusal and post-restart recovery.
+Independent quarantine/release (#468) and its default-disabled versioned read policy
+filter all indexes and reject gemspec/original GET/HEAD consistently before
+conditional/Range handling. Release verifies retained bytes and never undoes yank.
 Proxy/Group, signed archives, the remaining governance and formal admission stay
 under #293. The preview stays outside
 the formal catalog, Console format selector and installation presets.

@@ -50,3 +50,10 @@ func (a *RubyGemsBoundary) GetRubyGemsPreviewGovernance(w http.ResponseWriter, r
 func (a *RubyGemsBoundary) ChangeRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _, _ string) {
 	a.serve(w, r)
 }
+
+func (a *RubyGemsBoundary) GetRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *RubyGemsBoundary) ReplaceRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}

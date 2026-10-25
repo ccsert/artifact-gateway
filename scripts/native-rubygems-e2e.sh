@@ -45,6 +45,12 @@ required={
 'TestRubyGemsGovernanceRequiresCurrentAuthorityAfterLockAndVerification',
 'TestRubyGemsGovernanceUsesRepositoryAdminAndExactName',
 'TestRubyGemsPostgresRustFSGovernanceAtomicAuditAndRestart',
+'TestRubyGemsQuarantinePolicyFiltersEveryReadIndependently',
+'TestRubyGemsReadPolicyFailureDeniesAllReads',
+'TestRubyGemsQuarantineAndPolicyRequireCurrentDurableAuthority',
+'TestRubyGemsQuarantineRequiresCurrentAuthorityAfterLockAndVerification',
+'TestRubyGemsQuarantineCorruptReleaseAndAuditFailureStayClosed',
+'TestRubyGemsPostgresRustFSQuarantinePolicyAndRelease',
 }
 class GateCancelled(Exception):
     def __init__(self,signum):self.signum=signum

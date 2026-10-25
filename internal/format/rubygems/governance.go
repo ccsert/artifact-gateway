@@ -24,6 +24,7 @@ type governanceReceipt struct {
 	Digest            string     `json:"digest"`
 	GovernanceVersion string     `json:"governanceVersion"`
 	Yanked            bool       `json:"yanked"`
+	Quarantined       bool       `json:"quarantined"`
 	UpdatedAt         *time.Time `json:"updatedAt,omitempty"`
 	UpdatedBy         string     `json:"updatedBy,omitempty"`
 	Reason            string     `json:"reason,omitempty"`
@@ -31,7 +32,7 @@ type governanceReceipt struct {
 
 func governanceDTO(p domain.Publication) governanceReceipt {
 	g := p.Governance
-	out := governanceReceipt{RepositoryID: p.RepositoryID, Name: p.Name, Version: p.Version, Platform: p.Platform, Digest: p.Digest, GovernanceVersion: g.Version, Yanked: g.Yanked, UpdatedBy: g.UpdatedBy, Reason: g.Reason}
+	out := governanceReceipt{RepositoryID: p.RepositoryID, Name: p.Name, Version: p.Version, Platform: p.Platform, Digest: p.Digest, GovernanceVersion: g.Version, Yanked: g.Yanked, Quarantined: g.Quarantined, UpdatedBy: g.UpdatedBy, Reason: g.Reason}
 	if !g.UpdatedAt.IsZero() {
 		out.UpdatedAt = &g.UpdatedAt
 	}
@@ -180,7 +181,7 @@ func (m *Module) previewGovernance(w http.ResponseWriter, r *http.Request, repo 
 	if err == nil && (before.Digest != c.ExpectedDigest || before.Governance.Version != c.ExpectedVersion) {
 		err = repository.ErrVersionConflict
 	}
-	if err == nil && c.Action == "restore" && before.Governance.Yanked {
+	if err == nil && (c.Action == "restore" && before.Governance.Yanked || c.Action == "release" && before.Governance.Quarantined) {
 		err = m.verifyRetained(ctx, before)
 	}
 	if err != nil {

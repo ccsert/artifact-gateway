@@ -87,7 +87,7 @@ func (m *Memory) Reserve(ctx context.Context, in Session) (Session, bool, error)
 			return Session{}, false, ErrConflict
 		}
 		if s.RepositoryID == in.RepositoryID && (s.Identity() == in.Identity() || Visible(s).FullName() == Visible(in).FullName()) && (s.State == "pending" || s.State == "committed") {
-			if s.Governance.Yanked || !Same(s, in) || s.State == "pending" && s.Actor != in.Actor {
+			if s.Governance.Yanked || s.Governance.Quarantined || !Same(s, in) || s.State == "pending" && s.Actor != in.Actor {
 				return Session{}, false, ErrConflict
 			}
 			return clone(s), true, nil
@@ -131,7 +131,7 @@ func (m *Memory) Commit(ctx context.Context, id, actor string) (Publication, boo
 		return Publication{}, false, e
 	}
 	if s.State == "committed" {
-		if s.Governance.Yanked {
+		if s.Governance.Yanked || s.Governance.Quarantined {
 			return Publication{}, false, ErrConflict
 		}
 		return Visible(s), true, nil
