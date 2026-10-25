@@ -2250,6 +2250,62 @@ export type EmailTargetInput = {
   enabled?: boolean;
 };
 
+/**
+ * pending/retrying/delivering/accepted/dead partition total. Other counters overlap these states and each other and must not be summed. futureBackoff covers only pending/retrying with future nextAttemptAt. Lease counters cover delivering only. awaitingCancellation matches claim cleanup regardless of nextAttemptAt; awaitingExhaustion matches attempts >= 8 and due pending/retrying or expired lease, and can overlap cancellation. predecessorBlocked covers otherwise eligible rows blocked by an active earlier same-rule event after projected cleanup. executableCandidates excludes both cleanup categories and predecessor blocking; it ignores row locks and is not a promise that a worker can claim.
+ */
+export type EmailQueueCounts = {
+  total: number;
+  pending: number;
+  retrying: number;
+  delivering: number;
+  accepted: number;
+  dead: number;
+  executableCandidates: number;
+  futureBackoff: number;
+  validLeases: number;
+  expiredLeases: number;
+  predecessorBlocked: number;
+  awaitingCancellation: number;
+  awaitingExhaustion: number;
+};
+
+export type EmailQueueFailureClass = {
+  category:
+    | "configuration"
+    | "transport"
+    | "temporary_rejection"
+    | "permanent_rejection"
+    | "outcome_unknown"
+    | "cancelled"
+    | "attempts_exhausted"
+    | "unknown";
+  count: number;
+};
+
+export type EmailQueueDiagnostics = {
+  sampledAt: string;
+  scope: "whole_retained_queue";
+  clock: "database" | "memory_store";
+  counts: EmailQueueCounts;
+  /**
+   * Maximum age since own nextAttemptAt (pending/retrying) or lease expiry (delivering) among executable candidates; null if none. Does not reconstruct when predecessors cleared.
+   */
+  oldestExecutableWaitSeconds: number;
+  /**
+   * Latest persisted acceptedAt in retained rows, null without evidence. Final positive SMTP DATA reply recorded by a fenced finish, not final inbox delivery or current worker activity.
+   */
+  lastSmtpAcceptedAt: string;
+  /**
+   * Counts of current nonempty failure codes across retained rows, grouped into fixed safe classes; no raw errors or identities. Empty if none.
+   */
+  failureClasses: Array<EmailQueueFailureClass>;
+  /**
+   * No persisted role heartbeat or expected worker configuration exists.
+   */
+  workerHealth: "unknown";
+  evidenceLimitations: Array<string>;
+};
+
 export type EmailDeliveryList = Array<EmailDelivery>;
 
 export type EmailPreviewInput = {
@@ -8125,6 +8181,41 @@ export type UpdateEmailTargetResponses = {
 
 export type UpdateEmailTargetResponse =
   UpdateEmailTargetResponses[keyof UpdateEmailTargetResponses];
+
+export type GetEmailQueueDiagnosticsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/email-queue/diagnostics";
+};
+
+export type GetEmailQueueDiagnosticsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type GetEmailQueueDiagnosticsError =
+  GetEmailQueueDiagnosticsErrors[keyof GetEmailQueueDiagnosticsErrors];
+
+export type GetEmailQueueDiagnosticsResponses = {
+  /**
+   * Whole retained queue evidence with explicit limits
+   */
+  200: EmailQueueDiagnostics;
+};
+
+export type GetEmailQueueDiagnosticsResponse =
+  GetEmailQueueDiagnosticsResponses[keyof GetEmailQueueDiagnosticsResponses];
 
 export type ListEmailDeliveriesData = {
   body?: never;

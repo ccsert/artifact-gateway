@@ -194,6 +194,49 @@ EMAIL_CONSOLE_BROWSER_E2E=1 TEST_DATABASE_URL='<isolated-test-connection>' \
 版本冲突 412，停用目标或非 dead 重放 409，限流 429，中继停用/无密钥/队列满 503。
 重放保留事件 ID、收件人密文、内容描述符和可能重复标记。目标变更须新建显式测试。
 
+## 队列只读诊断
+
+管理员可调用 `GET /api/v2/email-queue/diagnostics`，响应进程关闭邮件时也可用。
+该端点执行相同管理员及强制改密检查，返回 `Cache-Control: no-store`。GET 不发送、
+不领取、不重放、不探测 SMTP，也不更新队列；不增加 Console 页面或 CLI 命令，
+保持默认关闭发送。
+
+`scope: whole_retained_queue` 包含全部保留的测试及仓库配额交付，包括终态历史，
+不从最近 50 条状态估算。PostgreSQL 在一个 MVCC 语句快照中聚合，并仅采样一次
+数据库 `clock_timestamp()`（`sampledAt`、`clock: database`）。Memory 使用一次
+store 锁和自身时钟（`clock: memory_store`），范围仅该实例而非集群。快照之后
+提交的并发变化不包含在本次结果。
+
+五个状态计数互斥且合计为 `total`。其他计数与状态及彼此可重叠，不能求和：
+
+- `futureBackoff`：pending/retrying 且 `nextAttemptAt` 在未来；正常退避本身
+  不能证明队列停滞。
+- `validLeases` / `expiredLeases`：delivering 的租约分别晚于 / 不晚于
+  `sampledAt`；缺少到期时间的不属于两类中的任一类。
+- `awaitingCancellation`：已撤销的 pending/retrying（无论是否到期），以及
+  租约过期的已撤销 delivering。
+- `awaitingExhaustion`：已达八次尝试且到期的 pending/retrying 或租约过期的
+  delivering；可与取消重叠。
+- `executableCandidates`：到期 pending/retrying 或过期 delivering，尝试少于八次，
+  无自动取消，且投影 claim 的取消/耗尽清理后没有同规则活动前序事件。
+- `predecessorBlocked`：其他条件满足、仅被此前序事件阻塞的候选；不含已经被
+  次数、取消或到期条件排除的行。
+
+候选对应领取加行锁前的资格；其他事务可能持锁，或在采样后领取/完成。
+`oldestExecutableWaitSeconds` 使用采样时钟，取候选自身 `nextAttemptAt` 或过期
+租约以来的最大秒数；无候选时为 null。它不重建前序事件清除时刻，也不证明持续
+具备领取资格。
+
+`failureClasses` 对全部保留行的当前非空错误码聚合，最多八类：`configuration`、
+`transport`、`temporary_rejection`、`permanent_rejection`、`outcome_unknown`、
+`cancelled`、`attempts_exhausted`、`unknown`。未知/旧错误只归 unknown，绝不回显。
+响应不包含邮件身份、收件人、SMTP 地址、key 摘要、原始错误、正文或租约令牌。
+`lastSmtpAcceptedAt` 是保留行中最新的持久 `acceptedAt`，由持有效租约的成功完成
+操作在最终 DATA 正回复后记录；无此证据为 null。它不证明收件箱送达或当前 worker
+活动；`updatedAt` 也不是 worker 活动证据。尚无持久角色心跳或预期角色配置，
+`workerHealth` 始终为 `unknown`；不能推断 worker 健康、无人运行、集群配置一致
+或完整停机。响应通过 `evidenceLimitations` 再次说明这些限制。
+
 ## 投递语义
 
 状态为 `pending`、`delivering`、`retrying`、`accepted`、`dead`。每次领取使用

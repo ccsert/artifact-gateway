@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 新增管理员[邮件队列只读诊断](docs/email-notification-delivery.zh-CN.md#队列只读诊断)（#467）：使用数据库时间的一致快照覆盖全部保留交付，聚合与领取条件一致的候选、退避、租约和待终结任务，提供有限安全失败分类及持久 SMTP 接受证据。worker 健康保持 unknown，GET 不发送、不修改队列；不增加 Console 或 CLI 入口。
+
 - Nexus 新增 [PyPI Hosted 迁移](docs/nexus-pypi-migration.zh-CN.md)（#461），将完整 wheel/sdist 版本与持久检查点原子提交，保留 Requires-Python 和文件 yank。提交前复查当前管理员、租约与源版本；固定 pip 必需门禁在停止合成源后仅从目标消费。
 
 - RubyGems Hosted 预览支持原生 `gem yank` 与版本化恢复（#462）。撤回隐藏索引、gemspec 和下载，保留字节及配额；恢复核验原包和当前仓库管理员权限。各 platform 版本独立，重启后状态保留。

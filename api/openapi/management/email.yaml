@@ -389,6 +389,96 @@ EmailDelivery:
     acceptedAt: {type: string, format: date-time}
     createdAt: {type: string, format: date-time}
     updatedAt: {type: string, format: date-time}
+email_queue_diagnostics:
+  get:
+    operationId: getEmailQueueDiagnostics
+    description: >-
+      Administrator-only, no-store, read-only whole retained queue snapshot. PostgreSQL
+      uses one statement snapshot and one database clock sample; Memory uses one lock
+      and store clock sample. Never sends, claims, replays, probes SMTP or changes rows.
+      Candidate counts project the claim's automatic cancellation and exhaustion cleanup,
+      then apply its due, attempt, lease and same-rule predecessor predicates. Row locks
+      and concurrent commits can change actual claim results. Counts are observations,
+      not worker health or a stalled-queue diagnosis. Normal future backoff is expected.
+    responses:
+      '200':
+        description: Whole retained queue evidence with explicit limits
+        headers:
+          Cache-Control:
+            schema: {type: string, enum: [no-store]}
+        content:
+          application/json:
+            schema: {$ref: '#/EmailQueueDiagnostics'}
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '500':
+        $ref: '../components/responses.yaml#/Problem'
+EmailQueueDiagnostics:
+  type: object
+  additionalProperties: false
+  required: [sampledAt, scope, clock, counts, oldestExecutableWaitSeconds, lastSmtpAcceptedAt, failureClasses, workerHealth, evidenceLimitations]
+  properties:
+    sampledAt: {type: string, format: date-time}
+    scope: {type: string, enum: [whole_retained_queue]}
+    clock: {type: string, enum: [database, memory_store]}
+    counts: {$ref: '#/EmailQueueCounts'}
+    oldestExecutableWaitSeconds:
+      type: number
+      nullable: true
+      minimum: 0
+      description: Maximum age since own nextAttemptAt (pending/retrying) or lease expiry (delivering) among executable candidates; null if none. Does not reconstruct when predecessors cleared.
+    lastSmtpAcceptedAt:
+      type: string
+      format: date-time
+      nullable: true
+      description: Latest persisted acceptedAt in retained rows, null without evidence. Final positive SMTP DATA reply recorded by a fenced finish, not final inbox delivery or current worker activity.
+    failureClasses:
+      type: array
+      maxItems: 8
+      description: Counts of current nonempty failure codes across retained rows, grouped into fixed safe classes; no raw errors or identities. Empty if none.
+      items: {$ref: '#/EmailQueueFailureClass'}
+    workerHealth: {type: string, enum: [unknown], description: No persisted role heartbeat or expected worker configuration exists.}
+    evidenceLimitations:
+      type: array
+      items: {type: string}
+EmailQueueCounts:
+  type: object
+  additionalProperties: false
+  description: >-
+    pending/retrying/delivering/accepted/dead partition total. Other counters overlap
+    these states and each other and must not be summed. futureBackoff covers only
+    pending/retrying with future nextAttemptAt. Lease counters cover delivering only.
+    awaitingCancellation matches claim cleanup regardless of nextAttemptAt;
+    awaitingExhaustion matches attempts >= 8 and due pending/retrying or expired lease,
+    and can overlap cancellation. predecessorBlocked covers otherwise eligible rows
+    blocked by an active earlier same-rule event after projected cleanup.
+    executableCandidates excludes both cleanup categories and predecessor blocking;
+    it ignores row locks and is not a promise that a worker can claim.
+  required: [total, pending, retrying, delivering, accepted, dead, executableCandidates, futureBackoff, validLeases, expiredLeases, predecessorBlocked, awaitingCancellation, awaitingExhaustion]
+  properties:
+    total: {type: integer, format: int64, minimum: 0}
+    pending: {type: integer, format: int64, minimum: 0}
+    retrying: {type: integer, format: int64, minimum: 0}
+    delivering: {type: integer, format: int64, minimum: 0}
+    accepted: {type: integer, format: int64, minimum: 0}
+    dead: {type: integer, format: int64, minimum: 0}
+    executableCandidates: {type: integer, format: int64, minimum: 0}
+    futureBackoff: {type: integer, format: int64, minimum: 0}
+    validLeases: {type: integer, format: int64, minimum: 0}
+    expiredLeases: {type: integer, format: int64, minimum: 0}
+    predecessorBlocked: {type: integer, format: int64, minimum: 0}
+    awaitingCancellation: {type: integer, format: int64, minimum: 0}
+    awaitingExhaustion: {type: integer, format: int64, minimum: 0}
+EmailQueueFailureClass:
+  type: object
+  additionalProperties: false
+  required: [category, count]
+  properties:
+    category: {type: string, enum: [configuration, transport, temporary_rejection, permanent_rejection, outcome_unknown, cancelled, attempts_exhausted, unknown]}
+    count: {type: integer, format: int64, minimum: 1}
+
 EmailDeliveryList:
   type: array
   items: {$ref: '#/EmailDelivery'}

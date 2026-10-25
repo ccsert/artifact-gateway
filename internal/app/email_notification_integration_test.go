@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"net/mail"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -122,6 +123,24 @@ func TestPostgresAdministratorEmailReopensAndDeliversActualTLSMIME(t *testing.T)
 	}
 	if strings.Contains(got.Body.String(), "private-recipient") || strings.Contains(got.Body.String(), "smtp.example") || strings.Contains(got.Body.String(), "cipher") {
 		t.Fatal("sensitive delivery diagnostics")
+	}
+	beforeDiagnostics, err := reopened.GetEmailDelivery(context.Background(), delivery.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostics := request("GET", "/api/v2/email-queue/diagnostics", "", "", "")
+	var evidence repository.EmailQueueDiagnostics
+	if diagnostics.Code != 200 || diagnostics.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(diagnostics.Body.Bytes(), &evidence) != nil || evidence.Clock != "database" || evidence.Counts.Accepted != 1 || evidence.LastSMTPAcceptedAt == nil || !evidence.LastSMTPAcceptedAt.Equal(beforeDiagnostics.AcceptedAt) || evidence.WorkerHealth != "unknown" {
+		t.Fatalf("SMTP acceptance evidence: %d %s", diagnostics.Code, diagnostics.Body.String())
+	}
+	afterDiagnostics, err := reopened.GetEmailDelivery(context.Background(), delivery.ID)
+	if err != nil || !reflect.DeepEqual(beforeDiagnostics, afterDiagnostics) {
+		t.Fatal("diagnostics changed accepted delivery")
+	}
+	for _, secret := range []string{"private-recipient", "smtp.example", "cipher", "leaseToken", "leaseOwner", "keyDigest", "<html"} {
+		if strings.Contains(diagnostics.Body.String(), secret) {
+			t.Fatalf("diagnostics leaked %q", secret)
+		}
 	}
 	messages, _ := f.Snapshot()
 	if len(messages) != 1 {
