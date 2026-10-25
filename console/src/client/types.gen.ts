@@ -4,8 +4,18 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+export type RubyGemsPreviewQuarantineReadPolicy = {
+  version: string;
+  enabled: boolean;
+};
+
+export type RubyGemsPreviewQuarantineReadPolicyChange = {
+  expectedVersion: string;
+  enabled: boolean;
+};
+
 /**
- * Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
+ * Retained immutable gem identity. Yank always hides discovery and downloads. Independent quarantine hides them only when the default-disabled repository read policy is enabled. Both preserve bytes, identity and capacity.
  */
 export type RubyGemsPreviewGovernance = {
   repositoryId: string;
@@ -15,6 +25,7 @@ export type RubyGemsPreviewGovernance = {
   digest: string;
   governanceVersion: string;
   yanked: boolean;
+  quarantined: boolean;
   updatedAt?: string;
   updatedBy?: string;
   reason?: string;
@@ -23,7 +34,7 @@ export type RubyGemsPreviewGovernance = {
 export type RubyGemsPreviewGovernanceChange = {
   expectedDigest: string;
   expectedGovernanceVersion: string;
-  action: "yank" | "restore";
+  action: "yank" | "restore" | "quarantine" | "release";
   reason: string;
 };
 
@@ -3863,6 +3874,96 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type GetRubyGemsPreviewQuarantineReadPolicyData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type GetRubyGemsPreviewQuarantineReadPolicyErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type GetRubyGemsPreviewQuarantineReadPolicyError =
+  GetRubyGemsPreviewQuarantineReadPolicyErrors[keyof GetRubyGemsPreviewQuarantineReadPolicyErrors];
+
+export type GetRubyGemsPreviewQuarantineReadPolicyResponses = {
+  /**
+   * Current policy
+   */
+  200: RubyGemsPreviewQuarantineReadPolicy;
+};
+
+export type GetRubyGemsPreviewQuarantineReadPolicyResponse =
+  GetRubyGemsPreviewQuarantineReadPolicyResponses[keyof GetRubyGemsPreviewQuarantineReadPolicyResponses];
+
+export type ReplaceRubyGemsPreviewQuarantineReadPolicyData = {
+  body: RubyGemsPreviewQuarantineReadPolicyChange;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy";
+};
+
+export type ReplaceRubyGemsPreviewQuarantineReadPolicyErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type ReplaceRubyGemsPreviewQuarantineReadPolicyError =
+  ReplaceRubyGemsPreviewQuarantineReadPolicyErrors[keyof ReplaceRubyGemsPreviewQuarantineReadPolicyErrors];
+
+export type ReplaceRubyGemsPreviewQuarantineReadPolicyResponses = {
+  /**
+   * Current policy
+   */
+  200: RubyGemsPreviewQuarantineReadPolicy;
+};
+
+export type ReplaceRubyGemsPreviewQuarantineReadPolicyResponse =
+  ReplaceRubyGemsPreviewQuarantineReadPolicyResponses[keyof ReplaceRubyGemsPreviewQuarantineReadPolicyResponses];
 
 export type CreateHelmPreviewReplicationJobData = {
   body: HelmPreviewReplicationRequest;

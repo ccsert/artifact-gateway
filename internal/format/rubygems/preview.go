@@ -104,6 +104,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if len(parts) == 2 && parts[1] == "quarantine-read-policy" {
+		m.previewReadPolicy(w, r, repo)
+		return
+	}
 	if validGovernancePath(parts) {
 		m.previewGovernance(w, r, repo, parts[2], parts[3], parts[4])
 		return

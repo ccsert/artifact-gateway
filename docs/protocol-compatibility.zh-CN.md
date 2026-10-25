@@ -100,7 +100,9 @@ Compact、legacy Marshal 索引与 gemspec 描述同一批已提交包；
 `make native-rubygems-e2e` 使用固定官方 RubyGems/Bundler、仅配置目标的空缓存，
 验证服务重启前后的原包摘要与冷安装。原生 `gem yank` 隐藏所有包表示与下载，保留不可变
 字节和配额；仓库管理员按治理版本恢复，提交前核验原始闭包及当前权限，覆盖事务锁等待后
-的撤权。客户端门禁验证 platform 隔离、冷读取拒绝与重启后恢复。Proxy/Group、签名包、
+的撤权。客户端门禁验证 platform 隔离、冷读取拒绝与重启后恢复。独立隔离/释放
+（#468）配合默认关闭的版本化读策略，在条件/Range 处理前一致过滤全部索引，
+拒绝 gemspec/原包 GET/HEAD。release 重验原字节且不撤销 yank。Proxy/Group、签名包、
 其余治理和正式准入仍由 #293 承接；预览不进入正式目录、Console 格式选择器或安装预置。
 
 ## 契约对齐

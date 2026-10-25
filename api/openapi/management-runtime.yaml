@@ -9,6 +9,8 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy":
+    "$ref": "./management/rubygems-preview.yaml#/quarantine_read_policy"
   "/previews/helm/replication-jobs":
     "$ref": "./management/helm-preview.yaml#/replication_jobs"
   "/previews/helm/replication-jobs/{jobId}":
@@ -383,6 +385,10 @@ paths:
     "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_commit"
 components:
   schemas:
+    RubyGemsPreviewQuarantineReadPolicy:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewQuarantineReadPolicy"
+    RubyGemsPreviewQuarantineReadPolicyChange:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewQuarantineReadPolicyChange"
     RubyGemsPreviewGovernance:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernance"
     RubyGemsPreviewGovernanceChange:

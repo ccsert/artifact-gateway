@@ -16,6 +16,97 @@
     }
   ],
   "paths": {
+    "/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy": {
+      "parameters": [
+        {
+          "name": "repositoryId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "RubyGemsPreview"
+        ],
+        "operationId": "getRubyGemsPreviewQuarantineReadPolicy",
+        "description": "Repository administrator reads the independent default-disabled quarantine read policy.",
+        "responses": {
+          "200": {
+            "description": "Current policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RubyGemsPreviewQuarantineReadPolicy"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "RubyGemsPreview"
+        ],
+        "operationId": "replaceRubyGemsPreviewQuarantineReadPolicy",
+        "description": "Current repository administrator replaces the policy using version CAS and transactional audit. Same-state current-version requests are unaudited no-ops. Enabled policies consistently hide quarantined compact and legacy indexes, quick gemspecs and original GET/HEAD bytes before ETag/304 or Range handling. Policy read failures deny access. Yank remains effective regardless of policy.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RubyGemsPreviewQuarantineReadPolicyChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RubyGemsPreviewQuarantineReadPolicy"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/previews/helm/replication-jobs": {
       "post": {
         "operationId": "createHelmPreviewReplicationJob",
@@ -225,7 +316,7 @@
           "RubyGemsPreview"
         ],
         "operationId": "getRubyGemsPreviewGovernance",
-        "description": "Repository administrator reads the exact retained gem variant, including yanked publications. The package-name grant and current credential are checked.",
+        "description": "Repository administrator reads the exact retained gem variant, including yanked and quarantined publications. The package-name grant and current credential are checked.",
         "responses": {
           "200": {
             "description": "Retained gem governance",
@@ -259,7 +350,7 @@
           "RubyGemsPreview"
         ],
         "operationId": "changeRubyGemsPreviewGovernance",
-        "description": "Repository administrator compares the immutable digest and governance version. Yank hides the exact version/platform from every index, gemspec and download. Restore verifies complete original bytes, archive identity and metadata before rechecking current authority and atomically committing state and audit. A current same-state request is an unaudited no-op; a stale version conflicts. Retained identity and capacity are not released by yank, and pushing cannot restore a gem.",
+        "description": "Repository administrator compares the immutable digest and governance version. Yank hides the exact version/platform from every index, gemspec and download. Restore verifies complete original bytes, archive identity and metadata before rechecking current authority and atomically committing state and audit. A current same-state request is an unaudited no-op; a stale version conflicts. Retained identity and capacity are not released by yank or quarantine. Release verifies original bytes, digest and identity before clearing only quarantine; restore clears only yank. Replayed pushes cannot clear either restriction.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10737,10 +10828,45 @@
   },
   "components": {
     "schemas": {
+      "RubyGemsPreviewQuarantineReadPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "enabled"
+        ],
+        "properties": {
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "RubyGemsPreviewQuarantineReadPolicyChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "enabled"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
       "RubyGemsPreviewGovernance": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.",
+        "description": "Retained immutable gem identity. Yank always hides discovery and downloads. Independent quarantine hides them only when the default-disabled repository read policy is enabled. Both preserve bytes, identity and capacity.",
         "required": [
           "repositoryId",
           "name",
@@ -10748,7 +10874,8 @@
           "platform",
           "digest",
           "governanceVersion",
-          "yanked"
+          "yanked",
+          "quarantined"
         ],
         "properties": {
           "repositoryId": {
@@ -10773,6 +10900,9 @@
             "pattern": "^[1-9][0-9]*$"
           },
           "yanked": {
+            "type": "boolean"
+          },
+          "quarantined": {
             "type": "boolean"
           },
           "updatedAt": {
@@ -10809,7 +10939,9 @@
             "type": "string",
             "enum": [
               "yank",
-              "restore"
+              "restore",
+              "quarantine",
+              "release"
             ]
           },
           "reason": {

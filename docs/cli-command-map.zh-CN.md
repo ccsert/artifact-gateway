@@ -514,3 +514,7 @@ agctl 命令。NuGet 重试保留原持久主体与凭据身份，并重新检�
 | `GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance`<br>`getRubyGemsPreviewGovernance` | 显式 RubyGems 预览 API | #462 | N/A | RA for the exact package | N：此 Hosted 预览提供版本化治理 API，尚未注册或验证对应 agctl 命令 |
 | `POST /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance`<br>`changeRubyGemsPreviewGovernance` | 显式 RubyGems 预览 API | #462 | N/A | RA for the exact package | N：此 Hosted 预览提供版本化治理 API，尚未注册或验证对应 agctl 命令 |
 | `DELETE /rubygems/{repository}/api/v1/gems/yank`<br>`yankRubyGemHostedPreview` | native `gem yank` | #462 | N/A | W for the exact package | N：官方 RubyGems 客户端发送原生 yank，agctl 不另行实现协议客户端 |
+| `GET /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy`<br>`getRubyGemsPreviewQuarantineReadPolicy` | 显式 RubyGems 预览 API | #468 | N/A | RA | N：独立版本化策略 API；尚未注册或验证对应 agctl 命令 |
+| `PUT /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceRubyGemsPreviewQuarantineReadPolicy` | 显式 RubyGems 预览 API | #468 | N/A | RA | N：独立版本化策略 API；尚未注册或验证对应 agctl 命令 |
+
+RubyGems 治理 POST 同时支持独立 `quarantine`/`release`（#468），沿用精确包名管理员权限和 CAS 契约；release 不撤销 yank，restore 不清除隔离。

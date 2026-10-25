@@ -1,8 +1,11 @@
 package rubygemsfixture
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	protocol "github.com/ccsert/artifact-gateway/internal/protocol/rubygems"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +16,7 @@ import (
 )
 
 func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepository) {
+	defer QuarantinePlatformContract(t, store, repo)
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
@@ -82,8 +86,63 @@ func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepos
 	if got, err := store.Get(ctx, repo.ID, p.FullName()); err != nil || got.Digest != p.Digest {
 		t.Fatalf("restored original %+v %v", got, err)
 	}
-	c.Action = "yank"
+	// Each action changes only its own overlay; canonical identity and retained
+	// capacity remain stable throughout all four yank/quarantine combinations.
 	c.ExpectedVersion = "3"
+	for _, step := range []struct {
+		action, version     string
+		yanked, quarantined bool
+	}{
+		{"quarantine", "4", false, true}, {"yank", "5", true, true},
+		{"release", "6", true, false}, {"quarantine", "7", true, true},
+		{"restore", "8", false, true}, {"release", "9", false, false},
+	} {
+		c.Action = step.action
+		got, err := store.TransitionGovernance(ctx, c, check)
+		if err != nil || got.Governance.Yanked != step.yanked || got.Governance.Quarantined != step.quarantined || got.Governance.Version != step.version || got.Digest != p.Digest || got.ObjectKey != p.ObjectKey {
+			t.Fatalf("independent %s: %+v %v", step.action, got, err)
+		}
+		c.ExpectedVersion = step.version
+		same, err := store.TransitionGovernance(ctx, c, check)
+		if err != nil || same.Governance != got.Governance {
+			t.Fatalf("no-op %s %+v %v", step.action, same, err)
+		}
+		if _, err = store.TransitionGovernance(ctx, c, nil); !errors.Is(err, d.ErrAccessDenied) {
+			t.Fatalf("no-op bypassed authority %v", err)
+		}
+		if step.quarantined {
+			if _, _, err = store.Reserve(ctx, in); !errors.Is(err, d.ErrConflict) {
+				t.Fatalf("push bypassed quarantine: %v", err)
+			}
+			if _, _, err = store.Commit(ctx, p.SessionID, in.Actor); !errors.Is(err, d.ErrConflict) {
+				t.Fatalf("commit bypassed quarantine: %v", err)
+			}
+		}
+	}
+	policy, err := store.GetReadPolicy(ctx, repo.ID)
+	if err != nil || policy.Version != "1" || policy.Enabled {
+		t.Fatalf("default policy %+v %v", policy, err)
+	}
+	pc := d.PolicyChange{RepositoryID: repo.ID, Identity: c.Identity, Actor: c.Actor, ExpectedVersion: "1", Enabled: true}
+	if _, err = store.ReplaceReadPolicy(ctx, pc, nil); !errors.Is(err, d.ErrAccessDenied) {
+		t.Fatalf("policy bypassed authority: %v", err)
+	}
+	policy, err = store.ReplaceReadPolicy(ctx, pc, check)
+	if err != nil || policy.Version != "2" || !policy.Enabled {
+		t.Fatalf("policy %+v %v", policy, err)
+	}
+	if _, err = store.ReplaceReadPolicy(ctx, pc, check); !errors.Is(err, repository.ErrVersionConflict) {
+		t.Fatalf("policy stale CAS %v", err)
+	}
+	pc.ExpectedVersion = "2"
+	if same, err := store.ReplaceReadPolicy(ctx, pc, check); err != nil || same != policy {
+		t.Fatalf("policy no-op %+v %v", same, err)
+	}
+	if _, err = store.ReplaceReadPolicy(ctx, pc, nil); !errors.Is(err, d.ErrAccessDenied) {
+		t.Fatalf("policy no-op bypassed authority %v", err)
+	}
+	c.Action = "yank"
+	c.ExpectedVersion = "9"
 	var wg sync.WaitGroup
 	errorsCh := make(chan error, 8)
 	for range 8 {
@@ -102,5 +161,40 @@ func GovernanceContract(t *testing.T, store d.Store, repo repository.HostedRepos
 	}
 	if success != 1 {
 		t.Fatalf("concurrent CAS accepted %d writers", success)
+	}
+}
+
+func QuarantinePlatformContract(t *testing.T, store d.Store, repo repository.HostedRepository) {
+	t.Helper()
+	ctx := t.Context()
+	original := Session(t, repo.ID)
+	original.Name = "variant"
+	original.MetadataYAML = bytes.Replace(original.MetadataYAML, []byte("name: contract"), []byte("name: variant"), 1)
+	for _, platform := range []string{"ruby", "java"} {
+		in := original
+		in.ID, in.Platform = uuid.NewString(), platform
+		in.MetadataYAML = bytes.Replace(in.MetadataYAML, []byte("platform: ruby"), []byte("platform: "+platform), 1)
+		meta, err := protocol.ParseMetadata(in.MetadataYAML)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in.MetadataJSON, _ = json.Marshal(meta)
+		session, _, err := store.Reserve(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err = store.Commit(ctx, session.ID, in.Actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(ctx context.Context, _ repository.RubyGemsGovernanceAuthority) error { return ctx.Err() }
+	c := d.GovernanceChange{RepositoryID: repo.ID, Name: "variant", Version: "1.0", Platform: "ruby", ExpectedDigest: original.Digest, ExpectedVersion: "1", Action: "quarantine", Actor: original.Actor, Reason: "Owned platform quarantine", Identity: repository.RubyGemsGovernanceIdentity{Actor: original.Actor, Kind: "static_admin"}}
+	got, err := store.TransitionGovernance(ctx, c, check)
+	if err != nil || !got.Governance.Quarantined || got.Governance.Yanked {
+		t.Fatal(got, err)
+	}
+	java, err := store.GetRetained(ctx, repo.ID, "variant", "1.0.0", "java")
+	if err != nil || java.Governance.Quarantined || java.Governance.Version != "1" {
+		t.Fatal("quarantine widened platform", java, err)
 	}
 }

@@ -48,6 +48,10 @@ func RubyGemsEarlierAuthorityExpiry(a, b time.Time) time.Time {
 func (s *MemoryStore) ReadRubyGemsGovernanceAuthority(ctx context.Context, id string, in RubyGemsGovernanceIdentity) (RubyGemsGovernanceAuthority, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.rubyGemsGovernanceAuthorityLocked(ctx, id, in)
+}
+
+func (s *MemoryStore) rubyGemsGovernanceAuthorityLocked(ctx context.Context, id string, in RubyGemsGovernanceIdentity) (RubyGemsGovernanceAuthority, error) {
 	a := RubyGemsGovernanceAuthority{Identity: in, ValidUntil: in.ValidUntil}
 	r, ok := s.hostedRepositories[id]
 	if !ok || r.Format != FormatRubyGems || r.Type != RepositoryTypeHosted || r.State != RepositoryActive {
@@ -99,4 +103,32 @@ func (s *MemoryStore) ReadRubyGemsGovernanceAuthority(ctx context.Context, id st
 		}
 	}
 	return a, ctx.Err()
+}
+
+// ChangeRubyGemsReadPolicy shares the repository mutex with credential/grant and
+// generic policy mutations. The callback validates CAS and current authority;
+// policy and audit become visible together only after it succeeds.
+func (s *MemoryStore) ChangeRubyGemsReadPolicy(ctx context.Context, id string, identity RubyGemsGovernanceIdentity, apply func(RepositoryQuarantineReadPolicy, RubyGemsGovernanceAuthority) (RepositoryQuarantineReadPolicy, *AuditRecord, error)) (RepositoryQuarantineReadPolicy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, err := s.rubyGemsGovernanceAuthorityLocked(ctx, id, identity)
+	if err != nil {
+		return RepositoryQuarantineReadPolicy{}, err
+	}
+	current, ok := s.quarantineReadPolicies[id]
+	if !ok {
+		current = DefaultRepositoryQuarantineReadPolicy()
+	}
+	next, audit, err := apply(current, a)
+	if err != nil {
+		return RepositoryQuarantineReadPolicy{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return RepositoryQuarantineReadPolicy{}, err
+	}
+	if audit != nil {
+		s.appendAuditLocked(withRequestContextAudit(ctx, *audit))
+		s.quarantineReadPolicies[id] = next
+	}
+	return next, nil
 }

@@ -1,6 +1,9 @@
 package contracts
 
-import "testing"
+import (
+	"github.com/getkin/kin-openapi/openapi3"
+	"testing"
+)
 
 func TestRubyGemsPreviewContractSeparatesWorkerPlacementFromFormalAdmission(t *testing.T) {
 	spec := loadManagementRuntimeSpec(t)
@@ -58,5 +61,43 @@ func TestRubyGemsNativeContractDescribesAuthenticationAndReadMetadataConsistentl
 				requireResponse(t, op, response)
 			}
 		}
+	}
+}
+
+func TestRubyGemsQuarantineContractRequiresIndependentStateAndPolicyCAS(t *testing.T) {
+	for _, spec := range []struct {
+		name string
+		load func(*testing.T) *openapi3.T
+	}{
+		{"management", loadManagementRuntimeSpec}, {"native", loadNativeHostedSpec},
+	} {
+		t.Run(spec.name, func(t *testing.T) {
+			doc := spec.load(t)
+			governance := doc.Components.Schemas["RubyGemsPreviewGovernance"].Value
+			if governance.Properties["quarantined"] == nil {
+				t.Fatal("missing independent quarantine state")
+			}
+			change := doc.Components.Schemas["RubyGemsPreviewGovernanceChange"].Value
+			for _, action := range []string{"yank", "restore", "quarantine", "release"} {
+				if err := change.Properties["action"].Value.VisitJSON(action); err != nil {
+					t.Fatal(action, err)
+				}
+			}
+			path := "/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy"
+			operation(t, doc, path, "GET")
+			put := operation(t, doc, path, "PUT")
+			for _, code := range []string{"200", "400", "401", "403", "404", "409", "500"} {
+				requireResponse(t, put, code)
+			}
+			input := put.RequestBody.Value.Content["application/json"].Schema.Value
+			if err := input.VisitJSON(map[string]any{"expectedVersion": "1", "enabled": true}); err != nil {
+				t.Fatal(err)
+			}
+			for _, bad := range []map[string]any{{"enabled": true}, {"expectedVersion": "1"}, {"expectedVersion": "0", "enabled": true}, {"expectedVersion": "1", "enabled": true, "format": "rubygems"}} {
+				if err := input.VisitJSON(bad); err == nil {
+					t.Fatal("invalid policy admitted", bad)
+				}
+			}
+		})
 	}
 }

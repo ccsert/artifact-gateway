@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
+
 - Nexus [PyPI Hosted migration](docs/nexus-pypi-migration.md) (#461) publishes each complete wheel/sdist release atomically with its durable checkpoint. Frozen Simple metadata preserves Requires-Python and file yanking; current administrator authority, lease and source versions are rechecked before publication. A required fixed-pip gate consumes only the target after the synthetic source is stopped.
 
 - RubyGems Hosted preview supports native `gem yank` and versioned management recovery (#462). Yank hides indexes, gemspecs and original downloads while retaining bytes and quota; restore verifies the original package under current repository-admin authority. Platform variants stay independent across restart.

@@ -7,7 +7,7 @@ governance:
   get:
     tags: [RubyGemsPreview]
     operationId: getRubyGemsPreviewGovernance
-    description: Repository administrator reads the exact retained gem variant, including yanked publications. The package-name grant and current credential are checked.
+    description: Repository administrator reads the exact retained gem variant, including yanked and quarantined publications. The package-name grant and current credential are checked.
     responses:
       '200':
         description: Retained gem governance
@@ -28,7 +28,9 @@ governance:
       Restore verifies complete original bytes, archive identity and metadata before
       rechecking current authority and atomically committing state and audit. A current
       same-state request is an unaudited no-op; a stale version conflicts. Retained
-      identity and capacity are not released by yank, and pushing cannot restore a gem.
+      identity and capacity are not released by yank or quarantine. Release verifies
+      original bytes, digest and identity before clearing only quarantine; restore
+      clears only yank. Replayed pushes cannot clear either restriction.
     requestBody:
       required: true
       content:
@@ -121,3 +123,46 @@ capacity:
       '403': {$ref: '../components/responses.yaml#/Problem'}
       '404': {$ref: '../components/responses.yaml#/Problem'}
       '409': {$ref: '../components/responses.yaml#/Problem'}
+quarantine_read_policy:
+  parameters:
+    - {name: repositoryId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    tags: [RubyGemsPreview]
+    operationId: getRubyGemsPreviewQuarantineReadPolicy
+    description: Repository administrator reads the independent default-disabled quarantine read policy.
+    responses:
+      '200':
+        description: Current policy
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewQuarantineReadPolicy'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '500': {$ref: '../components/responses.yaml#/Problem'}
+  put:
+    tags: [RubyGemsPreview]
+    operationId: replaceRubyGemsPreviewQuarantineReadPolicy
+    description: >-
+      Current repository administrator replaces the policy using version CAS and
+      transactional audit. Same-state current-version requests are unaudited no-ops.
+      Enabled policies consistently hide quarantined compact and legacy indexes,
+      quick gemspecs and original GET/HEAD bytes before ETag/304 or Range handling.
+      Policy read failures deny access. Yank remains effective regardless of policy.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewQuarantineReadPolicyChange'}
+    responses:
+      '200':
+        description: Current policy
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewQuarantineReadPolicy'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '409': {$ref: '../components/responses.yaml#/Problem'}
+      '500': {$ref: '../components/responses.yaml#/Problem'}

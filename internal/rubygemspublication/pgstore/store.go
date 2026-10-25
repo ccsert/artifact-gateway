@@ -29,14 +29,14 @@ func New(db, locks *sql.DB) (*Store, error) {
 	return &Store{db, locks}, nil
 }
 
-const columns = `id::text,repository_id::text,name,version,platform,digest,size,actor,state,object_key,metadata_json,metadata_yaml,created_at,expires_at,committed_at,collected_at,governance_version::text,yanked,governance_updated_at,governance_updated_by,governance_reason`
+const columns = `id::text,repository_id::text,name,version,platform,digest,size,actor,state,object_key,metadata_json,metadata_yaml,created_at,expires_at,committed_at,collected_at,governance_version::text,yanked,quarantined,governance_updated_at,governance_updated_by,governance_reason`
 
 type scanner interface{ Scan(...any) error }
 
 func scan(row scanner) (domain.Session, error) {
 	var s domain.Session
 	var committed, collected, governed sql.NullTime
-	err := row.Scan(&s.ID, &s.RepositoryID, &s.Name, &s.Version, &s.Platform, &s.Digest, &s.Size, &s.Actor, &s.State, &s.ObjectKey, &s.MetadataJSON, &s.MetadataYAML, &s.CreatedAt, &s.ExpiresAt, &committed, &collected, &s.Governance.Version, &s.Governance.Yanked, &governed, &s.Governance.UpdatedBy, &s.Governance.Reason)
+	err := row.Scan(&s.ID, &s.RepositoryID, &s.Name, &s.Version, &s.Platform, &s.Digest, &s.Size, &s.Actor, &s.State, &s.ObjectKey, &s.MetadataJSON, &s.MetadataYAML, &s.CreatedAt, &s.ExpiresAt, &committed, &collected, &s.Governance.Version, &s.Governance.Yanked, &s.Governance.Quarantined, &governed, &s.Governance.UpdatedBy, &s.Governance.Reason)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = repository.ErrNotFound
 	}
@@ -111,7 +111,7 @@ func (s *Store) Reserve(ctx context.Context, in domain.Session) (domain.Session,
 	}
 	prior, e := scan(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE id::text=$1`, in.ID))
 	if e == nil {
-		if prior.Governance.Yanked || !domain.Same(prior, in) || prior.Actor != in.Actor {
+		if prior.Governance.Yanked || prior.Governance.Quarantined || !domain.Same(prior, in) || prior.Actor != in.Actor {
 			return domain.Session{}, false, domain.ErrConflict
 		}
 		if prior.State == "expired" {
@@ -124,7 +124,7 @@ func (s *Store) Reserve(ctx context.Context, in domain.Session) (domain.Session,
 	}
 	prior, e = scan(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM native_rubygems_sessions WHERE repository_id::text=$1 AND ((name=$2 AND canonical_version=$3 AND platform=$4) OR full_name=$5) AND state IN ('pending','committed')`, in.RepositoryID, in.Name, protocol.CanonicalVersion(in.Version), in.Platform, domain.Visible(in).FullName()))
 	if e == nil {
-		if prior.Governance.Yanked || !domain.Same(prior, in) || prior.State == "pending" && prior.Actor != in.Actor {
+		if prior.Governance.Yanked || prior.Governance.Quarantined || !domain.Same(prior, in) || prior.State == "pending" && prior.Actor != in.Actor {
 			return domain.Session{}, false, domain.ErrConflict
 		}
 		return prior, true, tx.Commit()
@@ -174,7 +174,7 @@ func (s *Store) Commit(ctx context.Context, id, actor string) (domain.Publicatio
 		return domain.Publication{}, false, e
 	}
 	if in.State == "committed" {
-		if in.Governance.Yanked {
+		if in.Governance.Yanked || in.Governance.Quarantined {
 			return domain.Publication{}, false, domain.ErrConflict
 		}
 		return domain.Visible(in), true, tx.Commit()

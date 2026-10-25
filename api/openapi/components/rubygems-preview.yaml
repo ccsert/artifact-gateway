@@ -48,8 +48,8 @@ RubyGemsPreviewQuotaInput:
 RubyGemsPreviewGovernance:
   type: object
   additionalProperties: false
-  description: Retained immutable gem identity. Yank hides discovery and downloads while preserving bytes, identity and capacity.
-  required: [repositoryId, name, version, platform, digest, governanceVersion, yanked]
+  description: Retained immutable gem identity. Yank always hides discovery and downloads. Independent quarantine hides them only when the default-disabled repository read policy is enabled. Both preserve bytes, identity and capacity.
+  required: [repositoryId, name, version, platform, digest, governanceVersion, yanked, quarantined]
   properties:
     repositoryId: {type: string, format: uuid}
     name: {type: string}
@@ -58,6 +58,7 @@ RubyGemsPreviewGovernance:
     digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
     governanceVersion: {type: string, pattern: '^[1-9][0-9]*$'}
     yanked: {type: boolean}
+    quarantined: {type: boolean}
     updatedAt: {type: string, format: date-time}
     updatedBy: {type: string}
     reason: {type: string}
@@ -68,5 +69,19 @@ RubyGemsPreviewGovernanceChange:
   properties:
     expectedDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
     expectedGovernanceVersion: {type: string, pattern: '^[1-9][0-9]*$'}
-    action: {type: string, enum: [yank, restore]}
+    action: {type: string, enum: [yank, restore, quarantine, release]}
     reason: {type: string, minLength: 1, maxLength: 2048}
+RubyGemsPreviewQuarantineReadPolicy:
+  type: object
+  additionalProperties: false
+  required: [version, enabled]
+  properties:
+    version: {type: string, pattern: '^[1-9][0-9]*$'}
+    enabled: {type: boolean, default: false}
+RubyGemsPreviewQuarantineReadPolicyChange:
+  type: object
+  additionalProperties: false
+  required: [expectedVersion, enabled]
+  properties:
+    expectedVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+    enabled: {type: boolean}
