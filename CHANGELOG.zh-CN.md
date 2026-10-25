@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 新增管理员[邮件队列只读诊断](docs/email-notification-delivery.zh-CN.md#队列只读诊断)（#467）：使用数据库时间的一致快照覆盖全部保留交付，聚合与领取条件一致的候选、退避、租约和待终结任务，提供有限安全失败分类及持久 SMTP 接受证据。worker 健康保持 unknown，GET 不发送、不修改队列；不增加 Console 或 CLI 入口。
+
 - 新增仅限 TTY 的 [agctl 交互式 shell](docs/cli.zh-CN.md#交互式-shell)（#136），支持会话 profile/仓库上下文、命令/profile/仓库补全、sticky JSON/dry-run/verbose、私有命令路径历史和有界客户端中断。沿用普通 CLI 的权限、确认与输出处理；stdin 读取不会吞掉后续 shell 命令。
 
 - Nexus 新增 [PyPI Hosted 迁移](docs/nexus-pypi-migration.zh-CN.md)（#461），将完整 wheel/sdist 版本与持久检查点原子提交，保留 Requires-Python 和文件 yank。提交前复查当前管理员、租约与源版本；固定 pip 必需门禁在停止合成源后仅从目标消费。

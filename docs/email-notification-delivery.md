@@ -233,6 +233,58 @@ targets or non-dead replay 409, rate limits 429, disabled relay/missing key or f
 queue 503. Replaying preserves event ID, encrypted recipient, content descriptor
 and possible-duplicate warning. A changed target requires a new explicit test.
 
+## Read-only queue diagnostics
+
+Administrators can call `GET /api/v2/email-queue/diagnostics` even while the
+responding process has email disabled. It requires the same administrator and
+forced-password-change gates and returns `Cache-Control: no-store`. This GET
+never sends, claims, replays, probes SMTP or updates queue rows. It adds no
+Console page or CLI command and leaves default-off sending unchanged.
+
+`scope: whole_retained_queue` includes every retained test and repository-quota
+delivery, including terminal history, rather than the latest 50 statuses.
+PostgreSQL computes all aggregates in one MVCC statement snapshot with a single
+database `clock_timestamp()` sample (`sampledAt`, `clock: database`). Memory uses
+one store lock and its clock (`clock: memory_store`); its scope is that store
+instance, not a cluster. Concurrent commits after the snapshot are not included.
+
+The five state counts partition `total`. Other counts overlap states and each
+other and must not be added together:
+
+- `futureBackoff`: pending/retrying with future `nextAttemptAt`; expected retry
+  delay alone is not evidence of a stalled queue.
+- `validLeases` / `expiredLeases`: delivering rows whose expiry is respectively
+  after / at or before `sampledAt`. Missing expiry belongs to neither category.
+- `awaitingCancellation`: automatically revoked pending/retrying rows regardless
+  of due time, or revoked delivering rows with expired leases.
+- `awaitingExhaustion`: eight attempts and due pending/retrying or expired
+  delivering; may overlap cancellation.
+- `executableCandidates`: due pending/retrying or expired delivering, fewer than
+  eight attempts, no automatic cancellation and no active earlier same-rule
+  event after projecting the claim's cancellation/exhaustion cleanup.
+- `predecessorBlocked`: otherwise eligible candidates held by that earlier event.
+  It excludes rows already excluded by attempts, cancellation or due time.
+
+Candidates mirror claim eligibility before row locking; another transaction can
+hold a row lock, claim or finish after sampling. `oldestExecutableWaitSeconds`
+is the maximum time since a candidate's own `nextAttemptAt` or expired lease,
+computed with the sampled clock; it is null with no candidates. It does not
+reconstruct when a predecessor cleared or establish continuous executability.
+
+`failureClasses` contains at most eight fixed aggregate categories across current
+nonempty stored failure codes: `configuration`, `transport`, `temporary_rejection`,
+`permanent_rejection`, `outcome_unknown`, `cancelled`, `attempts_exhausted`,
+`unknown`. Unknown/legacy codes are counted as unknown, never echoed. No message
+identity, recipient, SMTP address, key digest, raw error, body or lease token is
+returned. `lastSmtpAcceptedAt` is the newest persisted `acceptedAt` in retained
+rows, written by a fenced successful finish after the final positive DATA reply;
+it is null without that evidence. It proves neither inbox delivery nor current
+worker activity. `updatedAt` is not worker activity evidence. No durable role
+heartbeat or expected-role configuration exists, so `workerHealth` is always
+`unknown`; these observations cannot prove healthy workers, no workers, cluster
+configuration agreement or a complete outage. The response repeats these limits
+in `evidenceLimitations`.
+
 ## Delivery semantics
 
 States are `pending`, `delivering`, `retrying`, `accepted`, `dead`. Each claim

@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Add administrator-only [read-only email queue diagnostics](docs/email-notification-delivery.md#read-only-queue-diagnostics) (#467): one database-time snapshot across all retained deliveries, claim-aligned candidate/backoff/lease/cleanup counts, bounded safe failure classes and persisted SMTP acceptance evidence. Worker health remains unknown; the GET never sends or changes the queue. No Console or CLI surface is added.
+
 - Add the TTY-only [agctl interactive shell](docs/cli.md#interactive-shell) (#136), with session profile/repository context, command/profile/repository completion, sticky JSON/dry-run/verbose options, private command-path history, and bounded client interruption. It shares ordinary CLI authorization, confirmation and output handling; stdin readers cannot consume later shell commands.
 
 - Nexus [PyPI Hosted migration](docs/nexus-pypi-migration.md) (#461) publishes each complete wheel/sdist release atomically with its durable checkpoint. Frozen Simple metadata preserves Requires-Python and file yanking; current administrator authority, lease and source versions are rechecked before publication. A required fixed-pip gate consumes only the target after the synthetic source is stopped.
