@@ -59,11 +59,11 @@ func (s *shellSession) arguments(args []string) []string {
 	fs.SetOutput(io.Discard)
 	registerGlobalFlags(fs, &globalFlags{})
 	if fs.Parse(args) == nil {
-		if cmd, _, ok := resolveCommand(fs.Args()); ok && cmd.setFlags != nil && s.repo != "" {
+		if cmd, remaining, ok := resolveCommand(fs.Args()); ok && cmd.setFlags != nil && s.repo != "" {
 			local := flag.NewFlagSet("command", flag.ContinueOnError)
 			cmd.setFlags(local)
 			if local.Lookup("repo") != nil {
-				insert := len(args) - len(fs.Args()) + len(strings.Fields(cmd.name))
+				insert := len(args) - len(remaining)
 				withRepo := append([]string{}, args[:insert]...)
 				withRepo = append(withRepo, "--repo="+s.repo)
 				args = append(withRepo, args[insert:]...)
@@ -363,12 +363,16 @@ func (s *shellSession) candidates(ctx context.Context, line string) []string {
 	}
 	var matches []string
 	for _, value := range values {
-		if validProfileName(value) == nil && strings.HasPrefix(value, prefix) {
+		if validProfileName(value) == nil && strings.HasPrefix(escapeShellCompletion(value), prefix) {
 			matches = append(matches, value)
 		}
 	}
 	sort.Strings(matches)
 	return matches
+}
+
+func escapeShellCompletion(value string) string {
+	return strings.NewReplacer(`\`, `\\`, `'`, `\'`, `"`, `\"`).Replace(value)
 }
 
 type shellCompleter struct {
@@ -385,7 +389,10 @@ func (c shellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 	var results [][]rune
 	for _, candidate := range c.session.candidates(c.ctx, text) {
-		results = append(results, []rune(strings.TrimPrefix(candidate, prefix)+" "))
+		// Completion suffixes become shell input, so quote characters and
+		// backslashes must remain literal when splitShellLine parses them.
+		suffix := strings.TrimPrefix(escapeShellCompletion(candidate), prefix)
+		results = append(results, []rune(suffix+" "))
 	}
 	return results, len([]rune(prefix))
 }
@@ -427,12 +434,14 @@ func runShell(ctx context.Context, env *commandContext) error {
 	}()
 	historyPath := filepath.Join(filepath.Dir(env.configPath), "history")
 	historyEnabled := env.configPath != ""
+	var historyEntries []string
 	if historyEnabled {
 		entries, e := readShellHistory(historyPath)
 		if e != nil {
 			historyEnabled = false
 			_, _ = fmt.Fprintln(env.stderr, "shell history disabled:", e)
 		} else {
+			historyEntries = entries
 			for _, entry := range entries {
 				_ = rl.SaveHistory(entry)
 			}
@@ -442,6 +451,14 @@ func runShell(ctx context.Context, env *commandContext) error {
 	for ctx.Err() == nil {
 		rl.SetPrompt(s.prompt())
 		line, e := rl.Readline()
+		// readline retains temporary edits on recalled entries even with auto-save
+		// disabled. SaveHistory can substitute those edits for its argument.
+		// Rebuild from sanitized paths after every read, including invalid input
+		// and builtins, before allowing another recall or sanitized insertion.
+		rl.ResetHistory()
+		for _, entry := range historyEntries {
+			_ = rl.SaveHistory(entry)
+		}
 		if errors.Is(e, readline.ErrInterrupt) {
 			continue
 		}
@@ -467,6 +484,10 @@ func runShell(ctx context.Context, env *commandContext) error {
 			continue
 		}
 		if entry := shellHistoryEntry(line); entry != "" {
+			historyEntries = append(historyEntries, entry)
+			if len(historyEntries) > shellHistoryLimit {
+				historyEntries = historyEntries[len(historyEntries)-shellHistoryLimit:]
+			}
 			_ = rl.SaveHistory(entry)
 			if historyEnabled {
 				if e := appendShellHistory(historyPath, entry); e != nil {

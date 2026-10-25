@@ -139,6 +139,35 @@ func TestShellHistoryFiltersSyntheticSecrets(t *testing.T) {
 	}
 }
 
+func TestShellProfileCompletionRoundTrip(t *testing.T) {
+	for _, tc := range []struct{ name, prefix string }{
+		{`prod"east`, `prod`}, {`prod'east`, `prod`}, {`prod\east`, `prod`}, {`prod"east\edge`, `prod`},
+		{`prod"east`, `prod\"e`}, {`prod'east`, `prod\'e`}, {`prod\east`, `prod\\e`},
+	} {
+		name := tc.name
+		t.Run(name+"/"+tc.prefix, func(t *testing.T) {
+			s := testShellSession(t)
+			code, out, errout := runCLI(t, "config", "profile", "add", name, "--server", "https://example.com")
+			if code != ExitOK {
+				t.Fatalf("add supported profile: %d, %s, %s", code, out, errout)
+			}
+			// readline appends the returned suffix to the existing input.
+			line := "use profile " + tc.prefix
+			completions, _ := (shellCompleter{context.Background(), s}).Do([]rune(line), len([]rune(line)))
+			if len(completions) != 1 {
+				t.Fatalf("completion: %q", completions)
+			}
+			args, err := splitShellLine(line + string(completions[0]))
+			if err != nil || !reflect.DeepEqual(args, []string{"use", "profile", name}) {
+				t.Fatalf("completed profile did not round trip: %q, %v", args, err)
+			}
+			if handled, _, err := s.builtin(args); !handled || err != nil || s.profile != name {
+				t.Fatalf("use completed profile: %v, %v, %q", handled, err, s.profile)
+			}
+		})
+	}
+}
+
 func TestShellCompletionUsesAuthorizedRepositoryList(t *testing.T) {
 	s := testShellSession(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -211,6 +240,40 @@ func TestShellStickyOptionsPreserveWriteSafety(t *testing.T) {
 	}
 	if recorded() != "GET,DELETE" {
 		t.Fatal(recorded())
+	}
+}
+
+func TestShellExplicitFalseOverridesStickyOptions(t *testing.T) {
+	s := testShellSession(t)
+	var methods []string
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		methods = append(methods, r.Method)
+		mu.Unlock()
+		if r.Method == http.MethodGet {
+			_, _ = fmt.Fprint(w, `{"id":"target","name":"target","format":"raw","state":"active","version":"v1"}`)
+			return
+		}
+		writeProblem(w, http.StatusForbidden, "access_denied", "administrator permission required")
+	}))
+	defer server.Close()
+	s.env.globals.server, s.env.globals.token = server.URL, "synthetic-token"
+	s.env.flagSet["server"], s.env.flagSet["token"] = true, true
+	s.json, s.dryRun, s.verbose = true, true, true
+	var out, errout bytes.Buffer
+	code := RunCLI(context.Background(), s.arguments([]string{"repo", "delete", "target", "--yes", "--json=false", "--dry-run=false", "--verbose=false"}), strings.NewReader(""), &out, &errout)
+	mu.Lock()
+	gotMethods := strings.Join(methods, ",")
+	mu.Unlock()
+	if code != ExitForbidden || gotMethods != "DELETE" {
+		t.Fatalf("explicit dry-run=false did not submit the write: code %d, methods %s", code, gotMethods)
+	}
+	if out.Len() != 0 || !strings.Contains(errout.String(), "error: server returned HTTP 403 (Forbidden)") {
+		t.Fatalf("explicit json=false did not render a human error: stdout %s, stderr %s", &out, &errout)
+	}
+	if strings.Contains(errout.String(), "> DELETE") || strings.Contains(errout.String(), "< 403") {
+		t.Fatalf("explicit verbose=false still traced the request: %s", &errout)
 	}
 }
 

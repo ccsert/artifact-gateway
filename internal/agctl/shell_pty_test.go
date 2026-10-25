@@ -68,7 +68,7 @@ func startShellPTY(t *testing.T, binary, home string, args ...string) *shellPTY 
 	p.expect("]> ")
 	return p
 }
-func (p *shellPTY) expect(value string) {
+func (p *shellPTY) expect(value string) string {
 	p.t.Helper()
 	deadline := time.NewTimer(8 * time.Second)
 	defer deadline.Stop()
@@ -83,7 +83,10 @@ func (p *shellPTY) expect(value string) {
 			p.t.Fatalf("PTY timed out waiting for %q: %s", value, p.text)
 		}
 	}
-	p.text = p.text[strings.Index(p.text, value)+len(value):]
+	end := strings.Index(p.text, value) + len(value)
+	observed := p.text[:end]
+	p.text = p.text[end:]
+	return observed
 }
 func (p *shellPTY) send(value string) {
 	p.t.Helper()
@@ -147,6 +150,63 @@ func TestShellPTY(t *testing.T) {
 		if !bytes.Contains(data, []byte("version\n")) {
 			t.Fatal("history missing command")
 		}
+	})
+	t.Run("older-recalled-entry-is-sanitized", func(t *testing.T) {
+		home := t.TempDir()
+		p := startShellPTY(t, binary, home)
+		p.send("version\n")
+		p.expect("(revision ")
+		p.expect("]> ")
+		p.send("auth whoami\n")
+		p.expect("error:")
+		p.expect("]> ")
+		p.send("\x1b[A\x1b[A --token SYNTHETIC_REVIEW_136\n")
+		p.expect("(revision ")
+		p.expect("]> ")
+		// Recall and execute the last entry. Without sanitization this sends
+		// the secret-bearing version command back through the editor.
+		p.send("\x1b[A\n")
+		recalled := p.expect("(revision ")
+		if strings.Contains(recalled, "SYNTHETIC_REVIEW_136") || strings.Contains(recalled, "--token") {
+			t.Fatalf("session history recalled private input: %s", recalled)
+		}
+		p.expect("]> ")
+		p.send("exit\n")
+		p.wait(true)
+		data, err := os.ReadFile(filepath.Join(home, ".config", "agctl", "history"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "SYNTHETIC_REVIEW_136") || strings.Contains(string(data), "--token") {
+			t.Fatalf("disk history leaked private input: %s", data)
+		}
+	})
+	t.Run("quoted-profile-completion", func(t *testing.T) {
+		p := startShellPTY(t, binary, t.TempDir())
+		p.send("config profile add 'prod\"east' --server https://example.com\n")
+		p.expect("stored in")
+		p.expect("]> ")
+		p.send("use repo repo-one\n")
+		p.expect("repo:repo-one]> ")
+		p.send("use profile prod\t\n")
+		p.expect("agctl [prod\"east | https://example.com | repo:]> ")
+		p.send("version\n")
+		p.expect("(revision ")
+		p.expect("]> ")
+		p.send("exit\n")
+		p.wait(true)
+	})
+	t.Run("quoted-command-with-repository", func(t *testing.T) {
+		p := startShellPTY(t, binary, t.TempDir())
+		p.send("use repo repo-one\n")
+		p.expect("repo:repo-one]> ")
+		p.send("\"artifact list\"\n")
+		p.expect("]> ")
+		p.send("version\n")
+		p.expect("(revision ")
+		p.expect("]> ")
+		p.send("exit\n")
+		p.wait(true)
 	})
 	t.Run("eof", func(t *testing.T) { p := startShellPTY(t, binary, t.TempDir()); p.send("\x04"); p.wait(true) })
 	t.Run("closed-terminal", func(t *testing.T) { p := startShellPTY(t, binary, t.TempDir()); _ = p.file.Close(); p.wait(false) })
