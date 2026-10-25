@@ -167,6 +167,8 @@ paths:
     "$ref": "./management/email.yaml#/email_targets"
   "/email-targets/{targetId}":
     "$ref": "./management/email.yaml#/email_target"
+  "/email-queue/diagnostics":
+    "$ref": "./management/email.yaml#/email_queue_diagnostics"
   "/email-deliveries":
     "$ref": "./management/email.yaml#/email_deliveries"
   "/email-deliveries/{deliveryId}":

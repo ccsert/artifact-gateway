@@ -202,6 +202,22 @@ func (h generatedRepositoryAPIAdapter) GetEmailNotificationCapability(w http.Res
 	reason := h.emailReady()
 	writeNativeMavenJSON(w, 200, map[string]any{"enabled": reason == "ready", "reason": reason})
 }
+func (h generatedRepositoryAPIAdapter) GetEmailQueueDiagnostics(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.emailAuthorize(w, r); !ok {
+		return
+	}
+	store, ok := h.emailTargets.(repository.EmailQueueDiagnosticsStore)
+	if !ok {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "email queue diagnostics are unavailable")
+		return
+	}
+	out, err := store.EmailQueueDiagnostics(r.Context())
+	if emailProblem(w, err) {
+		return
+	}
+	writeNativeMavenJSON(w, http.StatusOK, out)
+}
+
 func emailDeliveryResponse(v repository.EmailDelivery) map[string]any {
 	out := map[string]any{"id": v.ID, "eventId": v.EventID, "targetId": v.TargetID, "targetVersion": v.TargetVersion, "scenario": v.Scenario, "locale": v.Locale, "templateVersion": v.TemplateVersion, "state": v.State, "attempts": v.Attempts, "possibleDuplicate": v.PossibleDuplicate, "version": v.Version, "createdAt": v.CreatedAt, "updatedAt": v.UpdatedAt}
 	kind := v.Kind
