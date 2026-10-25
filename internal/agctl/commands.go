@@ -52,6 +52,7 @@ type command struct {
 
 func registry() []command {
 	return []command{
+		shellCommand(),
 		versionCommand(),
 		infoCommand(),
 		commandsCommand(),

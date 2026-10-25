@@ -1,5 +1,6 @@
 import {
   cleanup,
+  isInaccessible,
   render,
   screen,
   waitFor,
@@ -89,6 +90,15 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+// Resolve the label once, then check accessibility on that field alone.
+function evidenceInput(dialog: HTMLElement, label: string) {
+  const input = within(dialog).getByLabelText(label, { selector: "input" });
+  expect(input).toHaveRole("textbox");
+  expect(input).toHaveAccessibleName(label);
+  expect(isInaccessible(input)).toBe(false);
+  return input;
+}
+
 describe("real batch read/control states", () => {
   it("shows exactly one initial error branch and sanitizes unknown transport text", async () => {
     list.mockRejectedValue(new Error("password=never-show"));
@@ -190,6 +200,7 @@ describe("real batch read/control states", () => {
     expect(document.body).not.toHaveTextContent("hide-me");
   });
   it("leaves resume blank, blocks unknown evidence, and uses a fresh explicit runtime-bound observation", async () => {
+    const user = userEvent.setup();
     detail.mockResolvedValue({
       data: { ...nexusBatch, state: "paused" },
     } as never);
@@ -200,9 +211,7 @@ describe("real batch read/control states", () => {
       return { error: { status: 412 } } as never;
     });
     show();
-    await userEvent.click(
-      await screen.findByRole("button", { name: "恢复批次" }),
-    );
+    await user.click(await screen.findByRole("button", { name: "恢复批次" }));
     // rc-util uses a fixed ID in jsdom; table pagination also owns that ID.
     // The real-browser gate checks the dialog's actual accessible title.
     const dialog = screen.getByRole("dialog");
@@ -216,21 +225,16 @@ describe("real batch read/control states", () => {
       "恢复峰值字节",
       "保留余量字节",
     ]) {
-      const input = within(dialog).getByRole("textbox", { name: label });
+      const input = evidenceInput(dialog, label);
       expect(input).toHaveValue("");
-      await userEvent.type(input, label === "存储池可用字节" ? "1000000" : "0");
+      await user.type(input, label === "存储池可用字节" ? "1000000" : "0");
     }
-    await userEvent.type(
-      within(dialog).getByRole("textbox", { name: "容量观察时间（含时区）" }),
-      new Date(Date.now() - 1000).toISOString(),
-    );
-    await userEvent.type(
-      within(dialog).getByRole("textbox", {
-        name: "证据有效截止时间（含时区）",
-      }),
-      new Date(Date.now() + 600_000).toISOString(),
-    );
-    await userEvent.click(submit);
+    // Timestamps are whole observations; paste them without replaying every key.
+    await user.click(evidenceInput(dialog, "容量观察时间（含时区）"));
+    await user.paste(new Date(Date.now() - 1000).toISOString());
+    await user.click(evidenceInput(dialog, "证据有效截止时间（含时区）"));
+    await user.paste(new Date(Date.now() + 600_000).toISOString());
+    await user.click(submit);
     await screen.findByText(/批次已被后台或其他管理员更新/);
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -321,6 +325,7 @@ describe("real batch read/control states", () => {
     expect(screen.getByText("批次版本 7")).toBeInTheDocument();
   });
   it("retries a failed unsealed scan in the same batch with fresh evidence rather than pretending it was ready", async () => {
+    const user = userEvent.setup();
     const failed = {
       ...nexusBatch,
       state: "failed" as const,
@@ -345,7 +350,7 @@ describe("real batch read/control states", () => {
       return { data: scanning } as never;
     });
     show();
-    await userEvent.click(
+    await user.click(
       await screen.findByRole("button", { name: "重试可重试失败项" }),
     );
     const dialog = screen.getByRole("dialog");
@@ -364,21 +369,16 @@ describe("real batch read/control states", () => {
       "恢复峰值字节",
       "保留余量字节",
     ])
-      await userEvent.type(
-        within(dialog).getByRole("textbox", { name: label }),
+      await user.type(
+        evidenceInput(dialog, label),
         label === "存储池可用字节" ? "1000000" : "0",
       );
-    await userEvent.type(
-      within(dialog).getByRole("textbox", { name: "容量观察时间（含时区）" }),
-      new Date(Date.now() - 1000).toISOString(),
-    );
-    await userEvent.type(
-      within(dialog).getByRole("textbox", {
-        name: "证据有效截止时间（含时区）",
-      }),
-      new Date(Date.now() + 600000).toISOString(),
-    );
-    await userEvent.click(submit);
+    // Timestamps are whole observations; paste them without replaying every key.
+    await user.click(evidenceInput(dialog, "容量观察时间（含时区）"));
+    await user.paste(new Date(Date.now() - 1000).toISOString());
+    await user.click(evidenceInput(dialog, "证据有效截止时间（含时区）"));
+    await user.paste(new Date(Date.now() + 600000).toISOString());
+    await user.click(submit);
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );

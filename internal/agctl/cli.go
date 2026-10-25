@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
@@ -224,8 +225,8 @@ func scanFailureTokens(args []string) []string {
 }
 
 // RunCLI executes one agctl invocation and returns its documented exit code.
-// Commands never prompt: missing required input fails with a usage error
-// before any request is sent.
+// Resource commands never prompt: missing required input fails with a usage
+// error before any request is sent. The optional shell supplies a TTY frontend.
 func RunCLI(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	failureFormat, knownSecrets := scanFailureFlags(args)
 	knownSecrets = append(knownSecrets, os.Getenv("AGCTL_TOKEN"))
@@ -354,6 +355,11 @@ func RunCLI(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 		addKnownSecret: func(secret string) {
 			knownSecrets = append(knownSecrets, secret)
 		},
+	}
+	if cmd.name != "shell" {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt)
+		defer stop()
 	}
 	if err := cmd.run(ctx, env); err != nil {
 		return fail(err)

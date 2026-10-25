@@ -5,7 +5,7 @@
 `agctl` is the Gateway command line client for CI pipelines, platform
 management, and agents. It programs against the management API under
 `/api/v2` with a bearer credential. This checkout provides `version`, `info`,
-`commands`, `auth login|logout|whoami|change-password`, and
+`commands`, `shell`, `auth login|logout|whoami|change-password`, and
 `config profile add|list|use|remove`. The rest of the surface ships as separate
 reviewable slices and appears in the command tree only once implemented. The
 client shape and its machine contract are recorded in
@@ -132,6 +132,64 @@ not reuse that token; supply the new target's credential explicitly through
 `--token` or `AGCTL_TOKEN`. Equivalent host/default-port spellings retain the
 binding; distinct IPv6 authorities, interface zones, and base-path case do not
 share credentials.
+
+## Interactive shell
+
+`agctl shell` is an optional terminal frontend to the same `RunCLI` command
+registry used by scripts and agents. Both stdin and stdout must be TTYs;
+piped input or redirected output exits 2. Use ordinary commands for automation.
+The prompt shows the effective profile, redacted server URL, and repository.
+
+```text
+agctl --profile production shell
+agctl [production | https://gateway.example.com | repo:]> use repo repository-id
+agctl [production | https://gateway.example.com | repo:repository-id]> artifact list
+agctl [production | https://gateway.example.com | repo:repository-id]> set json on
+agctl [production | https://gateway.example.com | repo:repository-id]> repo list
+agctl [production | https://gateway.example.com | repo:repository-id]> set dry-run on
+agctl [production | https://gateway.example.com | repo:repository-id]> set verbose on
+agctl [production | https://gateway.example.com | repo:repository-id]> use profile staging
+agctl [staging | https://staging.example.com | repo:]> exit
+```
+
+- `use repo ID` supplies a default `--repo` only to commands declaring that
+  flag; `use repo -` clears it. Explicit command flags override the default.
+  `artifact search --global --q QUERY` searches across readable repositories
+  even when a session repository is selected.
+- `use profile NAME` supplies `--profile` for this session and clears its
+  repository. It never changes persistent `current_profile`. Existing flag and
+  environment precedence, including server/token overrides, still applies.
+- `set json|dry-run|verbose on|off` changes sticky defaults. Startup `--json`
+  (or `-o json`), `--dry-run`, and `--verbose` initialize them. An individual
+  command can override them with `--json=false`, `--dry-run=false`, or
+  `--verbose=false`. Commands retain their JSON envelopes and schemas;
+  the prompt and interactive notices are terminal UI, not a JSON stream.
+- Tab completes command words, `use profile` names, and `use repo` IDs from
+  the current caller's authorized repository list (a bounded two-second read).
+- Up/down recall persistent command paths from `~/.config/agctl/history`.
+  History deliberately omits **all arguments**, including repository/profile
+  selections, password/token flags, private bodies, and secret-output paths.
+  It never records command output or once-only secrets. History is capped at
+  500 entries, atomically replaced with mode 0600, and refuses symlinks,
+  non-regular files, publicly readable files, and files larger than 1 MiB.
+  Unsafe/unavailable history disables persistence with a notice.
+
+The shell supports single/double quotes and backslash escaping, with literal
+arguments and no environment expansion, pipelines, or command substitution.
+Commands receive isolated empty stdin: `--password-stdin`, `--token-stdin`,
+and other stdin readers fail promptly rather than consuming subsequent shell
+commands. Use a supported private-file flag, or run the stdin command outside
+the shell with a pipe; do not paste secrets or input bodies as shell commands.
+No password prompt is introduced. Permissions, required destructive `--yes`
+confirmation, and dry-run support remain those of each ordinary command;
+`--yes` is supplied explicitly per command, never enabled by a sticky setting.
+
+`exit`, `quit`, or Ctrl-D at an empty prompt exits normally. Ctrl-C clears the
+current input or cancels the active **client request/wait** and returns to the
+prompt; it does not promise to cancel a remote job or roll back a submitted
+write. Closing the terminal ends the session. There is no undo/redo or generic
+repository undelete; use actual artifact/snapshot recovery endpoints when
+available. `--dry-run` previews only commands that support it.
 
 ## Global flags
 
