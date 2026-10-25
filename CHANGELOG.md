@@ -11,7 +11,7 @@ their meaning.
 
 ## Unreleased
 
-- RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
+- RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; in-memory policy changes honor the configured auditor and retain the prior policy/version on audit failure, including delegating audit wrappers; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
 
 - Nexus [PyPI Hosted migration](docs/nexus-pypi-migration.md) (#461) publishes each complete wheel/sdist release atomically with its durable checkpoint. Frozen Simple metadata preserves Requires-Python and file yanking; current administrator authority, lease and source versions are rechecked before publication. A required fixed-pip gate consumes only the target after the synthetic source is stopped.
 

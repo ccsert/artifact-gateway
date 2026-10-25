@@ -107,8 +107,9 @@ func (s *MemoryStore) rubyGemsGovernanceAuthorityLocked(ctx context.Context, id 
 
 // ChangeRubyGemsReadPolicy shares the repository mutex with credential/grant and
 // generic policy mutations. The callback validates CAS and current authority;
-// policy and audit become visible together only after it succeeds.
-func (s *MemoryStore) ChangeRubyGemsReadPolicy(ctx context.Context, id string, identity RubyGemsGovernanceIdentity, apply func(RepositoryQuarantineReadPolicy, RubyGemsGovernanceAuthority) (RepositoryQuarantineReadPolicy, *AuditRecord, error)) (RepositoryQuarantineReadPolicy, error) {
+// policy and any audits delegated back to this store become visible together
+// only after the injected recordAudit succeeds.
+func (s *MemoryStore) ChangeRubyGemsReadPolicy(ctx context.Context, id string, identity RubyGemsGovernanceIdentity, recordAudit func(context.Context, AuditRecord) error, apply func(RepositoryQuarantineReadPolicy, RubyGemsGovernanceAuthority) (RepositoryQuarantineReadPolicy, *AuditRecord, error)) (RepositoryQuarantineReadPolicy, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, err := s.rubyGemsGovernanceAuthorityLocked(ctx, id, identity)
@@ -127,7 +128,17 @@ func (s *MemoryStore) ChangeRubyGemsReadPolicy(ctx context.Context, id string, i
 		return RepositoryQuarantineReadPolicy{}, err
 	}
 	if audit != nil {
-		s.appendAuditLocked(withRequestContextAudit(ctx, *audit))
+		// The injected sink may wrap this store. Stage delegated RecordAudit calls
+		// instead of reacquiring s.mu or exposing an audit before sink success.
+		batch := &memoryAuditBatch{store: s}
+		defer batch.finish()
+		auditCtx := context.WithValue(ctx, memoryAuditBatchKey{}, batch)
+		if err := recordAudit(auditCtx, *audit); err != nil {
+			return RepositoryQuarantineReadPolicy{}, err
+		}
+		for _, record := range batch.finish() {
+			s.appendAuditLocked(record)
+		}
 		s.quarantineReadPolicies[id] = next
 	}
 	return next, nil

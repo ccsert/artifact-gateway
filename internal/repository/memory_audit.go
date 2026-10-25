@@ -2,14 +2,51 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 )
 
+// memoryAuditBatch is private to a locked repository operation. Its context may
+// pass through an injected audit wrapper; only delegation back to this store is
+// staged. Closing the batch also prevents a retained context from writing later.
+type memoryAuditBatchKey struct{}
+
+type memoryAuditBatch struct {
+	mu      sync.Mutex
+	store   *MemoryStore
+	records []AuditRecord
+	closed  bool
+}
+
+func (b *memoryAuditBatch) record(record AuditRecord) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return errors.New("memory audit transaction is closed")
+	}
+	record.Evidence = cloneAuditEvidence(record.Evidence)
+	b.records = append(b.records, record)
+	return nil
+}
+
+func (b *memoryAuditBatch) finish() []AuditRecord {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	records := b.records
+	b.records = nil
+	return records
+}
+
 func (s *MemoryStore) RecordAudit(ctx context.Context, record AuditRecord) error {
 	record = withRequestContextAudit(ctx, record)
+	if batch, ok := ctx.Value(memoryAuditBatchKey{}).(*memoryAuditBatch); ok && batch.store == s {
+		return batch.record(record)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.appendAuditLocked(record)
