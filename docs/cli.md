@@ -962,10 +962,21 @@ command, flag, or argument count the client does not have.
   unread member diagnostics are unknown and fail `status --strict`. CI and
   `ci-local` run the same target; no existing development stack is reused.
 - `make email-compose-check` runs the email commands against an isolated
-  Gateway with owned TLS SMTP: a target from a private recipient file, a
-  rename that keeps it enabled, a preview and a plan that queue nothing, a
-  keyed test delivered exactly once, a refused replay, and a quota rule
-  lifecycle, with the recipient absent from all agctl output.
+  Gateway/PostgreSQL and owned TLS SMTP. It checks disabled-by-default targets
+  and rules, explicit enablement, CAS and pinned target versions, all mutating
+  dry-run plans, private recipient input, and both output streams for synthetic
+  secrets. Real member and password-change-required admin sessions are refused
+  across the 16 management operations and delivery wait. Missing channel/key,
+  no-sender pending and bounded wait, HTTP replies lost after committed test
+  and replay writes, same-key recovery, and SMTP final-reply loss retain their
+  actual machine outcomes. The real scheduler drives warning → critical →
+  resolved at its existing 15-second cadence; stopping it past the 30-second
+  sample-age policy exposes stale capacity without declaring recovery.
+  SMTP retry after an unknown acknowledgement demonstrates possible duplicate
+  MIME; one idempotent queue row does not guarantee exactly-once delivery.
+  For source hashes, JSON/exit-code cases and owned cleanup evidence, use
+  `python3 scripts/email-compose-check.py --evidence-dir output/email-check-1`
+  with a new output directory. No `.env`, real relay or existing stack is used.
 - `make cli-contract-check` verifies that the command map classifies every
   contract operation and that each row marked `implemented` names a
   registered command that declares the row's endpoint.

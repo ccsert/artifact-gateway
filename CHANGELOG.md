@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Complete the existing [quota/email CLI acceptance gate](docs/cli.md#verification) (#336) with real PostgreSQL/TLS SMTP, administrator rejection cases, no-write plans, pinned versions, production-cadence alert/stale/recovery transitions, and committed HTTP/SMTP response-loss recovery. Evidence retains JSON/exit codes, source hashes and owned cleanup; SMTP ambiguity preserves possible duplicates and does not claim inbox delivery or worker health.
+
 - RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; in-memory policy changes honor the configured auditor and retain the prior policy/version on audit failure, including delegating audit wrappers; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
 
 - Add administrator-only [read-only email queue diagnostics](docs/email-notification-delivery.md#read-only-queue-diagnostics) (#467): one database-time snapshot across all retained deliveries, claim-aligned candidate/backoff/lease/cleanup counts, bounded safe failure classes and persisted SMTP acceptance evidence. Worker health remains unknown; the GET never sends or changes the queue. No Console or CLI surface is added.

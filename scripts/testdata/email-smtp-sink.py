@@ -62,6 +62,10 @@ def serve(conn):
                         if len(data) > 256 * 1024:
                             return
                     (root / (str(uuid.uuid4()) + ".eml")).write_bytes(data)
+                    if (root / "drop-final-reply").exists():
+                        # DATA has reached this synthetic relay, but the sender
+                        # cannot know whether it was accepted. Never forward it.
+                        return
                     reply(b"250 accepted")
                 elif line == b"QUIT":
                     reply(b"221 bye")

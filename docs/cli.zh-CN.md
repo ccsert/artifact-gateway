@@ -771,8 +771,16 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   读不到的诊断保留 unknown，`status --strict` 返回失败。CI 和 `ci-local` 调用
   同一目标，不复用已有开发栈。
 - `make email-compose-check` 在带自有 TLS SMTP 的隔离 Gateway 上运行邮件命令：
-  从私有收件人文件建目标、改名后仍保持启用、预览和计划不入队、带 key 的测试只送达
-  一次、重放被拒，以及配额规则的生命周期；收件人不出现在任何 agctl 输出中。
+  使用真实 PostgreSQL，验证目标/规则默认停用、明确启用、CAS、固定目标版本、
+  所有写命令的 dry-run、私有收件人输入，以及两个输出流均不含合成秘密。
+  真实 member 与强制改密管理员会在 16 个管理操作及 delivery wait 中被拒绝；
+  缺通道/key、无 sender 的 pending 与有界 wait、test/replay 已提交但 HTTP 响应
+  丢失、同 key 恢复及 SMTP 最终确认丢失均保留准确机器结果。真实 scheduler 按
+  现有 15 秒节奏驱动 warning → critical → resolved；停止至超过 30 秒采样年龄
+  策略后暴露 stale，且不会假称恢复。SMTP 未知确认后的重试会实际产生重复 MIME，
+  幂等队列行不保证恰好一次投递。需要源码哈希、JSON/退出码和自有资源清理证据时，
+  使用 `python3 scripts/email-compose-check.py --evidence-dir output/email-check-1`，
+  输出目录必须尚不存在。夹具不读取 `.env`、不使用真实中继或已有开发栈。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为
   `implemented` 的行都对应声明了该行端点的已注册命令。
 

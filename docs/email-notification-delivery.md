@@ -152,10 +152,34 @@ exit. It verifies disabled config, startup errors and auth permissions,
 API-only pending, absent worker config, differing worker key, two corrected
 workers, accepted actual HTML/plain MIME, RCPT 550/dead, a disabled scheduler's
 permanent suppression, correct quota delivery and standalone delivery. Three
-synthetic messages are accepted; the rejected attempt has no DATA. This is a
-Compose wiring gate, not real SMTP-provider, inbox/client, production or
-Kubernetes deployment acceptance. Existing sender/PG contract tests cover the
-broader TLS/retry/fencing matrix.
+baseline synthetic messages are accepted; the rejected attempt has no DATA.
+The same stack then exercises agctl's full quota/email workflow: default-disabled
+configuration, explicit enablement, all 16 management operations and wait under
+real member/forced-password-change sessions, private input and output redaction,
+no-write dry-run snapshots, missing channel/key and no-sender pending. A loopback
+proxy withholds real committed test/replay responses until the CLI times out;
+read-back and the original test key/version recover without another queue row.
+The TLS sink can retain DATA while dropping the final reply, so retries preserve
+`possibleDuplicate` and demonstrate actual duplicate MIME.
+
+Quota warning → critical → resolved uses actual Raw bytes and the unchanged
+15-second scheduler cadence. Stopping only that scheduler until a 30-second
+sample-age policy expires exposes `stale` while preserving critical severity;
+fresh recovery samples are still required after restart. Updating a target
+leaves an existing rule pinned to its old version and records `target_changed`
+without silently sending to the new configuration. Add
+`--evidence-dir output/email-check-1` to the Python entry point to retain source
+hashes, secret-checked CLI JSON/exit-code cases and a fixture-owned cleanup
+report; the directory must be new. The final JSON reports observed MIME counts.
+For a local daemon with occupied default address pools,
+`--fixture-subnets INTERNAL INGRESS` selects two explicitly reserved,
+non-overlapping private IPv4 networks for this disposable fixture. Default runs
+retain Docker's address allocation; the override lives only in temporary Compose
+files.
+
+This gate does not establish real SMTP-provider, inbox/client, production,
+Kubernetes deployment or cluster-wide sender health. Existing sender/PG contract
+tests cover the broader TLS/retry/fencing matrix.
 
 ## Console workflow
 
