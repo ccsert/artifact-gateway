@@ -46,6 +46,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 		m.problem(w, 403, reason)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/v2/previews/rubygems/replication-jobs") {
+		m.previewReplication(w, r, p)
+		return
+	}
 	const prefix = "/api/v2/previews/rubygems/repositories"
 	if r.URL.Path == prefix {
 		if r.Method != http.MethodPost {
@@ -106,6 +110,10 @@ func (m *Module) servePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 && parts[1] == "quarantine-read-policy" {
 		m.previewReadPolicy(w, r, repo)
+		return
+	}
+	if len(parts) == 5 && parts[1] == "packages" {
+		m.previewPackageIdentity(w, r, repo, parts[2], parts[3], parts[4])
 		return
 	}
 	if validGovernancePath(parts) {

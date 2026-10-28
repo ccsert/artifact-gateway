@@ -10,7 +10,7 @@ Console creation selector and installation presets. There is no preview `agctl`
 command. The Hosted slice is tracked by [#459](https://github.com/ccsert/artifact-gateway/issues/459);
 Native yank and controlled restore are tracked by
 [#462](https://github.com/ccsert/artifact-gateway/issues/462). Independent quarantine and release are tracked by
-[#468](https://github.com/ccsert/artifact-gateway/issues/468). Proxy/Group, hard deletion, Console, scanning, distribution,
+[#468](https://github.com/ccsert/artifact-gateway/issues/468). [Durable Hosted replication](rubygems-replication-preview.md) is tracked by [#472](https://github.com/ccsert/artifact-gateway/issues/472). Proxy/Group, hard deletion, Console, scanning,
 backup admission and Nexus migration remain in
 [#293](https://github.com/ccsert/artifact-gateway/issues/293).
 

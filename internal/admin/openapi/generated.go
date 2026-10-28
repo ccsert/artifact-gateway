@@ -3881,6 +3881,102 @@ func (e RubyGemsPreviewGovernanceChangeAction) Valid() bool {
 	}
 }
 
+// Defines values for RubyGemsPreviewReplicationItemCode.
+const (
+	RubyGemsPreviewReplicationItemCodeAccessDenied     RubyGemsPreviewReplicationItemCode = "access_denied"
+	RubyGemsPreviewReplicationItemCodeIdentityConflict RubyGemsPreviewReplicationItemCode = "identity_conflict"
+	RubyGemsPreviewReplicationItemCodeQuotaExceeded    RubyGemsPreviewReplicationItemCode = "quota_exceeded"
+	RubyGemsPreviewReplicationItemCodeSourceChanged    RubyGemsPreviewReplicationItemCode = "source_changed"
+	RubyGemsPreviewReplicationItemCodeTargetConflict   RubyGemsPreviewReplicationItemCode = "target_conflict"
+	RubyGemsPreviewReplicationItemCodeTransferFailed   RubyGemsPreviewReplicationItemCode = "transfer_failed"
+)
+
+// Valid indicates whether the value is a known member of the RubyGemsPreviewReplicationItemCode enum.
+func (e RubyGemsPreviewReplicationItemCode) Valid() bool {
+	switch e {
+	case RubyGemsPreviewReplicationItemCodeAccessDenied:
+		return true
+	case RubyGemsPreviewReplicationItemCodeIdentityConflict:
+		return true
+	case RubyGemsPreviewReplicationItemCodeQuotaExceeded:
+		return true
+	case RubyGemsPreviewReplicationItemCodeSourceChanged:
+		return true
+	case RubyGemsPreviewReplicationItemCodeTargetConflict:
+		return true
+	case RubyGemsPreviewReplicationItemCodeTransferFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RubyGemsPreviewReplicationItemResult.
+const (
+	RubyGemsPreviewReplicationItemResultAlreadyPresent RubyGemsPreviewReplicationItemResult = "already_present"
+	RubyGemsPreviewReplicationItemResultPublished      RubyGemsPreviewReplicationItemResult = "published"
+)
+
+// Valid indicates whether the value is a known member of the RubyGemsPreviewReplicationItemResult enum.
+func (e RubyGemsPreviewReplicationItemResult) Valid() bool {
+	switch e {
+	case RubyGemsPreviewReplicationItemResultAlreadyPresent:
+		return true
+	case RubyGemsPreviewReplicationItemResultPublished:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RubyGemsPreviewReplicationItemState.
+const (
+	RubyGemsPreviewReplicationItemStateFailed    RubyGemsPreviewReplicationItemState = "failed"
+	RubyGemsPreviewReplicationItemStatePending   RubyGemsPreviewReplicationItemState = "pending"
+	RubyGemsPreviewReplicationItemStateRunning   RubyGemsPreviewReplicationItemState = "running"
+	RubyGemsPreviewReplicationItemStateSucceeded RubyGemsPreviewReplicationItemState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the RubyGemsPreviewReplicationItemState enum.
+func (e RubyGemsPreviewReplicationItemState) Valid() bool {
+	switch e {
+	case RubyGemsPreviewReplicationItemStateFailed:
+		return true
+	case RubyGemsPreviewReplicationItemStatePending:
+		return true
+	case RubyGemsPreviewReplicationItemStateRunning:
+		return true
+	case RubyGemsPreviewReplicationItemStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RubyGemsPreviewReplicationJobState.
+const (
+	RubyGemsPreviewReplicationJobStateFailed    RubyGemsPreviewReplicationJobState = "failed"
+	RubyGemsPreviewReplicationJobStateQueued    RubyGemsPreviewReplicationJobState = "queued"
+	RubyGemsPreviewReplicationJobStateRunning   RubyGemsPreviewReplicationJobState = "running"
+	RubyGemsPreviewReplicationJobStateSucceeded RubyGemsPreviewReplicationJobState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the RubyGemsPreviewReplicationJobState enum.
+func (e RubyGemsPreviewReplicationJobState) Valid() bool {
+	switch e {
+	case RubyGemsPreviewReplicationJobStateFailed:
+		return true
+	case RubyGemsPreviewReplicationJobStateQueued:
+		return true
+	case RubyGemsPreviewReplicationJobStateRunning:
+		return true
+	case RubyGemsPreviewReplicationJobStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RubyGemsPreviewRepositoryFormat.
 const (
 	RubyGemsPreviewRepositoryFormatRubygems RubyGemsPreviewRepositoryFormat = "rubygems"
@@ -8270,6 +8366,16 @@ type RubyGemsPreviewGovernanceChange struct {
 // RubyGemsPreviewGovernanceChangeAction defines model for RubyGemsPreviewGovernanceChange.Action.
 type RubyGemsPreviewGovernanceChangeAction string
 
+// RubyGemsPreviewIdentity Exact server-owned, visible and distribution-eligible gem identity. Versions preserve the original archive spelling; duplicate RubyGems-canonical version/platform identities are rejected.
+type RubyGemsPreviewIdentity struct {
+	Digest                  string `json:"digest"`
+	Name                    string `json:"name"`
+	Platform                string `json:"platform"`
+	Size                    int64  `json:"size"`
+	SourceGovernanceVersion string `json:"sourceGovernanceVersion"`
+	Version                 string `json:"version"`
+}
+
 // RubyGemsPreviewQuarantineReadPolicy defines model for RubyGemsPreviewQuarantineReadPolicy.
 type RubyGemsPreviewQuarantineReadPolicy struct {
 	Enabled bool   `json:"enabled"`
@@ -8286,6 +8392,62 @@ type RubyGemsPreviewQuarantineReadPolicyChange struct {
 type RubyGemsPreviewQuotaInput struct {
 	// QuotaBytes Zero means no configured quota. Pending unexpired uploads reserve capacity.
 	QuotaBytes int64 `json:"quotaBytes"`
+}
+
+// RubyGemsPreviewReplicationItem defines model for RubyGemsPreviewReplicationItem.
+type RubyGemsPreviewReplicationItem struct {
+	Attempts                int                                   `json:"attempts"`
+	Code                    *RubyGemsPreviewReplicationItemCode   `json:"code,omitempty"`
+	CompletedAt             *time.Time                            `json:"completedAt,omitempty"`
+	Digest                  string                                `json:"digest"`
+	Index                   int                                   `json:"index"`
+	Name                    string                                `json:"name"`
+	Platform                string                                `json:"platform"`
+	Result                  *RubyGemsPreviewReplicationItemResult `json:"result,omitempty"`
+	Size                    int64                                 `json:"size"`
+	SourceGovernanceVersion string                                `json:"sourceGovernanceVersion"`
+	State                   RubyGemsPreviewReplicationItemState   `json:"state"`
+	TargetSessionId         *openapi_types.UUID                   `json:"targetSessionId,omitempty"`
+	Version                 string                                `json:"version"`
+}
+
+// RubyGemsPreviewReplicationItemCode defines model for RubyGemsPreviewReplicationItem.Code.
+type RubyGemsPreviewReplicationItemCode string
+
+// RubyGemsPreviewReplicationItemResult defines model for RubyGemsPreviewReplicationItem.Result.
+type RubyGemsPreviewReplicationItemResult string
+
+// RubyGemsPreviewReplicationItemState defines model for RubyGemsPreviewReplicationItem.State.
+type RubyGemsPreviewReplicationItemState string
+
+// RubyGemsPreviewReplicationJob defines model for RubyGemsPreviewReplicationJob.
+type RubyGemsPreviewReplicationJob struct {
+	Actor              string                             `json:"actor"`
+	CreatedAt          time.Time                          `json:"createdAt"`
+	Id                 openapi_types.UUID                 `json:"id"`
+	Items              []RubyGemsPreviewReplicationItem   `json:"items"`
+	PlanDigest         string                             `json:"planDigest"`
+	SourceRepositoryId openapi_types.UUID                 `json:"sourceRepositoryId"`
+	State              RubyGemsPreviewReplicationJobState `json:"state"`
+	TargetRepositoryId openapi_types.UUID                 `json:"targetRepositoryId"`
+	UpdatedAt          time.Time                          `json:"updatedAt"`
+	Version            string                             `json:"version"`
+}
+
+// RubyGemsPreviewReplicationJobState defines model for RubyGemsPreviewReplicationJob.State.
+type RubyGemsPreviewReplicationJobState string
+
+// RubyGemsPreviewReplicationRequest defines model for RubyGemsPreviewReplicationRequest.
+type RubyGemsPreviewReplicationRequest struct {
+	Items              []RubyGemsPreviewIdentity `json:"items"`
+	SourceRepositoryId openapi_types.UUID        `json:"sourceRepositoryId"`
+	TargetRepositoryId openapi_types.UUID        `json:"targetRepositoryId"`
+}
+
+// RubyGemsPreviewReplicationRetry defines model for RubyGemsPreviewReplicationRetry.
+type RubyGemsPreviewReplicationRetry struct {
+	ExpectedVersion string `json:"expectedVersion"`
+	ItemIndexes     []int  `json:"itemIndexes"`
 }
 
 // RubyGemsPreviewRepository defines model for RubyGemsPreviewRepository.
@@ -9237,6 +9399,16 @@ type CreateNuGetPublicationSessionParams struct {
 	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
+// CreateRubyGemsPreviewReplicationJobParams defines parameters for CreateRubyGemsPreviewReplicationJob.
+type CreateRubyGemsPreviewReplicationJobParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// RetryRubyGemsPreviewReplicationJobParams defines parameters for RetryRubyGemsPreviewReplicationJob.
+type RetryRubyGemsPreviewReplicationJobParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // CreateRubyGemsPreviewRepositoryParams defines parameters for CreateRubyGemsPreviewRepository.
 type CreateRubyGemsPreviewRepositoryParams struct {
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
@@ -9806,6 +9978,12 @@ type CreateNuGetPublicationSessionJSONRequestBody = NuGetPublicationRequest
 
 // ReplaceNuGetPreviewQuarantineReadPolicyJSONRequestBody defines body for ReplaceNuGetPreviewQuarantineReadPolicy for application/json ContentType.
 type ReplaceNuGetPreviewQuarantineReadPolicyJSONRequestBody = NuGetPreviewQuarantineReadPolicyRequest
+
+// CreateRubyGemsPreviewReplicationJobJSONRequestBody defines body for CreateRubyGemsPreviewReplicationJob for application/json ContentType.
+type CreateRubyGemsPreviewReplicationJobJSONRequestBody = RubyGemsPreviewReplicationRequest
+
+// RetryRubyGemsPreviewReplicationJobJSONRequestBody defines body for RetryRubyGemsPreviewReplicationJob for application/json ContentType.
+type RetryRubyGemsPreviewReplicationJobJSONRequestBody = RubyGemsPreviewReplicationRetry
 
 // CreateRubyGemsPreviewRepositoryJSONRequestBody defines body for CreateRubyGemsPreviewRepository for application/json ContentType.
 type CreateRubyGemsPreviewRepositoryJSONRequestBody = RubyGemsPreviewRepositoryInput
@@ -11022,6 +11200,15 @@ type ServerInterface interface {
 
 	// (PUT /previews/nuget/repositories/{repositoryId}/quarantine-read-policy)
 	ReplaceNuGetPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (POST /previews/rubygems/replication-jobs)
+	CreateRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, params CreateRubyGemsPreviewReplicationJobParams)
+
+	// (GET /previews/rubygems/replication-jobs/{jobId})
+	GetRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID)
+
+	// (POST /previews/rubygems/replication-jobs/{jobId}/retry)
+	RetryRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID, params RetryRubyGemsPreviewReplicationJobParams)
 	// CreateRubyGemsPreviewRepository Create an opt-in RubyGems Hosted preview repository
 	// (POST /previews/rubygems/repositories)
 	CreateRubyGemsPreviewRepository(w http.ResponseWriter, r *http.Request, params CreateRubyGemsPreviewRepositoryParams)
@@ -11034,6 +11221,9 @@ type ServerInterface interface {
 	// SetRubyGemsPreviewQuota Set administrator-managed preview quota atomically with its audit
 	// (PUT /previews/rubygems/repositories/{repositoryId}/capacity)
 	SetRubyGemsPreviewQuota(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID)
+
+	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform})
+	GetRubyGemsPreviewPackageIdentity(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string)
 
 	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
 	GetRubyGemsPreviewGovernance(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string)
@@ -16088,6 +16278,131 @@ func (siw *ServerInterfaceWrapper) ReplaceNuGetPreviewQuarantineReadPolicy(w htt
 	handler.ServeHTTP(w, r)
 }
 
+// CreateRubyGemsPreviewReplicationJob operation middleware
+func (siw *ServerInterfaceWrapper) CreateRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRubyGemsPreviewReplicationJobParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRubyGemsPreviewReplicationJob(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRubyGemsPreviewReplicationJob operation middleware
+func (siw *ServerInterfaceWrapper) GetRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", r.PathValue("jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRubyGemsPreviewReplicationJob(w, r, jobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetryRubyGemsPreviewReplicationJob operation middleware
+func (siw *ServerInterfaceWrapper) RetryRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", r.PathValue("jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RetryRubyGemsPreviewReplicationJobParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryRubyGemsPreviewReplicationJob(w, r, jobId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateRubyGemsPreviewRepository operation middleware
 func (siw *ServerInterfaceWrapper) CreateRubyGemsPreviewRepository(w http.ResponseWriter, r *http.Request) {
 
@@ -16198,6 +16513,59 @@ func (siw *ServerInterfaceWrapper) SetRubyGemsPreviewQuota(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetRubyGemsPreviewQuota(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRubyGemsPreviewPackageIdentity operation middleware
+func (siw *ServerInterfaceWrapper) GetRubyGemsPreviewPackageIdentity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemName" -------------
+	var gemName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemName", r.PathValue("gemName"), &gemName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "gemVersion" -------------
+	var gemVersion string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "gemVersion", r.PathValue("gemVersion"), &gemVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gemVersion", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "platform" -------------
+	var platform string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "platform", r.PathValue("platform"), &platform, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRubyGemsPreviewPackageIdentity(w, r, repositoryId, gemName, gemVersion, platform)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21939,10 +22307,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/publication-sessions/{sessionId}/package", wrapper.StageNuGetPublicationSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/quarantine-read-policy", wrapper.GetNuGetPreviewQuarantineReadPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/nuget/repositories/{repositoryId}/quarantine-read-policy", wrapper.ReplaceNuGetPreviewQuarantineReadPolicy)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/rubygems/replication-jobs", wrapper.CreateRubyGemsPreviewReplicationJob)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/replication-jobs/{jobId}", wrapper.GetRubyGemsPreviewReplicationJob)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/rubygems/replication-jobs/{jobId}/retry", wrapper.RetryRubyGemsPreviewReplicationJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/rubygems/repositories", wrapper.CreateRubyGemsPreviewRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}", wrapper.GetRubyGemsPreviewRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/capacity", wrapper.GetRubyGemsPreviewCapacity)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/capacity", wrapper.SetRubyGemsPreviewQuota)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}", wrapper.GetRubyGemsPreviewPackageIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.GetRubyGemsPreviewGovernance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance", wrapper.ChangeRubyGemsPreviewGovernance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy", wrapper.GetRubyGemsPreviewQuarantineReadPolicy)
@@ -32588,6 +32960,203 @@ func (response ReplaceNuGetPreviewQuarantineReadPolicy503Response) VisitReplaceN
 	return nil
 }
 
+type CreateRubyGemsPreviewReplicationJobRequestObject struct {
+	Params CreateRubyGemsPreviewReplicationJobParams
+	Body   *CreateRubyGemsPreviewReplicationJobJSONRequestBody
+}
+
+type CreateRubyGemsPreviewReplicationJobResponseObject interface {
+	VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error
+}
+
+type CreateRubyGemsPreviewReplicationJob202JSONResponse RubyGemsPreviewReplicationJob
+
+func (response CreateRubyGemsPreviewReplicationJob202JSONResponse) VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRubyGemsPreviewReplicationJob400Response struct {
+}
+
+func (response CreateRubyGemsPreviewReplicationJob400Response) VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateRubyGemsPreviewReplicationJob401Response struct {
+}
+
+func (response CreateRubyGemsPreviewReplicationJob401Response) VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateRubyGemsPreviewReplicationJob403Response struct {
+}
+
+func (response CreateRubyGemsPreviewReplicationJob403Response) VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type CreateRubyGemsPreviewReplicationJob404Response struct {
+}
+
+func (response CreateRubyGemsPreviewReplicationJob404Response) VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type CreateRubyGemsPreviewReplicationJob409Response struct {
+}
+
+func (response CreateRubyGemsPreviewReplicationJob409Response) VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type CreateRubyGemsPreviewReplicationJob503Response struct {
+}
+
+func (response CreateRubyGemsPreviewReplicationJob503Response) VisitCreateRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type GetRubyGemsPreviewReplicationJobRequestObject struct {
+	JobId openapi_types.UUID `json:"jobId"`
+}
+
+type GetRubyGemsPreviewReplicationJobResponseObject interface {
+	VisitGetRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error
+}
+
+type GetRubyGemsPreviewReplicationJob200JSONResponse RubyGemsPreviewReplicationJob
+
+func (response GetRubyGemsPreviewReplicationJob200JSONResponse) VisitGetRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewReplicationJob401Response struct {
+}
+
+func (response GetRubyGemsPreviewReplicationJob401Response) VisitGetRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetRubyGemsPreviewReplicationJob403Response struct {
+}
+
+func (response GetRubyGemsPreviewReplicationJob403Response) VisitGetRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetRubyGemsPreviewReplicationJob404Response struct {
+}
+
+func (response GetRubyGemsPreviewReplicationJob404Response) VisitGetRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetRubyGemsPreviewReplicationJob503Response struct {
+}
+
+func (response GetRubyGemsPreviewReplicationJob503Response) VisitGetRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
+type RetryRubyGemsPreviewReplicationJobRequestObject struct {
+	JobId  openapi_types.UUID `json:"jobId"`
+	Params RetryRubyGemsPreviewReplicationJobParams
+	Body   *RetryRubyGemsPreviewReplicationJobJSONRequestBody
+}
+
+type RetryRubyGemsPreviewReplicationJobResponseObject interface {
+	VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error
+}
+
+type RetryRubyGemsPreviewReplicationJob202JSONResponse RubyGemsPreviewReplicationJob
+
+func (response RetryRubyGemsPreviewReplicationJob202JSONResponse) VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryRubyGemsPreviewReplicationJob400Response struct {
+}
+
+func (response RetryRubyGemsPreviewReplicationJob400Response) VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type RetryRubyGemsPreviewReplicationJob401Response struct {
+}
+
+func (response RetryRubyGemsPreviewReplicationJob401Response) VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type RetryRubyGemsPreviewReplicationJob403Response struct {
+}
+
+func (response RetryRubyGemsPreviewReplicationJob403Response) VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type RetryRubyGemsPreviewReplicationJob404Response struct {
+}
+
+func (response RetryRubyGemsPreviewReplicationJob404Response) VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type RetryRubyGemsPreviewReplicationJob409Response struct {
+}
+
+func (response RetryRubyGemsPreviewReplicationJob409Response) VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type RetryRubyGemsPreviewReplicationJob503Response struct {
+}
+
+func (response RetryRubyGemsPreviewReplicationJob503Response) VisitRetryRubyGemsPreviewReplicationJobResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
 type CreateRubyGemsPreviewRepositoryRequestObject struct {
 	Params CreateRubyGemsPreviewRepositoryParams
 	Body   *CreateRubyGemsPreviewRepositoryJSONRequestBody
@@ -32894,6 +33463,63 @@ func (response SetRubyGemsPreviewQuota409ApplicationProblemPlusJSONResponse) Vis
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type GetRubyGemsPreviewPackageIdentityRequestObject struct {
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	GemName      string             `json:"gemName"`
+	GemVersion   string             `json:"gemVersion"`
+	Platform     string             `json:"platform"`
+}
+
+type GetRubyGemsPreviewPackageIdentityResponseObject interface {
+	VisitGetRubyGemsPreviewPackageIdentityResponse(w http.ResponseWriter) error
+}
+
+type GetRubyGemsPreviewPackageIdentity200JSONResponse RubyGemsPreviewIdentity
+
+func (response GetRubyGemsPreviewPackageIdentity200JSONResponse) VisitGetRubyGemsPreviewPackageIdentityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRubyGemsPreviewPackageIdentity401Response struct {
+}
+
+func (response GetRubyGemsPreviewPackageIdentity401Response) VisitGetRubyGemsPreviewPackageIdentityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type GetRubyGemsPreviewPackageIdentity403Response struct {
+}
+
+func (response GetRubyGemsPreviewPackageIdentity403Response) VisitGetRubyGemsPreviewPackageIdentityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type GetRubyGemsPreviewPackageIdentity404Response struct {
+}
+
+func (response GetRubyGemsPreviewPackageIdentity404Response) VisitGetRubyGemsPreviewPackageIdentityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetRubyGemsPreviewPackageIdentity503Response struct {
+}
+
+func (response GetRubyGemsPreviewPackageIdentity503Response) VisitGetRubyGemsPreviewPackageIdentityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
 }
 
 type GetRubyGemsPreviewGovernanceRequestObject struct {
@@ -42755,6 +43381,15 @@ type StrictServerInterface interface {
 
 	// (PUT /previews/nuget/repositories/{repositoryId}/quarantine-read-policy)
 	ReplaceNuGetPreviewQuarantineReadPolicy(ctx context.Context, request ReplaceNuGetPreviewQuarantineReadPolicyRequestObject) (ReplaceNuGetPreviewQuarantineReadPolicyResponseObject, error)
+
+	// (POST /previews/rubygems/replication-jobs)
+	CreateRubyGemsPreviewReplicationJob(ctx context.Context, request CreateRubyGemsPreviewReplicationJobRequestObject) (CreateRubyGemsPreviewReplicationJobResponseObject, error)
+
+	// (GET /previews/rubygems/replication-jobs/{jobId})
+	GetRubyGemsPreviewReplicationJob(ctx context.Context, request GetRubyGemsPreviewReplicationJobRequestObject) (GetRubyGemsPreviewReplicationJobResponseObject, error)
+
+	// (POST /previews/rubygems/replication-jobs/{jobId}/retry)
+	RetryRubyGemsPreviewReplicationJob(ctx context.Context, request RetryRubyGemsPreviewReplicationJobRequestObject) (RetryRubyGemsPreviewReplicationJobResponseObject, error)
 	// CreateRubyGemsPreviewRepository Create an opt-in RubyGems Hosted preview repository
 	// (POST /previews/rubygems/repositories)
 	CreateRubyGemsPreviewRepository(ctx context.Context, request CreateRubyGemsPreviewRepositoryRequestObject) (CreateRubyGemsPreviewRepositoryResponseObject, error)
@@ -42767,6 +43402,9 @@ type StrictServerInterface interface {
 	// SetRubyGemsPreviewQuota Set administrator-managed preview quota atomically with its audit
 	// (PUT /previews/rubygems/repositories/{repositoryId}/capacity)
 	SetRubyGemsPreviewQuota(ctx context.Context, request SetRubyGemsPreviewQuotaRequestObject) (SetRubyGemsPreviewQuotaResponseObject, error)
+
+	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform})
+	GetRubyGemsPreviewPackageIdentity(ctx context.Context, request GetRubyGemsPreviewPackageIdentityRequestObject) (GetRubyGemsPreviewPackageIdentityResponseObject, error)
 
 	// (GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}/governance)
 	GetRubyGemsPreviewGovernance(ctx context.Context, request GetRubyGemsPreviewGovernanceRequestObject) (GetRubyGemsPreviewGovernanceResponseObject, error)
@@ -46795,6 +47433,99 @@ func (sh *strictHandler) ReplaceNuGetPreviewQuarantineReadPolicy(w http.Response
 	}
 }
 
+// CreateRubyGemsPreviewReplicationJob operation middleware
+func (sh *strictHandler) CreateRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, params CreateRubyGemsPreviewReplicationJobParams) {
+	var request CreateRubyGemsPreviewReplicationJobRequestObject
+
+	request.Params = params
+
+	var body CreateRubyGemsPreviewReplicationJobJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRubyGemsPreviewReplicationJob(ctx, request.(CreateRubyGemsPreviewReplicationJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRubyGemsPreviewReplicationJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRubyGemsPreviewReplicationJobResponseObject); ok {
+		if err := validResponse.VisitCreateRubyGemsPreviewReplicationJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRubyGemsPreviewReplicationJob operation middleware
+func (sh *strictHandler) GetRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID) {
+	var request GetRubyGemsPreviewReplicationJobRequestObject
+
+	request.JobId = jobId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRubyGemsPreviewReplicationJob(ctx, request.(GetRubyGemsPreviewReplicationJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRubyGemsPreviewReplicationJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRubyGemsPreviewReplicationJobResponseObject); ok {
+		if err := validResponse.VisitGetRubyGemsPreviewReplicationJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetryRubyGemsPreviewReplicationJob operation middleware
+func (sh *strictHandler) RetryRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID, params RetryRubyGemsPreviewReplicationJobParams) {
+	var request RetryRubyGemsPreviewReplicationJobRequestObject
+
+	request.JobId = jobId
+	request.Params = params
+
+	var body RetryRubyGemsPreviewReplicationJobJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryRubyGemsPreviewReplicationJob(ctx, request.(RetryRubyGemsPreviewReplicationJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryRubyGemsPreviewReplicationJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryRubyGemsPreviewReplicationJobResponseObject); ok {
+		if err := validResponse.VisitRetryRubyGemsPreviewReplicationJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateRubyGemsPreviewRepository operation middleware
 func (sh *strictHandler) CreateRubyGemsPreviewRepository(w http.ResponseWriter, r *http.Request, params CreateRubyGemsPreviewRepositoryParams) {
 	var request CreateRubyGemsPreviewRepositoryRequestObject
@@ -46906,6 +47637,35 @@ func (sh *strictHandler) SetRubyGemsPreviewQuota(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetRubyGemsPreviewQuotaResponseObject); ok {
 		if err := validResponse.VisitSetRubyGemsPreviewQuotaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRubyGemsPreviewPackageIdentity operation middleware
+func (sh *strictHandler) GetRubyGemsPreviewPackageIdentity(w http.ResponseWriter, r *http.Request, repositoryId openapi_types.UUID, gemName string, gemVersion string, platform string) {
+	var request GetRubyGemsPreviewPackageIdentityRequestObject
+
+	request.RepositoryId = repositoryId
+	request.GemName = gemName
+	request.GemVersion = gemVersion
+	request.Platform = platform
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRubyGemsPreviewPackageIdentity(ctx, request.(GetRubyGemsPreviewPackageIdentityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRubyGemsPreviewPackageIdentity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRubyGemsPreviewPackageIdentityResponseObject); ok {
+		if err := validResponse.VisitGetRubyGemsPreviewPackageIdentityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

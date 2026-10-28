@@ -9,8 +9,10 @@ compact 索引、Marshal 4.8 legacy 索引和 zlib gemspec。它尚未加入正�
 Hosted 切片由 [#459](https://github.com/ccsert/artifact-gateway/issues/459) 跟踪；
 原生 yank 与受控恢复由 [#462](https://github.com/ccsert/artifact-gateway/issues/462) 跟踪。
 独立隔离与释放由 [#468](https://github.com/ccsert/artifact-gateway/issues/468) 跟踪。
-Proxy/Group、硬删除、Console、扫描、分发、备份准入和
+Proxy/Group、硬删除、Console、扫描、备份准入和
 Nexus 迁移仍由 [#293](https://github.com/ccsert/artifact-gateway/issues/293) 承接。
+
+[同安装 Hosted 持久复制](rubygems-replication-preview.zh-CN.md) 由 [#472](https://github.com/ccsert/artifact-gateway/issues/472) 跟踪，沿用默认关闭预览。
 
 ## 启用与创建
 

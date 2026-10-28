@@ -70,6 +70,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [NuGet 路线图](nuget-roadmap.zh-CN.md) — 预览验收与剩余生命周期、格式准入工作。
 - [NuGet 持久复制预览](nuget-replication-preview.zh-CN.md) — 固定 Hosted 计划、Worker 租约保护、目标自有验证包与精确逐项重试。
 - [RubyGems Hosted 预览](rubygems-hosted-preview.zh-CN.md) — 默认关闭的原生发布、compact/legacy 依赖索引与原始包校验。
+- [RubyGems Hosted 持久复制预览](rubygems-replication-preview.zh-CN.md) — 默认关闭的持久计划、不可变变体、发布 fencing 与冷客户端验证。
 - [旧 Group 迁移](legacy-group-migration.zh-CN.md) — 兼容行为与迁移指引。
 - [Gitea 后端参考](gitea-backend-reference.zh-CN.md) — Preflight 和证据闭环设计参考。
 

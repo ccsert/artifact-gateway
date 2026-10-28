@@ -12,6 +12,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/ocidiscovery"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	rubydist "github.com/ccsert/artifact-gateway/internal/rubygemsdistribution"
 	"github.com/ccsert/artifact-gateway/internal/rubygemspublication"
 )
 
@@ -73,6 +74,7 @@ type GatewayOptions struct {
 	NuGetObjects           ObjectStore
 	RubyGemsPreviewEnabled bool
 	RubyGemsStore          rubygemspublication.Store
+	RubyGemsDistribution   rubydist.Store
 	RubyGemsObjects        ObjectStore
 	Adapter                Adapter
 	Authenticator          Authenticator
@@ -130,10 +132,13 @@ func (o GatewayOptions) validate() error {
 		if nilDependency(o.RubyGemsStore) {
 			failures = append(failures, errors.New("RubyGems preview publication store is required"))
 		}
+		if o.RubyGemsDistribution != nil && nilDependency(o.RubyGemsDistribution) {
+			failures = append(failures, errors.New("RubyGems replication store is typed nil"))
+		}
 		if err := objectstore.Validate(o.RubyGemsObjects); err != nil {
 			failures = append(failures, fmt.Errorf("RubyGems preview %w", err))
 		}
-	} else if o.RubyGemsStore != nil || o.RubyGemsObjects != nil {
+	} else if o.RubyGemsStore != nil || o.RubyGemsObjects != nil || o.RubyGemsDistribution != nil {
 		failures = append(failures, errors.New("RubyGems preview dependencies require explicit enablement"))
 	}
 	if nilDependency(o.Store) {
