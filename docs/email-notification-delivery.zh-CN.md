@@ -130,9 +130,25 @@ API 与后台角色；TLS SMTP sink 只在私有 internal network，不能外发
 使用临时 loopback 宿主端口。生成的凭据/证书、数据与容器退出时清理。验收覆盖
 关闭配置、启动失败/auth 权限、API-only pending、worker 缺配置/key 不同、两个
 正确 worker、实际 HTML/纯文本 MIME 接受、RCPT 550/dead、scheduler 缺配置
-永久抑制、正确配额交付与 standalone 交付。合成邮件共接受三封，拒绝项无 DATA。
-这是 Compose 接线门禁，不代表真实 SMTP provider、收件箱/邮件客户端、生产或
-Kubernetes 部署验收；已有 sender/PG 契约测试覆盖更广 TLS/重试/fencing 矩阵。
+永久抑制、正确配额交付与 standalone 交付。基础路径接受三封合成邮件，拒绝项无 DATA。
+同一隔离栈继续验收 agctl 完整流程：目标/规则默认停用、明确启用、真实 member 与
+强制改密会话对 16 个管理操作及 wait 的拒绝、私有输入与输出脱敏、dry-run 无写入
+快照，以及缺通道/key、无 sender 的 pending。回环代理在真实 test/replay 已提交后
+扣留响应至 CLI 超时；通过回读及原 test key/版本恢复，不新增队列行。TLS sink
+可接收 DATA 后丢弃最终确认，重试保留 `possibleDuplicate`，并实际观测重复 MIME。
+
+配额 warning → critical → resolved 使用真实 Raw 字节及未修改的 15 秒 scheduler
+节奏。仅停止自有 scheduler，等待超过 30 秒采样年龄策略后，CLI 暴露 `stale` 并
+保留 critical；重启后仍需新鲜恢复样本。更新目标后，已有规则继续固定旧版本，
+记录 `target_changed`，不会悄悄跟随新配置发送。给 Python 入口增加
+`--evidence-dir output/email-check-1` 可保存源码哈希、已检查秘密的 CLI JSON/退出码
+及自有资源清理报告；输出目录必须尚不存在。最终 JSON 报告实际 MIME 数量。
+本机 Docker 默认地址池已被占用时，可用 `--fixture-subnets INTERNAL INGRESS`
+为此次一次性夹具选择两条明确预留、互不重叠的私有 IPv4 子网。默认运行仍使用
+Docker 的地址分配；覆盖只写入临时 Compose 文件。
+
+此门禁不代表真实 SMTP provider、收件箱/邮件客户端、生产、Kubernetes 部署或
+集群 sender 健康验收；已有 sender/PG 契约测试覆盖更广 TLS/重试/fencing 矩阵。
 
 ## Console 操作流程
 
