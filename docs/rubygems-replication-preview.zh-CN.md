@@ -5,8 +5,8 @@
 此预览在同一安装内将原始 `.gem` 包从一个 Hosted 仓库复制到另一个 Hosted
 仓库，目标使用独立对象。它沿用默认关闭的 `GATEWAY_RUBYGEMS_PREVIEW_ENABLED`。
 启用前执行正常的追加式迁移，包括 `000190_native_rubygems_replication.sql`。
-API 节点创建、读取任务；只有 worker 节点同时选择 `rubygems` 格式和 `replication`
-工作类型才执行复制。本切片不加入正式格式目录、Console、agctl 或安装预设。
+API 节点创建、读取任务；只有 worker 节点在 `GATEWAY_WORKER_FORMATS` 中选择
+`rubygems`，并在 `GATEWAY_WORKER_KINDS` 中选择 `replication` 才执行复制。本切片不加入正式格式目录、Console、agctl 或安装预设。
 
 ## 固定服务端精确身份
 
@@ -82,8 +82,9 @@ Content-Type: application/json
 PostgreSQL/RustFS 事务测试，以及固定的官方 Ruby 3.4.4、RubyGems 3.6.7、Bundler 2.6.7
 客户端。真实 Gateway 先在仅 API 节点持久化任务，重启后由替换进程的 worker 执行，再用
 空缓存、仅目标仓源完成传递依赖的 `gem install`、compact-index 和
-`bundle install --full-index`。完整下载的摘要与依赖元数据必须与原包一致，进程重启后
-再次冷安装；同时记录资源所有权与清理回执。
+`bundle install --full-index`。完整下载的摘要与依赖元数据必须与原包一致，复制后在独占 fixture 中显式模拟移除源对象，并真正重启 PostgreSQL、RustFS 和 Gateway 后
+再次冷安装，仍仅使用目标源。官方 MRI 上的 `gem --platform` 显式读取并区分同名同版本
+`ruby`/`java` 原包，只执行 `ruby` 变体，不声明 JRuby 运行时验证；同时记录资源所有权与清理回执。
 
 本切片不覆盖 Proxy/Group、promotion、跨安装复制、正式准入、扫描/GC、备份准入、Nexus
 迁移或生产部署。[父项 #293](https://github.com/ccsert/artifact-gateway/issues/293) 保持开放，

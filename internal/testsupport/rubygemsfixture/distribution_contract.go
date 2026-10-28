@@ -291,3 +291,79 @@ func ReplicationStoreContract(t *testing.T, s ReplicationStore, source, target r
 		t.Fatalf("unbounded key %v", err)
 	}
 }
+
+// ReplicationPublicationExpiryContract isolates publication expiry from lease or
+// actor expiry. crossExpiry must block a delegated audit past until, and prove
+// that the audit was entered before returning the completion result.
+func ReplicationPublicationExpiryContract(t *testing.T, s ReplicationStore, audits interface {
+	ListAudits(context.Context, repository.AuditQuery) ([]repository.AuditRecord, error)
+}, source, target repository.HostedRepository, crossExpiry func(time.Time, func() error) error) {
+	t.Helper()
+	ctx := t.Context()
+	in := Session(t, source.ID)
+	staged, _, err := s.Reserve(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _, err := s.Commit(ctx, staged.ID, in.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := dist.NewJob(dist.Plan{SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Items: []dist.Identity{{Name: p.Name, Version: p.Version, Platform: p.Platform, Digest: p.Digest, Size: p.Size, SourceGovernanceVersion: p.Governance.Version}}}, dist.Subject{Actor: "operator", Kind: "static_admin"}, uuid.NewString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(c context.Context, a dist.Authority) error {
+		if !a.Active || a.Subject.Kind != "static_admin" || !a.ValidUntil.IsZero() {
+			return dist.ErrAccessDenied
+		}
+		return c.Err()
+	}
+	if _, _, err = s.CreateRubyGemsReplication(ctx, job, check); err != nil {
+		t.Fatal(err)
+	}
+	claim, err := s.ClaimRubyGemsReplication(ctx, "publication-expiry-owner", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.ID = uuid.NewString()
+	in.RepositoryID = target.ID
+	in.Actor = claim.Actor
+	in.ExpiresAt = time.Now().UTC().Add(time.Second)
+	targetSession, _, err := s.Reserve(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.BindRubyGemsReplicationSession(ctx, claim.Lease, 0, targetSession.ID, check)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = crossExpiry(targetSession.ExpiresAt, func() error {
+		_, e := s.CompleteRubyGemsReplicationItem(ctx, claim.Lease, 0, dist.Commit{SessionID: targetSession.ID}, check)
+		return e
+	})
+	if ctx.Err() != nil || !claim.Lease.Until.After(time.Now().Add(30*time.Second)) {
+		t.Fatal("publication expiry was masked by context or lease expiry")
+	}
+	t.Logf("publication expiry=%s; lease remains valid until=%s; actor=static_admin without expiry; completion=%v", targetSession.ExpiresAt.Format(time.RFC3339Nano), claim.Lease.Until.Format(time.RFC3339Nano), err)
+	if !errors.Is(err, dist.ErrTargetBlocked) {
+		t.Fatalf("expired publication session committed with valid lease and actor: %v", err)
+	}
+	if _, err = s.Get(ctx, target.ID, p.FullName()); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expired target visible: %v", err)
+	}
+	after, err := s.GetRubyGemsReplication(ctx, job.ID)
+	if err != nil || after.Version != before.Version || after.Items[0].State != "running" {
+		t.Fatalf("expired checkpoint escaped rollback: %+v %v", after, err)
+	}
+	retained, err := s.GetSession(ctx, targetSession.ID)
+	if err != nil || retained.State != "pending" || !retained.CommittedAt.IsZero() {
+		t.Fatalf("expired session changed: %+v %v", retained, err)
+	}
+	for _, op := range []string{"rubygems.publish", "rubygems.replication.item"} {
+		rows, err := audits.ListAudits(ctx, repository.AuditQuery{Repository: target.Name, Operation: op, Limit: 100})
+		if err != nil || len(rows) != 0 {
+			t.Fatalf("expired transaction audit escaped: %s %+v %v", op, rows, err)
+		}
+	}
+}

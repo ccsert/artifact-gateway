@@ -17,6 +17,13 @@ image='ruby:3.4.4-alpine@sha256:81096866ac15f906adc79867da3ed97a2aa271d6149363e2
 rust_image='rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21'
 required={
  'TestRubyGemsMemoryReplicationStoreContract',
+'TestRubyGemsMemoryReplicationRejectsPublicationExpiryAfterDelegatedAudit',
+'TestRubyGemsPostgresReplicationRejectsPublicationExpiryAfterAudit',
+'TestRubyGemsReplicationSurvivesSimulatedSourceObjectRemoval',
+'TestRubyGemsPostgresRustFSReplicationSurvivesSimulatedSourceObjectRemoval',
+'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart/replication-cold-client-and-restart/platform-variants',
+'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart/replication-cold-client-and-restart/simulated-source-object-removal',
+'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart/replication-cold-client-and-restart/post-copy-postgres-rustfs-restart-cold-clients',
 'TestRubyGemsMemoryReplicationAuditAtomicityCancellationAndExpiry',
 'TestRubyGemsReplicationRejectsInvalidPlansQuotaAndForgedTransfers',
 'TestRubyGemsPostgresReplicationStoreContract',

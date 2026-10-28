@@ -17,7 +17,7 @@ type distributionAuthorityWriter interface {
 
 // The domain mutex is always acquired before the fixture repository mutex.
 // apply stages local copies and audits; commit alone publishes their changes.
-func (m *Memory) replicationChange(ctx context.Context, j dist.Job, check dist.Check, lease *dist.Lease, apply func(context.Context, dist.Authority) error, commit func()) error {
+func (m *Memory) replicationChange(ctx context.Context, j dist.Job, check dist.Check, lease *dist.Lease, apply func(context.Context, dist.Authority) error, commit func(), commitChecks ...func() error) error {
 	if lease != nil && !dist.LeaseMatches(m.replications[j.ID], *lease) {
 		return dist.ErrLeaseLost
 	}
@@ -31,6 +31,11 @@ func (m *Memory) replicationChange(ctx context.Context, j dist.Job, check dist.C
 		subject = &v
 	}
 	validate := func(a, b repository.RubyGemsGovernanceAuthority) error {
+		for _, checkCommit := range commitChecks {
+			if err := checkCommit(); err != nil {
+				return err
+			}
+		}
 		if lease != nil && !dist.LeaseMatches(m.replications[j.ID], *lease) {
 			return dist.ErrLeaseLost
 		}
@@ -337,6 +342,13 @@ func (m *Memory) CompleteRubyGemsReplicationItem(ctx context.Context, l dist.Lea
 			m.sessions[published.ID] = clone(*published)
 		}
 		m.replications[j.ID] = dist.Clone(j)
+	}, func() error {
+		// A delegated auditor may block after staging both audit records. Keep the
+		// pending publication deadline inside the final transaction validation too.
+		if published != nil && !published.ExpiresAt.After(time.Now()) {
+			return dist.ErrTargetBlocked
+		}
+		return nil
 	})
 	return dist.Clone(j), err
 }

@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- RubyGems Hosted 预览新增[同安装持久复制](docs/rubygems-replication-preview.zh-CN.md)（#472）：固定源身份、重验原提交凭据，以租约保护目标发布、审计及检查点，支持失败项选择重试。Memory 与 PostgreSQL 均拒绝审计等待后已到期的发布会话。固定官方客户端在 MRI 上区分 ruby/java 变体，并在模拟移除源对象、真正重启 PostgreSQL/RustFS/Gateway 后仅从目标冷安装；正式准入仍由 #293 承接。
+
 - RubyGems Hosted 预览增加[独立隔离/释放及默认关闭的读策略](docs/rubygems-hosted-preview.zh-CN.md#独立隔离与释放)（#468）。当前管理员按 CAS 决策，状态和策略与审计同事务提交；内存策略变更遵循注入的审计器，包含委托包装器的审计失败均保留原策略及版本；release 重验保留原字节且不撤销 yank。compact/full 索引和原包 GET/HEAD 在重启、条件及 Range 请求下遵循同一策略。
 
 - 新增管理员[邮件队列只读诊断](docs/email-notification-delivery.zh-CN.md#队列只读诊断)（#467）：使用数据库时间的一致快照覆盖全部保留交付，聚合与领取条件一致的候选、退避、租约和待终结任务，提供有限安全失败分类及持久 SMTP 接受证据。worker 健康保持 unknown，GET 不发送、不修改队列；不增加 Console 或 CLI 入口。

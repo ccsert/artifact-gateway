@@ -403,3 +403,36 @@ func TestRubyGemsReplicationRejectsInvalidPlansQuotaAndForgedTransfers(t *testin
 		t.Fatal("missing explicit port", w.Code)
 	}
 }
+
+func testDistributionSourceRemoval(t *testing.T, f distributionFixture) {
+	t.Helper()
+	ruby, rubyBytes := distributionPublish(t, f, f.source, "owned_removed_source", "ruby")
+	java, javaBytes := distributionPublish(t, f, f.source, "owned_removed_source", "java")
+	job := distributionCreate(t, f, distributionPlan(f, ruby, java), "owned-admin", uuid.NewString())
+	job = distributionRun(t, f, job.ID)
+	if job.State != "succeeded" {
+		t.Fatalf("copy %+v", job)
+	}
+	for _, original := range []struct {
+		p    domain.Publication
+		body []byte
+	}{{ruby, rubyBytes}, {java, javaBytes}} {
+		if err := f.objects.Delete(t.Context(), original.p.ObjectKey); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.objects.Get(t.Context(), original.p.ObjectKey); !errors.Is(err, objectstore.ErrNotFound) {
+			t.Fatalf("simulated source object removal did not remove source: %v", err)
+		}
+		source := request(f.module, "GET", "/rubygems/"+f.source.Name+"/gems/"+original.p.FullName()+".gem", nil, "owned-admin")
+		if source.Code != 404 {
+			t.Fatalf("removed source still readable %d", source.Code)
+		}
+		target := request(f.module, "GET", "/rubygems/"+f.target.Name+"/gems/"+original.p.FullName()+".gem", nil, "owned-admin")
+		if target.Code != 200 || !bytes.Equal(target.Body.Bytes(), original.body) {
+			t.Fatalf("target lost original after simulated source object removal: %s %d", original.p.Platform, target.Code)
+		}
+	}
+}
+func TestRubyGemsReplicationSurvivesSimulatedSourceObjectRemoval(t *testing.T) {
+	testDistributionSourceRemoval(t, distributionMemory(t))
+}

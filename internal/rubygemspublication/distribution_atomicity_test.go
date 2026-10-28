@@ -148,3 +148,42 @@ func TestRubyGemsMemoryReplicationAuditAtomicityCancellationAndExpiry(t *testing
 		})
 	}
 }
+
+func TestRubyGemsMemoryReplicationRejectsPublicationExpiryAfterDelegatedAudit(t *testing.T) {
+	repos := repository.NewMemoryStore()
+	var source, target repository.HostedRepository
+	for _, r := range []*repository.HostedRepository{&source, &target} {
+		v, err := repos.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: "session-expiry-" + uuid.NewString(), Format: repository.FormatRubyGems, Type: repository.RepositoryTypeHosted})
+		if err != nil {
+			t.Fatal(err)
+		}
+		*r = v
+	}
+	var until time.Time
+	entered := false
+	auditor := distributionAudit(func(ctx context.Context, record repository.AuditRecord) error {
+		if err := repos.RecordAudit(ctx, record); err != nil {
+			return err
+		}
+		if record.Operation == "rubygems.replication.item" && record.Status == 200 {
+			entered = true
+			timer := time.NewTimer(time.Until(until) + 30*time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+		return nil
+	})
+	store := domain.NewMemory(repos, auditor)
+	f.ReplicationPublicationExpiryContract(t, store, repos, source, target, func(expiry time.Time, complete func() error) error {
+		until = expiry
+		err := complete()
+		if !entered {
+			t.Fatal("delegated audit was never entered")
+		}
+		return err
+	})
+}

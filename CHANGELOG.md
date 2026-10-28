@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- RubyGems Hosted preview adds [durable same-installation replication](docs/rubygems-replication-preview.md) (#472): exact source identities, current original credential checks, lease-fenced target publication and audit/checkpoints, and selective retry. Memory and PostgreSQL reject publication-session expiry after delayed audit. The fixed official client gate distinguishes ruby/java variants on MRI and verifies cold target-only installation after simulated source-object removal and a physical PostgreSQL/RustFS/Gateway restart; formal admission remains under #293.
+
 - RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; in-memory policy changes honor the configured auditor and retain the prior policy/version on audit failure, including delegating audit wrappers; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
 
 - Add administrator-only [read-only email queue diagnostics](docs/email-notification-delivery.md#read-only-queue-diagnostics) (#467): one database-time snapshot across all retained deliveries, claim-aligned candidate/backoff/lease/cleanup counts, bounded safe failure classes and persisted SMTP acceptance evidence. Worker health remains unknown; the GET never sends or changes the queue. No Console or CLI surface is added.

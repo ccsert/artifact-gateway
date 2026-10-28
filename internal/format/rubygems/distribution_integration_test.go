@@ -188,3 +188,8 @@ func TestRubyGemsPostgresRustFSReplicationAuditRollbackAndLeaseFenceAfterWait(t 
 		t.Fatal(err)
 	}
 }
+
+func TestRubyGemsPostgresRustFSReplicationSurvivesSimulatedSourceObjectRemoval(t *testing.T) {
+	f, _ := distributionPostgres(t)
+	testDistributionSourceRemoval(t, f)
+}

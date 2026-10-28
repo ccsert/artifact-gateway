@@ -31,6 +31,7 @@ import (
 	protocol "github.com/ccsert/artifact-gateway/internal/protocol/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	dist "github.com/ccsert/artifact-gateway/internal/rubygemsdistribution"
+	publicationpg "github.com/ccsert/artifact-gateway/internal/rubygemspublication/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/testsupport"
 	"github.com/google/uuid"
 )
@@ -213,7 +214,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	proof := []map[string]any{}
 	originalMetadata := map[string]protocol.Metadata{}
 	producer := filepath.Join(work, "producer", "project")
-	for _, spec := range []struct{ name, version, platform, dep, expr string }{{"owned_leaf", "1.0.0", "ruby", "", "'leaf'"}, {"owned_middle", "1.1.0", "ruby", "s.add_runtime_dependency('owned_leaf','>= 1.0','< 2.0')", "require 'owned_leaf'; 'middle-' + OWNED_LEAF"}, {"owned_top", "1.2.0", "ruby", "s.add_runtime_dependency('owned_middle','~> 1.1')", "require 'owned_middle'; 'top-' + OWNED_MIDDLE"}, {"owned_top", "1.3.0.pre", "ruby", "s.add_runtime_dependency('owned_middle','>= 1.1','< 2.0')", "require 'owned_middle'; 'pre-' + OWNED_MIDDLE"}, {"owned_platform", "1.0.0", "x86_64-linux", "s.add_runtime_dependency('owned_leaf','= 1.0.0')", "'platform'"}, {"owned_variant", "1.0.0", "ruby", "", "'variant'"}, {"owned_variant", "1.0.0", "java", "", "'variant'"}} {
+	for _, spec := range []struct{ name, version, platform, dep, expr string }{{"owned_leaf", "1.0.0", "ruby", "", "'leaf'"}, {"owned_middle", "1.1.0", "ruby", "s.add_runtime_dependency('owned_leaf','>= 1.0','< 2.0')", "require 'owned_leaf'; 'middle-' + OWNED_LEAF"}, {"owned_top", "1.2.0", "ruby", "s.add_runtime_dependency('owned_middle','~> 1.1')", "require 'owned_middle'; 'top-' + OWNED_MIDDLE"}, {"owned_top", "1.3.0.pre", "ruby", "s.add_runtime_dependency('owned_middle','>= 1.1','< 2.0')", "require 'owned_middle'; 'pre-' + OWNED_MIDDLE"}, {"owned_platform", "1.0.0", "x86_64-linux", "s.add_runtime_dependency('owned_leaf','= 1.0.0')", "'platform'"}, {"owned_variant", "1.0.0", "ruby", "", "'variant'"}, {"owned_variant", "1.0.0", "java", "", "'variant'"}, {"owned_replicated_variant", "1.0.0", "ruby", "", "'replicated-ruby'"}, {"owned_replicated_variant", "1.0.0", "java", "", "'replicated-java'"}} {
 		file := spec.name + "-" + spec.version + "-" + spec.platform + ".gemspec"
 		content := "Gem::Specification.new do |s|\ns.name=" + strconv.Quote(spec.name) + ";s.version=" + strconv.Quote(spec.version) + ";s.platform=" + strconv.Quote(spec.platform) + ";s.summary='Owned fixture';s.authors=['Gateway'];s.licenses=['MIT'];s.files=['lib/" + spec.name + ".rb'];s.require_paths=['lib'];s.required_ruby_version='>= 3.0';s.metadata={'source_code_uri'=>'https://example.invalid/owned','changelog_uri'=>'https://example.invalid/tail'};" + spec.dep + "\ns.description='Benign tail after dependency fields';s.post_install_message='owned metadata tail';\nend\n"
 		ownedFile(t, producer, file, content)
@@ -242,6 +243,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	if e := os.WriteFile(filepath.Join(evidence, "original-gem-closures.json"), append(encoded, '\n'), 0600); e != nil {
 		t.Fatal(e)
 	}
+	var objects *objectstore.RustFSStore
 	var repos *repository.PostgresStore
 	var repo repository.HostedRepository
 	var server *httptest.Server
@@ -258,7 +260,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		}
 		ownedRepos := repos
 		t.Cleanup(func() { _ = ownedRepos.Close() })
-		objects, e := objectstore.NewRustFSStore(os.Getenv("TEST_RUSTFS_ENDPOINT"), os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY"), bucket)
+		objects, e = objectstore.NewRustFSStore(os.Getenv("TEST_RUSTFS_ENDPOINT"), os.Getenv("TEST_RUSTFS_ACCESS_KEY"), os.Getenv("TEST_RUSTFS_SECRET_KEY"), bucket)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -531,34 +533,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	server.Close()
 	stopGateway()
 	_ = repos.Close()
-	for _, service := range strings.Split(os.Getenv("RUBYGEMS_OWNED_RESTART_CONTAINERS"), ",") {
-		if service == "" {
-			t.Fatal("owned database/object service restart identities required")
-		}
-		ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
-		out, e := exec.CommandContext(ctx, "docker", "restart", service).CombinedOutput()
-		cancel()
-		if e != nil {
-			t.Fatalf("owned service restart: %v %s", e, out)
-		}
-	}
-	// Readiness is bounded separately from individual native requests. No client
-	// cache or default source is reused after physical dependency restart.
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		db, e := database.OpenPostgres(dsn, database.DefaultPoolConfig())
-		if e == nil {
-			e = db.PingContext(t.Context())
-			_ = db.Close()
-		}
-		if e == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("owned PostgreSQL restart did not become ready")
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
+	restartOwnedRubyServices(t, dsn)
 	start()
 	deniedConsumers("after")
 	statePath := governancePath(repo.ID, "owned_leaf", "1.0.0", "ruby")
@@ -596,17 +571,28 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 			readSource = originalReadSource
 			gemfileBody = "source " + strconv.Quote(readSource) + "\ngem 'owned_top', '= 1.2.0'\n"
 		}()
-		create := replicationRequest(server.Config.Handler, "POST", "/api/v2/previews/rubygems/repositories", []byte(`{"name":"ruby-replicated-`+uuid.NewString()+`"}`), admin, uuid.NewString())
-		var target repository.HostedRepository
-		if create.Code != 201 || json.Unmarshal(create.Body.Bytes(), &target) != nil {
-			t.Fatalf("target creation %d %s", create.Code, create.Body.String())
+		provision := func(prefix string) repository.HostedRepository {
+			create := replicationRequest(server.Config.Handler, "POST", "/api/v2/previews/rubygems/repositories", []byte(`{"name":"`+prefix+uuid.NewString()+`"}`), admin, uuid.NewString())
+			var created repository.HostedRepository
+			if create.Code != 201 || json.Unmarshal(create.Body.Bytes(), &created) != nil {
+				t.Fatalf("replication repository creation %d %s", create.Code, create.Body.String())
+			}
+			if _, err := repos.ReplaceRepositoryGrants(t.Context(), created.ID, []repository.RepositoryGrant{{Principal: "ruby-gate-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+				t.Fatal(err)
+			}
+			return created
 		}
-		if _, err := repos.ReplaceRepositoryGrants(t.Context(), target.ID, []repository.RepositoryGrant{{Principal: "ruby-gate-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
-			t.Fatal(err)
-		}
-		plan := dist.Plan{SourceRepositoryID: repo.ID, TargetRepositoryID: target.ID}
-		for _, pin := range []struct{ name, version string }{{"owned_leaf", "1.0.0"}, {"owned_middle", "1.1.0"}, {"owned_top", "1.2.0"}} {
-			identity := request(server.Config.Handler, "GET", "/api/v2/previews/rubygems/repositories/"+repo.ID+"/packages/"+pin.name+"/"+pin.version+"/ruby", nil, "Bearer "+reader)
+		replicationSource, target := provision("ruby-copy-source-"), provision("ruby-replicated-")
+		plan := dist.Plan{SourceRepositoryID: replicationSource.ID, TargetRepositoryID: target.ID}
+		for _, pin := range []struct{ name, version, platform string }{{"owned_leaf", "1.0.0", "ruby"}, {"owned_middle", "1.1.0", "ruby"}, {"owned_top", "1.2.0", "ruby"}, {"owned_replicated_variant", "1.0.0", "ruby"}, {"owned_replicated_variant", "1.0.0", "java"}} {
+			filename := pin.name + "-" + pin.version
+			if pin.platform != "ruby" {
+				filename += "-" + pin.platform
+			}
+			filename += ".gem"
+			ownedSource := strings.Replace(source, "/rubygems/"+originalRepo.Name+"/", "/rubygems/"+replicationSource.Name+"/", 1)
+			run("push", "replication-source-push-"+filename, false, "gem", "push", filename, "--host", strings.TrimSuffix(ownedSource, "/"))
+			identity := request(server.Config.Handler, "GET", "/api/v2/previews/rubygems/repositories/"+replicationSource.ID+"/packages/"+pin.name+"/"+pin.version+"/"+pin.platform, nil, "Bearer "+reader)
 			var item dist.Identity
 			if identity.Code != 200 || json.Unmarshal(identity.Body.Bytes(), &item) != nil {
 				t.Fatalf("source reader identity %d %s", identity.Code, identity.Body.String())
@@ -654,13 +640,101 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 		verifyPhase("bundle-replicated-compact", stable, compact)
 		run("bundle-replicated-full", "replicated-full-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
 		verifyPhase("bundle-replicated-full", stable, legacy)
-		server.Close()
-		stopGateway()
-		_ = repos.Close()
-		start()
-		install("gem-replicated-restart-cold")
-		run("bundle-replicated-restart-full", "replicated-restart-full-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
-		verifyPhase("bundle-replicated-restart-full", stable, legacy)
+		t.Run("platform-variants", func(t *testing.T) {
+			for _, platform := range []string{"ruby", "java"} {
+				phase := "replication-platform-" + platform + "-cold"
+				run(phase, "explicit-platform-fetch", false, "gem", "fetch", "owned_replicated_variant", "--version", "1.0.0", "--platform", platform, "--clear-sources", "--source", readSource)
+				filename := "owned_replicated_variant-1.0.0"
+				if platform != "ruby" {
+					filename += "-" + platform
+				}
+				filename += ".gem"
+				verifyPhase(phase, []string{filename}, nil)
+				actual, err := os.ReadFile(filepath.Join(phaseRoots[phase], "project", filename))
+				if err != nil {
+					t.Fatal(err)
+				}
+				inspected, err := protocol.Inspect(bytes.NewReader(actual))
+				if err != nil || inspected.Metadata.Platform != platform {
+					t.Fatalf("official platform fetch mixed variants: %s %+v %v", platform, inspected.Metadata, err)
+				}
+			}
+			run("replication-platform-ruby-install-cold", "explicit-ruby-platform-install", false, "gem", "install", "owned_replicated_variant", "--version", "1.0.0", "--platform", "ruby", "--remote", "--clear-sources", "--source", readSource, "--no-document")
+			run("replication-platform-ruby-install-cold", "execute-ruby-variant-only", true, "ruby", "-e", `require 'owned_replicated_variant';abort unless OWNED_REPLICATED_VARIANT=='replicated-ruby';puts OWNED_REPLICATED_VARIANT`)
+			verifyPhase("replication-platform-ruby-install-cold", []string{"owned_replicated_variant-1.0.0.gem"}, nil)
+			governanceEvidence["replicationRubyAndJavaExplicitPlatformFetchOnMRI"] = true
+			governanceEvidence["replicationPlatformRuntimeScope"] = "official gem platform fetch and archive identity on MRI; only ruby variant executed; no JRuby runtime verification"
+		})
+		t.Run("simulated-source-object-removal", func(t *testing.T) {
+			db, err := database.OpenPostgres(dsn, database.DefaultPoolConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = db.Close() }()
+			locks, err := database.OpenPostgres(dsn, database.DefaultArtifactLockPoolConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = locks.Close() }()
+			publications, err := publicationpg.New(db, locks)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mu.Lock()
+			activePhase = "replication-simulated-source-object-removal"
+			mu.Unlock()
+			removed := []map[string]any{}
+			for _, pin := range plan.Items {
+				sourcePublication, err := publications.GetRetained(t.Context(), replicationSource.ID, pin.Name, pin.Version, pin.Platform)
+				if err != nil {
+					t.Fatal(err)
+				}
+				targetPublication, err := publications.GetRetained(t.Context(), target.ID, pin.Name, pin.Version, pin.Platform)
+				if err != nil || targetPublication.ObjectKey == sourcePublication.ObjectKey {
+					t.Fatal("target did not own independent object", err)
+				}
+				// Fixture-only fault injection: no lifecycle/GC implementation or
+				// source metadata changes are performed by the product here.
+				if err = objects.Delete(t.Context(), sourcePublication.ObjectKey); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = objects.Get(t.Context(), sourcePublication.ObjectKey); !errors.Is(err, objectstore.ErrNotFound) {
+					t.Fatalf("simulated source removal failed: %v", err)
+				}
+				sourceRead := request(server.Config.Handler, "GET", "/rubygems/"+replicationSource.Name+"/gems/"+sourcePublication.FullName()+".gem", nil, admin)
+				if sourceRead.Code != 404 {
+					t.Fatalf("removed source still readable %d", sourceRead.Code)
+				}
+				targetRead := request(server.Config.Handler, "GET", "/rubygems/"+target.Name+"/gems/"+targetPublication.FullName()+".gem", nil, admin)
+				sum := sha256.Sum256(targetRead.Body.Bytes())
+				if targetRead.Code != 200 || int64(targetRead.Body.Len()) != pin.Size || "sha256:"+hex.EncodeToString(sum[:]) != pin.Digest {
+					t.Fatalf("target lost complete original after source removal: %s/%s %d", pin.Name, pin.Platform, targetRead.Code)
+				}
+				removed = append(removed, map[string]any{"name": pin.Name, "version": pin.Version, "platform": pin.Platform, "sourceObjectAbsent": true, "sourceHTTPStatus": sourceRead.Code, "targetHTTPStatus": targetRead.Code, "targetSize": targetRead.Body.Len(), "targetDigest": pin.Digest})
+			}
+			governanceEvidence["replicationSimulatedSourceObjectRemoval"] = removed
+		})
+		t.Run("post-copy-postgres-rustfs-restart-cold-clients", func(t *testing.T) {
+			server.Close()
+			stopGateway()
+			_ = repos.Close()
+			restarted := restartOwnedRubyServices(t, dsn)
+			start()
+			receipt := request(server.Config.Handler, "GET", "/api/v2/previews/rubygems/replication-jobs/"+job.ID, nil, "Bearer "+admin)
+			var retained dist.Job
+			if receipt.Code != 200 || json.Unmarshal(receipt.Body.Bytes(), &retained) != nil || retained.State != "succeeded" || retained.PlanDigest != job.PlanDigest {
+				t.Fatal("post-storage-restart replication checkpoint lost", receipt.Code)
+			}
+			install("gem-replicated-restart-cold")
+			run("bundle-replicated-restart-compact", "replicated-restart-compact-install", false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
+			verifyPhase("bundle-replicated-restart-compact", stable, compact)
+			run("bundle-replicated-restart-full", "replicated-restart-full-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
+			verifyPhase("bundle-replicated-restart-full", stable, legacy)
+			run("replication-platform-java-storage-restart-cold", "explicit-java-fetch-after-source-removal-and-storage-restart", false, "gem", "fetch", "owned_replicated_variant", "--version", "1.0.0", "--platform", "java", "--clear-sources", "--source", readSource)
+			verifyPhase("replication-platform-java-storage-restart-cold", []string{"owned_replicated_variant-1.0.0-java.gem"}, nil)
+			governanceEvidence["replicationPostCopyPhysicalServiceRestart"] = restarted
+			governanceEvidence["replicationTargetColdAfterSimulatedSourceRemovalAndPostgresRustFSRestart"] = true
+		})
 		governanceEvidence["replicationQueuedOnAPIOnlyAndResumedByReplacementWorker"] = true
 		governanceEvidence["replicatedTargetOnlyColdGemAndBundlerOriginalBytes"] = true
 		governanceEvidence["replicatedTargetColdAfterProcessRestart"] = true
@@ -768,4 +842,53 @@ func startRealRubyGateway(t *testing.T, admin, reader, bucket, evidence string, 
 	stop()
 	t.Fatal("production gateway did not become ready")
 	return stop, base
+}
+
+func restartOwnedRubyServices(t *testing.T, dsn string) []string {
+	t.Helper()
+	project := os.Getenv("RUBYGEMS_OWNED_PROJECT")
+	services := strings.Split(os.Getenv("RUBYGEMS_OWNED_RESTART_CONTAINERS"), ",")
+	if project == "" || len(services) != 2 {
+		t.Fatal("owned PostgreSQL/RustFS restart identities required")
+	}
+	for _, service := range services {
+		if !strings.HasPrefix(service, project+"-") || strings.ContainsAny(service, "\x00\r\n") {
+			t.Fatal("restart target is not fixture-owned")
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+		output, err := exec.CommandContext(ctx, "docker", "restart", service).CombinedOutput()
+		cancel()
+		if err != nil {
+			t.Fatalf("owned physical service restart: %v %s", err, output)
+		}
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		db, err := database.OpenPostgres(dsn, database.DefaultPoolConfig())
+		if err == nil {
+			err = db.PingContext(ctx)
+			_ = db.Close()
+		}
+		cancel()
+		if err == nil {
+			client := &http.Client{Timeout: time.Second}
+			response, e := client.Get(strings.TrimSuffix(os.Getenv("TEST_RUSTFS_ENDPOINT"), "/") + "/health")
+			if e != nil {
+				err = e
+			} else {
+				_ = response.Body.Close()
+				if response.StatusCode != 200 {
+					err = errors.New("owned RustFS not ready")
+				}
+			}
+		}
+		if err == nil {
+			return services
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("owned PostgreSQL/RustFS restart did not become ready")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }

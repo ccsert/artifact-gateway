@@ -104,7 +104,11 @@ and Bundler 2.6.7 clients. The production Gateway persists an API-only job,
 restarts before worker execution and performs cold target-only transitive
 `gem install`, compact-index and `bundle install --full-index` checks. Complete
 downloads must match original archive hashes and dependency metadata, including
-after process restart. The gate records resource ownership and cleanup.
+after explicit fixture-only simulated source-object removal and a post-copy
+physical PostgreSQL/RustFS/Gateway restart. Explicit official `gem --platform`
+fetches distinguish same-name/version `ruby` and `java` archives on MRI; only
+the `ruby` variant executes, with no JRuby runtime claim. The gate records
+resource ownership and cleanup.
 
 This slice excludes Proxy/Group, promotion, federation, formal admission,
 scanning/GC, backup admission, Nexus migration and production deployment.
