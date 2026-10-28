@@ -366,4 +366,20 @@ func ReplicationPublicationExpiryContract(t *testing.T, s ReplicationStore, audi
 			t.Fatalf("expired transaction audit escaped: %s %+v %v", op, rows, err)
 		}
 	}
+	// Keep the rollback checks above independent from cleanup. The durable PG
+	// queue is shared by later contracts; an unfinished owner becomes eligible
+	// again after its lease expires and can displace their newly queued jobs.
+	if err = s.FailRubyGemsReplicationItem(ctx, claim.Lease, 0, "target_conflict"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.FinishRubyGemsReplication(ctx, claim.Lease); err != nil {
+		t.Fatal(err)
+	}
+	finished, err := s.GetRubyGemsReplication(ctx, job.ID)
+	if err != nil || finished.State != "failed" || finished.Items[0].State != "failed" || finished.Items[0].Code != "target_conflict" {
+		t.Fatalf("publication-expiry contract left work that a later worker can reclaim: %+v %v", finished, err)
+	}
+	if next, err := s.ClaimRubyGemsReplication(ctx, "post-publication-expiry-worker", time.Minute); !errors.Is(err, dist.ErrNotFound) {
+		t.Fatalf("publication-expiry contract left claimable work: %+v %v", next, err)
+	}
 }
