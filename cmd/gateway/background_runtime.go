@@ -19,6 +19,7 @@ import (
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	rubydist "github.com/ccsert/artifact-gateway/internal/rubygemsdistribution"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 )
 
@@ -40,6 +41,7 @@ type backgroundRuntime struct {
 	nugetMaintenance    *nugetformat.Maintenance
 	nugetReplication    *dist.Worker
 	rubyGemsMaintenance *rubygemsformat.Maintenance
+	rubyGemsReplication *rubydist.Worker
 }
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
@@ -61,6 +63,9 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 			// This preview only reclaims expired, never-visible uploads. It
 			// does not advertise NuGet lifecycle/retention capability.
 			r.nugetMaintenance.Start(ctx, time.Minute)
+		}
+		if r.rubyGemsReplication != nil && cfg.RubyGemsPreviewEnabled && cfg.WorkerEnabled("rubygems", "replication") {
+			r.rubyGemsReplication.Start(ctx, 5*time.Second)
 		}
 		if r.rubyGemsMaintenance != nil && cfg.RubyGemsPreviewEnabled && cfg.WorkerEnabled("rubygems", "retention") {
 			r.rubyGemsMaintenance.Start(ctx, time.Minute)

@@ -166,3 +166,98 @@ quarantine_read_policy:
       '404': {$ref: '../components/responses.yaml#/Problem'}
       '409': {$ref: '../components/responses.yaml#/Problem'}
       '500': {$ref: '../components/responses.yaml#/Problem'}
+
+package_identity:
+  parameters:
+    - {name: repositoryId, in: path, required: true, schema: {type: string, format: uuid}}
+    - {name: gemName, in: path, required: true, schema: {type: string}}
+    - {name: gemVersion, in: path, required: true, schema: {type: string}}
+    - {name: platform, in: path, required: true, schema: {type: string}}
+  get:
+    tags: [RubyGemsPreview]
+    operationId: getRubyGemsPreviewPackageIdentity
+    description: Source reader obtains the exact server-owned name, original version, platform, SHA-256, size and governance version for replication. Yanked or quarantined variants are unavailable independently of read policy. No physical object key is returned.
+    responses:
+      '200':
+        description: Distribution-eligible gem identity
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewIdentity'}
+      '401': {description: Authentication required}
+      '403': {description: Current package read authority required}
+      '404': {description: Exact eligible source gem not found}
+      '503': {description: Preview disabled or storage unavailable}
+
+replication_jobs:
+  post:
+    operationId: createRubyGemsPreviewReplicationJob
+    description: >-
+      Creates a bounded, durable Hosted-to-Hosted replication plan. This default-disabled preview
+      fixes case-preserved names, original versions, canonical platforms, complete gem SHA-256 and sizes, and source governance versions.
+      Every source governance change invalidates its item. Each gem commits
+      atomically; a failed batch retains completed items. No credentials, source object keys, Proxy or
+      Group targets are accepted. The current durable actor, source read and target write authority,
+      governance and capacity are checked again by the worker at publication.
+    parameters:
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 200}}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewReplicationRequest'}
+    responses:
+      '202':
+        description: Queued plan, or the same plan on an exact idempotent replay
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewReplicationJob'}
+      '400': {description: "Invalid or duplicate gem identity, unbounded plan or key"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Current source read and target write authority required"}
+      '404': {description: "Active RubyGems Hosted repository or exact source gem not found"}
+      '409': {description: "Different plan for the key, source governance changed, conflict or capacity denied"}
+      '503': {description: "Preview disabled or durable replication unavailable"}
+replication_job:
+  parameters:
+    - {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    operationId: getRubyGemsPreviewReplicationJob
+    description: Returns exact item results; current read authority on both repositories is required.
+    responses:
+      '200':
+        description: Durable job and gem checkpoints without secrets or physical object keys
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewReplicationJob'}
+      '401': {description: "Authentication required"}
+      '403': {description: "Source and target read authority required"}
+      '404': {description: "Job not found"}
+      '503': {description: "Preview disabled or durable replication unavailable"}
+replication_retry:
+  parameters:
+    - {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+  post:
+    operationId: retryRubyGemsPreviewReplicationJob
+    description: >-
+      The original durable actor can retry explicitly selected failed items of a failed job using
+      its current version. Completed items, plan, actor and source pins remain fixed. An exact key
+      replay never schedules another attempt. This is gem-level recovery, not a batch rollback.
+    parameters:
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 200}}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewReplicationRetry'}
+    responses:
+      '202':
+        description: Selected failed items queued, or an exact retry replay
+        content:
+          application/json:
+            schema: {$ref: '../components/rubygems-preview.yaml#/RubyGemsPreviewReplicationJob'}
+      '400': {description: "Invalid retry key or item set"}
+      '401': {description: "Authentication required"}
+      '403': {description: "Original actor with current source read and target write authority required"}
+      '404': {description: "Job not found"}
+      '409': {description: "Job version, retry payload, state or selected item conflicts"}
+      '503': {description: "Preview disabled or durable replication unavailable"}

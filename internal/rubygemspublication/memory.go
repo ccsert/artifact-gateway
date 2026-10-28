@@ -8,15 +8,18 @@ import (
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	dist "github.com/ccsert/artifact-gateway/internal/rubygemsdistribution"
 )
 
 type Memory struct {
-	mu           sync.Mutex
-	repositories RepositoryReader
-	audit        Auditor
-	sessions     map[string]Session
-	quotas       map[string]int64
-	locks        [256]chan struct{}
+	mu                 sync.Mutex
+	repositories       RepositoryReader
+	audit              Auditor
+	sessions           map[string]Session
+	quotas             map[string]int64
+	locks              [256]chan struct{}
+	replications       map[string]dist.Job
+	replicationRetries map[string]string
 }
 
 func NewMemory(repos RepositoryReader, audit Auditor) *Memory {
