@@ -57,3 +57,16 @@ func (a *RubyGemsBoundary) GetRubyGemsPreviewQuarantineReadPolicy(w http.Respons
 func (a *RubyGemsBoundary) ReplaceRubyGemsPreviewQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
 	a.serve(w, r)
 }
+
+func (a *RubyGemsBoundary) GetRubyGemsPreviewPackageIdentity(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _, _, _ string) {
+	a.serve(w, r)
+}
+func (a *RubyGemsBoundary) CreateRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ api.CreateRubyGemsPreviewReplicationJobParams) {
+	a.serve(w, r)
+}
+func (a *RubyGemsBoundary) GetRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID) {
+	a.serve(w, r)
+}
+func (a *RubyGemsBoundary) RetryRubyGemsPreviewReplicationJob(w http.ResponseWriter, r *http.Request, _ openapi_types.UUID, _ api.RetryRubyGemsPreviewReplicationJobParams) {
+	a.serve(w, r)
+}

@@ -210,16 +210,16 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 implemented | A | W |
 | `GET /repository-grants`<br>`listRepositoryGrants` | `grant list --all-repositories` | #134 | M1 implemented | FA | Q |
 | `GET /authorization-templates`<br>`listAuthorizationTemplates` | `template list` | #134 | M1 implemented | A | Q |
-| `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 | A | W |
+| `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 implemented | A | W |
 | `GET /authorization-templates/{templateId}`<br>`getAuthorizationTemplate` | `template show <id>` | #134 | M1 implemented | A | Q |
-| `PUT /authorization-templates/{templateId}`<br>`updateAuthorizationTemplate` | `template update <id>` | #134 | M2 | A | C |
-| `DELETE /authorization-templates/{templateId}`<br>`deleteAuthorizationTemplate` | `template delete <id>` | #134 | M2 | A | W |
+| `PUT /authorization-templates/{templateId}`<br>`updateAuthorizationTemplate` | `template update <id>` | #134 | M2 implemented | A | C |
+| `DELETE /authorization-templates/{templateId}`<br>`deleteAuthorizationTemplate` | `template delete <id>` | #134 | M2 implemented | A | W |
 | `POST /authorization-templates/{templateId}/apply`<br>`applyAuthorizationTemplate` | `template apply <id> --repo <id>` | #134 | M1 implemented | RA | G |
 | `GET /authorization-roles`<br>`listAuthorizationRoles` | `role list` | #134 | M1 implemented | A | Q |
-| `POST /authorization-roles`<br>`createAuthorizationRole` | `role create` | #134 | M2 | A | W |
+| `POST /authorization-roles`<br>`createAuthorizationRole` | `role create` | #134 | M2 implemented | A | W |
 | `GET /authorization-roles/{roleId}`<br>`getAuthorizationRole` | `role show <id>` | #134 | M1 implemented | A | Q |
-| `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 | A | C |
-| `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 | A | W |
+| `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 implemented | A | C |
+| `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 implemented | A | W |
 | `GET /repository-capacities`<br>`listRepositoryCapacities` | `capacity list` | #138 | M2 | FA | Q |
 | `GET /lifecycle-jobs`<br>`listLifecycleJobs` | `lifecycle-job list --all-repositories` | #135 | M1 implemented | FA | Q |
 | `GET /scheduled-tasks`<br>`listScheduledTasks` | `scheduled-task list` | #137 | M2 | ST | Q |
@@ -584,5 +584,9 @@ format admission remains under #292, #289 and #293.
 | `DELETE /rubygems/{repository}/api/v1/gems/yank`<br>`yankRubyGemHostedPreview` | native `gem yank` | #462 | N/A | W for the exact package | N: the official RubyGems client owns native yank; agctl does not implement another protocol client |
 | `GET /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy`<br>`getRubyGemsPreviewQuarantineReadPolicy` | explicit RubyGems preview API | #468 | N/A | RA | N: independent versioned policy API; no agctl command is registered or verified |
 | `PUT /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceRubyGemsPreviewQuarantineReadPolicy` | explicit RubyGems preview API | #468 | N/A | RA | N: independent versioned policy API; no agctl command is registered or verified |
+| `GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}`<br>`getRubyGemsPreviewPackageIdentity` | explicit RubyGems preview API | #472 | N/A | source R for the exact package | N: this Hosted replication preview is API-only; no agctl command is registered or verified |
+| `POST /previews/rubygems/replication-jobs`<br>`createRubyGemsPreviewReplicationJob` | explicit RubyGems preview API | #472 | N/A | source R + target W for every item | N: this Hosted replication preview is API-only; no agctl command is registered or verified |
+| `GET /previews/rubygems/replication-jobs/{jobId}`<br>`getRubyGemsPreviewReplicationJob` | explicit RubyGems preview API | #472 | N/A | source R + target R for every item | N: this Hosted replication preview is API-only; no agctl command is registered or verified |
+| `POST /previews/rubygems/replication-jobs/{jobId}/retry`<br>`retryRubyGemsPreviewReplicationJob` | explicit RubyGems preview API | #472 | N/A | original actor + source R + target W | N: this Hosted replication preview is API-only; no agctl command is registered or verified |
 
 RubyGems governance POST also accepts independent `quarantine`/`release` (#468); the existing exact-package administrator permission and CAS contract apply. Release does not undo yank, and restore does not clear quarantine.

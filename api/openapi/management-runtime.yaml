@@ -9,6 +9,14 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/previews/rubygems/replication-jobs":
+    "$ref": "./management/rubygems-preview.yaml#/replication_jobs"
+  "/previews/rubygems/replication-jobs/{jobId}":
+    "$ref": "./management/rubygems-preview.yaml#/replication_job"
+  "/previews/rubygems/replication-jobs/{jobId}/retry":
+    "$ref": "./management/rubygems-preview.yaml#/replication_retry"
+  "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}":
+    "$ref": "./management/rubygems-preview.yaml#/package_identity"
   "/previews/rubygems/repositories/{repositoryId}/quarantine-read-policy":
     "$ref": "./management/rubygems-preview.yaml#/quarantine_read_policy"
   "/previews/helm/replication-jobs":
@@ -391,6 +399,16 @@ components:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewQuarantineReadPolicy"
     RubyGemsPreviewQuarantineReadPolicyChange:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewQuarantineReadPolicyChange"
+    RubyGemsPreviewIdentity:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewIdentity"
+    RubyGemsPreviewReplicationRequest:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewReplicationRequest"
+    RubyGemsPreviewReplicationItem:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewReplicationItem"
+    RubyGemsPreviewReplicationJob:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewReplicationJob"
+    RubyGemsPreviewReplicationRetry:
+      "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewReplicationRetry"
     RubyGemsPreviewGovernance:
       "$ref": "./components/rubygems-preview.yaml#/RubyGemsPreviewGovernance"
     RubyGemsPreviewGovernanceChange:

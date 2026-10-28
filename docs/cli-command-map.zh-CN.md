@@ -165,16 +165,16 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 implemented | A | W |
 | `GET /repository-grants`<br>`listRepositoryGrants` | `grant list --all-repositories` | #134 | M1 implemented | FA | Q |
 | `GET /authorization-templates`<br>`listAuthorizationTemplates` | `template list` | #134 | M1 implemented | A | Q |
-| `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 | A | W |
+| `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 implemented | A | W |
 | `GET /authorization-templates/{templateId}`<br>`getAuthorizationTemplate` | `template show <id>` | #134 | M1 implemented | A | Q |
-| `PUT /authorization-templates/{templateId}`<br>`updateAuthorizationTemplate` | `template update <id>` | #134 | M2 | A | C |
-| `DELETE /authorization-templates/{templateId}`<br>`deleteAuthorizationTemplate` | `template delete <id>` | #134 | M2 | A | W |
+| `PUT /authorization-templates/{templateId}`<br>`updateAuthorizationTemplate` | `template update <id>` | #134 | M2 implemented | A | C |
+| `DELETE /authorization-templates/{templateId}`<br>`deleteAuthorizationTemplate` | `template delete <id>` | #134 | M2 implemented | A | W |
 | `POST /authorization-templates/{templateId}/apply`<br>`applyAuthorizationTemplate` | `template apply <id> --repo <id>` | #134 | M1 implemented | RA | G |
 | `GET /authorization-roles`<br>`listAuthorizationRoles` | `role list` | #134 | M1 implemented | A | Q |
-| `POST /authorization-roles`<br>`createAuthorizationRole` | `role create` | #134 | M2 | A | W |
+| `POST /authorization-roles`<br>`createAuthorizationRole` | `role create` | #134 | M2 implemented | A | W |
 | `GET /authorization-roles/{roleId}`<br>`getAuthorizationRole` | `role show <id>` | #134 | M1 implemented | A | Q |
-| `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 | A | C |
-| `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 | A | W |
+| `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 implemented | A | C |
+| `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 implemented | A | W |
 | `GET /repository-capacities`<br>`listRepositoryCapacities` | `capacity list` | #138 | M2 | FA | Q |
 | `GET /lifecycle-jobs`<br>`listLifecycleJobs` | `lifecycle-job list --all-repositories` | #135 | M1 implemented | FA | Q |
 | `GET /scheduled-tasks`<br>`listScheduledTasks` | `scheduled-task list` | #137 | M2 | ST | Q |
@@ -517,5 +517,9 @@ agctl 命令。NuGet 重试保留原持久主体与凭据身份，并重新检�
 | `DELETE /rubygems/{repository}/api/v1/gems/yank`<br>`yankRubyGemHostedPreview` | native `gem yank` | #462 | N/A | W for the exact package | N：官方 RubyGems 客户端发送原生 yank，agctl 不另行实现协议客户端 |
 | `GET /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy`<br>`getRubyGemsPreviewQuarantineReadPolicy` | 显式 RubyGems 预览 API | #468 | N/A | RA | N：独立版本化策略 API；尚未注册或验证对应 agctl 命令 |
 | `PUT /previews/rubygems/repositories/{repositoryId}/quarantine-read-policy`<br>`replaceRubyGemsPreviewQuarantineReadPolicy` | 显式 RubyGems 预览 API | #468 | N/A | RA | N：独立版本化策略 API；尚未注册或验证对应 agctl 命令 |
+| `GET /previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}`<br>`getRubyGemsPreviewPackageIdentity` | 显式 RubyGems 预览 API | #472 | N/A | 精确包的源 R | N：此 Hosted 复制预览仅提供 API；尚未注册或验证对应 agctl 命令 |
+| `POST /previews/rubygems/replication-jobs`<br>`createRubyGemsPreviewReplicationJob` | 显式 RubyGems 预览 API | #472 | N/A | 每项的源 R + 目标 W | N：此 Hosted 复制预览仅提供 API；尚未注册或验证对应 agctl 命令 |
+| `GET /previews/rubygems/replication-jobs/{jobId}`<br>`getRubyGemsPreviewReplicationJob` | 显式 RubyGems 预览 API | #472 | N/A | 每项的源 R + 目标 R | N：此 Hosted 复制预览仅提供 API；尚未注册或验证对应 agctl 命令 |
+| `POST /previews/rubygems/replication-jobs/{jobId}/retry`<br>`retryRubyGemsPreviewReplicationJob` | 显式 RubyGems 预览 API | #472 | N/A | 原提交者 + 源 R + 目标 W | N：此 Hosted 复制预览仅提供 API；尚未注册或验证对应 agctl 命令 |
 
 RubyGems 治理 POST 同时支持独立 `quarantine`/`release`（#468），沿用精确包名管理员权限和 CAS 契约；release 不撤销 yank，restore 不清除隔离。

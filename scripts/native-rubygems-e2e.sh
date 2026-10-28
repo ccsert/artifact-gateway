@@ -16,6 +16,24 @@ label='com.artifact-gateway.rubygems-e2e.run='+run_id
 image='ruby:3.4.4-alpine@sha256:81096866ac15f906adc79867da3ed97a2aa271d6149363e216a174701345c53b'
 rust_image='rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21'
 required={
+ 'TestRubyGemsMemoryReplicationStoreContract',
+'TestRubyGemsMemoryReplicationRejectsPublicationExpiryAfterDelegatedAudit',
+'TestRubyGemsPostgresReplicationRejectsPublicationExpiryAfterAudit',
+'TestRubyGemsReplicationSurvivesSimulatedSourceObjectRemoval',
+'TestRubyGemsPostgresRustFSReplicationSurvivesSimulatedSourceObjectRemoval',
+'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart/replication-cold-client-and-restart/platform-variants',
+'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart/replication-cold-client-and-restart/simulated-source-object-removal',
+'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart/replication-cold-client-and-restart/post-copy-postgres-rustfs-restart-cold-clients',
+'TestRubyGemsMemoryReplicationAuditAtomicityCancellationAndExpiry',
+'TestRubyGemsReplicationRejectsInvalidPlansQuotaAndForgedTransfers',
+'TestRubyGemsPostgresReplicationStoreContract',
+'TestRubyGemsReplicationCanonicalIdentityBoundsAndSubjects',
+'TestRubyGemsReplicationWorkerPreservesFailuresAndLeaseLoss',
+'TestRubyGemsReplicationOriginalBytesMetadataAndPlatform',
+'TestRubyGemsReplicationRechecksGovernanceGrantsAndOriginalCredential',
+'TestRubyGemsPostgresRustFSReplicationOriginalBytesAndCurrentAuthority',
+'TestRubyGemsPostgresRustFSReplicationAuditRollbackAndLeaseFenceAfterWait',
+'TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart/replication-cold-client-and-restart',
 'TestRubyGemArchivePreservesDependenciesAcrossBenignTrailingFields',
 'TestRubyGemRejectsYamlAndTarParserDifferentials',
 'TestRubyGemPlatformDefaultsAndLongUSTARPathsKeepDependencies',
@@ -193,7 +211,7 @@ try:
     command(['go','build','-o',str(work/'gateway'),'./cmd/gateway'],output='gateway-build.log')
     env['RUBYGEMS_GATEWAY_BIN']=str(work/'gateway')
     write('gateway-binary.json',{'sha256':hashlib.sha256((work/'gateway').read_bytes()).hexdigest(),'build':'real cmd/gateway from recorded source snapshot','runtime':'production config/composition with explicit RubyGems preview flag'})
-    result=command(['go','test','-json','-count=1','-p','1','-race','-tags=integration','./internal/protocol/rubygems','./internal/rubygemspublication/...','./internal/format/rubygems','-run','RubyGem','-timeout','600s'],output='results.jsonl',check=False)
+    result=command(['go','test','-json','-count=1','-p','1','-race','-tags=integration','./internal/protocol/rubygems','./internal/rubygemspublication/...','./internal/rubygemsdistribution','./internal/format/rubygems','-run','RubyGem','-timeout','600s'],output='results.jsonl',check=False)
     events=[]
     for line in (evidence/'results.jsonl').read_text().splitlines():
         try:events.append(json.loads(line))

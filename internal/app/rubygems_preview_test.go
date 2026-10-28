@@ -135,3 +135,31 @@ func TestRubyGemsPreviewWorkerDiagnosticsUseIndependentPreviewProjection(t *test
 		}
 	}
 }
+
+func TestRubyGemsReplicationPreviewRequiresExplicitEnablementAndDistributionPort(t *testing.T) {
+	o := explicitGatewayOptions()
+	repos := o.Store.(*repository.MemoryStore)
+	h, err := NewGatewayHandler(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v2/previews/rubygems/replication-jobs", "/api/v2/previews/rubygems/replication-jobs/4c83e59b-419a-4403-b812-b333c9106494", "/api/v2/previews/rubygems/repositories/4c83e59b-419a-4403-b812-b333c9106494/packages/owned/1.0.0/ruby"} {
+		method := "GET"
+		if path == "/api/v2/previews/rubygems/replication-jobs" {
+			method = "POST"
+		}
+		if w := rubyGemsGatewayRequest(h, method, path, nil); w.Code != 503 {
+			t.Fatalf("disabled preview %d %s", w.Code, path)
+		}
+	}
+	o.RubyGemsDistribution = (*rubygemspublication.Memory)(nil)
+	if _, err = NewGatewayHandler(o); err == nil {
+		t.Fatal("distribution port enabled preview implicitly")
+	}
+	o.RubyGemsPreviewEnabled = true
+	o.RubyGemsStore = rubygemspublication.NewMemory(repos, repos)
+	o.RubyGemsObjects = objectstore.NewMemoryStore()
+	if _, err = NewGatewayHandler(o); err == nil {
+		t.Fatal("typed nil distribution accepted")
+	}
+}

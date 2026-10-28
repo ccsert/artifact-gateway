@@ -73,6 +73,7 @@ agree with executable tests and the
 - [NuGet roadmap](nuget-roadmap.md) — preview acceptance and remaining lifecycle/admission work.
 - [NuGet durable replication preview](nuget-replication-preview.md) — fixed Hosted plans, fenced workers, verified target-owned packages and exact item retry.
 - [RubyGems Hosted preview](rubygems-hosted-preview.md) — default-off native publication, compact/legacy dependency indexes and verified original gems.
+- [RubyGems Hosted replication preview](rubygems-replication-preview.md) — default-off durable plans, immutable variants, fenced publication and cold client verification.
 - [Legacy Group migration](legacy-group-migration.md) — compatibility behavior and migration guidance.
 - [Gitea backend reference](gitea-backend-reference.md) — preflight and evidence-loop design reference.
 

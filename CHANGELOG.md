@@ -11,6 +11,14 @@ their meaning.
 
 ## Unreleased
 
+- Update `golang.org/x/net` to v0.62.0 and its required Go module dependencies to address GO-2026-6860 (#474), which is reachable through PyPI Simple HTML parsing. Dependency audit remains required.
+
+- agctl adds administrator-only role/template catalogue create, update and delete (#134). Updates preserve unspecified fields, use `If-Match` and return current/proposed content after a 412 without overwriting. Explicit confirmation, read-only plans, non-retried writes and unknown-result read-back keep catalogue changes separate from account roles and existing repository grants. Deletion reflects the existing API's lack of conditional versions.
+
+- Complete the existing [quota/email CLI acceptance gate](docs/cli.md#verification) (#336) with real PostgreSQL/TLS SMTP, administrator rejection cases, no-write plans, pinned versions, production-cadence alert/stale/recovery transitions, and committed HTTP/SMTP response-loss recovery. Evidence retains JSON/exit codes, source hashes and owned cleanup; SMTP ambiguity preserves possible duplicates and does not claim inbox delivery or worker health.
+
+- RubyGems Hosted preview adds [durable same-installation replication](docs/rubygems-replication-preview.md) (#472): exact source identities, current original credential checks, lease-fenced target publication and audit/checkpoints, and selective retry. Memory and PostgreSQL reject publication-session expiry after delayed audit. The fixed official client gate distinguishes ruby/java variants on MRI and verifies cold target-only installation after simulated source-object removal and a physical PostgreSQL/RustFS/Gateway restart; formal admission remains under #293.
+
 - RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; in-memory policy changes honor the configured auditor and retain the prior policy/version on audit failure, including delegating audit wrappers; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
 
 - Add administrator-only [read-only email queue diagnostics](docs/email-notification-delivery.md#read-only-queue-diagnostics) (#467): one database-time snapshot across all retained deliveries, claim-aligned candidate/backoff/lease/cleanup counts, bounded safe failure classes and persisted SMTP acceptance evidence. Worker health remains unknown; the GET never sends or changes the queue. No Console or CLI surface is added.
