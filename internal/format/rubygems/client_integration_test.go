@@ -30,6 +30,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	protocol "github.com/ccsert/artifact-gateway/internal/protocol/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	dist "github.com/ccsert/artifact-gateway/internal/rubygemsdistribution"
 	"github.com/ccsert/artifact-gateway/internal/testsupport"
 	"github.com/google/uuid"
 )
@@ -247,6 +248,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	var address string
 	bucket := "ruby-owned-" + uuid.NewString()
 	var stopGateway func()
+	replicationWorkerEnabled := false
 	start := func() {
 		t.Helper()
 		var e error
@@ -264,7 +266,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 			t.Fatal(e)
 		}
 		var backend string
-		stopGateway, backend = startRealRubyGateway(t, admin, reader, bucket, evidence)
+		stopGateway, backend = startRealRubyGateway(t, admin, reader, bucket, evidence, replicationWorkerEnabled)
 		target, e := url.Parse(backend)
 		if e != nil {
 			t.Fatal(e)
@@ -586,6 +588,84 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 
 	run("bundle-full-release-after", "released-full-index-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
 	verifyPhase("bundle-full-release-after", stable, legacy)
+
+	t.Run("replication-cold-client-and-restart", func(t *testing.T) {
+		originalRepo, originalReadSource := repo, readSource
+		defer func() {
+			repo = originalRepo
+			readSource = originalReadSource
+			gemfileBody = "source " + strconv.Quote(readSource) + "\ngem 'owned_top', '= 1.2.0'\n"
+		}()
+		create := replicationRequest(server.Config.Handler, "POST", "/api/v2/previews/rubygems/repositories", []byte(`{"name":"ruby-replicated-`+uuid.NewString()+`"}`), admin, uuid.NewString())
+		var target repository.HostedRepository
+		if create.Code != 201 || json.Unmarshal(create.Body.Bytes(), &target) != nil {
+			t.Fatalf("target creation %d %s", create.Code, create.Body.String())
+		}
+		if _, err := repos.ReplaceRepositoryGrants(t.Context(), target.ID, []repository.RepositoryGrant{{Principal: "ruby-gate-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+			t.Fatal(err)
+		}
+		plan := dist.Plan{SourceRepositoryID: repo.ID, TargetRepositoryID: target.ID}
+		for _, pin := range []struct{ name, version string }{{"owned_leaf", "1.0.0"}, {"owned_middle", "1.1.0"}, {"owned_top", "1.2.0"}} {
+			identity := request(server.Config.Handler, "GET", "/api/v2/previews/rubygems/repositories/"+repo.ID+"/packages/"+pin.name+"/"+pin.version+"/ruby", nil, "Bearer "+reader)
+			var item dist.Identity
+			if identity.Code != 200 || json.Unmarshal(identity.Body.Bytes(), &item) != nil {
+				t.Fatalf("source reader identity %d %s", identity.Code, identity.Body.String())
+			}
+			plan.Items = append(plan.Items, item)
+		}
+		encoded, _ := json.Marshal(plan)
+		key := uuid.NewString()
+		queued := replicationRequest(server.Config.Handler, "POST", "/api/v2/previews/rubygems/replication-jobs", encoded, admin, key)
+		var job dist.Job
+		if queued.Code != 202 || json.Unmarshal(queued.Body.Bytes(), &job) != nil || job.State != "queued" {
+			t.Fatalf("queued API-only %d %s", queued.Code, queued.Body.String())
+		}
+		// API-only submission survives a physical Gateway restart before any worker
+		// starts; the worker is enabled only on the replacement process.
+		server.Close()
+		stopGateway()
+		_ = repos.Close()
+		replicationWorkerEnabled = true
+		start()
+		deadline := time.Now().Add(25 * time.Second)
+		for {
+			response := request(server.Config.Handler, "GET", "/api/v2/previews/rubygems/replication-jobs/"+job.ID, nil, "Bearer "+admin)
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &job) != nil {
+				t.Fatal("replication receipt unavailable", response.Code)
+			}
+			if job.State == "succeeded" {
+				break
+			}
+			if job.State == "failed" || time.Now().After(deadline) {
+				t.Fatalf("durable worker %+v", job)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		replay := replicationRequest(server.Config.Handler, "POST", "/api/v2/previews/rubygems/replication-jobs", encoded, admin, key)
+		var replayJob dist.Job
+		if replay.Code != 202 || json.Unmarshal(replay.Body.Bytes(), &replayJob) != nil || replayJob.ID != job.ID || replayJob.Version != job.Version {
+			t.Fatal("completed replay changed job")
+		}
+		repo = target
+		readSource = strings.Replace(originalReadSource, "/rubygems/"+originalRepo.Name+"/", "/rubygems/"+target.Name+"/", 1)
+		gemfileBody = "source " + strconv.Quote(readSource) + "\ngem 'owned_top', '= 1.2.0'\n"
+		install("gem-replicated-cold")
+		run("bundle-replicated-compact", "replicated-compact-install", false, "bundle", "_2.6.7_", "install", "--jobs", "1", "--retry", "0")
+		verifyPhase("bundle-replicated-compact", stable, compact)
+		run("bundle-replicated-full", "replicated-full-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
+		verifyPhase("bundle-replicated-full", stable, legacy)
+		server.Close()
+		stopGateway()
+		_ = repos.Close()
+		start()
+		install("gem-replicated-restart-cold")
+		run("bundle-replicated-restart-full", "replicated-restart-full-install", false, "bundle", "_2.6.7_", "install", "--full-index", "--jobs", "1", "--retry", "0")
+		verifyPhase("bundle-replicated-restart-full", stable, legacy)
+		governanceEvidence["replicationQueuedOnAPIOnlyAndResumedByReplacementWorker"] = true
+		governanceEvidence["replicatedTargetOnlyColdGemAndBundlerOriginalBytes"] = true
+		governanceEvidence["replicatedTargetColdAfterProcessRestart"] = true
+		governanceEvidence["replicationJobId"] = job.ID
+	})
 	// Release must never revive a yanked dependency in either index family.
 	governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, "5", "yank", "Bearer "+admin, 200)
 	governanceChange(t, server.Config.Handler, repo.ID, "owned_leaf", "1.0.0", "ruby", state.Digest, "6", "quarantine", "Bearer "+admin, 200)
@@ -610,7 +690,7 @@ func TestRubyGemsFixedOfficialClientColdTransitiveInstallAndRestart(t *testing.T
 	t.Logf("official toolchain %s; %d original closures verified; real compact and legacy cold three-level installs survived owned PostgreSQL/RustFS restart", versions, len(proof))
 }
 
-func startRealRubyGateway(t *testing.T, admin, reader, bucket, evidence string) (func(), string) {
+func startRealRubyGateway(t *testing.T, admin, reader, bucket, evidence string, replication ...bool) (func(), string) {
 	t.Helper()
 	binary := os.Getenv("RUBYGEMS_GATEWAY_BIN")
 	if binary == "" {
@@ -633,6 +713,14 @@ func startRealRubyGateway(t *testing.T, admin, reader, bucket, evidence string) 
 		}
 	}
 	cmd.Env = append(cmd.Env, "GATEWAY_DATABASE_URL="+os.Getenv("TEST_DATABASE_URL"), "GATEWAY_RUSTFS_ENDPOINT="+os.Getenv("TEST_RUSTFS_ENDPOINT"), "GATEWAY_RUSTFS_ACCESS_KEY="+os.Getenv("TEST_RUSTFS_ACCESS_KEY"), "GATEWAY_RUSTFS_SECRET_KEY="+os.Getenv("TEST_RUSTFS_SECRET_KEY"), "GATEWAY_RUSTFS_BUCKET="+bucket, "GATEWAY_ADMIN_TOKEN="+admin, "GATEWAY_ADMIN_ACTOR=ruby-gate-operator", "GATEWAY_RESOLVER_TOKEN="+reader, "GATEWAY_RESOLVER_ACTOR=ruby-gate-reader", "GATEWAY_RUBYGEMS_PREVIEW_ENABLED=true", "GATEWAY_REPOSITORY_PRESETS=none", "GATEWAY_NODE_ROLES=api", "GATEWAY_LISTEN_ADDRESS="+address, "GATEWAY_ACCESS_LOG=limited")
+	if len(replication) > 0 && replication[0] {
+		for i, v := range cmd.Env {
+			if v == "GATEWAY_NODE_ROLES=api" {
+				cmd.Env[i] = "GATEWAY_NODE_ROLES=api,worker"
+			}
+		}
+		cmd.Env = append(cmd.Env, "GATEWAY_WORKER_FORMATS=rubygems", "GATEWAY_WORKER_KINDS=replication")
+	}
 	cmd.Stdout, cmd.Stderr = log, log
 	if e = cmd.Start(); e != nil {
 		_ = log.Close()

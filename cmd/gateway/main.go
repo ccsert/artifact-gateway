@@ -35,6 +35,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/preflight"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	rubydist "github.com/ccsert/artifact-gateway/internal/rubygemsdistribution"
 	rubygemspg "github.com/ccsert/artifact-gateway/internal/rubygemspublication/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
@@ -341,6 +342,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		}
 		nugetReplication = &worker
 	}
+	var rubyGemsReplication *rubydist.Worker
 	var rubyGemsStore *rubygemspg.Store
 	var rubyGemsMaintenance *rubygemsformat.Maintenance
 	if cfg.RubyGemsPreviewEnabled {
@@ -354,6 +356,19 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			slog.Error("configure RubyGems preview maintenance", "error", err)
 			return 1
 		}
+
+		authority := authorization.Authenticator{AdminToken: cfg.AdminToken, AdminActor: cfg.AdminActor, ResolverToken: cfg.ResolverToken, ResolverActor: cfg.ResolverActor, RepositoryReaders: cfg.RepositoryReaders, LegacyReadPermissive: cfg.LegacyReadPermissive}
+		module, setupErr := rubygemsformat.New(rubygemsformat.Options{Store: rubyGemsStore, Distribution: rubyGemsStore, Repositories: store, Objects: objectStore, Authenticator: authority, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: authority}, Audit: store, Anonymous: store})
+		if setupErr != nil {
+			slog.Error("configure RubyGems preview replication", "error", setupErr)
+			return 1
+		}
+		worker, setupErr := module.ReplicationWorker(cfg.InstanceID + "/" + runtimeSessionID)
+		if setupErr != nil {
+			slog.Error("configure RubyGems preview replication worker", "error", setupErr)
+			return 1
+		}
+		rubyGemsReplication = &worker
 	}
 	(backgroundRuntime{
 		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
@@ -368,6 +383,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		helmMaintenance:     helmMaintenance,
 		helmReplication:     helmReplication,
 		rubyGemsMaintenance: rubyGemsMaintenance,
+		rubyGemsReplication: rubyGemsReplication,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
@@ -428,6 +444,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		if cfg.RubyGemsPreviewEnabled {
 			gatewayOptions.RubyGemsPreviewEnabled = true
 			gatewayOptions.RubyGemsStore = rubyGemsStore
+			gatewayOptions.RubyGemsDistribution = rubyGemsStore
 			gatewayOptions.RubyGemsObjects = objectStore
 		}
 		handler, err = app.NewGatewayHandler(gatewayOptions)

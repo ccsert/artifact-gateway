@@ -15,6 +15,64 @@ export type RubyGemsPreviewQuarantineReadPolicyChange = {
 };
 
 /**
+ * Exact server-owned, visible and distribution-eligible gem identity. Versions preserve the original archive spelling; duplicate RubyGems-canonical version/platform identities are rejected.
+ */
+export type RubyGemsPreviewIdentity = {
+  name: string;
+  version: string;
+  platform: string;
+  digest: string;
+  size: number;
+  sourceGovernanceVersion: string;
+};
+
+export type RubyGemsPreviewReplicationRequest = {
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  items: Array<RubyGemsPreviewIdentity>;
+};
+
+export type RubyGemsPreviewReplicationItem = {
+  index: number;
+  name: string;
+  version: string;
+  platform: string;
+  digest: string;
+  size: number;
+  sourceGovernanceVersion: string;
+  state: "pending" | "running" | "succeeded" | "failed";
+  attempts: number;
+  code?:
+    | "access_denied"
+    | "source_changed"
+    | "target_conflict"
+    | "identity_conflict"
+    | "quota_exceeded"
+    | "transfer_failed";
+  targetSessionId?: string;
+  result?: "published" | "already_present";
+  completedAt?: string;
+};
+
+export type RubyGemsPreviewReplicationJob = {
+  id: string;
+  planDigest: string;
+  sourceRepositoryId: string;
+  targetRepositoryId: string;
+  actor: string;
+  version: string;
+  state: "queued" | "running" | "succeeded" | "failed";
+  items: Array<RubyGemsPreviewReplicationItem>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RubyGemsPreviewReplicationRetry = {
+  expectedVersion: string;
+  itemIndexes: Array<number>;
+};
+
+/**
  * Retained immutable gem identity. Yank always hides discovery and downloads. Independent quarantine hides them only when the default-disabled repository read policy is enabled. Both preserve bytes, identity and capacity.
  */
 export type RubyGemsPreviewGovernance = {
@@ -3930,6 +3988,181 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type CreateRubyGemsPreviewReplicationJobData = {
+  body: RubyGemsPreviewReplicationRequest;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/previews/rubygems/replication-jobs";
+};
+
+export type CreateRubyGemsPreviewReplicationJobErrors = {
+  /**
+   * Invalid or duplicate gem identity, unbounded plan or key
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Active RubyGems Hosted repository or exact source gem not found
+   */
+  404: unknown;
+  /**
+   * Different plan for the key, source governance changed, conflict or capacity denied
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type CreateRubyGemsPreviewReplicationJobResponses = {
+  /**
+   * Queued plan, or the same plan on an exact idempotent replay
+   */
+  202: RubyGemsPreviewReplicationJob;
+};
+
+export type CreateRubyGemsPreviewReplicationJobResponse =
+  CreateRubyGemsPreviewReplicationJobResponses[keyof CreateRubyGemsPreviewReplicationJobResponses];
+
+export type GetRubyGemsPreviewReplicationJobData = {
+  body?: never;
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/replication-jobs/{jobId}";
+};
+
+export type GetRubyGemsPreviewReplicationJobErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Source and target read authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type GetRubyGemsPreviewReplicationJobResponses = {
+  /**
+   * Durable job and gem checkpoints without secrets or physical object keys
+   */
+  200: RubyGemsPreviewReplicationJob;
+};
+
+export type GetRubyGemsPreviewReplicationJobResponse =
+  GetRubyGemsPreviewReplicationJobResponses[keyof GetRubyGemsPreviewReplicationJobResponses];
+
+export type RetryRubyGemsPreviewReplicationJobData = {
+  body: RubyGemsPreviewReplicationRetry;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/replication-jobs/{jobId}/retry";
+};
+
+export type RetryRubyGemsPreviewReplicationJobErrors = {
+  /**
+   * Invalid retry key or item set
+   */
+  400: unknown;
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Original actor with current source read and target write authority required
+   */
+  403: unknown;
+  /**
+   * Job not found
+   */
+  404: unknown;
+  /**
+   * Job version, retry payload, state or selected item conflicts
+   */
+  409: unknown;
+  /**
+   * Preview disabled or durable replication unavailable
+   */
+  503: unknown;
+};
+
+export type RetryRubyGemsPreviewReplicationJobResponses = {
+  /**
+   * Selected failed items queued, or an exact retry replay
+   */
+  202: RubyGemsPreviewReplicationJob;
+};
+
+export type RetryRubyGemsPreviewReplicationJobResponse =
+  RetryRubyGemsPreviewReplicationJobResponses[keyof RetryRubyGemsPreviewReplicationJobResponses];
+
+export type GetRubyGemsPreviewPackageIdentityData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    gemName: string;
+    gemVersion: string;
+    platform: string;
+  };
+  query?: never;
+  url: "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}";
+};
+
+export type GetRubyGemsPreviewPackageIdentityErrors = {
+  /**
+   * Authentication required
+   */
+  401: unknown;
+  /**
+   * Current package read authority required
+   */
+  403: unknown;
+  /**
+   * Exact eligible source gem not found
+   */
+  404: unknown;
+  /**
+   * Preview disabled or storage unavailable
+   */
+  503: unknown;
+};
+
+export type GetRubyGemsPreviewPackageIdentityResponses = {
+  /**
+   * Distribution-eligible gem identity
+   */
+  200: RubyGemsPreviewIdentity;
+};
+
+export type GetRubyGemsPreviewPackageIdentityResponse =
+  GetRubyGemsPreviewPackageIdentityResponses[keyof GetRubyGemsPreviewPackageIdentityResponses];
 
 export type GetRubyGemsPreviewQuarantineReadPolicyData = {
   body?: never;

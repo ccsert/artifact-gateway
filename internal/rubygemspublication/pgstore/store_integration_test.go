@@ -84,3 +84,41 @@ func TestRubyGemsPostgresGovernanceStoreContract(t *testing.T) {
 	}
 	f.GovernanceContract(t, store, repo)
 }
+
+func TestRubyGemsPostgresReplicationStoreContract(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("owned PostgreSQL required")
+	}
+	if err := testsupport.ValidateIsolatedDatabaseURL(dsn); err != nil {
+		t.Fatal(err)
+	}
+	db, err := database.OpenPostgres(dsn, database.DefaultPoolConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	locks, err := database.OpenPostgres(dsn, database.DefaultArtifactLockPoolConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = locks.Close() }()
+	repos, err := repository.NewPostgresStore(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = repos.Close() }()
+	store, err := pgstore.New(db, locks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var source, target repository.HostedRepository
+	for _, r := range []*repository.HostedRepository{&source, &target} {
+		v, err := repos.CreateHostedRepository(t.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: "replication-" + uuid.NewString(), Format: repository.FormatRubyGems, Type: repository.RepositoryTypeHosted})
+		if err != nil {
+			t.Fatal(err)
+		}
+		*r = v
+	}
+	f.ReplicationStoreContract(t, store, source, target)
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	protocol "github.com/ccsert/artifact-gateway/internal/protocol/rubygems"
 	"github.com/ccsert/artifact-gateway/internal/repository"
+	dist "github.com/ccsert/artifact-gateway/internal/rubygemsdistribution"
 	domain "github.com/ccsert/artifact-gateway/internal/rubygemspublication"
 )
 
@@ -29,6 +30,7 @@ type AnonymousPolicy interface {
 }
 type Options struct {
 	Store         domain.Store
+	Distribution  dist.Store
 	Repositories  RepositoryStore
 	Objects       objectstore.Store
 	Authenticator authorization.Authenticator
@@ -38,14 +40,15 @@ type Options struct {
 	MaxGemBytes   int64
 }
 type Module struct {
-	store     domain.Store
-	repos     RepositoryStore
-	objects   objectstore.Store
-	auth      authorization.Authenticator
-	access    authorization.RepositoryAuthorizer
-	audit     domain.Auditor
-	anonymous AnonymousPolicy
-	maxBytes  int64
+	store        domain.Store
+	distribution dist.Store
+	repos        RepositoryStore
+	objects      objectstore.Store
+	auth         authorization.Authenticator
+	access       authorization.RepositoryAuthorizer
+	audit        domain.Auditor
+	anonymous    AnonymousPolicy
+	maxBytes     int64
 }
 
 func nilPort(v any) bool {
@@ -64,6 +67,9 @@ func New(o Options) (*Module, error) {
 			return nil, errors.New("RubyGems preview requires explicit publication, repository, authorization, audit and anonymous-policy ports")
 		}
 	}
+	if o.Distribution != nil && nilPort(o.Distribution) {
+		return nil, errors.New("RubyGems replication store is typed nil")
+	}
 	if e := objectstore.Validate(o.Objects); e != nil {
 		return nil, e
 	}
@@ -73,7 +79,7 @@ func New(o Options) (*Module, error) {
 	if o.MaxGemBytes < 1 || o.MaxGemBytes > protocol.MaxGemBytes {
 		return nil, errors.New("RubyGems archive limit must be between 1 and 64 MiB")
 	}
-	return &Module{o.Store, o.Repositories, o.Objects, o.Authenticator, o.Authorizer, o.Audit, o.Anonymous, o.MaxGemBytes}, nil
+	return &Module{store: o.Store, distribution: o.Distribution, repos: o.Repositories, objects: o.Objects, auth: o.Authenticator, access: o.Authorizer, audit: o.Audit, anonymous: o.Anonymous, maxBytes: o.MaxGemBytes}, nil
 }
 func (*Module) Format() repository.Format { return repository.FormatRubyGems }
 func (m *Module) Routes() []formatmodule.Route {

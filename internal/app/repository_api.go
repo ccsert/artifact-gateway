@@ -296,7 +296,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	}
 	var rubyGemsPreview http.Handler
 	if options.RubyGemsPreviewEnabled {
-		rubyGemsModule, err := rubygemsformat.New(rubygemsformat.Options{Store: options.RubyGemsStore, Repositories: store, Objects: options.RubyGemsObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store})
+		rubyGemsModule, err := rubygemsformat.New(rubygemsformat.Options{Store: options.RubyGemsStore, Distribution: options.RubyGemsDistribution, Repositories: store, Objects: options.RubyGemsObjects, Authenticator: authenticator, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Audit: store, Anonymous: store})
 		if err != nil {
 			return nil, err
 		}

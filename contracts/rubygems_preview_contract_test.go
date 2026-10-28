@@ -101,3 +101,67 @@ func TestRubyGemsQuarantineContractRequiresIndependentStateAndPolicyCAS(t *testi
 		})
 	}
 }
+
+func TestRubyGemsReplicationPreviewContractHasBoundedPinsAndSafeReceipts(t *testing.T) {
+	for _, load := range []func(*testing.T) *openapi3.T{loadManagementRuntimeSpec, loadNativeHostedSpec} {
+		spec := load(t)
+		identity := operation(t, spec, "/previews/rubygems/repositories/{repositoryId}/packages/{gemName}/{gemVersion}/{platform}", "GET")
+		if identity.OperationID != "getRubyGemsPreviewPackageIdentity" {
+			t.Fatal("missing source-reader identity")
+		}
+		create := operation(t, spec, "/previews/rubygems/replication-jobs", "POST")
+		if create.OperationID != "createRubyGemsPreviewReplicationJob" {
+			t.Fatal("missing preview create")
+		}
+		input := create.RequestBody.Value.Content["application/json"].Schema.Value
+		pin := map[string]any{"name": "owned", "version": "1.0.0", "platform": "ruby", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "size": float64(17), "sourceGovernanceVersion": "1"}
+		plan := map[string]any{"sourceRepositoryId": "5b942a99-316e-4b6a-973f-781486b20cfb", "targetRepositoryId": "f3efde6b-dbe8-4079-a79e-68ba0e853fa2", "items": []any{pin}}
+		if err := input.VisitJSON(plan); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"platform", "digest", "size", "sourceGovernanceVersion"} {
+			bad := map[string]any{}
+			for k, v := range pin {
+				if k != field {
+					bad[k] = v
+				}
+			}
+			copy := map[string]any{}
+			for k, v := range plan {
+				copy[k] = v
+			}
+			copy["items"] = []any{bad}
+			if input.VisitJSON(copy) == nil {
+				t.Fatalf("missing pin accepted %s", field)
+			}
+		}
+		plan["credentials"] = "forbidden"
+		if input.VisitJSON(plan) == nil {
+			t.Fatal("credential input accepted")
+		}
+		delete(plan, "credentials")
+		items := make([]any, 101)
+		for i := range items {
+			items[i] = pin
+		}
+		plan["items"] = items
+		if input.VisitJSON(plan) == nil {
+			t.Fatal("unbounded plan accepted")
+		}
+		operation(t, spec, "/previews/rubygems/replication-jobs/{jobId}", "GET")
+		retry := operation(t, spec, "/previews/rubygems/replication-jobs/{jobId}/retry", "POST")
+		schema := retry.RequestBody.Value.Content["application/json"].Schema.Value
+		if schema.VisitJSON(map[string]any{"expectedVersion": "1", "itemIndexes": []any{float64(0)}}) != nil || schema.VisitJSON(map[string]any{"expectedVersion": "1", "itemIndexes": []any{float64(0), float64(0)}}) == nil {
+			t.Fatal("retry CAS/unique items")
+		}
+		receipt := spec.Components.Schemas["RubyGemsPreviewReplicationJob"].Value
+		for _, field := range []string{"credentialId", "sessionId", "leaseToken", "objectKey"} {
+			if receipt.Properties[field] != nil {
+				t.Fatalf("private receipt field %s", field)
+			}
+		}
+		if spec.Components.Schemas["Format"].Value.VisitJSON("rubygems") == nil {
+			t.Fatal("preview was formally admitted")
+		}
+	}
+}
