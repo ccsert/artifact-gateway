@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Update `golang.org/x/net` to v0.62.0 and its required Go module dependencies to address GO-2026-6860 (#474), which is reachable through PyPI Simple HTML parsing. Dependency audit remains required.
+
 - agctl adds administrator-only role/template catalogue create, update and delete (#134). Updates preserve unspecified fields, use `If-Match` and return current/proposed content after a 412 without overwriting. Explicit confirmation, read-only plans, non-retried writes and unknown-result read-back keep catalogue changes separate from account roles and existing repository grants. Deletion reflects the existing API's lack of conditional versions.
 
 - Complete the existing [quota/email CLI acceptance gate](docs/cli.md#verification) (#336) with real PostgreSQL/TLS SMTP, administrator rejection cases, no-write plans, pinned versions, production-cadence alert/stale/recovery transitions, and committed HTTP/SMTP response-loss recovery. Evidence retains JSON/exit codes, source hashes and owned cleanup; SMTP ambiguity preserves possible duplicates and does not claim inbox delivery or worker health.
