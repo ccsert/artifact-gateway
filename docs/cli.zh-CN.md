@@ -546,6 +546,38 @@ profile 运行验收。
 - `agctl grant delete --repo ID --principal P [--resource-prefix X] --yes`
   删除一条授权。不会重试：重复请求返回 404，而这与授权本就不存在时的应答相同。
 - `agctl role list|show` 和 `agctl template list|show` 读取目录（平台管理员）。
+- `agctl role create NAME --scope SCOPE... [--description TEXT]` 创建命名的
+  仓库 scope 集。`agctl role update ID [--name NAME] [--description TEXT]
+  [--scope SCOPE...] --yes` 保留未指定字段；指定 scope 时替换整个 scope 集。
+  `--description=` 清空描述。
+- `agctl template create NAME --grants-file FILE [--description TEXT]` 创建
+  授权配方。`agctl template update ID [--name NAME] [--description TEXT]
+  [--grants-file FILE] --yes` 保留未指定字段；提供文件时替换配方中的全部授权。
+  文件必须是单个 JSON 数组，最多 500 条主体/资源前缀唯一的授权，每条包含不重复
+  的有效 scope；拒绝未知字段和 `null`。`[]` 显式清空配方。完整请求须满足服务端
+  128 KiB 大小上限。例如：
+
+  ```json
+  [{"principal":"service-account:ACCOUNT_ID","scopes":["repositories:read"],"resourcePrefix":"releases/"}]
+  ```
+
+- 角色/模板更新先读取完整目录项，以其版本作为 `If-Match`，也可显式传
+  `--if-match VERSION`。412（退出码 7）返回拟议的替换内容，并尝试回读最新的
+  `data.current` 供审阅；从不重新提交写入。回读失败时，`data.readBack` 指明读取
+  命令。`--dry-run` 读取现有目录项，给出前后内容、版本和仅影响目录的范围，不写入。
+- `agctl role delete ID --yes` 和 `agctl template delete ID --yes` 删除目录项。
+  `--dry-run` 只读取，不删除。现有删除 API 不支持 `If-Match`；读取后目录项仍可能
+  改变，删除命令不接受 `--if-match`。六条目录写命令都不自动重试；创建没有幂等键。
+  无法确定写入结果时返回 `data.outcome: "unknown"` 和回读命令，操作者审阅后再
+  决定是否重复。
+
+目录 CRUD 要求活跃、无需改密的平台管理员；待授权和 member 账号返回 403
+（退出码 6）。创建的 dry-run 只验证本地输入，不证明权限或名称可用；更新/删除
+的 dry-run 使用受保护的读取，也不证明后续写入必然获准。目录项 ID 是 UUID，
+这些命令不编辑内置账号级别 `none`、`member`、`admin`。命名 scope 集不是账号
+级别，也不是角色分配。任一目录的创建、编辑或删除都不改变既有仓库授权；应用
+模板仍是单独、明确的操作。
+
 - `agctl template apply TEMPLATE_ID --repo ID --yes` 用模板的授权替换仓库的
   全部授权，以 `--if-match` 或刚读到的授权集版本为条件；412（退出码 7）不替换
   任何内容，且从不重试。`--dry-run` 读取授权和模板，列出将新增、删除、变更和
@@ -729,12 +761,19 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   `go test ./internal/agctl/ -update` 重写并审阅差异。
 - `make cli-e2e` 构建 `agctl` 并在真实、隔离的 Gateway 上运行：按
   `GATEWAY_ENV_FILE`（或 `.env`）在空闲端口上启动一个 Compose 项目，结束后
-  删除。设置 `CLI_E2E_SERVER` 和 `CLI_E2E_TOKEN`（管理员 token）时改为复用
+  删除。Docker 自动地址池耗尽时，可用 `CLI_E2E_NETWORK_SUBNET` 为该项目指定
+  未占用的 RFC 1918 IPv4 /16 至 /28 网段；Docker 仍拒绝重叠网段。设置
+  `CLI_E2E_SERVER` 和 `CLI_E2E_TOKEN`（管理员 token）时改为复用
   正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的；设置
   `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查；设置
   `CLI_E2E_OIDC_ISSUER`（Gateway 已配置的 OIDC issuer，会规范化首尾空白和末尾斜杠）会加入身份绑定检查，
   隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。Agent 菜谱
-  先用 `commands --json` 和 `info --json` 在同一真实 Gateway 核对 schema、能力与身份，再创建仓库、
+  先用 `commands --json` 和 `info --json` 在同一真实 Gateway 核对 schema、能力与身份。
+  角色/模板 CRUD 验证完整替换、412 回读、确认和预演无写入、变更审计，以及真实
+  待授权/member/必须改密账号拒绝。隔离栈中最后一个本地管理员的会话会先被吊销
+  并拒绝访问，账号随所属 Compose 数据卷销毁；复用 Gateway 且没有既有本地
+  管理员时，会明确报告未执行“必须改密的 admin”场景，仍检查必须改密的 member。
+  随后创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
   `If-Match` 的改名、重排、保留成员的删除）；创建和更新合成上游的 Maven Proxy

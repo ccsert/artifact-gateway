@@ -660,6 +660,48 @@ addressed by ID with `--repo`.
   what a grant that does not exist answers.
 - `agctl role list|show` and `agctl template list|show` read the catalogues
   (platform administrators).
+- `agctl role create NAME --scope SCOPE... [--description TEXT]` creates a
+  named repository scope set. `agctl role update ID [--name NAME]
+  [--description TEXT] [--scope SCOPE...] --yes` preserves unspecified fields;
+  supplying scopes replaces the complete scope set. `--description=` clears
+  the description.
+- `agctl template create NAME --grants-file FILE [--description TEXT]` creates
+  a grant recipe. `agctl template update ID [--name NAME] [--description TEXT]
+  [--grants-file FILE] --yes` preserves unspecified fields and replaces all
+  recipe grants when the file is supplied. The file contains one JSON array
+  of at most 500 unique principal/resource-prefix grants, with distinct valid
+  scopes per grant; unknown fields and `null` are refused. `[]` explicitly
+  clears the recipe. The full request must fit the server's 128 KiB limit.
+  For example:
+
+  ```json
+  [{"principal":"service-account:ACCOUNT_ID","scopes":["repositories:read"],"resourcePrefix":"releases/"}]
+  ```
+
+- Role/template updates read the complete entry and send its version as
+  `If-Match`, or use an explicit `--if-match VERSION`. A 412 (exit 7) returns
+  the proposed replacement and attempts to read the latest `data.current`
+  for review; it never resubmits the write. If that read fails, `data.readBack`
+  names the read command. `--dry-run` reads the current entry and reports the
+  before/after content, version and catalogue-only scope without writing.
+- `agctl role delete ID --yes` and `agctl template delete ID --yes` delete a
+  catalogue entry. Their `--dry-run` reads the entry without deleting it.
+  These existing API endpoints have no `If-Match` condition; the entry may
+  change after the read, and `--if-match` is not accepted for deletion.
+  None of the six catalogue writes retries automatically. Creation has no
+  idempotency key; uncertain writes return `data.outcome: "unknown"` with a
+  read-back command before the operator decides whether to repeat them.
+
+Catalogue CRUD requires an active platform administrator without a required
+password change; pending and member accounts are refused (403, exit 6).
+Create dry-runs validate local input only and do not establish permission or
+name availability. Update/delete dry-runs use protected reads and still do
+not prove that a later write will be allowed. Catalogue entry IDs are UUIDs:
+these commands do not edit the built-in account roles `none`, `member`, or
+`admin`. Named scope sets are not account roles or role assignments. Creating,
+editing or deleting either catalogue does not change existing repository
+grants; applying a template remains a separate, explicit operation.
+
 - `agctl template apply TEMPLATE_ID --repo ID --yes` replaces every grant of
   the repository with the template's, conditional on `--if-match` or the
   grant set version read just before; a 412 (exit 7) replaces nothing and the
@@ -895,7 +937,10 @@ command, flag, or argument count the client does not have.
   review the diff.
 - `make cli-e2e` builds `agctl` and runs it against a real, isolated Gateway:
   it boots a Compose project from `GATEWAY_ENV_FILE` (or `.env`) on free
-  ports and removes it afterwards. With `CLI_E2E_SERVER` and `CLI_E2E_TOKEN`
+  ports and removes it afterwards. `CLI_E2E_NETWORK_SUBNET` optionally selects
+  an unused RFC 1918 IPv4 /16 through /28 CIDR for that project's network when
+  Docker's automatic address pools are full; Docker still refuses overlaps.
+  With `CLI_E2E_SERVER` and `CLI_E2E_TOKEN`
   (an admin token) it reuses a running Gateway instead, which is how CI runs
   it after the Console E2E; `CLI_E2E_RESOLVER_TOKEN` adds the checks that need
   a credential without repository permissions, and `CLI_E2E_OIDC_ISSUER` (the
@@ -904,7 +949,13 @@ command, flag, or argument count the client does not have.
   Compose mode configures a synthetic issuer itself, and CI configures one on
   the shared Gateway. Agent recipes first inspect the same real Gateway through
   `commands --json` and `info --json`, retaining schema/capability and identity
-  checks. The scenario creates a repository, replays the
+  checks. Role/template CRUD verifies complete replacements, 412 read-back,
+  confirmation and dry-run without writes, mutation audits, and real
+  pending/member/password-change refusals. An isolated last local admin's
+  sessions are revoked and rejected before its account is removed by the
+  owned Compose volume teardown. A reused Gateway without an existing local
+  admin explicitly reports that the password-change-admin scenario did not
+  run, while still checking a password-change member. The scenario creates a repository, replays the
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,

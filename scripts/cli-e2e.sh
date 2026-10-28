@@ -10,6 +10,8 @@
 # need a credential without repository permissions; without it they are
 # skipped. CLI_E2E_OIDC_ISSUER (the Gateway's configured OIDC issuer) adds
 # the identity link checks; the isolated Gateway gets a synthetic issuer.
+# CLI_E2E_NETWORK_SUBNET optionally selects an explicit private CIDR for the
+# isolated project's own network when Docker's automatic pools are full.
 #
 # Scenario: repository create -> update -> visible in list -> Group create,
 # members, resolution, rename, reorder, delete -> repository delete accepted
@@ -46,7 +48,11 @@ free_port() {
 }
 
 compose() {
-  COMPOSE_PROJECT_NAME="$project" docker compose --env-file "$workdir/gateway.env" -f compose.yml "$@"
+  local network_options=()
+  if [[ -f "$workdir/network.json" ]]; then
+    network_options=(-f "$workdir/network.json")
+  fi
+  COMPOSE_PROJECT_NAME="$project" docker compose --env-file "$workdir/gateway.env" -f compose.yml "${network_options[@]}" "$@"
 }
 
 cleanup() {
@@ -83,6 +89,20 @@ else
     exit 1
   }
   project="artifact-gateway-cli-${RANDOM}-${RANDOM}"
+  if [[ -n "${CLI_E2E_NETWORK_SUBNET:-}" ]]; then
+    python3 - "$CLI_E2E_NETWORK_SUBNET" "$workdir/network.json" <<'PY2'
+import ipaddress
+import json
+import sys
+
+network = ipaddress.ip_network(sys.argv[1], strict=True)
+private_ranges = [ipaddress.ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
+if network.version != 4 or not any(network.subnet_of(private) for private in private_ranges) or network.prefixlen < 16 or network.prefixlen > 28:
+    raise SystemExit("CLI_E2E_NETWORK_SUBNET must be a private IPv4 /16 through /28 network")
+with open(sys.argv[2], "w", encoding="utf-8") as stream:
+    json.dump({"networks": {"default": {"ipam": {"config": [{"subnet": str(network)}]}}}}, stream)
+PY2
+  fi
   gateway_port=$(free_port)
   admin_token="cli-e2e-admin-${RANDOM}-${RANDOM}"
   resolver_token="cli-e2e-resolver-${RANDOM}-${RANDOM}"
@@ -576,12 +596,9 @@ if kinds != ["entry", "entry", "end"] or events[-1]["data"]["reason"] != "max_ev
     raise SystemExit(f"bounded audit stream: {kinds} {events[-1]}")
 PY2
 
-template_response="$workdir/template.json"
-curl --silent --show-error --fail --output "$template_response" -X POST -H "Authorization: Bearer $admin_token" \
-  -H 'Content-Type: application/json' \
-  --data "{\"name\":\"cli-e2e-template-${suffix}\",\"grants\":[{\"principal\":\"$principal\",\"scopes\":[\"repositories:read\",\"repositories:intelligence\"]}]}" \
-  "$server/api/v2/authorization-templates"
-template_id=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["id"])' "$template_response")
+printf '[{"principal":"%s","scopes":["repositories:read","repositories:intelligence"]}]\n' "$principal" >"$workdir/template-grants.json"
+expect 0 "$out" -- template create "cli-e2e-template-${suffix}" --grants-file "$workdir/template-grants.json" --json
+template_id=$(field "$out" data.id)
 expect 0 "$out" -- template show "$template_id" --json
 require "$(field "$out" data.grants.0.principal)" "$principal" "template grant"
 expect 0 "$out" -- grant list --repo "$content_id" --json
@@ -608,6 +625,12 @@ expect 0 "$out" -- grant delete --repo "$content_id" --principal "$principal" --
 expect 0 "$out" -- grant delete --repo "$content_id" --principal "$principal" --yes --json
 expect 4 "$out" -- grant delete --repo "$content_id" --principal "$principal" --yes --json
 expect 6 "$out" -- access check --repo "$content_id" --actor "$principal" --role member --require read --json
+
+# M2 catalogue CRUD uses this exact CLI against PostgreSQL. It also checks
+# pending/member/password-change refusal and removes its synthetic catalogue
+# entries and sessions. An isolated last local admin is removed by teardown.
+CLI_E2E_SERVER="$server" CLI_E2E_TOKEN="$admin_token" CLI_E2E_OWNED_PROJECT="$project" \
+  python3 scripts/cli-authorization-e2e.py "$workdir/agctl" "$suffix" "$content_id"
 
 # Concurrent writes to different principals preserve both rows. Each process
 # has separate result files; neither reads and replaces the whole grant set.
@@ -653,7 +676,7 @@ if [[ -n "$project" && -n "$resolver_token" ]]; then
   # With no remaining authority the API hides the repository's existence.
   cli_test_token=$resolver_token expect 4 "$out" -- access check --repo "$content_id" --require read --json
 fi
-curl --silent --show-error --fail --output /dev/null -X DELETE -H "Authorization: Bearer $admin_token" "$server/api/v2/authorization-templates/$template_id"
+expect 0 "$out" -- template delete "$template_id" --yes --json
 
 # The anonymous switch is shared with every other check on this Gateway: it is
 # read, re-set to its own value, and refused on a stale version, never flipped.

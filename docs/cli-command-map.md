@@ -210,16 +210,16 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 implemented | A | W |
 | `GET /repository-grants`<br>`listRepositoryGrants` | `grant list --all-repositories` | #134 | M1 implemented | FA | Q |
 | `GET /authorization-templates`<br>`listAuthorizationTemplates` | `template list` | #134 | M1 implemented | A | Q |
-| `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 | A | W |
+| `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 implemented | A | W |
 | `GET /authorization-templates/{templateId}`<br>`getAuthorizationTemplate` | `template show <id>` | #134 | M1 implemented | A | Q |
-| `PUT /authorization-templates/{templateId}`<br>`updateAuthorizationTemplate` | `template update <id>` | #134 | M2 | A | C |
-| `DELETE /authorization-templates/{templateId}`<br>`deleteAuthorizationTemplate` | `template delete <id>` | #134 | M2 | A | W |
+| `PUT /authorization-templates/{templateId}`<br>`updateAuthorizationTemplate` | `template update <id>` | #134 | M2 implemented | A | C |
+| `DELETE /authorization-templates/{templateId}`<br>`deleteAuthorizationTemplate` | `template delete <id>` | #134 | M2 implemented | A | W |
 | `POST /authorization-templates/{templateId}/apply`<br>`applyAuthorizationTemplate` | `template apply <id> --repo <id>` | #134 | M1 implemented | RA | G |
 | `GET /authorization-roles`<br>`listAuthorizationRoles` | `role list` | #134 | M1 implemented | A | Q |
-| `POST /authorization-roles`<br>`createAuthorizationRole` | `role create` | #134 | M2 | A | W |
+| `POST /authorization-roles`<br>`createAuthorizationRole` | `role create` | #134 | M2 implemented | A | W |
 | `GET /authorization-roles/{roleId}`<br>`getAuthorizationRole` | `role show <id>` | #134 | M1 implemented | A | Q |
-| `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 | A | C |
-| `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 | A | W |
+| `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 implemented | A | C |
+| `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 implemented | A | W |
 | `GET /repository-capacities`<br>`listRepositoryCapacities` | `capacity list` | #138 | M2 | FA | Q |
 | `GET /lifecycle-jobs`<br>`listLifecycleJobs` | `lifecycle-job list --all-repositories` | #135 | M1 implemented | FA | Q |
 | `GET /scheduled-tasks`<br>`listScheduledTasks` | `scheduled-task list` | #137 | M2 | ST | Q |

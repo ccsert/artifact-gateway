@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- agctl adds administrator-only role/template catalogue create, update and delete (#134). Updates preserve unspecified fields, use `If-Match` and return current/proposed content after a 412 without overwriting. Explicit confirmation, read-only plans, non-retried writes and unknown-result read-back keep catalogue changes separate from account roles and existing repository grants. Deletion reflects the existing API's lack of conditional versions.
+
 - RubyGems Hosted preview adds [independent quarantine/release and a default-disabled read policy](docs/rubygems-hosted-preview.md#independent-quarantine-and-release) (#468). Current administrator CAS decisions and policy changes commit with audit; in-memory policy changes honor the configured auditor and retain the prior policy/version on audit failure, including delegating audit wrappers; release verifies retained original bytes without undoing yank. Compact/full indexes and original GET/HEAD enforce one policy across restart, including conditional and Range requests.
 
 - Add administrator-only [read-only email queue diagnostics](docs/email-notification-delivery.md#read-only-queue-diagnostics) (#467): one database-time snapshot across all retained deliveries, claim-aligned candidate/backoff/lease/cleanup counts, bounded safe failure classes and persisted SMTP acceptance evidence. Worker health remains unknown; the GET never sends or changes the queue. No Console or CLI surface is added.
